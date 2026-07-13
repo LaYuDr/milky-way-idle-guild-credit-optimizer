@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8">
+  <title>MWI Credit Sidebar Harness</title>
+  <style>
+    body { margin: 0; min-height: 100vh; background: #10111c; color: #eee; font: 16px system-ui, sans-serif; }
+    #test-sidebar { position: fixed; right: 0; top: 0; width: 420px; height: 100vh; background: #202139; }
+    #test-tabs { display: flex; border-bottom: 1px solid #55567b; }
+    #test-tabs button { flex: 1; border: 0; padding: 14px 6px; background: #292a46; color: #fff; font: inherit; cursor: pointer; }
+    #test-tabs button:first-child { background: #5053ad; }
+    #native-content { padding: 16px; }
+  </style>
+  <main>本地右侧栏自动化测试页</main>
+  <aside id="test-sidebar">
+    <nav id="test-tabs">
+      <button type="button">库存</button><button type="button">装备</button><button type="button">技能</button><button type="button">房屋</button><button type="button">配装</button><button type="button">收获</button>
+    </nav>
+    <section id="native-content">原生右侧内容</section>
+  </aside>
+  <script src="/runtime.js"></script>
+</html>

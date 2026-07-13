@@ -1,0 +1,12 @@
+{
+  "name": "milky-way-idle-guild-credit-optimizer",
+  "version": "0.4.17",
+  "private": true,
+  "description": "Milky Way Idle guild credit optimizer userscript",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node --test test/*.test.js",
+    "serve": "node tools/dev-server.js",
+    "check": "npm test && npm run build"
+  }
+}
