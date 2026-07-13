@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.17
+// @version      0.4.18
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -1697,7 +1697,7 @@
     advisor.setAttribute("aria-live", "polite");
     advisor.innerHTML = `<style>
       #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;padding:0;border:1px solid #4fcdb5;border-radius:7px;background:#202139;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
-      #mwi-guild-exchange-advisor[hidden]{display:none}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:center;justify-content:space-between;padding:9px 11px 8px;border-bottom:1px solid #414361;background:#282a49;color:#dfe1f7;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-tax{color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-body{padding:10px 11px 9px}#mwi-guild-exchange-advisor .mwi-advisor-result{display:flex;align-items:baseline;gap:5px;margin:0 0 9px;padding:7px 8px;border-radius:4px;background:#173c38;color:#d9fff4}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"]{background:#303149;color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-result-label{font-size:12px}#mwi-guild-exchange-advisor .mwi-advisor-result strong{color:#77f3d0;font-size:21px;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"] strong{color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}#mwi-guild-exchange-advisor .mwi-advisor-metric{min-width:0;padding:6px 7px;border:1px solid #414361;border-radius:4px;background:#252640}#mwi-guild-exchange-advisor .mwi-advisor-metric-wide{grid-column:1/-1}#mwi-guild-exchange-advisor .mwi-advisor-metric span{display:block;margin-bottom:2px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-metric b{display:block;overflow:hidden;color:#fff;font-size:13px;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-metric em{margin-left:4px;color:#77f3d0;font-style:normal}
+      #mwi-guild-exchange-advisor[hidden]{display:none}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:center;justify-content:space-between;padding:9px 11px 8px;border-bottom:1px solid #414361;background:#282a49;color:#dfe1f7;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-tax{color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-body{padding:10px 11px 9px}#mwi-guild-exchange-advisor .mwi-advisor-result{display:flex;align-items:baseline;gap:5px;margin:0 0 9px;padding:7px 8px;border-radius:4px;background:#173c38;color:#d9fff4}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"]{background:#303149;color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-result-label{font-size:12px}#mwi-guild-exchange-advisor .mwi-advisor-result strong{color:#77f3d0;font-size:21px;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"] strong{color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}#mwi-guild-exchange-advisor .mwi-advisor-metric{min-width:0;padding:6px 7px;border:1px solid #414361;border-radius:4px;background:#252640}#mwi-guild-exchange-advisor .mwi-advisor-metric-wide{grid-column:1/-1}#mwi-guild-exchange-advisor .mwi-advisor-metric span{display:block;margin-bottom:2px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-metric b{display:flex;align-items:center;gap:5px;overflow:hidden;color:#fff;font-size:13px;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-metric .mwi-item-icon{width:24px;height:24px;flex:0 0 24px}#mwi-guild-exchange-advisor .mwi-advisor-metric em{margin-left:4px;color:#77f3d0;font-style:normal}
     </style><div class="mwi-advisor-head"><span>兑换替代估算</span><span class="mwi-advisor-tax">卖出税 2%</span></div><div class="mwi-advisor-body"><div class="mwi-advisor-result" data-role="result"><span class="mwi-advisor-result-label" data-role="result-label"></span><strong data-role="difference"></strong><span data-role="credit-label"></span></div><div class="mwi-advisor-metrics"><div class="mwi-advisor-metric"><span>出售</span><b data-role="sale-item"></b></div><div class="mwi-advisor-metric"><span>税后所得</span><b data-role="net-sale"></b></div><div class="mwi-advisor-metric mwi-advisor-metric-wide"><span>建议改买</span><b data-role="best-item"></b></div></div></div>`;
     document.body.append(advisor);
     state.exchangeAdvisor = advisor;
@@ -1741,8 +1741,9 @@
     advisor.querySelector('[data-role="credit-label"]').textContent = `${data.creditLabel}信用点`;
     advisor.querySelector('[data-role="sale-item"]').textContent = data.saleItem;
     advisor.querySelector('[data-role="net-sale"]').textContent = `${core.formatCompactCost(data.netSale)} 金币`;
-    advisor.querySelector('[data-role="best-item"]').textContent = "";
     const bestItem = advisor.querySelector('[data-role="best-item"]');
+    bestItem.replaceChildren();
+    bestItem.insertAdjacentHTML("beforeend", iconMarkup(data.bestItemHrid, data.bestItem));
     bestItem.append(document.createTextNode(data.bestItem));
     const creditAmount = document.createElement("em");
     creditAmount.textContent = `${formatNumber(data.bestCredits)} 点`;
@@ -1804,6 +1805,7 @@
       creditLabel,
       saleItem: `${saleItemCount} 件${selectedConversion.itemName}${modalData.selectedEnhancementLevel > 0 ? ` +${modalData.selectedEnhancementLevel}` : ""}`,
       netSale: sale.net,
+      bestItemHrid: best.itemHrid,
       bestItem: best.itemName,
       bestCredits: best.actualCredits
     });
