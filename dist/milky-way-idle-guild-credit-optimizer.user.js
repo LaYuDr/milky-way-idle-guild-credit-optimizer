@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.20
+// @version      0.4.21
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -1068,10 +1068,10 @@
     "Crippling Slash": "致残斩",
     "Catalytic Tea": "催化茶",
     "Red Culinary Hat": "红色厨师帽",
-    "Philosopher's Necklace": "哲学家项链",
-    "Philosopher's Ring": "哲学家戒指",
+    "Philosopher's Necklace": "贤者项链",
+    "Philosopher's Ring": "贤者戒指",
     "Necklace Of Speed": "速度项链",
-    "Philosopher's Earrings": "哲学家耳环",
+    "Philosopher's Earrings": "贤者耳环",
     "Advanced Melee Charm": "高级近战护符",
     "Advanced Defense Charm": "高级防御护符",
     "Advanced Intelligence Charm": "高级智力护符",

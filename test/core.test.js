@@ -173,8 +173,9 @@ test("多项神龛升级合并相同材料", () => {
   ]);
 });
 
-test("中文物品本地化覆盖究极茶和全等级护符", () => {
+test("中文物品本地化覆盖究极茶、贤者系列和全等级护符", () => {
   assert.equal(localization.localizeItemName({ itemName: "Ultra Brewing Tea", locale: "zh-CN", chineseNames: chineseItemNames }), "究极冲泡茶");
+  assert.equal(localization.localizeItemName({ itemName: "Philosopher's Necklace", locale: "zh-CN", chineseNames: { "Philosopher's Necklace": "贤者项链" } }), "贤者项链");
   assert.equal(localization.localizeItemName({ itemName: "Expert Attack Charm", locale: "zh-CN", chineseNames: chineseItemNames }), "专家攻击护符");
   assert.equal(localization.localizeItemName({ itemName: "Master Intelligence Charm", locale: "zh-CN", chineseNames: chineseItemNames }), "大师智力护符");
   assert.equal(localization.localizeItemName({ itemName: "Master Intelligence Charm", locale: "en", chineseNames: chineseItemNames }), "Master Intelligence Charm");
