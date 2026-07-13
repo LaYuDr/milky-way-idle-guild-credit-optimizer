@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.18
+// @version      0.4.19
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -12,6 +12,60 @@
 // ==/UserScript==
 
 // MWI_GUILD_CREDIT_RUNTIME
+(function () {
+  "use strict";
+
+  const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
+  const bridge = page.__mwiGuildCreditBridge || (page.__mwiGuildCreditBridge = {
+    messages: [],
+    itemDetails: null,
+    guildBuffDetails: null,
+    guildBuffLevels: null
+  });
+
+  function keepGuildData(message) {
+    if (!message || typeof message !== "object") return;
+    const visited = new Set();
+    const pending = [message];
+    let scanned = 0;
+    while (pending.length && scanned < 400) {
+      const value = pending.pop();
+      if (!value || typeof value !== "object" || visited.has(value)) continue;
+      visited.add(value);
+      scanned += 1;
+      const itemDetails = value.itemDetailMap || value.itemDetailDict;
+      const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
+      const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
+      if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
+      if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
+      for (const child of Object.values(value)) pending.push(child);
+    }
+  }
+
+  const NativeWebSocket = page.WebSocket;
+  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) return;
+  function ObservedWebSocket(...args) {
+    const socket = new NativeWebSocket(...args);
+    socket.addEventListener("message", (event) => {
+      if (typeof event.data !== "string") return;
+      bridge.messages.push(event.data);
+      if (bridge.messages.length > 80) bridge.messages.shift();
+      try {
+        keepGuildData(JSON.parse(event.data));
+      } catch (_) {
+        // Ignore non-JSON protocol frames.
+      }
+    });
+    return socket;
+  }
+  ObservedWebSocket.prototype = NativeWebSocket.prototype;
+  Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
+  ObservedWebSocket.__mwiGuildCreditBridge = true;
+  page.WebSocket = ObservedWebSocket;
+})();
+
+
 // Derived item-name mapping from the public Milky Way Idle Chinese translation
 // (Greasy Fork script 490242), extracted on 2026-07-13.
 (function (root, factory) {
@@ -1033,7 +1087,7 @@
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function simpleItemName(itemHrid) {
     return String(itemHrid || "未知物品").split("/").pop().replaceAll("_", " ");
@@ -1101,7 +1155,7 @@
   function setGuildBuffLevelsFrom(source) {
     if (!source || typeof source !== "object") return false;
     return setGuildBuffLevels(
-      source.characterGuildBuffMap || source.characterGuildBuffDict || source.characterGuildBuffs ||
+      source.characterGuildBuffMap || source.characterGuildBuffDict || source.characterGuildBuffs || source.characterGuildBuffLevelMap || source.characterGuildBuffLevelDict ||
       source.guildBuffLevelMap || source.guildBuffLevelDict || source.guildBuffLevels || source.guildBuffMap || source.guildBuffDict
     );
   }
@@ -1256,6 +1310,7 @@
     const bridge = pageWindow.__mwiGuildCreditBridge;
     if (!bridge || typeof bridge !== "object") return;
     setItemDetails(bridge.itemDetails);
+    setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels)) {
       for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels); index -= 1) {
@@ -1708,6 +1763,19 @@
     if (state.exchangeAdvisor) state.exchangeAdvisor.hidden = true;
   }
 
+  function suppressGuildExchangeAdvisor(modal) {
+    state.exchangeAdvisorSuppressedModal = modal;
+    hideGuildExchangeAdvisor();
+  }
+
+  function isGuildExchangeCloseGesture(event, modal) {
+    if (!(event.target instanceof Element) || !modal.contains(event.target)) return false;
+    const modalRect = modal.getBoundingClientRect();
+    const closeAreaWidth = Math.min(96, modalRect.width * 0.25);
+    const closeAreaHeight = Math.min(96, modalRect.height * 0.2);
+    return event.clientX >= modalRect.right - closeAreaWidth && event.clientY <= modalRect.top + closeAreaHeight;
+  }
+
   function placeGuildExchangeAdvisor(advisor, modal) {
     const margin = 12;
     const gap = 12;
@@ -1755,9 +1823,16 @@
   function refreshGuildExchangeAdvisor() {
     const modalData = findGuildExchangeModal();
     if (!modalData) {
+      state.exchangeAdvisorSuppressedModal = null;
       hideGuildExchangeAdvisor();
       return;
     }
+
+    if (state.exchangeAdvisorSuppressedModal === modalData.element) {
+      hideGuildExchangeAdvisor();
+      return;
+    }
+    state.exchangeAdvisorSuppressedModal = null;
 
     const conversions = allConversions(modalData.creditItemHrid);
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
@@ -1937,11 +2012,22 @@
   hydrateLocalInitData();
   hydrateBridgeData();
   document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
+  document.addEventListener("pointerdown", (event) => {
+    const modalData = findGuildExchangeModal();
+    if (modalData && isGuildExchangeCloseGesture(event, modalData.element)) {
+      suppressGuildExchangeAdvisor(modalData.element);
+    }
+  }, true);
   document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", (event) => {
     if (event.target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
   window.addEventListener("resize", scheduleGuildExchangeAdvisor);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const modalData = findGuildExchangeModal();
+    if (modalData) suppressGuildExchangeAdvisor(modalData.element);
+  }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
   window.setInterval(refreshGuildExchangeAdvisor, 800);
   window.setTimeout(ensureSidebarIntegration, 1000);

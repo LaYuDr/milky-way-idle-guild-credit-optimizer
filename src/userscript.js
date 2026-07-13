@@ -55,7 +55,7 @@
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function simpleItemName(itemHrid) {
     return String(itemHrid || "未知物品").split("/").pop().replaceAll("_", " ");
@@ -123,7 +123,7 @@
   function setGuildBuffLevelsFrom(source) {
     if (!source || typeof source !== "object") return false;
     return setGuildBuffLevels(
-      source.characterGuildBuffMap || source.characterGuildBuffDict || source.characterGuildBuffs ||
+      source.characterGuildBuffMap || source.characterGuildBuffDict || source.characterGuildBuffs || source.characterGuildBuffLevelMap || source.characterGuildBuffLevelDict ||
       source.guildBuffLevelMap || source.guildBuffLevelDict || source.guildBuffLevels || source.guildBuffMap || source.guildBuffDict
     );
   }
@@ -278,6 +278,7 @@
     const bridge = pageWindow.__mwiGuildCreditBridge;
     if (!bridge || typeof bridge !== "object") return;
     setItemDetails(bridge.itemDetails);
+    setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels)) {
       for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels); index -= 1) {
@@ -730,6 +731,19 @@
     if (state.exchangeAdvisor) state.exchangeAdvisor.hidden = true;
   }
 
+  function suppressGuildExchangeAdvisor(modal) {
+    state.exchangeAdvisorSuppressedModal = modal;
+    hideGuildExchangeAdvisor();
+  }
+
+  function isGuildExchangeCloseGesture(event, modal) {
+    if (!(event.target instanceof Element) || !modal.contains(event.target)) return false;
+    const modalRect = modal.getBoundingClientRect();
+    const closeAreaWidth = Math.min(96, modalRect.width * 0.25);
+    const closeAreaHeight = Math.min(96, modalRect.height * 0.2);
+    return event.clientX >= modalRect.right - closeAreaWidth && event.clientY <= modalRect.top + closeAreaHeight;
+  }
+
   function placeGuildExchangeAdvisor(advisor, modal) {
     const margin = 12;
     const gap = 12;
@@ -777,9 +791,16 @@
   function refreshGuildExchangeAdvisor() {
     const modalData = findGuildExchangeModal();
     if (!modalData) {
+      state.exchangeAdvisorSuppressedModal = null;
       hideGuildExchangeAdvisor();
       return;
     }
+
+    if (state.exchangeAdvisorSuppressedModal === modalData.element) {
+      hideGuildExchangeAdvisor();
+      return;
+    }
+    state.exchangeAdvisorSuppressedModal = null;
 
     const conversions = allConversions(modalData.creditItemHrid);
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
@@ -959,11 +980,22 @@
   hydrateLocalInitData();
   hydrateBridgeData();
   document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
+  document.addEventListener("pointerdown", (event) => {
+    const modalData = findGuildExchangeModal();
+    if (modalData && isGuildExchangeCloseGesture(event, modalData.element)) {
+      suppressGuildExchangeAdvisor(modalData.element);
+    }
+  }, true);
   document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", (event) => {
     if (event.target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
   window.addEventListener("resize", scheduleGuildExchangeAdvisor);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const modalData = findGuildExchangeModal();
+    if (modalData) suppressGuildExchangeAdvisor(modalData.element);
+  }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
   window.setInterval(refreshGuildExchangeAdvisor, 800);
   window.setTimeout(ensureSidebarIntegration, 1000);

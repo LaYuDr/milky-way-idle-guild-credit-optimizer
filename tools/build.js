@@ -24,7 +24,7 @@ const header = `// ==UserScript==
 
 `;
 
-const runtime = `// MWI_GUILD_CREDIT_RUNTIME\n${source("src/zh-cn-items.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
+const runtime = `// MWI_GUILD_CREDIT_RUNTIME\n${source("src/bridge.js")}\n\n${source("src/zh-cn-items.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
 fs.writeFileSync(output, bundle);
