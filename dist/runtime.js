@@ -1756,7 +1756,10 @@
   }
 
   function isGuildExchangeCloseGesture(event, modal) {
-    if (!(event.target instanceof Element) || !modal.contains(event.target)) return false;
+    const target = event.target;
+    // Tampermonkey and the game can expose DOM objects from different realms,
+    // making instanceof Element unreliable for clicks on the game's close icon.
+    if (!target || target.nodeType !== 1 || !modal.contains(target)) return false;
     const modalRect = modal.getBoundingClientRect();
     const closeAreaWidth = Math.min(96, modalRect.width * 0.25);
     const closeAreaHeight = Math.min(96, modalRect.height * 0.2);

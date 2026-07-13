@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.19
+// @version      0.4.20
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -1769,7 +1769,10 @@
   }
 
   function isGuildExchangeCloseGesture(event, modal) {
-    if (!(event.target instanceof Element) || !modal.contains(event.target)) return false;
+    const target = event.target;
+    // Tampermonkey and the game can expose DOM objects from different realms,
+    // making instanceof Element unreliable for clicks on the game's close icon.
+    if (!target || target.nodeType !== 1 || !modal.contains(target)) return false;
     const modalRect = modal.getBoundingClientRect();
     const closeAreaWidth = Math.min(96, modalRect.width * 0.25);
     const closeAreaHeight = Math.min(96, modalRect.height * 0.2);
