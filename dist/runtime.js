@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.35";
+window.MwiGuildCreditVersion = "0.4.37";
 
 (function () {
   "use strict";
@@ -1190,7 +1190,7 @@ window.MwiGuildCreditVersion = "0.4.35";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorModalObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function savedPriceReference() {
     try {
@@ -2034,8 +2034,8 @@ window.MwiGuildCreditVersion = "0.4.35";
     advisor.id = "mwi-guild-exchange-advisor";
     advisor.setAttribute("aria-live", "polite");
     advisor.innerHTML = `<style>
-      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
-      #mwi-guild-exchange-advisor[hidden]{display:none}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}#mwi-guild-exchange-advisor .mwi-advisor-title{display:grid;gap:2px;font-size:17px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-credit::before{width:9px;height:9px;border-radius:2px;background:var(--mwi-credit-color,#4fcdb5);content:""}#mwi-guild-exchange-advisor .mwi-advisor-reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-body{display:grid;gap:9px;padding:11px 12px}#mwi-guild-exchange-advisor .mwi-advisor-options{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"]{grid-template-columns:minmax(0,1fr)}#mwi-guild-exchange-advisor .mwi-advisor-option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}#mwi-guild-exchange-advisor .mwi-advisor-option[data-role="best-option"]{border-color:var(--mwi-credit-color,#4fcdb5);background:#193836}#mwi-guild-exchange-advisor .mwi-advisor-option-label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}#mwi-guild-exchange-advisor .mwi-advisor-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-cost{margin:8px 0 5px;color:var(--mwi-credit-color,#77f3d0);font-size:23px;font-weight:700;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-detail b{color:#e7e8f6;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-vs{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-vs span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}#mwi-guild-exchange-advisor .mwi-advisor-summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-summary strong{color:var(--mwi-credit-color,#77f3d0);font-size:16px}
+      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
+      #mwi-guild-exchange-advisor[hidden],#mwi-guild-exchange-advisor [hidden]{display:none!important}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}#mwi-guild-exchange-advisor .mwi-advisor-title{display:grid;gap:2px;font-size:17px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-credit::before{width:9px;height:9px;border-radius:2px;background:var(--mwi-credit-color,#4fcdb5);content:""}#mwi-guild-exchange-advisor .mwi-advisor-reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}#mwi-guild-exchange-advisor .mwi-advisor-options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"]{grid-template-columns:minmax(0,1fr)}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"] .mwi-advisor-option{display:flex;flex-direction:column;justify-content:center}#mwi-guild-exchange-advisor .mwi-advisor-option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}#mwi-guild-exchange-advisor .mwi-advisor-option[data-role="best-option"]{border-color:var(--mwi-credit-color,#4fcdb5);background:#193836}#mwi-guild-exchange-advisor .mwi-advisor-option-label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}#mwi-guild-exchange-advisor .mwi-advisor-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-cost{margin:8px 0 5px;color:var(--mwi-credit-color,#77f3d0);font-size:23px;font-weight:700;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-detail b{color:#e7e8f6;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-vs{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-vs span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}#mwi-guild-exchange-advisor .mwi-advisor-summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-summary strong{color:var(--mwi-credit-color,#77f3d0);font-size:16px}
     </style><div class="mwi-advisor-head"><div class="mwi-advisor-title"><span>兑换最优推荐</span><span class="mwi-advisor-credit" data-role="credit-label"></span></div><span class="mwi-advisor-reference" data-role="reference"></span></div><div class="mwi-advisor-body"><div class="mwi-advisor-options" data-role="options"><div class="mwi-advisor-option" data-role="selected-option"><span class="mwi-advisor-option-label">当前选择</span><div class="mwi-advisor-item" data-role="selected-item"></div><div class="mwi-advisor-cost" data-role="selected-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="selected-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="selected-market-cost"></b></div></div><div class="mwi-advisor-vs" data-role="vs"><span>VS</span></div><div class="mwi-advisor-option" data-role="best-option"><span class="mwi-advisor-option-label">最优物品</span><div class="mwi-advisor-item" data-role="best-item"></div><div class="mwi-advisor-cost" data-role="best-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="best-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="best-market-cost"></b></div></div></div><div class="mwi-advisor-summary" data-role="summary"></div></div>`;
     document.body.append(advisor);
     state.exchangeAdvisor = advisor;
@@ -2131,10 +2131,15 @@ window.MwiGuildCreditVersion = "0.4.35";
   function refreshGuildExchangeAdvisor() {
     const modalData = findGuildExchangeModal();
     if (!modalData) {
+      if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
+      state.exchangeAdvisorModalObserver = null;
+      state.exchangeAdvisorModal = null;
       state.exchangeAdvisorSuppressedModal = null;
       hideGuildExchangeAdvisor();
       return;
     }
+
+    observeGuildExchangeModal(modalData.element);
 
     if (state.exchangeAdvisorSuppressedModal === modalData.element) {
       hideGuildExchangeAdvisor();
@@ -2185,8 +2190,24 @@ window.MwiGuildCreditVersion = "0.4.35";
   }
 
   function scheduleGuildExchangeAdvisor() {
-    window.clearTimeout(state.exchangeAdvisorTimer);
-    state.exchangeAdvisorTimer = window.setTimeout(refreshGuildExchangeAdvisor, 80);
+    if (state.exchangeAdvisorFrame !== null) return;
+    state.exchangeAdvisorFrame = window.requestAnimationFrame(() => {
+      state.exchangeAdvisorFrame = null;
+      refreshGuildExchangeAdvisor();
+    });
+  }
+
+  function observeGuildExchangeModal(modal) {
+    if (state.exchangeAdvisorModal === modal) return;
+    if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
+    state.exchangeAdvisorModal = modal;
+    state.exchangeAdvisorModalObserver = new MutationObserver(scheduleGuildExchangeAdvisor);
+    state.exchangeAdvisorModalObserver.observe(modal, {
+      attributes: true,
+      attributeFilter: ["aria-label", "class", "disabled", "href", "style", "value", "xlink:href"],
+      childList: true,
+      subtree: true
+    });
   }
 
   function watchGuildExchangeModals() {
@@ -2350,7 +2371,7 @@ window.MwiGuildCreditVersion = "0.4.35";
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
   watchGuildExchangeModals();
-  window.setInterval(refreshGuildExchangeAdvisor, 1200);
+  window.setInterval(refreshGuildExchangeAdvisor, 5000);
   window.setTimeout(ensureSidebarIntegration, 1000);
   window.setTimeout(refreshGuildExchangeAdvisor, 1000);
 })();
