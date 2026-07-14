@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.32";
+window.MwiGuildCreditVersion = "0.4.33";
 
 (function () {
   "use strict";
@@ -2216,9 +2216,9 @@ window.MwiGuildCreditVersion = "0.4.32";
   function activateCreditTabFromPointer(event) {
     const creditTab = state.creditTab;
     if (!creditTab || !creditTab.isConnected) return false;
-    const rect = creditTab.getBoundingClientRect();
-    const isHit = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-    if (!isHit) return false;
+    const rawTarget = event.target;
+    const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
+    if (!target || !creditTab.contains(target)) return false;
     const tabBar = creditTab.parentElement;
     const tabsRoot = tabBar && tabBar.parentElement && tabBar.parentElement.parentElement && tabBar.parentElement.parentElement.parentElement;
     const sidebar = tabsRoot && tabsRoot.parentElement;

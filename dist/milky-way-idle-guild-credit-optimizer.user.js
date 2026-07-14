@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.32
+// @version      0.4.33
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -12,7 +12,7 @@
 // ==/UserScript==
 
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.32";
+window.MwiGuildCreditVersion = "0.4.33";
 
 (function () {
   "use strict";
@@ -2229,9 +2229,9 @@ window.MwiGuildCreditVersion = "0.4.32";
   function activateCreditTabFromPointer(event) {
     const creditTab = state.creditTab;
     if (!creditTab || !creditTab.isConnected) return false;
-    const rect = creditTab.getBoundingClientRect();
-    const isHit = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-    if (!isHit) return false;
+    const rawTarget = event.target;
+    const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
+    if (!target || !creditTab.contains(target)) return false;
     const tabBar = creditTab.parentElement;
     const tabsRoot = tabBar && tabBar.parentElement && tabBar.parentElement.parentElement && tabBar.parentElement.parentElement.parentElement;
     const sidebar = tabsRoot && tabsRoot.parentElement;
