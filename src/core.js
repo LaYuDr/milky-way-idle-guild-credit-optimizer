@@ -224,6 +224,59 @@
     };
   }
 
+  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts) {
+    const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
+    const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
+    const rows = [];
+    const unpricedItemHrids = [];
+    let totalGold = 0;
+    let missingGold = 0;
+    let guildTokensRequired = 0;
+    let guildTokensOwned = 0;
+
+    for (const item of Array.isArray(totals) ? totals : []) {
+      const itemHrid = item && item.itemHrid;
+      const required = Number(item && item.count);
+      if (!itemHrid || !Number.isFinite(required) || required <= 0) continue;
+      const owned = Math.max(0, Number(inventory[itemHrid]) || 0);
+      const missing = Math.max(0, required - owned);
+      if (itemHrid === "/items/guild_token") {
+        guildTokensRequired += required;
+        guildTokensOwned += owned;
+        rows.push({ itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null });
+        continue;
+      }
+      const unitCost = Number(unitCosts[itemHrid]);
+      const priced = Number.isFinite(unitCost) && unitCost > 0;
+      if (priced) {
+        totalGold += required * unitCost;
+        missingGold += missing * unitCost;
+      } else {
+        unpricedItemHrids.push(itemHrid);
+      }
+      rows.push({
+        itemHrid,
+        required,
+        owned,
+        missing,
+        unitCost: priced ? unitCost : null,
+        totalCost: priced ? required * unitCost : null,
+        missingCost: priced ? missing * unitCost : null
+      });
+    }
+
+    return {
+      status: unpricedItemHrids.length ? "partial" : "ok",
+      totalGold,
+      missingGold,
+      guildTokensRequired,
+      guildTokensOwned,
+      guildTokensMissing: Math.max(0, guildTokensRequired - guildTokensOwned),
+      unpricedItemHrids,
+      rows
+    };
+  }
+
   function conversionsFromItemDetails(itemDetails, creditItemHrid) {
     const details = Array.isArray(itemDetails)
       ? itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
@@ -240,5 +293,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });

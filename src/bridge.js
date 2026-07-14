@@ -6,7 +6,8 @@
     messages: [],
     itemDetails: null,
     guildBuffDetails: null,
-    guildBuffLevels: null
+    guildBuffLevels: null,
+    characterItems: null
   });
 
   function keepGuildData(message) {
@@ -22,9 +23,11 @@
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
       const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      const characterItems = value.characterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
+      if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
       for (const child of Object.values(value)) pending.push(child);
     }
   }

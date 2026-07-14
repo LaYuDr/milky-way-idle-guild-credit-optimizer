@@ -7,7 +7,8 @@
     messages: [],
     itemDetails: null,
     guildBuffDetails: null,
-    guildBuffLevels: null
+    guildBuffLevels: null,
+    characterItems: null
   });
 
   function keepGuildData(message) {
@@ -23,9 +24,11 @@
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
       const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      const characterItems = value.characterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
+      if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
       for (const child of Object.values(value)) pending.push(child);
     }
   }
@@ -997,6 +1000,59 @@
     };
   }
 
+  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts) {
+    const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
+    const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
+    const rows = [];
+    const unpricedItemHrids = [];
+    let totalGold = 0;
+    let missingGold = 0;
+    let guildTokensRequired = 0;
+    let guildTokensOwned = 0;
+
+    for (const item of Array.isArray(totals) ? totals : []) {
+      const itemHrid = item && item.itemHrid;
+      const required = Number(item && item.count);
+      if (!itemHrid || !Number.isFinite(required) || required <= 0) continue;
+      const owned = Math.max(0, Number(inventory[itemHrid]) || 0);
+      const missing = Math.max(0, required - owned);
+      if (itemHrid === "/items/guild_token") {
+        guildTokensRequired += required;
+        guildTokensOwned += owned;
+        rows.push({ itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null });
+        continue;
+      }
+      const unitCost = Number(unitCosts[itemHrid]);
+      const priced = Number.isFinite(unitCost) && unitCost > 0;
+      if (priced) {
+        totalGold += required * unitCost;
+        missingGold += missing * unitCost;
+      } else {
+        unpricedItemHrids.push(itemHrid);
+      }
+      rows.push({
+        itemHrid,
+        required,
+        owned,
+        missing,
+        unitCost: priced ? unitCost : null,
+        totalCost: priced ? required * unitCost : null,
+        missingCost: priced ? missing * unitCost : null
+      });
+    }
+
+    return {
+      status: unpricedItemHrids.length ? "partial" : "ok",
+      totalGold,
+      missingGold,
+      guildTokensRequired,
+      guildTokensOwned,
+      guildTokensMissing: Math.max(0, guildTokensRequired - guildTokensOwned),
+      unpricedItemHrids,
+      rows
+    };
+  }
+
   function conversionsFromItemDetails(itemDetails, creditItemHrid) {
     const details = Array.isArray(itemDetails)
       ? itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
@@ -1013,7 +1069,7 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
 
 
@@ -1074,7 +1130,7 @@
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function simpleItemName(itemHrid) {
     return String(itemHrid || "未知物品").split("/").pop().replaceAll("_", " ");
@@ -1134,6 +1190,14 @@
   function setGuildBuffLevels(candidate) {
     if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
       state.guildBuffLevels = candidate;
+      return true;
+    }
+    return false;
+  }
+
+  function setCharacterItems(candidate) {
+    if (Array.isArray(candidate)) {
+      state.characterItems = candidate;
       return true;
     }
     return false;
@@ -1230,7 +1294,7 @@
   }
 
   function hydrateLocalInitData() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
     let raw;
     try {
       raw = pageWindow.localStorage && pageWindow.localStorage.getItem("initClientData");
@@ -1244,14 +1308,15 @@
       const hasItems = setItemDetails(data.itemDetailMap || data.itemDetailDict);
       const hasGuildBuffs = setGuildBuffDetails(data.guildBuffDetailMap || data.guildBuffDetailDict);
       const hasGuildBuffLevels = setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character);
-      return hasItems || hasGuildBuffs || hasGuildBuffLevels;
+      const hasCharacterItems = setCharacterItems(data.characterItems || data.character && data.character.items);
+      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasCharacterItems;
     } catch (_) {
       return false;
     }
   }
 
   function extractItemDetailsFromReact() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
     const roots = [document.getElementById("root"), document.body].filter(Boolean);
     const visited = new Set();
     const stack = [];
@@ -1274,7 +1339,8 @@
         found = setItemDetails(candidate.itemDetailMap || candidate.itemDetailDict) || found;
         found = setGuildBuffDetails(candidate.guildBuffDetailMap || candidate.guildBuffDetailDict) || found;
         found = setGuildBuffLevelsFrom(candidate) || found;
-        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels) return true;
+        found = setCharacterItems(candidate.characterItems) || found;
+        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
       }
       // React 18 containers point at a FiberRoot whose active tree is .current.
       if (fiber.current) stack.push(fiber.current);
@@ -1290,6 +1356,7 @@
     setItemDetails(value.itemDetailMap || value.itemDetailDict);
     setGuildBuffDetails(value.guildBuffDetailMap || value.guildBuffDetailDict);
     setGuildBuffLevelsFrom(value);
+    setCharacterItems(value.characterItems);
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
 
@@ -1299,8 +1366,9 @@
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
-    if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels)) {
-      for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels); index -= 1) {
+    setCharacterItems(bridge.characterItems);
+    if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.characterItems)) {
+      for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.characterItems); index -= 1) {
         try {
           scanMessage(JSON.parse(bridge.messages[index]), 0);
         } catch (_) {
@@ -1403,6 +1471,29 @@
     return itemNameForMaterial(left.itemHrid).localeCompare(itemNameForMaterial(right.itemHrid), "zh-CN");
   }
 
+  function inventoryItemCounts() {
+    hydrateLocalInitData();
+    hydrateBridgeData();
+    extractItemDetailsFromReact();
+    const counts = Object.create(null);
+    for (const item of state.characterItems || []) {
+      if (!item || item.itemLocationHrid !== "/item_locations/inventory") continue;
+      const count = Number(item.count);
+      if (!item.itemHrid || !Number.isFinite(count) || count <= 0) continue;
+      counts[item.itemHrid] = (counts[item.itemHrid] || 0) + count;
+    }
+    return counts;
+  }
+
+  function bestCreditUnitCosts() {
+    return Object.fromEntries(CREDIT_TYPES.map(([creditItemHrid]) => {
+      const conversions = allConversions(creditItemHrid);
+      const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
+      const best = core.rankConversions(conversions, books, 1).find((row) => row.status === "ok");
+      return [creditItemHrid, best ? best.costPerCredit : null];
+    }));
+  }
+
   function currentGuildBuffLevel(entry) {
     const stored = Array.isArray(state.guildBuffLevels)
       ? state.guildBuffLevels.find((value) => value && (value.guildBuffHrid || value.hrid) === entry.hrid)
@@ -1460,17 +1551,40 @@
     }).join("");
   }
 
-  function renderMaterialTotals(results, totals) {
+  function renderUpgradeCostText(gold, guildTokens) {
+    const parts = [`${core.formatCompactCost(gold)} 金币`];
+    if (guildTokens > 0) parts.push(`${formatNumber(guildTokens)} 公会代币`);
+    return parts.join(" + ");
+  }
+
+  function renderUpgradeCostSummary(estimate, hasInventory) {
+    if (!estimate) return '<div class="mwi-upgrade-cost-summary mwi-upgrade-cost-unavailable">未读取到公开市场快照，暂无法估算金币成本。</div>';
+    const partial = estimate.status !== "ok";
+    const missingNames = estimate.unpricedItemHrids.map(itemNameForMaterial).join("、");
+    const totalLabel = partial ? "预计成本（已定价部分）" : "预计总成本";
+    const missingLabel = partial ? "库存后缺口（已定价部分）" : "库存后仍需";
+    const inventoryNote = hasInventory ? "" : '<div class="mwi-upgrade-cost-note">未读取背包库存，缺口暂按 0 件库存计算。</div>';
+    const priceNote = partial ? `<div class="mwi-upgrade-cost-note">以下信用点暂无可用市场价格：${escapeHtml(missingNames)}。</div>` : "";
+    return `<div class="mwi-upgrade-cost-summary"><div><span>${totalLabel}</span><strong>${renderUpgradeCostText(estimate.totalGold, estimate.guildTokensRequired)}</strong></div><div><span>${missingLabel}</span><strong>${renderUpgradeCostText(estimate.missingGold, estimate.guildTokensMissing)}</strong></div>${inventoryNote}${priceNote}</div>`;
+  }
+
+  function renderMaterialTotals(results, totals, estimate, hasInventory) {
     const planSummary = results.map((plan) => {
       const entry = guildBuffEntries().find((candidate) => candidate.hrid === plan.guildBuffHrid);
       const label = entry ? guildBuffLabel(entry.detail, entry.hrid) : plan.guildBuffHrid;
       return `<span>${escapeHtml(label)} ${plan.startLevel} -> ${plan.targetLevel}</span>`;
     }).join("<span class=\"mwi-plan-separator\">，</span>");
-    const materials = totals.sort(materialOrder).map((item) => `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><strong>${formatNumber(item.count)}</strong></div>`).join("");
-    return `<div class="mwi-plan-summary">${planSummary}</div><div class="mwi-material-list">${materials}</div>`;
+    const estimateRows = Object.fromEntries((estimate && estimate.rows || []).map((row) => [row.itemHrid, row]));
+    const materials = totals.sort(materialOrder).map((item) => {
+      const row = estimateRows[item.itemHrid];
+      const inventoryText = row ? `库存 ${formatNumber(row.owned)} · 缺 ${formatNumber(row.missing)}` : "库存未读取";
+      return `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small></span><strong>${formatNumber(item.count)}</strong></div>`;
+    }).join("");
+    return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
   }
 
-  function refreshGuildUpgrade(panel) {
+  async function refreshGuildUpgrade(panel) {
+    const refreshId = ++state.upgradeRefreshId;
     refreshPageItemNames();
     const status = panel.querySelector('[data-role="upgrade-status"]');
     const results = panel.querySelector('[data-role="upgrade-results"]');
@@ -1498,10 +1612,22 @@
       results.replaceChildren();
       return;
     }
-    status.textContent = state.guildBuffLevels
-      ? `已合并 ${result.plans.length} 项神龛升级的材料成本。`
-      : `未读取当前神龛等级，已按 0 级开始；请确认或手动调整“起始等级”。`;
-    results.innerHTML = renderMaterialTotals(result.plans, result.totals);
+    let estimate = null;
+    let snapshotFailed = false;
+    try {
+      await loadSnapshot(false);
+      if (refreshId !== state.upgradeRefreshId) return;
+      estimate = core.estimateGuildUpgradeCosts(result.totals, bestCreditUnitCosts(), inventoryItemCounts());
+    } catch (_) {
+      snapshotFailed = true;
+    }
+    if (refreshId !== state.upgradeRefreshId) return;
+    const hasInventory = Array.isArray(state.characterItems);
+    const notices = [state.guildBuffLevels ? `已合并 ${result.plans.length} 项神龛升级的材料成本。` : "未读取当前神龛等级，已按 0 级开始；请确认或手动调整“起始等级”。"];
+    if (snapshotFailed) notices.push("公开市场快照读取失败，暂未估算金币成本。");
+    if (!hasInventory) notices.push("未读取背包库存，缺口暂按 0 件库存计算。");
+    status.textContent = notices.join(" ");
+    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory);
   }
 
   function setPanelView(panel, view) {
@@ -1544,7 +1670,7 @@
         #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;gap:8px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:end;padding:8px;border:1px solid #474969;border-radius:4px;background:#292a46}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:32px;min-width:32px;padding:0!important;font-size:20px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{margin-top:10px}
-        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
+        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
       </style>
       <h3>公会助手</h3>
