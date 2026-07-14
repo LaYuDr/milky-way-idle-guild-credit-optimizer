@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.30";
+window.MwiGuildCreditVersion = "0.4.31";
 
 (function () {
   "use strict";
@@ -1782,19 +1782,6 @@ window.MwiGuildCreditVersion = "0.4.30";
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
     panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
-      const tokenToggle = event.target.closest('[data-role="toggle-token-values"]');
-      if (tokenToggle) {
-        state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
-        const section = tokenToggle.closest(".mwi-token-value-section");
-        if (!section) return;
-        section.dataset.collapsed = String(state.guildTokenValuesCollapsed);
-        tokenToggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
-        const icon = tokenToggle.querySelector(".mwi-collapse-icon");
-        if (icon) icon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
-        const body = section.querySelector(".mwi-token-value-body");
-        if (body) body.hidden = state.guildTokenValuesCollapsed;
-        return;
-      }
       const toggle = event.target.closest('[data-role="toggle-credit-section"]');
       const section = toggle && toggle.closest('[data-credit-item-hrid]');
       if (!section) return;
@@ -1873,6 +1860,21 @@ window.MwiGuildCreditVersion = "0.4.30";
     return `<section class="mwi-token-value-section" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
   }
 
+  function bindGuildTokenValueToggle(results) {
+    const toggle = results.querySelector('[data-role="toggle-token-values"]');
+    const section = toggle && toggle.closest(".mwi-token-value-section");
+    const body = section && section.querySelector(".mwi-token-value-body");
+    if (!toggle || !section || !body) return;
+    toggle.addEventListener("click", () => {
+      state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
+      section.dataset.collapsed = String(state.guildTokenValuesCollapsed);
+      toggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
+      const icon = toggle.querySelector(".mwi-collapse-icon");
+      if (icon) icon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
+      body.hidden = state.guildTokenValuesCollapsed;
+    });
+  }
+
   async function refreshPanel(panel, forceSnapshot) {
     refreshPageItemNames();
     if (state.refreshInFlight) {
@@ -1916,6 +1918,7 @@ window.MwiGuildCreditVersion = "0.4.30";
       status.textContent = "";
       status.hidden = true;
       results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
+      bindGuildTokenValueToggle(results);
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {
