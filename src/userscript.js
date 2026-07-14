@@ -1035,7 +1035,9 @@
       setOption("best", data.best);
     }
     const summary = advisor.querySelector('[data-role="summary"]');
-    if (!data.selected) {
+    if (!data.selected && data.unavailableReason) {
+      summary.textContent = data.unavailableReason;
+    } else if (!data.selected) {
       summary.textContent = "请选择兑换物品以计算卖出后替代方案。";
     } else if (data.replacement.creditDifference > 0) {
       summary.replaceChildren("卖出后改买可多获得 ", Object.assign(document.createElement("strong"), { textContent: `+${formatNumber(data.replacement.creditDifference)}` }), ` ${data.creditLabel}信用点。`);
@@ -1093,6 +1095,7 @@
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
     let selected = null;
     let replacement = null;
+    let unavailableReason = "";
     if (selectedConversion) {
       const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
       const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
@@ -1105,10 +1108,11 @@
         buyPrices
       });
       if (replacement.status !== "ok") {
-        hideGuildExchangeAdvisor();
-        return;
+        unavailableReason = "当前物品暂无公开收购价，无法估算卖出后回购。";
+        replacement = null;
+      } else {
+        selected = selectedConversion;
       }
-      selected = selectedConversion;
     }
     const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
     renderGuildExchangeAdvisor(modalData, {
@@ -1116,7 +1120,8 @@
       color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
       best: replacement ? replacement.best : best,
       selected,
-      replacement
+      replacement,
+      unavailableReason
     });
   }
 
