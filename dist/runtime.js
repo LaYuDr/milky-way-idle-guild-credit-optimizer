@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.38";
+window.MwiGuildCreditVersion = "0.4.39";
 
 (function () {
   "use strict";
@@ -938,6 +938,35 @@ window.MwiGuildCreditVersion = "0.4.38";
     return candidates[0] || null;
   }
 
+  function estimateSaleReplacement(options) {
+    const selectedConversion = options && options.selectedConversion;
+    const batches = positiveInteger(options && options.batches);
+    const selectedItemCount = positiveInteger(selectedConversion && selectedConversion.itemCount);
+    const selectedCreditCount = positiveInteger(selectedConversion && selectedConversion.creditCount);
+    if (!batches || !selectedItemCount || !selectedCreditCount) {
+      return { status: "invalid_selection", options };
+    }
+
+    const directCredits = batches * selectedCreditCount;
+    const sale = calculateSaleProceeds(
+      batches * selectedItemCount,
+      options && options.sellPrice,
+      options && options.sellerTaxRate
+    );
+    if (sale.status !== "ok") return { status: sale.status, directCredits, sale };
+
+    const best = bestConversionForBudget(options && options.conversions, options && options.buyPrices, sale.net);
+    if (!best) return { status: "no_affordable_conversion", directCredits, sale, best: null };
+
+    return {
+      status: "ok",
+      directCredits,
+      sale,
+      best,
+      creditDifference: best.actualCredits - directCredits
+    };
+  }
+
   function calculateSaleProceeds(quantity, sellPrice, sellerTaxRate) {
     const itemQuantity = positiveInteger(quantity);
     const price = Number(sellPrice);
@@ -1113,7 +1142,7 @@ window.MwiGuildCreditVersion = "0.4.38";
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
 
 
@@ -1152,6 +1181,7 @@ window.MwiGuildCreditVersion = "0.4.38";
     { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
     { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
   ];
+  const SELLER_TAX_RATE = 0.02;
   const GUILD_SHRINE_NAMES = {
     "/guild_shrines/force": "力量神龛",
     "/guild_shrines/tempo": "节奏神龛",
@@ -2092,7 +2122,9 @@ window.MwiGuildCreditVersion = "0.4.38";
   function renderGuildExchangeAdvisor(modalData, data) {
     const advisor = ensureGuildExchangeAdvisor();
     advisor.querySelector('[data-role="credit-label"]').textContent = `${data.creditLabel}信用点`;
-    advisor.querySelector('[data-role="reference"]').textContent = `参考${PRICE_REFERENCES[state.priceReference].label}`;
+    advisor.querySelector('[data-role="reference"]').textContent = data.selected
+      ? `卖出右一（税 2%）·买入${PRICE_REFERENCES[state.priceReference].label}`
+      : `买入参考${PRICE_REFERENCES[state.priceReference].label}`;
     advisor.style.setProperty("--mwi-credit-color", data.color);
     const options = advisor.querySelector('[data-role="options"]');
     const selectedOption = advisor.querySelector('[data-role="selected-option"]');
@@ -2101,7 +2133,7 @@ window.MwiGuildCreditVersion = "0.4.38";
     selectedOption.hidden = !data.selected;
     versus.hidden = !data.selected;
 
-    const setOption = (prefix, option) => {
+    const setOption = (prefix, option, details) => {
       const item = advisor.querySelector(`[data-role="${prefix}-item"]`);
       item.replaceChildren();
       item.insertAdjacentHTML("beforeend", iconMarkup(option.itemHrid, option.itemName));
@@ -2109,23 +2141,56 @@ window.MwiGuildCreditVersion = "0.4.38";
       name.className = "mwi-advisor-item-name";
       name.textContent = option.itemName;
       item.append(name);
-      advisor.querySelector(`[data-role="${prefix}-cost"]`).replaceChildren(
+      const cost = advisor.querySelector(`[data-role="${prefix}-cost"]`);
+      const rows = advisor.querySelectorAll(`[data-role="${prefix}-option"] .mwi-advisor-detail`);
+      if (details) {
+        cost.replaceChildren(
+          document.createTextNode(formatNumber(details.credits)),
+          Object.assign(document.createElement("small"), { textContent: "信用点" })
+        );
+        rows[0].querySelector("span").textContent = details.firstLabel;
+        rows[0].querySelector("b").textContent = details.firstValue;
+        rows[1].querySelector("span").textContent = details.secondLabel;
+        rows[1].querySelector("b").textContent = details.secondValue;
+        return;
+      }
+      cost.replaceChildren(
         document.createTextNode(core.formatCompactCost(option.costPerCredit)),
         Object.assign(document.createElement("small"), { textContent: "金币 / 信用" })
       );
-      advisor.querySelector(`[data-role="${prefix}-conversion"]`).textContent = `${formatNumber(option.itemCount)} 件 -> ${formatNumber(option.creditCount)} 点`;
-      advisor.querySelector(`[data-role="${prefix}-market-cost"]`).textContent = `${core.formatCompactCost(option.cost)} 金币`;
+      rows[0].querySelector("span").textContent = "单次兑换";
+      rows[0].querySelector("b").textContent = `${formatNumber(option.itemCount)} 件 -> ${formatNumber(option.creditCount)} 点`;
+      rows[1].querySelector("span").textContent = "市场成本";
+      rows[1].querySelector("b").textContent = `${core.formatCompactCost(option.cost)} 金币`;
     };
 
-    setOption("best", data.best);
-    if (data.selected) setOption("selected", data.selected);
+    if (data.selected) {
+      setOption("selected", data.selected, {
+        credits: data.replacement.directCredits,
+        firstLabel: "直接兑换",
+        firstValue: `${formatNumber(data.replacement.sale.quantity)} 件 -> ${formatNumber(data.replacement.directCredits)} 点`,
+        secondLabel: "税后所得",
+        secondValue: `${core.formatCompactCost(data.replacement.sale.net)} 金币`
+      });
+      setOption("best", data.best, {
+        credits: data.replacement.best.actualCredits,
+        firstLabel: "回购兑换",
+        firstValue: `${formatNumber(data.replacement.best.requiredItems)} 件 -> ${formatNumber(data.replacement.best.actualCredits)} 点`,
+        secondLabel: "买入成本",
+        secondValue: `${core.formatCompactCost(data.replacement.best.cost)} 金币`
+      });
+    } else {
+      setOption("best", data.best);
+    }
     const summary = advisor.querySelector('[data-role="summary"]');
     if (!data.selected) {
-      summary.textContent = "请选择兑换物品以查看成本对比。";
-    } else if (data.savingPercent > 0) {
-      summary.replaceChildren("改用最优物品，每信用点预计节省 ", Object.assign(document.createElement("strong"), { textContent: `${data.savingPercent}%` }), "。");
+      summary.textContent = "请选择兑换物品以计算卖出后替代方案。";
+    } else if (data.replacement.creditDifference > 0) {
+      summary.replaceChildren("卖出后改买可多获得 ", Object.assign(document.createElement("strong"), { textContent: `+${formatNumber(data.replacement.creditDifference)}` }), ` ${data.creditLabel}信用点。`);
+    } else if (data.replacement.creditDifference < 0) {
+      summary.replaceChildren("直接兑换可多获得 ", Object.assign(document.createElement("strong"), { textContent: formatNumber(-data.replacement.creditDifference) }), ` ${data.creditLabel}信用点。`);
     } else {
-      summary.textContent = "当前选择已是最优物品。";
+      summary.textContent = "两种方案可获得相同的信用点。";
     }
     advisor.hidden = false;
     placeGuildExchangeAdvisor(advisor, modalData.modal);
@@ -2175,18 +2240,31 @@ window.MwiGuildCreditVersion = "0.4.38";
 
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
     let selected = null;
+    let replacement = null;
     if (selectedConversion) {
-      const price = snapshotPrice(selectedConversion.itemHrid, state.priceReference, modalData.selectedEnhancementLevel);
-      selected = price === null ? null : core.evaluateConversion(selectedConversion, { asks: [{ price, quantity: Number.MAX_SAFE_INTEGER }] }, 1);
-      if (selected && selected.status !== "ok") selected = null;
+      const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
+      const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
+      replacement = core.estimateSaleReplacement({
+        selectedConversion,
+        batches: modalData.batches,
+        sellPrice,
+        sellerTaxRate: SELLER_TAX_RATE,
+        conversions,
+        buyPrices
+      });
+      if (replacement.status !== "ok") {
+        hideGuildExchangeAdvisor();
+        return;
+      }
+      selected = selectedConversion;
     }
     const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
     renderGuildExchangeAdvisor(modalData, {
       creditLabel,
       color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
-      best,
+      best: replacement ? replacement.best : best,
       selected,
-      savingPercent: selected && selected.costPerCredit > 0 ? Math.max(0, Math.round((1 - best.costPerCredit / selected.costPerCredit) * 100)) : 0
+      replacement
     });
   }
 

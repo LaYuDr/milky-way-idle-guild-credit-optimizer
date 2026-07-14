@@ -160,6 +160,35 @@
     return candidates[0] || null;
   }
 
+  function estimateSaleReplacement(options) {
+    const selectedConversion = options && options.selectedConversion;
+    const batches = positiveInteger(options && options.batches);
+    const selectedItemCount = positiveInteger(selectedConversion && selectedConversion.itemCount);
+    const selectedCreditCount = positiveInteger(selectedConversion && selectedConversion.creditCount);
+    if (!batches || !selectedItemCount || !selectedCreditCount) {
+      return { status: "invalid_selection", options };
+    }
+
+    const directCredits = batches * selectedCreditCount;
+    const sale = calculateSaleProceeds(
+      batches * selectedItemCount,
+      options && options.sellPrice,
+      options && options.sellerTaxRate
+    );
+    if (sale.status !== "ok") return { status: sale.status, directCredits, sale };
+
+    const best = bestConversionForBudget(options && options.conversions, options && options.buyPrices, sale.net);
+    if (!best) return { status: "no_affordable_conversion", directCredits, sale, best: null };
+
+    return {
+      status: "ok",
+      directCredits,
+      sale,
+      best,
+      creditDifference: best.actualCredits - directCredits
+    };
+  }
+
   function calculateSaleProceeds(quantity, sellPrice, sellerTaxRate) {
     const itemQuantity = positiveInteger(quantity);
     const price = Number(sellPrice);
@@ -335,5 +364,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
