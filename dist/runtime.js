@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.31";
+window.MwiGuildCreditVersion = "0.4.32";
 
 (function () {
   "use strict";
@@ -1124,6 +1124,11 @@ window.MwiGuildCreditVersion = "0.4.31";
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
+  const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
+  const PRICE_REFERENCES = {
+    a: { label: "左一", title: "左一：最低出售价，可立即买入" },
+    b: { label: "右一", title: "右一：最高收购价，仅作理论参考" }
+  };
 
   const CREDIT_TYPES = [
     ["/items/green_guild_credit", "绿色", "#42c59f"],
@@ -1184,7 +1189,26 @@ window.MwiGuildCreditVersion = "0.4.31";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+
+  function savedPriceReference() {
+    try {
+      const saved = pageWindow.localStorage && pageWindow.localStorage.getItem(PRICE_REFERENCE_STORAGE_KEY);
+      return PRICE_REFERENCES[saved] ? saved : "a";
+    } catch (_) {
+      return "a";
+    }
+  }
+
+  function setPriceReference(reference) {
+    if (!PRICE_REFERENCES[reference]) return;
+    state.priceReference = reference;
+    try {
+      pageWindow.localStorage && pageWindow.localStorage.setItem(PRICE_REFERENCE_STORAGE_KEY, reference);
+    } catch (_) {
+      // Keep the current page choice even when browser storage is unavailable.
+    }
+  }
 
   function simpleItemName(itemHrid) {
     return String(itemHrid || "未知物品").split("/").pop().replaceAll("_", " ");
@@ -1440,9 +1464,9 @@ window.MwiGuildCreditVersion = "0.4.31";
     return state.snapshot;
   }
 
-  function snapshotOrderBook(itemHrid) {
-    const askPrice = snapshotPrice(itemHrid, "a");
-    return askPrice === null ? null : { asks: [{ price: askPrice, quantity: Number.MAX_SAFE_INTEGER }] };
+  function snapshotOrderBook(itemHrid, reference = state.priceReference) {
+    const price = snapshotPrice(itemHrid, reference);
+    return price === null ? null : { asks: [{ price, quantity: Number.MAX_SAFE_INTEGER }] };
   }
 
   function snapshotPrice(itemHrid, field, enhancementLevel = 0) {
@@ -1732,6 +1756,14 @@ window.MwiGuildCreditVersion = "0.4.31";
     else refreshPanel(panel);
   }
 
+  function updatePriceReferenceButtons(panel) {
+    for (const button of panel.querySelectorAll('[data-role="price-reference"]')) {
+      const active = button.dataset.priceReference === state.priceReference;
+      button.dataset.active = String(active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+  }
+
   function createPanel() {
     const panel = document.createElement("section");
     panel.id = "mwi-credit-optimizer";
@@ -1741,7 +1773,7 @@ window.MwiGuildCreditVersion = "0.4.31";
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs{display:flex;border-bottom:1px solid #474969;margin:0 0 10px}.mwi-view-tab{min-height:30px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:5px 10px!important}.mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;color:#fff!important}
-        #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}
+        #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
@@ -1767,6 +1799,7 @@ window.MwiGuildCreditVersion = "0.4.31";
       <div data-role="credit-view">
         <div class="mwi-controls">
           <label>目标信用点<input data-role="target" type="number" min="1" step="1" value="1"></label>
+          <div class="mwi-price-reference" role="group" aria-label="市场价格参考"><span class="mwi-price-reference-label">价格参考</span><button data-role="price-reference" data-price-reference="a" type="button" title="左一：最低出售价，可立即买入">左一</button><button data-role="price-reference" data-price-reference="b" type="button" title="右一：最高收购价，仅作理论参考">右一</button></div>
           <button data-role="refresh" type="button">刷新市场估算</button>
         </div>
         <div class="mwi-status" data-role="status">等待游戏兑换数据...</div>
@@ -1778,9 +1811,19 @@ window.MwiGuildCreditVersion = "0.4.31";
         <div class="mwi-status" data-role="upgrade-status">等待神龛升级数据...</div>
         <div data-role="upgrade-results"></div>
       </div>
-      <footer class="mwi-plugin-footer">作者：柆雨<br>有问题请加群反馈：437320340</footer>`;
+      <footer class="mwi-plugin-footer">作者：柆雨<br>遇到问题或无法获取最新版，请加群：437320340</footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
     panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
+    panel.querySelector('.mwi-price-reference').addEventListener("click", (event) => {
+      const button = event.target.closest('[data-role="price-reference"]');
+      if (!button || button.dataset.priceReference === state.priceReference) return;
+      setPriceReference(button.dataset.priceReference);
+      updatePriceReferenceButtons(panel);
+      refreshPanel(panel);
+      refreshGuildUpgrade(panel);
+      refreshGuildExchangeAdvisor();
+    });
+    updatePriceReferenceButtons(panel);
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
       const toggle = event.target.closest('[data-role="toggle-credit-section"]');
       const section = toggle && toggle.closest('[data-credit-item-hrid]');
@@ -2107,7 +2150,7 @@ window.MwiGuildCreditVersion = "0.4.31";
       hideGuildExchangeAdvisor();
       return;
     }
-    const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, "a")]));
+    const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
     const best = core.bestConversionForBudget(conversions, buyPrices, sale.net);
     if (!best) {
       hideGuildExchangeAdvisor();
