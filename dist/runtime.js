@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.37";
+window.MwiGuildCreditVersion = "0.4.38";
 
 (function () {
   "use strict";
@@ -1190,7 +1190,7 @@ window.MwiGuildCreditVersion = "0.4.37";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorModalObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function savedPriceReference() {
     try {
@@ -1981,9 +1981,10 @@ window.MwiGuildCreditVersion = "0.4.37";
   }
 
   function isVisible(node) {
-    if (!node || !node.isConnected) return false;
-    const rect = node.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== "hidden";
+    const modal = node && node.closest && node.closest('[class*="Modal_modal"]') || node;
+    if (!modal || !modal.isConnected || modal.hidden || modal.getAttribute("aria-hidden") === "true") return false;
+    const rect = modal.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && getComputedStyle(modal).visibility !== "hidden";
   }
 
   function itemHridFromIcon(icon) {
@@ -2005,6 +2006,7 @@ window.MwiGuildCreditVersion = "0.4.37";
     const candidates = Array.from(document.querySelectorAll('[class*="GuildPanel_exchangeModalContent"]'))
       .filter(isVisible);
     for (const element of candidates) {
+      const modal = element.closest('[class*="Modal_modal"]') || element;
       const icons = Array.from(element.querySelectorAll('svg[role="img"][aria-label]'))
         .map((icon) => ({
           itemHrid: itemHridFromIcon(icon),
@@ -2019,6 +2021,7 @@ window.MwiGuildCreditVersion = "0.4.37";
       if (!credit) continue;
       return {
         element,
+        modal,
         creditItemHrid: credit.itemHrid,
         selectedItemHrid: selected && selected.itemHrid || null,
         selectedEnhancementLevel: selected && selected.enhancementLevel || 0,
@@ -2125,23 +2128,21 @@ window.MwiGuildCreditVersion = "0.4.37";
       summary.textContent = "当前选择已是最优物品。";
     }
     advisor.hidden = false;
-    placeGuildExchangeAdvisor(advisor, modalData.element);
+    placeGuildExchangeAdvisor(advisor, modalData.modal);
   }
 
   function refreshGuildExchangeAdvisor() {
     const modalData = findGuildExchangeModal();
     if (!modalData) {
-      if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
-      state.exchangeAdvisorModalObserver = null;
       state.exchangeAdvisorModal = null;
       state.exchangeAdvisorSuppressedModal = null;
       hideGuildExchangeAdvisor();
       return;
     }
 
-    observeGuildExchangeModal(modalData.element);
+    state.exchangeAdvisorModal = modalData.modal;
 
-    if (state.exchangeAdvisorSuppressedModal === modalData.element) {
+    if (state.exchangeAdvisorSuppressedModal === modalData.modal) {
       hideGuildExchangeAdvisor();
       return;
     }
@@ -2191,45 +2192,44 @@ window.MwiGuildCreditVersion = "0.4.37";
 
   function scheduleGuildExchangeAdvisor() {
     if (state.exchangeAdvisorFrame !== null) return;
-    state.exchangeAdvisorFrame = window.requestAnimationFrame(() => {
+    const requestFrame = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (handler) => window.setTimeout(handler, 0);
+    state.exchangeAdvisorFrame = requestFrame(() => {
       state.exchangeAdvisorFrame = null;
       refreshGuildExchangeAdvisor();
     });
   }
 
-  function observeGuildExchangeModal(modal) {
-    if (state.exchangeAdvisorModal === modal) return;
-    if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
-    state.exchangeAdvisorModal = modal;
-    state.exchangeAdvisorModalObserver = new MutationObserver(scheduleGuildExchangeAdvisor);
-    state.exchangeAdvisorModalObserver.observe(modal, {
-      attributes: true,
-      attributeFilter: ["aria-label", "class", "disabled", "href", "style", "value", "xlink:href"],
-      childList: true,
-      subtree: true
-    });
+  function mutationMayAffectGuildExchangeAdvisor(mutation) {
+    const activeModal = state.exchangeAdvisorModal;
+    if (activeModal) {
+      if (!activeModal.isConnected || mutation.target === activeModal || activeModal.contains(mutation.target)) return true;
+      return Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []))
+        .some((node) => node === activeModal || node.contains && node.contains(activeModal));
+    }
+
+    const target = mutation.target && (mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement);
+    if (target && target.closest && target.closest('[class*="GuildPanel_exchangeModalContent"]')) return true;
+    return Array.from(mutation.addedNodes || []).some((node) => node && node.nodeType === 1 && (
+      node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')
+    ));
   }
 
   function watchGuildExchangeModals() {
-    if (!document.body || typeof MutationObserver === "undefined") return;
-    new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== 1) continue;
-          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
-            scheduleGuildExchangeAdvisor();
-            return;
-          }
-        }
-        for (const node of mutation.removedNodes) {
-          if (node.nodeType !== 1) continue;
-          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
-            scheduleGuildExchangeAdvisor();
-            return;
-          }
-        }
-      }
-    }).observe(document.body, { childList: true, subtree: true });
+    if (!document.body || state.exchangeAdvisorObserver) return;
+    const Observer = pageWindow.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
+    if (!Observer) return;
+    state.exchangeAdvisorObserver = new Observer((mutations) => {
+      if (Array.from(mutations || []).some(mutationMayAffectGuildExchangeAdvisor)) scheduleGuildExchangeAdvisor();
+    });
+    state.exchangeAdvisorObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["aria-label", "class", "hidden", "href", "style", "xlink:href"],
+      characterData: true,
+      childList: true,
+      subtree: true
+    });
   }
 
   function findSidebarTabBar() {
@@ -2355,8 +2355,8 @@ window.MwiGuildCreditVersion = "0.4.37";
   document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
   document.addEventListener("pointerdown", (event) => {
     const modalData = findGuildExchangeModal();
-    if (modalData && isGuildExchangeCloseGesture(event, modalData.element)) {
-      suppressGuildExchangeAdvisor(modalData.element);
+    if (modalData && isGuildExchangeCloseGesture(event, modalData.modal)) {
+      suppressGuildExchangeAdvisor(modalData.modal);
     }
   }, true);
   document.addEventListener("click", activateCreditTabFromPointer, true);
@@ -2367,7 +2367,7 @@ window.MwiGuildCreditVersion = "0.4.37";
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     const modalData = findGuildExchangeModal();
-    if (modalData) suppressGuildExchangeAdvisor(modalData.element);
+    if (modalData) suppressGuildExchangeAdvisor(modalData.modal);
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
   watchGuildExchangeModals();
