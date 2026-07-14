@@ -28,6 +28,7 @@ const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${J
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
 fs.writeFileSync(output, bundle);
+fs.writeFileSync(path.join(outputDirectory, `银河奶牛公会信用点性价比-v${version}.user.js`), bundle);
 
 const loader = `// ==UserScript==
 // @name         银河奶牛公会信用点性价比 开发加载器

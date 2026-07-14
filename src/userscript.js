@@ -33,7 +33,6 @@
     { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
     { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
   ];
-  const SELLER_TAX_RATE = 0.02;
   const GUILD_SHRINE_NAMES = {
     "/guild_shrines/force": "力量神龛",
     "/guild_shrines/tempo": "节奏神龛",
@@ -898,13 +897,13 @@
       const selected = icons.find((item) => !CREDIT_TYPES.some(([hrid]) => hrid === item.itemHrid));
       const quantityInput = element.querySelector('input[type="number"]');
       const batches = Number(quantityInput && quantityInput.value);
-      if (!credit || !selected || !Number.isSafeInteger(batches) || batches <= 0) continue;
+      if (!credit) continue;
       return {
         element,
         creditItemHrid: credit.itemHrid,
-        selectedItemHrid: selected.itemHrid,
-        selectedEnhancementLevel: selected.enhancementLevel,
-        batches
+        selectedItemHrid: selected && selected.itemHrid || null,
+        selectedEnhancementLevel: selected && selected.enhancementLevel || 0,
+        batches: Number.isSafeInteger(batches) && batches > 0 ? batches : 1
       };
     }
     return null;
@@ -916,9 +915,9 @@
     advisor.id = "mwi-guild-exchange-advisor";
     advisor.setAttribute("aria-live", "polite");
     advisor.innerHTML = `<style>
-      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;padding:0;border:1px solid #4fcdb5;border-radius:7px;background:#202139;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
-      #mwi-guild-exchange-advisor[hidden]{display:none}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:center;justify-content:space-between;padding:9px 11px 8px;border-bottom:1px solid #414361;background:#282a49;color:#dfe1f7;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-tax{color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-body{padding:10px 11px 9px}#mwi-guild-exchange-advisor .mwi-advisor-result{display:flex;align-items:baseline;gap:5px;margin:0 0 9px;padding:7px 8px;border-radius:4px;background:#173c38;color:#d9fff4}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"]{background:#303149;color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-result-label{font-size:12px}#mwi-guild-exchange-advisor .mwi-advisor-result strong{color:#77f3d0;font-size:21px;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-result[data-state="neutral"] strong{color:#e7e8f6}#mwi-guild-exchange-advisor .mwi-advisor-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px}#mwi-guild-exchange-advisor .mwi-advisor-metric{min-width:0;padding:6px 7px;border:1px solid #414361;border-radius:4px;background:#252640}#mwi-guild-exchange-advisor .mwi-advisor-metric-wide{grid-column:1/-1}#mwi-guild-exchange-advisor .mwi-advisor-metric span{display:block;margin-bottom:2px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-metric b{display:flex;align-items:center;gap:5px;overflow:hidden;color:#fff;font-size:13px;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-metric .mwi-item-icon{width:24px;height:24px;flex:0 0 24px}#mwi-guild-exchange-advisor .mwi-advisor-metric em{margin-left:4px;color:#77f3d0;font-style:normal}
-    </style><div class="mwi-advisor-head"><span>兑换替代估算</span><span class="mwi-advisor-tax">卖出税 2%</span></div><div class="mwi-advisor-body"><div class="mwi-advisor-result" data-role="result"><span class="mwi-advisor-result-label" data-role="result-label"></span><strong data-role="difference"></strong><span data-role="credit-label"></span></div><div class="mwi-advisor-metrics"><div class="mwi-advisor-metric"><span>出售</span><b data-role="sale-item"></b></div><div class="mwi-advisor-metric"><span>税后所得</span><b data-role="net-sale"></b></div><div class="mwi-advisor-metric mwi-advisor-metric-wide"><span>建议改买</span><b data-role="best-item"></b></div></div></div>`;
+      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
+      #mwi-guild-exchange-advisor[hidden]{display:none}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}#mwi-guild-exchange-advisor .mwi-advisor-title{display:grid;gap:2px;font-size:17px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-credit::before{width:9px;height:9px;border-radius:2px;background:var(--mwi-credit-color,#4fcdb5);content:""}#mwi-guild-exchange-advisor .mwi-advisor-reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-body{display:grid;gap:9px;padding:11px 12px}#mwi-guild-exchange-advisor .mwi-advisor-options{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"]{grid-template-columns:minmax(0,1fr)}#mwi-guild-exchange-advisor .mwi-advisor-option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}#mwi-guild-exchange-advisor .mwi-advisor-option[data-role="best-option"]{border-color:var(--mwi-credit-color,#4fcdb5);background:#193836}#mwi-guild-exchange-advisor .mwi-advisor-option-label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}#mwi-guild-exchange-advisor .mwi-advisor-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-cost{margin:8px 0 5px;color:var(--mwi-credit-color,#77f3d0);font-size:23px;font-weight:700;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-detail b{color:#e7e8f6;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-vs{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-vs span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}#mwi-guild-exchange-advisor .mwi-advisor-summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-summary strong{color:var(--mwi-credit-color,#77f3d0);font-size:16px}
+    </style><div class="mwi-advisor-head"><div class="mwi-advisor-title"><span>兑换最优推荐</span><span class="mwi-advisor-credit" data-role="credit-label"></span></div><span class="mwi-advisor-reference" data-role="reference"></span></div><div class="mwi-advisor-body"><div class="mwi-advisor-options" data-role="options"><div class="mwi-advisor-option" data-role="selected-option"><span class="mwi-advisor-option-label">当前选择</span><div class="mwi-advisor-item" data-role="selected-item"></div><div class="mwi-advisor-cost" data-role="selected-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="selected-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="selected-market-cost"></b></div></div><div class="mwi-advisor-vs" data-role="vs"><span>VS</span></div><div class="mwi-advisor-option" data-role="best-option"><span class="mwi-advisor-option-label">最优物品</span><div class="mwi-advisor-item" data-role="best-item"></div><div class="mwi-advisor-cost" data-role="best-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="best-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="best-market-cost"></b></div></div></div><div class="mwi-advisor-summary" data-role="summary"></div></div>`;
     document.body.append(advisor);
     state.exchangeAdvisor = advisor;
     return advisor;
@@ -970,20 +969,42 @@
 
   function renderGuildExchangeAdvisor(modalData, data) {
     const advisor = ensureGuildExchangeAdvisor();
-    const result = advisor.querySelector('[data-role="result"]');
-    result.dataset.state = data.gain > 0 ? "gain" : "neutral";
-    advisor.querySelector('[data-role="result-label"]').textContent = data.gain > 0 ? "改买后多获得" : "直接兑换更划算";
-    advisor.querySelector('[data-role="difference"]').textContent = data.gain > 0 ? `+${formatNumber(data.gain)}` : "0";
     advisor.querySelector('[data-role="credit-label"]').textContent = `${data.creditLabel}信用点`;
-    advisor.querySelector('[data-role="sale-item"]').textContent = data.saleItem;
-    advisor.querySelector('[data-role="net-sale"]').textContent = `${core.formatCompactCost(data.netSale)} 金币`;
-    const bestItem = advisor.querySelector('[data-role="best-item"]');
-    bestItem.replaceChildren();
-    bestItem.insertAdjacentHTML("beforeend", iconMarkup(data.bestItemHrid, data.bestItem));
-    bestItem.append(document.createTextNode(data.bestItem));
-    const creditAmount = document.createElement("em");
-    creditAmount.textContent = `${formatNumber(data.bestCredits)} 点`;
-    bestItem.append(creditAmount);
+    advisor.querySelector('[data-role="reference"]').textContent = `参考${PRICE_REFERENCES[state.priceReference].label}`;
+    advisor.style.setProperty("--mwi-credit-color", data.color);
+    const options = advisor.querySelector('[data-role="options"]');
+    const selectedOption = advisor.querySelector('[data-role="selected-option"]');
+    const versus = advisor.querySelector('[data-role="vs"]');
+    options.dataset.mode = data.selected ? "comparison" : "recommendation";
+    selectedOption.hidden = !data.selected;
+    versus.hidden = !data.selected;
+
+    const setOption = (prefix, option) => {
+      const item = advisor.querySelector(`[data-role="${prefix}-item"]`);
+      item.replaceChildren();
+      item.insertAdjacentHTML("beforeend", iconMarkup(option.itemHrid, option.itemName));
+      const name = document.createElement("span");
+      name.className = "mwi-advisor-item-name";
+      name.textContent = option.itemName;
+      item.append(name);
+      advisor.querySelector(`[data-role="${prefix}-cost"]`).replaceChildren(
+        document.createTextNode(core.formatCompactCost(option.costPerCredit)),
+        Object.assign(document.createElement("small"), { textContent: "金币 / 信用" })
+      );
+      advisor.querySelector(`[data-role="${prefix}-conversion"]`).textContent = `${formatNumber(option.itemCount)} 件 -> ${formatNumber(option.creditCount)} 点`;
+      advisor.querySelector(`[data-role="${prefix}-market-cost"]`).textContent = `${core.formatCompactCost(option.cost)} 金币`;
+    };
+
+    setOption("best", data.best);
+    if (data.selected) setOption("selected", data.selected);
+    const summary = advisor.querySelector('[data-role="summary"]');
+    if (!data.selected) {
+      summary.textContent = "请选择兑换物品以查看成本对比。";
+    } else if (data.savingPercent > 0) {
+      summary.replaceChildren("改用最优物品，每信用点预计节省 ", Object.assign(document.createElement("strong"), { textContent: `${data.savingPercent}%` }), "。");
+    } else {
+      summary.textContent = "当前选择已是最优物品。";
+    }
     advisor.hidden = false;
     placeGuildExchangeAdvisor(advisor, modalData.element);
   }
@@ -1003,8 +1024,7 @@
     state.exchangeAdvisorSuppressedModal = null;
 
     const conversions = allConversions(modalData.creditItemHrid);
-    const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
-    if (!selectedConversion) {
+    if (!conversions.length) {
       hideGuildExchangeAdvisor();
       return;
     }
@@ -1021,42 +1041,55 @@
       return;
     }
 
-    const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
-    if (sellPrice === null) {
-      hideGuildExchangeAdvisor();
-      return;
-    }
-
-    const saleItemCount = modalData.batches * selectedConversion.itemCount;
-    const sale = core.calculateSaleProceeds(saleItemCount, sellPrice, SELLER_TAX_RATE);
-    if (sale.status !== "ok") {
-      hideGuildExchangeAdvisor();
-      return;
-    }
-    const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
-    const best = core.bestConversionForBudget(conversions, buyPrices, sale.net);
+    const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
+    const best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
     if (!best) {
       hideGuildExchangeAdvisor();
       return;
     }
 
-    const directCredits = modalData.batches * selectedConversion.creditCount;
+    const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
+    let selected = null;
+    if (selectedConversion) {
+      const price = snapshotPrice(selectedConversion.itemHrid, state.priceReference, modalData.selectedEnhancementLevel);
+      selected = price === null ? null : core.evaluateConversion(selectedConversion, { asks: [{ price, quantity: Number.MAX_SAFE_INTEGER }] }, 1);
+      if (selected && selected.status !== "ok") selected = null;
+    }
     const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
-    const difference = best.actualCredits - directCredits;
     renderGuildExchangeAdvisor(modalData, {
-      gain: Math.max(0, difference),
       creditLabel,
-      saleItem: `${saleItemCount} 件${selectedConversion.itemName}${modalData.selectedEnhancementLevel > 0 ? ` +${modalData.selectedEnhancementLevel}` : ""}`,
-      netSale: sale.net,
-      bestItemHrid: best.itemHrid,
-      bestItem: best.itemName,
-      bestCredits: best.actualCredits
+      color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
+      best,
+      selected,
+      savingPercent: selected && selected.costPerCredit > 0 ? Math.max(0, Math.round((1 - best.costPerCredit / selected.costPerCredit) * 100)) : 0
     });
   }
 
   function scheduleGuildExchangeAdvisor() {
     window.clearTimeout(state.exchangeAdvisorTimer);
     state.exchangeAdvisorTimer = window.setTimeout(refreshGuildExchangeAdvisor, 80);
+  }
+
+  function watchGuildExchangeModals() {
+    if (!document.body || typeof MutationObserver === "undefined") return;
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
+            scheduleGuildExchangeAdvisor();
+            return;
+          }
+        }
+        for (const node of mutation.removedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
+            scheduleGuildExchangeAdvisor();
+            return;
+          }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   function findSidebarTabBar() {
@@ -1197,7 +1230,8 @@
     if (modalData) suppressGuildExchangeAdvisor(modalData.element);
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
-  window.setInterval(refreshGuildExchangeAdvisor, 800);
+  watchGuildExchangeModals();
+  window.setInterval(refreshGuildExchangeAdvisor, 1200);
   window.setTimeout(ensureSidebarIntegration, 1000);
   window.setTimeout(refreshGuildExchangeAdvisor, 1000);
 })();
