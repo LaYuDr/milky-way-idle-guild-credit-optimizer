@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.26
+// @version      0.4.27
 // @author       柆雨
 // @license      Copyright 柆雨
 // @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
@@ -12,7 +12,7 @@
 // ==/UserScript==
 
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.26";
+window.MwiGuildCreditVersion = "0.4.27";
 
 (function () {
   "use strict";
@@ -875,6 +875,40 @@ window.MwiGuildCreditVersion = "0.4.26";
       });
   }
 
+  function rankGuildTokenCreditValues(exchangeRules, rankedCredits) {
+    const rankings = rankedCredits && typeof rankedCredits === "object" ? rankedCredits : {};
+    return (Array.isArray(exchangeRules) ? exchangeRules : [])
+      .map((rule) => {
+        const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+        const creditCount = positiveInteger(rule && rule.creditCount);
+        const creditItemHrid = rule && rule.creditItemHrid;
+        if (!guildTokenCount || !creditCount || !creditItemHrid) {
+          return { status: "invalid_rule", rule };
+        }
+        const best = (Array.isArray(rankings[creditItemHrid]) ? rankings[creditItemHrid] : [])
+          .find((result) => result && result.status === "ok" && Number.isFinite(result.cost));
+        if (!best) {
+          return { status: "unpriced", guildTokenCount, creditCount, creditItemHrid };
+        }
+        return {
+          status: "ok",
+          guildTokenCount,
+          creditCount,
+          creditItemHrid,
+          goldValue: best.cost,
+          goldValuePerToken: best.cost / guildTokenCount,
+          bestItemHrid: best.itemHrid,
+          bestItemName: best.itemName
+        };
+      })
+      .sort((left, right) => {
+        if (left.status === "ok" && right.status !== "ok") return -1;
+        if (right.status === "ok" && left.status !== "ok") return 1;
+        if (left.status !== "ok" || right.status !== "ok") return String(left.creditItemHrid || "").localeCompare(String(right.creditItemHrid || ""));
+        return right.goldValuePerToken - left.goldValuePerToken || left.creditItemHrid.localeCompare(right.creditItemHrid);
+      });
+  }
+
   function evaluateBudgetConversion(conversion, buyPrice, budget) {
     const itemCount = positiveInteger(conversion && conversion.itemCount);
     const creditCount = positiveInteger(conversion && conversion.creditCount);
@@ -1096,7 +1130,7 @@ window.MwiGuildCreditVersion = "0.4.26";
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
 
 
@@ -1119,6 +1153,16 @@ window.MwiGuildCreditVersion = "0.4.26";
     ["/items/red_guild_credit", "红色", "#df4c5a"],
     ["/items/silver_guild_credit", "银色", "#c4cad5"],
     ["/items/gold_guild_credit", "金色", "#d8a33c"]
+  ];
+  const GUILD_TOKEN_CREDIT_CONVERSIONS = [
+    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/brown_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+    { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
+    { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
+    { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
   ];
   const SELLER_TAX_RATE = 0.02;
   const GUILD_SHRINE_NAMES = {
@@ -1728,7 +1772,7 @@ window.MwiGuildCreditVersion = "0.4.26";
         #mwi-credit-optimizer th:first-child,#mwi-credit-optimizer td:first-child{text-align:left} #mwi-credit-optimizer th{color:#bfc2de;font-weight:600}
         #mwi-credit-optimizer .mwi-item{display:flex;align-items:center;gap:5px;min-width:0}.mwi-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
-        #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}
+        #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}#mwi-credit-optimizer .mwi-token-value-section{margin:10px 0;border:1px solid #3a7b70;border-radius:6px;background:#203b3a;overflow:hidden}#mwi-credit-optimizer .mwi-token-value-heading{display:flex;align-items:center;gap:7px;padding:8px 9px;border-bottom:1px solid #3a7b70;color:#fff;font-size:13px;font-weight:700}#mwi-credit-optimizer .mwi-token-value-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}#mwi-credit-optimizer .mwi-token-value-heading small{margin-left:auto;color:#b8d9d1;font-size:10px;font-weight:400;text-align:right}#mwi-credit-optimizer .mwi-token-value-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}#mwi-credit-optimizer .mwi-token-value-row{display:flex;align-items:center;gap:6px;min-width:0;padding:7px 8px;border-top:1px solid #315d58;border-left:3px solid var(--mwi-credit-color)}#mwi-credit-optimizer .mwi-token-value-row:nth-child(-n+4){border-top:0}#mwi-credit-optimizer .mwi-token-value-name{display:grid;min-width:0;flex:1;color:#f4f5ff;font-size:12px;font-weight:700}.mwi-token-value-name small{color:#b8d9d1;font-size:10px;font-weight:400;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-row strong{color:#77f3d0;font-size:12px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-best{border-radius:3px;padding:2px 4px;background:#d8a33c;color:#211b0e;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-token-value-unpriced{color:#ffd17c;font-size:11px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:end;padding:8px;border:1px solid #474969;border-radius:4px;background:#292a46}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:32px;min-width:32px;padding:0!important;font-size:20px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{margin-top:10px}
         #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
@@ -1818,6 +1862,20 @@ window.MwiGuildCreditVersion = "0.4.26";
     return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>物品</th><th>兑换</th><th>每点</th><th>目标成本</th></tr></thead><tbody>${available.map((row) => `<tr><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${iconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td>${row.itemCount} -> ${row.creditCount}</td><td class="mwi-cost">${formatNumber(row.costPerCredit, 2)}</td><td>${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
 
+  function renderGuildTokenValues(values) {
+    const creditMeta = new Map(CREDIT_TYPES.map(([creditItemHrid, label, color]) => [creditItemHrid, { label, color }]));
+    const rows = values.map((value, index) => {
+      const meta = creditMeta.get(value.creditItemHrid) || { label: "未知", color: "#777" };
+      const exchange = `${value.guildTokenCount} 代币 -> ${value.creditCount} 点`;
+      if (value.status !== "ok") {
+        return `<div class="mwi-token-value-row" style="--mwi-credit-color:${meta.color}">${iconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-token-value-name">${meta.label}信用点<small>${exchange}</small></span><span class="mwi-token-value-unpriced">暂无市场估算</span></div>`;
+      }
+      const best = index === 0 ? '<span class="mwi-token-value-best">最值</span>' : "";
+      return `<div class="mwi-token-value-row" style="--mwi-credit-color:${meta.color}">${iconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-token-value-name">${meta.label}信用点<small>${exchange}</small></span><strong>${core.formatCompactCost(value.goldValuePerToken)} 金币</strong>${best}</div>`;
+    }).join("");
+    return `<section class="mwi-token-value-section"><div class="mwi-token-value-heading">${iconMarkup("/items/guild_token", "公会代币")}<span>公会代币兑换价值</span><small>每枚代币可兑换信用点的最优购买成本</small></div><div class="mwi-token-value-list">${rows}</div></section>`;
+  }
+
   async function refreshPanel(panel, forceSnapshot) {
     refreshPageItemNames();
     if (state.refreshInFlight) {
@@ -1850,11 +1908,17 @@ window.MwiGuildCreditVersion = "0.4.26";
           conversion.itemHrid,
           snapshotOrderBook(conversion.itemHrid)
         ]));
-        return { ...group, ranked: core.rankConversions(group.conversions, books, target) };
+        const tokenRule = GUILD_TOKEN_CREDIT_CONVERSIONS.find((rule) => rule.creditItemHrid === group.creditItemHrid);
+        return {
+          ...group,
+          ranked: core.rankConversions(group.conversions, books, target),
+          tokenRanked: core.rankConversions(group.conversions, books, tokenRule.creditCount)
+        };
       });
+      const tokenValues = core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked])));
       status.textContent = "";
       status.hidden = true;
-      results.innerHTML = `<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
+      results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {

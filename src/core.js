@@ -84,6 +84,40 @@
       });
   }
 
+  function rankGuildTokenCreditValues(exchangeRules, rankedCredits) {
+    const rankings = rankedCredits && typeof rankedCredits === "object" ? rankedCredits : {};
+    return (Array.isArray(exchangeRules) ? exchangeRules : [])
+      .map((rule) => {
+        const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+        const creditCount = positiveInteger(rule && rule.creditCount);
+        const creditItemHrid = rule && rule.creditItemHrid;
+        if (!guildTokenCount || !creditCount || !creditItemHrid) {
+          return { status: "invalid_rule", rule };
+        }
+        const best = (Array.isArray(rankings[creditItemHrid]) ? rankings[creditItemHrid] : [])
+          .find((result) => result && result.status === "ok" && Number.isFinite(result.cost));
+        if (!best) {
+          return { status: "unpriced", guildTokenCount, creditCount, creditItemHrid };
+        }
+        return {
+          status: "ok",
+          guildTokenCount,
+          creditCount,
+          creditItemHrid,
+          goldValue: best.cost,
+          goldValuePerToken: best.cost / guildTokenCount,
+          bestItemHrid: best.itemHrid,
+          bestItemName: best.itemName
+        };
+      })
+      .sort((left, right) => {
+        if (left.status === "ok" && right.status !== "ok") return -1;
+        if (right.status === "ok" && left.status !== "ok") return 1;
+        if (left.status !== "ok" || right.status !== "ok") return String(left.creditItemHrid || "").localeCompare(String(right.creditItemHrid || ""));
+        return right.goldValuePerToken - left.goldValuePerToken || left.creditItemHrid.localeCompare(right.creditItemHrid);
+      });
+  }
+
   function evaluateBudgetConversion(conversion, buyPrice, budget) {
     const itemCount = positiveInteger(conversion && conversion.itemCount);
     const creditCount = positiveInteger(conversion && conversion.creditCount);
@@ -305,5 +339,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
