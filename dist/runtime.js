@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.25";
+window.MwiGuildCreditVersion = "0.4.26";
 
 (function () {
   "use strict";
@@ -1458,7 +1458,14 @@ window.MwiGuildCreditVersion = "0.4.25";
       const latestVersion = match[1].trim();
       if (core.compareVersions(PLUGIN_VERSION, latestVersion) < 0) {
         status.classList.add("mwi-update-available");
-        status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 发现新版本，点击下方链接更新`;
+        status.replaceChildren(`当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 发现新版本`);
+        const updateLink = document.createElement("a");
+        updateLink.className = "mwi-update-link";
+        updateLink.href = UPDATE_SCRIPT_URL;
+        updateLink.target = "_blank";
+        updateLink.rel = "noopener noreferrer";
+        updateLink.textContent = "立即更新";
+        status.append(" · ", updateLink);
       } else {
         status.classList.remove("mwi-update-available");
         status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 已是最新`;
@@ -1710,7 +1717,7 @@ window.MwiGuildCreditVersion = "0.4.25";
         #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:end;padding:8px;border:1px solid #474969;border-radius:4px;background:#292a46}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:32px;min-width:32px;padding:0!important;font-size:20px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{margin-top:10px}
-        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}.mwi-plugin-footer .mwi-update-link{display:inline-block;color:#77f3d0;font-weight:700;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-footer .mwi-update-link:hover{color:#fff}
+        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
       </style>
       <h3>公会助手</h3>
@@ -1733,7 +1740,7 @@ window.MwiGuildCreditVersion = "0.4.25";
         <div class="mwi-status" data-role="upgrade-status">等待神龛升级数据...</div>
         <div data-role="upgrade-results"></div>
       </div>
-      <footer class="mwi-plugin-footer">作者：柆雨<br>有问题请加群反馈：437320340<br><a class="mwi-update-link" href="${UPDATE_SCRIPT_URL}" target="_blank" rel="noopener noreferrer">点击更新插件</a></footer>`;
+      <footer class="mwi-plugin-footer">作者：柆雨<br>有问题请加群反馈：437320340</footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
     panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
