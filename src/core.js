@@ -160,6 +160,18 @@
     return `${Math.round(rounded / 1000000)}m`;
   }
 
+  function compareVersions(currentVersion, latestVersion) {
+    const parse = (value) => (String(value || "").match(/\d+/g) || []).map(Number);
+    const current = parse(currentVersion);
+    const latest = parse(latestVersion);
+    const length = Math.max(current.length, latest.length);
+    for (let index = 0; index < length; index += 1) {
+      const difference = (current[index] || 0) - (latest[index] || 0);
+      if (difference !== 0) return difference;
+    }
+    return 0;
+  }
+
   function aggregateGuildBuffLevelCosts(levelCosts, startLevel, targetLevel) {
     const start = Number(startLevel);
     const target = Number(targetLevel);
@@ -293,5 +305,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });

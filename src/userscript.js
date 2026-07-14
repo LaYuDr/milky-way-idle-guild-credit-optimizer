@@ -5,6 +5,8 @@
   const localization = window.MwiGuildCreditLocalization;
   if (!core || !localization) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
+  const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
+  const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
 
   const CREDIT_TYPES = [
     ["/items/green_guild_credit", "绿色", "#42c59f"],
@@ -354,6 +356,30 @@
     return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits === undefined ? 0 : digits }).format(value);
   }
 
+  async function checkPluginUpdate(panel) {
+    const status = panel.querySelector('[data-role="version-status"]');
+    if (!status) return;
+    status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本：检查中...`;
+    try {
+      const response = await fetch(UPDATE_SCRIPT_URL, { cache: "no-store" });
+      if (!response.ok) throw new Error(`更新信息请求失败 (${response.status})`);
+      const source = await response.text();
+      const match = source.match(/^\/\/ @version\s+(.+)$/m);
+      if (!match) throw new Error("未找到最新版本号");
+      const latestVersion = match[1].trim();
+      if (core.compareVersions(PLUGIN_VERSION, latestVersion) < 0) {
+        status.classList.add("mwi-update-available");
+        status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 发现新版本，点击下方链接更新`;
+      } else {
+        status.classList.remove("mwi-update-available");
+        status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 已是最新`;
+      }
+    } catch (_) {
+      status.classList.remove("mwi-update-available");
+      status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本：暂时无法读取`;
+    }
+  }
+
   function guildBuffEntries() {
     hydrateLocalInitData();
     hydrateBridgeData();
@@ -579,7 +605,7 @@
       <style>
         #mwi-credit-optimizer{position:relative;z-index:20;flex:1;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:#202139;color:#f4f5ff;font:14px system-ui,sans-serif}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
-        #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 10px;font-size:17px}
+        #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs{display:flex;border-bottom:1px solid #474969;margin:0 0 10px}.mwi-view-tab{min-height:30px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:5px 10px!important}.mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;color:#fff!important}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
@@ -599,6 +625,7 @@
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
       </style>
       <h3>公会助手</h3>
+      <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
         <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">信用点性价比</button>
         <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">神龛升级</button>
@@ -617,7 +644,7 @@
         <div class="mwi-status" data-role="upgrade-status">等待神龛升级数据...</div>
         <div data-role="upgrade-results"></div>
       </div>
-      <footer class="mwi-plugin-footer">作者：柆雨<br>有问题请加群反馈：437320340<br><a class="mwi-update-link" href="https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js" target="_blank" rel="noopener noreferrer">使用旧版或功能异常？点击更新插件</a></footer>`;
+      <footer class="mwi-plugin-footer">作者：柆雨<br>有问题请加群反馈：437320340<br><a class="mwi-update-link" href="${UPDATE_SCRIPT_URL}" target="_blank" rel="noopener noreferrer">点击更新插件</a></footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
     panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
@@ -667,6 +694,7 @@
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== row.dataset.planId);
       refreshGuildUpgrade(panel);
     });
+    checkPluginUpdate(panel);
     return panel;
   }
 
