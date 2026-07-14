@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.33";
+window.MwiGuildCreditVersion = "0.4.34";
 
 (function () {
   "use strict";
@@ -873,7 +873,7 @@ window.MwiGuildCreditVersion = "0.4.33";
           return { status: "invalid_rule", rule };
         }
         const best = (Array.isArray(rankings[creditItemHrid]) ? rankings[creditItemHrid] : [])
-          .find((result) => result && result.status === "ok" && Number.isFinite(result.cost));
+          .find((result) => result && result.status === "ok" && Number.isFinite(result.costPerCredit));
         if (!best) {
           return { status: "unpriced", guildTokenCount, creditCount, creditItemHrid };
         }
@@ -882,8 +882,10 @@ window.MwiGuildCreditVersion = "0.4.33";
           guildTokenCount,
           creditCount,
           creditItemHrid,
-          goldValue: best.cost,
-          goldValuePerToken: best.cost / guildTokenCount,
+          // A token's value is based on the exchange rule's credit quantity, not
+          // the minimum purchasable batch. This avoids overstating sparse credits.
+          goldValue: best.costPerCredit * creditCount,
+          goldValuePerToken: (best.costPerCredit * creditCount) / guildTokenCount,
           bestItemHrid: best.itemHrid,
           bestItemName: best.itemName
         };

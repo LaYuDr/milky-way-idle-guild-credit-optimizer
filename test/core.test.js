@@ -49,21 +49,24 @@ test("完整方案优先于市场深度不足的更低理论单价", () => {
   assert.equal(results[1].status, "insufficient_depth");
 });
 
-test("公会代币兑换价值保留游戏兑换规则顺序", () => {
+test("公会代币兑换价值按每点成本计算，避免整批兑换放大单代币价值", () => {
   const values = core.rankGuildTokenCreditValues([
     { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
     { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 },
+    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
     { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
   ], {
-    "/items/green_guild_credit": [{ status: "ok", cost: 800, itemHrid: "/items/cheese", itemName: "奶酪" }],
-    "/items/gold_guild_credit": [{ status: "ok", cost: 900000, itemHrid: "/items/stone", itemName: "贤者之石" }],
+    "/items/green_guild_credit": [{ status: "ok", cost: 2240, costPerCredit: 224, itemHrid: "/items/beast_hide", itemName: "野兽皮" }],
+    "/items/gold_guild_credit": [{ status: "ok", cost: 180000000, costPerCredit: 450000, itemHrid: "/items/master_melee_charm", itemName: "大师近战护符" }],
+    "/items/purple_guild_credit": [{ status: "ok", cost: 5200000, costPerCredit: 10400, itemHrid: "/items/red_chef_hat", itemName: "红色厨师帽" }],
     "/items/red_guild_credit": []
   });
   assert.equal(values[0].creditItemHrid, "/items/green_guild_credit");
-  assert.equal(values[0].goldValuePerToken, 800);
+  assert.equal(values[0].goldValuePerToken, 2240);
   assert.equal(values[1].creditItemHrid, "/items/gold_guild_credit");
-  assert.equal(values[1].goldValuePerToken, 15000);
-  assert.equal(values[2].status, "unpriced");
+  assert.equal(values[1].goldValuePerToken, 7500);
+  assert.equal(values[2].goldValuePerToken, 10400);
+  assert.equal(values[3].status, "unpriced");
 });
 
 test("卖出后按预算回购时按可兑换批次计算信用点", () => {
