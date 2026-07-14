@@ -109,12 +109,6 @@
           bestItemHrid: best.itemHrid,
           bestItemName: best.itemName
         };
-      })
-      .sort((left, right) => {
-        if (left.status === "ok" && right.status !== "ok") return -1;
-        if (right.status === "ok" && left.status !== "ok") return 1;
-        if (left.status !== "ok" || right.status !== "ok") return String(left.creditItemHrid || "").localeCompare(String(right.creditItemHrid || ""));
-        return right.goldValuePerToken - left.goldValuePerToken || left.creditItemHrid.localeCompare(right.creditItemHrid);
       });
   }
 
