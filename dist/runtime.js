@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.40";
+window.MwiGuildCreditVersion = "0.4.41";
 
 (function () {
   "use strict";
