@@ -72,7 +72,7 @@
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false, exchangeAdvisorSignature: "" };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorTimer: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false, exchangeAdvisorSignature: "" };
 
   function savedPriceReference() {
     try {
@@ -871,7 +871,9 @@
     const modal = node && node.closest && node.closest('[class*="Modal_modal"]') || node;
     if (!modal || !modal.isConnected || modal.hidden || modal.getAttribute("aria-hidden") === "true") return false;
     const rect = modal.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && getComputedStyle(modal).visibility !== "hidden";
+    const style = getComputedStyle(modal);
+    const opacity = Number(style.opacity);
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" && style.pointerEvents !== "none" && (!Number.isFinite(opacity) || opacity > 0.01);
   }
 
   function itemHridFromIcon(icon) {
@@ -1181,7 +1183,20 @@
     });
   }
 
-  function scheduleGuildExchangeAdvisor() {
+  function scheduleGuildExchangeAdvisor(delay) {
+    const deferred = Number(delay) > 0;
+    if (deferred) {
+      if (state.exchangeAdvisorFrame !== null || state.exchangeAdvisorTimer !== null) return;
+      state.exchangeAdvisorTimer = window.setTimeout(() => {
+        state.exchangeAdvisorTimer = null;
+        scheduleGuildExchangeAdvisor();
+      }, Number(delay));
+      return;
+    }
+    if (state.exchangeAdvisorTimer !== null) {
+      window.clearTimeout(state.exchangeAdvisorTimer);
+      state.exchangeAdvisorTimer = null;
+    }
     if (state.exchangeAdvisorFrame !== null) return;
     const requestFrame = typeof window.requestAnimationFrame === "function"
       ? window.requestAnimationFrame.bind(window)
@@ -1212,7 +1227,7 @@
     const Observer = pageWindow.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
     if (!Observer) return;
     state.exchangeAdvisorObserver = new Observer((mutations) => {
-      if (Array.from(mutations || []).some(mutationMayAffectGuildExchangeAdvisor)) scheduleGuildExchangeAdvisor();
+      if (Array.from(mutations || []).some(mutationMayAffectGuildExchangeAdvisor)) scheduleGuildExchangeAdvisor(80);
     });
     state.exchangeAdvisorObserver.observe(document.body, {
       attributes: true,
@@ -1357,6 +1372,10 @@
   document.addEventListener("click", (event) => {
     const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
     if (target && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
+  }, true);
+  document.addEventListener("transitionend", (event) => {
+    const modal = state.exchangeAdvisorModal;
+    if (modal && (event.target === modal || modal.contains(event.target))) scheduleGuildExchangeAdvisor();
   }, true);
   window.addEventListener("resize", scheduleGuildExchangeAdvisor);
   document.addEventListener("keydown", (event) => {
