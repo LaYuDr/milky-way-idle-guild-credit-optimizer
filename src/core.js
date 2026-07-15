@@ -179,6 +179,9 @@
 
     const best = bestConversionForBudget(options && options.conversions, options && options.buyPrices, sale.net);
     if (!best) return { status: "no_affordable_conversion", directCredits, sale, best: null };
+    if (best.itemHrid === selectedConversion.itemHrid) {
+      return { status: "already_optimal", directCredits, sale, best, creditDifference: 0 };
+    }
 
     return {
       status: "ok",

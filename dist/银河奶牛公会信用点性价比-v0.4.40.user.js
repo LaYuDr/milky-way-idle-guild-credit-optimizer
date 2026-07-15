@@ -970,6 +970,9 @@ window.MwiGuildCreditVersion = "0.4.40";
 
     const best = bestConversionForBudget(options && options.conversions, options && options.buyPrices, sale.net);
     if (!best) return { status: "no_affordable_conversion", directCredits, sale, best: null };
+    if (best.itemHrid === selectedConversion.itemHrid) {
+      return { status: "already_optimal", directCredits, sale, best, creditDifference: 0 };
+    }
 
     return {
       status: "ok",
@@ -1233,7 +1236,7 @@ window.MwiGuildCreditVersion = "0.4.40";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false, exchangeAdvisorSignature: "" };
 
   function savedPriceReference() {
     try {
@@ -1295,6 +1298,7 @@ window.MwiGuildCreditVersion = "0.4.40";
 
   function setItemDetails(candidate) {
     if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
+      if (state.itemDetails !== candidate) state.conversionCache.clear();
       state.itemDetails = candidate;
       return true;
     }
@@ -1527,7 +1531,12 @@ window.MwiGuildCreditVersion = "0.4.40";
       hydrateBridgeData();
       extractItemDetailsFromReact();
     }
-    return core.conversionsFromItemDetails(state.itemDetails, creditItemHrid).map((conversion) => ({
+    let conversions = state.conversionCache.get(creditItemHrid);
+    if (!conversions) {
+      conversions = core.conversionsFromItemDetails(state.itemDetails, creditItemHrid);
+      state.conversionCache.set(creditItemHrid, conversions);
+    }
+    return conversions.map((conversion) => ({
       ...conversion,
       itemName: localizedItemName(conversion.itemName, conversion.itemHrid)
     }));
@@ -1869,7 +1878,22 @@ window.MwiGuildCreditVersion = "0.4.40";
     });
     updatePriceReferenceButtons(panel);
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
-      const toggle = event.target.closest('[data-role="toggle-credit-section"]');
+      const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
+      if (!target) return;
+      const tokenToggle = target.closest('[data-role="toggle-token-values"]');
+      if (tokenToggle) {
+        const tokenSection = tokenToggle.closest(".mwi-token-value-section");
+        const tokenBody = tokenSection && tokenSection.querySelector(".mwi-token-value-body");
+        if (!tokenSection || !tokenBody) return;
+        state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
+        tokenSection.dataset.collapsed = String(state.guildTokenValuesCollapsed);
+        tokenToggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
+        const tokenIcon = tokenToggle.querySelector(".mwi-collapse-icon");
+        if (tokenIcon) tokenIcon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
+        tokenBody.hidden = state.guildTokenValuesCollapsed;
+        return;
+      }
+      const toggle = target.closest('[data-role="toggle-credit-section"]');
       const section = toggle && toggle.closest('[data-credit-item-hrid]');
       if (!section) return;
       const creditItemHrid = section.dataset.creditItemHrid;
@@ -1947,21 +1971,6 @@ window.MwiGuildCreditVersion = "0.4.40";
     return `<section class="mwi-token-value-section" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
   }
 
-  function bindGuildTokenValueToggle(results) {
-    const toggle = results.querySelector('[data-role="toggle-token-values"]');
-    const section = toggle && toggle.closest(".mwi-token-value-section");
-    const body = section && section.querySelector(".mwi-token-value-body");
-    if (!toggle || !section || !body) return;
-    toggle.addEventListener("click", () => {
-      state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
-      section.dataset.collapsed = String(state.guildTokenValuesCollapsed);
-      toggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
-      const icon = toggle.querySelector(".mwi-collapse-icon");
-      if (icon) icon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
-      body.hidden = state.guildTokenValuesCollapsed;
-    });
-  }
-
   async function refreshPanel(panel, forceSnapshot) {
     refreshPageItemNames();
     if (state.refreshInFlight) {
@@ -2005,7 +2014,6 @@ window.MwiGuildCreditVersion = "0.4.40";
       status.textContent = "";
       status.hidden = true;
       results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
-      bindGuildTokenValueToggle(results);
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {
@@ -2080,7 +2088,7 @@ window.MwiGuildCreditVersion = "0.4.40";
     advisor.id = "mwi-guild-exchange-advisor";
     advisor.setAttribute("aria-live", "polite");
     advisor.innerHTML = `<style>
-      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
+      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;display:flex;flex-direction:column;width:min(400px,calc(100vw - 24px));max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:auto}
       #mwi-guild-exchange-advisor[hidden],#mwi-guild-exchange-advisor [hidden]{display:none!important}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}#mwi-guild-exchange-advisor .mwi-advisor-title{display:grid;gap:2px;font-size:17px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-credit::before{width:9px;height:9px;border-radius:2px;background:var(--mwi-credit-color,#4fcdb5);content:""}#mwi-guild-exchange-advisor .mwi-advisor-reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}#mwi-guild-exchange-advisor .mwi-advisor-options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"]{grid-template-columns:minmax(0,1fr)}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"] .mwi-advisor-option{display:flex;flex-direction:column;justify-content:center}#mwi-guild-exchange-advisor .mwi-advisor-option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}#mwi-guild-exchange-advisor .mwi-advisor-option[data-role="best-option"]{border-color:var(--mwi-credit-color,#4fcdb5);background:#193836}#mwi-guild-exchange-advisor .mwi-advisor-option-label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}#mwi-guild-exchange-advisor .mwi-advisor-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-cost{margin:8px 0 5px;color:var(--mwi-credit-color,#77f3d0);font-size:23px;font-weight:700;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-detail b{color:#e7e8f6;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-vs{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-vs span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}#mwi-guild-exchange-advisor .mwi-advisor-summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-summary strong{color:var(--mwi-credit-color,#77f3d0);font-size:16px}
     </style><div class="mwi-advisor-head"><div class="mwi-advisor-title"><span>兑换最优推荐</span><span class="mwi-advisor-credit" data-role="credit-label"></span></div><span class="mwi-advisor-reference" data-role="reference"></span></div><div class="mwi-advisor-body"><div class="mwi-advisor-options" data-role="options"><div class="mwi-advisor-option" data-role="selected-option"><span class="mwi-advisor-option-label">当前选择</span><div class="mwi-advisor-item" data-role="selected-item"></div><div class="mwi-advisor-cost" data-role="selected-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="selected-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="selected-market-cost"></b></div></div><div class="mwi-advisor-vs" data-role="vs"><span>VS</span></div><div class="mwi-advisor-option" data-role="best-option"><span class="mwi-advisor-option-label">最优物品</span><div class="mwi-advisor-item" data-role="best-item"></div><div class="mwi-advisor-cost" data-role="best-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="best-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="best-market-cost"></b></div></div></div><div class="mwi-advisor-summary" data-role="summary"></div></div>`;
     document.body.append(advisor);
@@ -2112,28 +2120,64 @@ window.MwiGuildCreditVersion = "0.4.40";
     const margin = 12;
     const gap = 12;
     const rect = modal.getBoundingClientRect();
+    const advisorRect = advisor.getBoundingClientRect();
     const maxWidth = Math.max(0, window.innerWidth - margin * 2);
     const maxHeight = Math.max(0, window.innerHeight - margin * 2);
     const rightSpace = Math.max(0, window.innerWidth - rect.right - gap - margin);
     const leftSpace = Math.max(0, rect.left - gap - margin);
-    const sideSpace = Math.max(rightSpace, leftSpace);
-    const width = Math.min(rect.width, sideSpace || maxWidth);
-    const height = Math.min(rect.height, maxHeight);
-    advisor.style.width = `${Math.round(width)}px`;
-    advisor.style.height = `${Math.round(height)}px`;
-
-    let left = rightSpace >= leftSpace ? rect.right + gap : rect.left - width - gap;
-    let top = Math.max(margin, Math.min(rect.top, window.innerHeight - height - margin));
-    if (sideSpace === 0) {
-      left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
-      top = Math.min(window.innerHeight - height - margin, rect.bottom + gap);
+    const bottomSpace = Math.max(0, window.innerHeight - rect.bottom - gap - margin);
+    const topSpace = Math.max(0, rect.top - gap - margin);
+    const width = Math.min(Math.max(advisorRect.width, 1), maxWidth);
+    const height = Math.min(Math.max(advisorRect.height, 1), maxHeight);
+    const clampLeft = (value) => Math.max(margin, Math.min(value, window.innerWidth - width - margin));
+    const clampTop = (value) => Math.max(margin, Math.min(value, window.innerHeight - height - margin));
+    let left;
+    let top;
+    let placement;
+    if (rightSpace >= width) {
+      left = rect.right + gap;
+      top = clampTop(rect.top);
+      placement = "right";
+    } else if (leftSpace >= width) {
+      left = rect.left - width - gap;
+      top = clampTop(rect.top);
+      placement = "left";
+    } else if (bottomSpace >= height) {
+      left = clampLeft(rect.left + (rect.width - width) / 2);
+      top = rect.bottom + gap;
+      placement = "bottom";
+    } else if (topSpace >= height) {
+      left = clampLeft(rect.left + (rect.width - width) / 2);
+      top = rect.top - height - gap;
+      placement = "top";
+    } else {
+      left = clampLeft(rect.left + (rect.width - width) / 2);
+      top = clampTop(window.innerHeight - height - margin);
+      placement = "overlay";
     }
+    advisor.dataset.placement = placement;
     advisor.style.left = `${Math.round(left)}px`;
-    advisor.style.top = `${Math.round(Math.max(margin, top))}px`;
+    advisor.style.top = `${Math.round(top)}px`;
   }
 
   function renderGuildExchangeAdvisor(modalData, data) {
     const advisor = ensureGuildExchangeAdvisor();
+    const signature = JSON.stringify({
+      creditLabel: data.creditLabel,
+      color: data.color,
+      best: data.best && [data.best.itemHrid, data.best.itemName, data.best.itemCount, data.best.creditCount, data.best.cost, data.best.costPerCredit],
+      selected: data.selected && [data.selected.itemHrid, data.selected.itemName],
+      selectedOptimal: data.selectedOptimal,
+      replacement: data.replacement && [data.replacement.directCredits, data.replacement.sale.net, data.replacement.best.itemHrid, data.replacement.best.actualCredits, data.replacement.best.requiredItems, data.replacement.best.cost, data.replacement.creditDifference],
+      unavailableReason: data.unavailableReason,
+      priceReference: state.priceReference
+    });
+    if (state.exchangeAdvisorSignature === signature) {
+      advisor.hidden = false;
+      placeGuildExchangeAdvisor(advisor, modalData.modal);
+      return;
+    }
+    state.exchangeAdvisorSignature = signature;
     advisor.querySelector('[data-role="credit-label"]').textContent = `${data.creditLabel}信用点`;
     advisor.querySelector('[data-role="reference"]').textContent = data.selected
       ? `卖出右一（税 2%）·买入${PRICE_REFERENCES[state.priceReference].label}`
@@ -2142,9 +2186,11 @@ window.MwiGuildCreditVersion = "0.4.40";
     const options = advisor.querySelector('[data-role="options"]');
     const selectedOption = advisor.querySelector('[data-role="selected-option"]');
     const versus = advisor.querySelector('[data-role="vs"]');
-    options.dataset.mode = data.selected ? "comparison" : "recommendation";
-    selectedOption.hidden = !data.selected;
-    versus.hidden = !data.selected;
+    const comparison = Boolean(data.selected && data.replacement);
+    options.dataset.mode = comparison ? "comparison" : "recommendation";
+    selectedOption.hidden = !comparison;
+    versus.hidden = !comparison;
+    advisor.querySelector('[data-role="best-option"] .mwi-advisor-option-label').textContent = data.selectedOptimal ? "当前选择（最优）" : "最优物品";
 
     const setOption = (prefix, option, details) => {
       const item = advisor.querySelector(`[data-role="${prefix}-item"]`);
@@ -2177,7 +2223,7 @@ window.MwiGuildCreditVersion = "0.4.40";
       rows[1].querySelector("b").textContent = `${core.formatCompactCost(option.cost)} 金币`;
     };
 
-    if (data.selected) {
+    if (comparison) {
       setOption("selected", data.selected, {
         credits: data.replacement.directCredits,
         firstLabel: "直接兑换",
@@ -2196,7 +2242,9 @@ window.MwiGuildCreditVersion = "0.4.40";
       setOption("best", data.best);
     }
     const summary = advisor.querySelector('[data-role="summary"]');
-    if (!data.selected && data.unavailableReason) {
+    if (data.selectedOptimal) {
+      summary.textContent = "当前选择已是最优物品，无需卖出再回购。";
+    } else if (!data.selected && data.unavailableReason) {
       summary.textContent = data.unavailableReason;
     } else if (!data.selected) {
       summary.textContent = "请选择兑换物品以计算卖出后替代方案。";
@@ -2216,6 +2264,7 @@ window.MwiGuildCreditVersion = "0.4.40";
     if (!modalData) {
       state.exchangeAdvisorModal = null;
       state.exchangeAdvisorSuppressedModal = null;
+      state.exchangeAdvisorSignature = "";
       hideGuildExchangeAdvisor();
       return;
     }
@@ -2247,7 +2296,7 @@ window.MwiGuildCreditVersion = "0.4.40";
     }
 
     const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
-    const best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
+    let best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
     if (!best) {
       hideGuildExchangeAdvisor();
       return;
@@ -2256,23 +2305,32 @@ window.MwiGuildCreditVersion = "0.4.40";
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
     let selected = null;
     let replacement = null;
+    let selectedOptimal = false;
     let unavailableReason = "";
     if (selectedConversion) {
-      const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
-      const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
-      replacement = core.estimateSaleReplacement({
-        selectedConversion,
-        batches: modalData.batches,
-        sellPrice,
-        sellerTaxRate: SELLER_TAX_RATE,
-        conversions,
-        buyPrices
-      });
-      if (replacement.status !== "ok") {
-        unavailableReason = "当前物品暂无公开收购价，无法估算卖出后回购。";
-        replacement = null;
+      if (selectedConversion.itemHrid === best.itemHrid) {
+        selectedOptimal = true;
       } else {
-        selected = selectedConversion;
+        const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
+        const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
+        replacement = core.estimateSaleReplacement({
+          selectedConversion,
+          batches: modalData.batches,
+          sellPrice,
+          sellerTaxRate: SELLER_TAX_RATE,
+          conversions,
+          buyPrices
+        });
+        if (replacement.status === "already_optimal") {
+          best = replacement.best;
+          selectedOptimal = true;
+          replacement = null;
+        } else if (replacement.status !== "ok") {
+          unavailableReason = "当前物品暂无公开收购价，无法估算卖出后回购。";
+          replacement = null;
+        } else {
+          selected = selectedConversion;
+        }
       }
     }
     const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
@@ -2281,6 +2339,7 @@ window.MwiGuildCreditVersion = "0.4.40";
       color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
       best: replacement ? replacement.best : best,
       selected,
+      selectedOptimal,
       replacement,
       unavailableReason
     });
@@ -2459,6 +2518,10 @@ window.MwiGuildCreditVersion = "0.4.40";
   document.addEventListener("input", (event) => {
     if (event.target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
+  document.addEventListener("click", (event) => {
+    const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
+    if (target && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
+  }, true);
   window.addEventListener("resize", scheduleGuildExchangeAdvisor);
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -2467,7 +2530,6 @@ window.MwiGuildCreditVersion = "0.4.40";
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
   watchGuildExchangeModals();
-  window.setInterval(refreshGuildExchangeAdvisor, 5000);
   window.setTimeout(ensureSidebarIntegration, 1000);
   window.setTimeout(refreshGuildExchangeAdvisor, 1000);
 })();
