@@ -72,7 +72,7 @@
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorTimer: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false, exchangeAdvisorSignature: "" };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorFrame: null, exchangeAdvisorTimer: null, exchangeAdvisorVisibilityTimer: null, exchangeAdvisorModal: null, exchangeAdvisorObserver: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false, exchangeAdvisorSignature: "" };
 
   function savedPriceReference() {
     try {
@@ -667,7 +667,7 @@
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
-        #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}
+        #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
         #mwi-credit-optimizer .mwi-credit-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}.mwi-credit-section table{width:100%;border-collapse:collapse;font-size:11px}
         #mwi-credit-optimizer th,#mwi-credit-optimizer td{padding:5px 6px;border-top:1px solid #474969;text-align:right;white-space:nowrap}
@@ -936,6 +936,22 @@
 
   function hideGuildExchangeAdvisor() {
     if (state.exchangeAdvisor) state.exchangeAdvisor.hidden = true;
+    if (state.exchangeAdvisorVisibilityTimer !== null) {
+      window.clearInterval(state.exchangeAdvisorVisibilityTimer);
+      state.exchangeAdvisorVisibilityTimer = null;
+    }
+  }
+
+  function watchGuildExchangeAdvisorVisibility() {
+    if (state.exchangeAdvisorVisibilityTimer !== null) return;
+    state.exchangeAdvisorVisibilityTimer = window.setInterval(() => {
+      const advisor = state.exchangeAdvisor;
+      const modal = state.exchangeAdvisorModal;
+      if (advisor && !advisor.hidden && modal && isVisible(modal)) return;
+      state.exchangeAdvisorModal = null;
+      state.exchangeAdvisorSignature = "";
+      hideGuildExchangeAdvisor();
+    }, 250);
   }
 
   function suppressGuildExchangeAdvisor(modal) {
@@ -1013,6 +1029,7 @@
     if (state.exchangeAdvisorSignature === signature) {
       advisor.hidden = false;
       placeGuildExchangeAdvisor(advisor, modalData.modal);
+      watchGuildExchangeAdvisorVisibility();
       return;
     }
     state.exchangeAdvisorSignature = signature;
@@ -1095,6 +1112,7 @@
     }
     advisor.hidden = false;
     placeGuildExchangeAdvisor(advisor, modalData.modal);
+    watchGuildExchangeAdvisorVisibility();
   }
 
   function refreshGuildExchangeAdvisor() {
