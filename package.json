@@ -2,7 +2,7 @@
   "name": "milky-way-idle-guild-credit-optimizer",
   "version": "0.4.43",
   "private": true,
-  "description": "Milky Way Idle guild credit optimizer userscript",
+  "description": "Read-only guild credit and shrine planning helper for Milky Way Idle",
   "scripts": {
     "build": "node tools/build.js",
     "test": "node --test test/*.test.js",
