@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.45";
+window.MwiGuildCreditVersion = "0.4.46";
 
 (function () {
   "use strict";
@@ -1159,6 +1159,7 @@ window.MwiGuildCreditVersion = "0.4.45";
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
   const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
+  const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
   const PRICE_REFERENCES = {
     a: { label: "左一", title: "左一：最低出售价，可立即买入" },
     b: { label: "右一", title: "右一：最高收购价，仅作理论参考" }
@@ -1223,7 +1224,54 @@ window.MwiGuildCreditVersion = "0.4.45";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const savedUiState = loadSavedPluginUiState();
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+
+  function loadSavedPluginUiState() {
+    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
+    try {
+      const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(UI_STATE_STORAGE_KEY);
+      if (!raw) return fallback;
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") return fallback;
+      const creditHrids = new Set(CREDIT_TYPES.map(([hrid]) => hrid));
+      const collapsedCreditSections = Array.isArray(stored.collapsedCreditSections)
+        ? Array.from(new Set(stored.collapsedCreditSections.filter((hrid) => creditHrids.has(hrid))))
+        : [];
+      const upgradePlans = Array.isArray(stored.upgradePlans)
+        ? stored.upgradePlans
+          .filter((plan) => plan && typeof plan.guildBuffHrid === "string" && Number.isSafeInteger(plan.startLevel) && Number.isSafeInteger(plan.targetLevel))
+          .map((plan) => ({ guildBuffHrid: plan.guildBuffHrid, startLevel: plan.startLevel, targetLevel: plan.targetLevel }))
+        : [];
+      const targetCredit = Number(stored.targetCredit);
+      return {
+        collapsedCreditSections,
+        guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
+        targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
+        upgradePlans
+      };
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function persistPluginUiState() {
+    const upgradePlans = state.upgradePlans.map((plan) => ({
+      guildBuffHrid: plan.guildBuffHrid,
+      startLevel: plan.startLevel,
+      targetLevel: plan.targetLevel
+    }));
+    try {
+      pageWindow.localStorage && pageWindow.localStorage.setItem(UI_STATE_STORAGE_KEY, JSON.stringify({
+        collapsedCreditSections: Array.from(state.collapsedCreditSections),
+        guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
+        targetCredit: state.targetCredit,
+        upgradePlans
+      }));
+    } catch (_) {
+      // Keep the current page state when browser storage is unavailable.
+    }
+  }
 
   function savedPriceReference() {
     try {
@@ -1677,6 +1725,7 @@ window.MwiGuildCreditVersion = "0.4.45";
   function ensureGuildUpgradePlans(entries) {
     state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
     if (!state.upgradePlans.length) addGuildUpgradePlan(entries);
+    persistPluginUiState();
   }
 
   function levelOptionMarkup(start, end, selected) {
@@ -1838,7 +1887,7 @@ window.MwiGuildCreditVersion = "0.4.45";
       </div>
       <div data-role="credit-view">
         <div class="mwi-controls">
-          <label>目标信用点<input data-role="target" type="number" min="1" step="1" value="1"></label>
+          <label>目标信用点<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
           <div class="mwi-price-reference" role="group" aria-label="市场价格参考"><span class="mwi-price-reference-label">价格参考</span><button data-role="price-reference" data-price-reference="a" type="button" title="左一：最低出售价，可立即买入">左一</button><button data-role="price-reference" data-price-reference="b" type="button" title="右一：最高收购价，仅作理论参考">右一</button></div>
           <button data-role="refresh" type="button">刷新市场估算</button>
         </div>
@@ -1853,7 +1902,13 @@ window.MwiGuildCreditVersion = "0.4.45";
       </div>
       <footer class="mwi-plugin-footer">作者：柆雨<br>遇到问题或无法获取最新版，请加群：437320340</footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
-    panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
+    panel.querySelector('[data-role="target"]').addEventListener("change", (event) => {
+      const target = Number(event.target.value);
+      if (Number.isSafeInteger(target) && target > 0) state.targetCredit = target;
+      else event.target.value = String(state.targetCredit);
+      persistPluginUiState();
+      refreshPanel(panel);
+    });
     panel.querySelector('.mwi-price-reference').addEventListener("click", (event) => {
       const button = event.target.closest('[data-role="price-reference"]');
       if (!button || button.dataset.priceReference === state.priceReference) return;
@@ -1878,6 +1933,7 @@ window.MwiGuildCreditVersion = "0.4.45";
         const tokenIcon = tokenToggle.querySelector(".mwi-collapse-icon");
         if (tokenIcon) tokenIcon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
         tokenBody.hidden = state.guildTokenValuesCollapsed;
+        persistPluginUiState();
         return;
       }
       const toggle = target.closest('[data-role="toggle-credit-section"]');
@@ -1893,10 +1949,11 @@ window.MwiGuildCreditVersion = "0.4.45";
       if (icon) icon.textContent = collapsed ? "▸" : "▾";
       const body = section.querySelector(".mwi-credit-body");
       if (body) body.hidden = collapsed;
+      persistPluginUiState();
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
-    panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); refreshGuildUpgrade(panel); });
+    panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("change", (event) => {
       const row = event.target.closest("[data-plan-id]");
       const plan = row && state.upgradePlans.find((candidate) => candidate.id === row.dataset.planId);
@@ -1917,6 +1974,7 @@ window.MwiGuildCreditVersion = "0.4.45";
       } else if (event.target.matches('[data-role="plan-target"]')) {
         plan.targetLevel = Number(event.target.value);
       }
+      persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
     panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
@@ -1924,6 +1982,7 @@ window.MwiGuildCreditVersion = "0.4.45";
       const row = button && button.closest("[data-plan-id]");
       if (!row) return;
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== row.dataset.planId);
+      persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
     checkPluginUpdate(panel);
