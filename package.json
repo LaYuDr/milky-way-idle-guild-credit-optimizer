@@ -1,6 +1,6 @@
 {
   "name": "milky-way-idle-guild-credit-optimizer",
-  "version": "0.4.43",
+  "version": "0.4.44",
   "private": true,
   "description": "Read-only guild credit and shrine planning helper for Milky Way Idle",
   "scripts": {
