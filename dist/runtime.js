@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.44";
+window.MwiGuildCreditVersion = "0.4.45";
 
 (function () {
   "use strict";
@@ -2327,6 +2327,12 @@ window.MwiGuildCreditVersion = "0.4.44";
     scheduleGuildExchangeAdvisor(true);
   }
 
+  function startGuildExchangeAdvisor() {
+    if (!createGuildExchangeAdvisorUi()) return;
+    watchGuildExchangeModals();
+    scheduleGuildExchangeAdvisor(true);
+  }
+
   function findSidebarTabBar() {
     const expectedTabs = new Set(["库存", "装备", "技能", "房屋", "配装", "收获"]);
     const elements = document.getElementsByTagName("*");
@@ -2458,8 +2464,7 @@ window.MwiGuildCreditVersion = "0.4.44";
     if (target && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
-  createGuildExchangeAdvisorUi();
-  watchGuildExchangeModals();
+  if (document.body) startGuildExchangeAdvisor();
+  else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
   window.setTimeout(ensureSidebarIntegration, 1000);
-  window.setTimeout(() => scheduleGuildExchangeAdvisor(true), 1000);
 })();
