@@ -531,13 +531,23 @@
     return counts;
   }
 
-  function bestCreditUnitCosts() {
+  function bestCreditConversions(targetCreditsByHrid) {
     return Object.fromEntries(CREDIT_TYPES.map(([creditItemHrid]) => {
+      const targetCredits = targetCreditsByHrid ? Number(targetCreditsByHrid[creditItemHrid]) : 1;
+      if (!Number.isSafeInteger(targetCredits) || targetCredits <= 0) return [creditItemHrid, null];
       const conversions = allConversions(creditItemHrid);
       const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
-      const best = core.rankConversions(conversions, books, 1).find((row) => row.status === "ok");
-      return [creditItemHrid, best ? best.costPerCredit : null];
+      return [creditItemHrid, core.rankConversions(conversions, books, targetCredits).find((row) => row.status === "ok") || null];
     }));
+  }
+
+  function bestCreditUnitCosts() {
+    return Object.fromEntries(Object.entries(bestCreditConversions()).map(([creditItemHrid, best]) => [creditItemHrid, best ? best.costPerCredit : null]));
+  }
+
+  function bestCreditMaterialPlans(estimate) {
+    const missingCredits = Object.fromEntries((estimate && estimate.rows || []).map((row) => [row.itemHrid, row.missing]));
+    return bestCreditConversions(missingCredits);
   }
 
   function currentGuildBuffLevel(entry) {
@@ -615,7 +625,7 @@
     return `<div class="mwi-upgrade-cost-summary"><div><span>${totalLabel}</span><strong>${renderUpgradeCostText(estimate.totalGold, estimate.guildTokensRequired)}</strong></div><div><span>${missingLabel}</span><strong>${renderUpgradeCostText(estimate.missingGold, estimate.guildTokensMissing)}</strong></div>${inventoryNote}${priceNote}</div>`;
   }
 
-  function renderMaterialTotals(results, totals, estimate, hasInventory) {
+  function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans) {
     const planSummary = results.map((plan) => {
       const entry = guildBuffEntries().find((candidate) => candidate.hrid === plan.guildBuffHrid);
       const label = entry ? guildBuffLabel(entry.detail, entry.hrid) : plan.guildBuffHrid;
@@ -625,7 +635,14 @@
     const materials = totals.sort(materialOrder).map((item) => {
       const row = estimateRows[item.itemHrid];
       const inventoryText = row ? `库存 ${formatNumber(row.owned)} · 缺 ${formatNumber(row.missing)}` : "库存未读取";
-      return `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small></span><strong>${formatNumber(item.count)}</strong></div>`;
+      const isGuildCredit = CREDIT_TYPES.some(([creditItemHrid]) => creditItemHrid === item.itemHrid);
+      const plan = creditMaterialPlans && creditMaterialPlans[item.itemHrid];
+      const conversionText = row && row.missing > 0 && isGuildCredit
+        ? plan
+          ? `按最优兑换需 ${formatNumber(plan.requiredItems)} 个${itemNameForMaterial(plan.itemHrid)}（${formatNumber(plan.itemCount)} 个 -> ${formatNumber(plan.creditCount)} 点）`
+          : "最优兑换：暂无可用市场价格"
+        : "";
+      return `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small>${conversionText ? `<small class="mwi-material-plan">${escapeHtml(conversionText)}</small>` : ""}</span><strong>${formatNumber(item.count)}</strong></div>`;
     }).join("");
     return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
   }
@@ -660,11 +677,13 @@
       return;
     }
     let estimate = null;
+    let creditMaterialPlans = null;
     let snapshotFailed = false;
     try {
       await loadSnapshot(false);
       if (refreshId !== state.upgradeRefreshId) return;
       estimate = core.estimateGuildUpgradeCosts(result.totals, bestCreditUnitCosts(), inventoryItemCounts());
+      creditMaterialPlans = bestCreditMaterialPlans(estimate);
     } catch (_) {
       snapshotFailed = true;
     }
@@ -674,7 +693,7 @@
     if (snapshotFailed) notices.push("公开市场快照读取失败，暂未估算金币成本。");
     if (!hasInventory) notices.push("未读取背包库存，缺口暂按 0 件库存计算。");
     status.textContent = notices.join(" ");
-    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory);
+    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory, creditMaterialPlans);
   }
 
   function setPanelView(panel, view) {
@@ -725,7 +744,7 @@
         #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}#mwi-credit-optimizer .mwi-token-value-section{margin:10px 0;border:1px solid #3a7b70;border-top:3px solid #43c4ad;border-radius:6px;background:#203b3a;overflow:hidden}#mwi-credit-optimizer .mwi-token-value-heading{border-bottom:1px solid #3a7b70}#mwi-credit-optimizer .mwi-token-value-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}#mwi-credit-optimizer .mwi-token-value-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0}#mwi-credit-optimizer .mwi-token-value-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;min-width:0;padding:8px;border-top:1px solid #315d58}#mwi-credit-optimizer .mwi-token-value-row .mwi-item-icon{width:21px;height:21px;flex:0 0 21px}#mwi-credit-optimizer .mwi-token-value-exchange{color:#d7f6ef;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-row .mwi-cost{font-size:12px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-unpriced{color:#ffd17c;font-size:11px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:end;padding:8px;border:1px solid #474969;border-radius:4px;background:#292a46}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:32px;min-width:32px;padding:0!important;font-size:20px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{margin-top:10px}
-        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
+        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-copy .mwi-material-plan{color:#77f3d0;font-weight:600}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
       </style>
       <h3>公会助手</h3>
