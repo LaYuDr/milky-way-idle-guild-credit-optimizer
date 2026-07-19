@@ -315,10 +315,12 @@
     try {
       const decoded = decompressFromUtf16(raw) || raw;
       const data = JSON.parse(decoded);
-      const hasItems = setItemDetails(data.itemDetailMap || data.itemDetailDict);
-      const hasGuildBuffs = setGuildBuffDetails(data.guildBuffDetailMap || data.guildBuffDetailDict);
-      const hasGuildBuffLevels = setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character);
-      const hasCharacterItems = setCharacterItems(data.characterItems || data.character && data.character.items);
+      // initClientData is a durable fallback and can outlive a game data update.
+      // Never let it overwrite values already captured from the current session.
+      const hasItems = !state.itemDetails && setItemDetails(data.itemDetailMap || data.itemDetailDict);
+      const hasGuildBuffs = !state.guildBuffDetails && setGuildBuffDetails(data.guildBuffDetailMap || data.guildBuffDetailDict);
+      const hasGuildBuffLevels = !state.guildBuffLevels && (setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character));
+      const hasCharacterItems = !state.characterItems && setCharacterItems(data.characterItems || data.character && data.character.items);
       return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasCharacterItems;
     } catch (_) {
       return false;
@@ -410,11 +412,11 @@
   }
 
   function allConversions(creditItemHrid) {
-    if (!state.itemDetails) {
-      hydrateLocalInitData();
-      hydrateBridgeData();
-      extractItemDetailsFromReact();
-    }
+    // Prefer data captured from this game session. The persisted init payload is
+    // only a fallback, so a previous game version cannot misclassify conversions.
+    hydrateBridgeData();
+    extractItemDetailsFromReact();
+    if (!state.itemDetails) hydrateLocalInitData();
     let conversions = state.conversionCache.get(creditItemHrid);
     if (!conversions) {
       conversions = core.conversionsFromItemDetails(state.itemDetails, creditItemHrid);
@@ -476,9 +478,9 @@
   }
 
   function guildBuffEntries() {
-    hydrateLocalInitData();
     hydrateBridgeData();
     extractItemDetailsFromReact();
+    hydrateLocalInitData();
     const details = Array.isArray(state.guildBuffDetails)
       ? state.guildBuffDetails.map((detail) => [detail && (detail.hrid || detail.guildBuffHrid), detail])
       : Object.entries(state.guildBuffDetails || {});
@@ -518,9 +520,9 @@
   }
 
   function inventoryItemCounts() {
-    hydrateLocalInitData();
     hydrateBridgeData();
     extractItemDetailsFromReact();
+    hydrateLocalInitData();
     const counts = Object.create(null);
     for (const item of state.characterItems || []) {
       if (!item || item.itemLocationHrid !== "/item_locations/inventory") continue;
@@ -1334,9 +1336,9 @@
     }
     state.creditTab.classList.add("Mui-selected");
     state.creditTab.setAttribute("aria-selected", "true");
-    hydrateLocalInitData();
     hydrateBridgeData();
     extractItemDetailsFromReact();
+    hydrateLocalInitData();
     if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
     else refreshPanel(state.panel);
   }
@@ -1383,8 +1385,9 @@
     state.creditTab = creditTab;
   }
 
-  hydrateLocalInitData();
   hydrateBridgeData();
+  extractItemDetailsFromReact();
+  hydrateLocalInitData();
   document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
   document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", (event) => {
