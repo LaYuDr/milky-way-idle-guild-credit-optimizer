@@ -7,6 +7,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../src/core.js");
 const itemNameCatalogApi = require("../src/item-name-catalog.js");
+const releaseInfoApi = require("../src/release-info.js");
 
 test("按价格逐档累计订单簿成本", () => {
   const quote = core.quoteAsks({ asks: [{ price: 10, quantity: 3 }, { price: 12, quantity: 8 }] }, 7);
@@ -21,6 +22,41 @@ test("订单簿不足时不虚报总价", () => {
   assert.equal(quote.status, "insufficient_depth");
   assert.equal(quote.cost, null);
   assert.equal(quote.availableQuantity, 3);
+});
+
+test("更新信息只解析 Userscript 头中的版本号", () => {
+  assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n// @version      1.0.0\n// ==/UserScript=="), "1.0.0");
+  assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n"), null);
+});
+
+test("更新检查复用五分钟内的成功结果", async () => {
+  let calls = 0;
+  const checker = releaseInfoApi.createVersionChecker({
+    url: "https://example.invalid/script.user.js",
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true, status: 200, text: async () => "// @version 1.0.1" };
+    }
+  });
+  assert.equal(await checker.latestVersion(), "1.0.1");
+  assert.equal(await checker.latestVersion(), "1.0.1");
+  assert.equal(calls, 1);
+});
+
+test("更新检查在请求长期无响应时超时", async () => {
+  let timeoutCallback;
+  const checker = releaseInfoApi.createVersionChecker({
+    url: "https://example.invalid/script.user.js",
+    fetchImpl: () => new Promise(() => {}),
+    setTimeout: (callback) => {
+      timeoutCallback = callback;
+      return 1;
+    },
+    clearTimeout: () => {}
+  });
+  const request = checker.latestVersion();
+  timeoutCallback();
+  await assert.rejects(request, /更新检查超时/);
 });
 
 test("目标信用点按兑换批次向上取整且买方手续费为零", () => {
@@ -465,7 +501,7 @@ test("总览界面固定展示八种信用点、前五项、中文名与物品�
   assert.match(source, /itemNameCatalogReady/);
   assert.match(source, /itemNameCatalogRetryCount/);
   assert.match(source, /if \(!force && state\.itemNameCatalogReady\) return;/);
-  assert.match(source, /data-role="item-name-catalog-status"/);
+  assert.doesNotMatch(source, /item-name-catalog-status|updateItemNameCoverage/);
   assert.match(source, /items_sprite/);
   assert.match(source, /tabPanelsContainer/);
   assert.match(source, /String\(child\.innerText \|\| child\.textContent \|\| ""\)\.replaceAll/);
@@ -483,6 +519,7 @@ test("总览界面固定展示八种信用点、前五项、中文名与物品�
   assert.match(source, /data-role="clear-upgrade-plans"/);
   assert.match(source, /function clearGuildUpgradePlans\(\)/);
   assert.match(source, /state\.suppressUpgradePlanAutofill = true/);
+  assert.match(source, /clearGuildUpgradePlans\(\); persistPluginUiState\(\); refreshGuildUpgrade\(panel\);/);
   assert.match(source, /data-role="plan-start"/);
   assert.match(source, /data-role="plan-target"/);
   assert.match(source, /\.mwi-upgrade-plan label:first-child\{grid-column:1\/-1;grid-row:1\}/);
@@ -552,12 +589,15 @@ test("总览界面固定展示八种信用点、前五项、中文名与物品�
   assert.match(source, /当前物品暂无公开收购价，无法估算卖出后回购。/);
   assert.doesNotMatch(source, /if \(replacement\.status !== "ok"\) \{\s*hideGuildExchangeAdvisor\(\);/);
   assert.match(source, /watchGuildExchangeModals/);
-  assert.match(source, /mutationMayAffectGuildExchangeAdvisor/);
+  assert.match(source, /observeActiveGuildExchangeModal/);
+  assert.match(source, /exchangeAdvisorRootObserver/);
+  assert.match(source, /exchangeAdvisorModalObserver/);
   assert.match(source, /state\.exchangeAdvisorUi && state\.exchangeAdvisorUi\.modal/);
   assert.match(source, /style\.display !== "none"/);
   assert.match(source, /style\.pointerEvents !== "none"/);
   assert.match(source, /opacity > 0\.01/);
-  assert.match(source, /attributeFilter: \["aria-label", "class", "hidden", "href", "style", "xlink:href"\]/);
+  assert.match(source, /attributeFilter: \["aria-hidden", "class", "hidden", "style"\]/);
+  assert.doesNotMatch(source, /characterData: true/);
   assert.match(source, /window\.requestAnimationFrame/);
   assert.match(source, /exchangeAdvisorForceRender/);
   assert.doesNotMatch(source, /exchangeAdvisorTimer/);
@@ -582,13 +622,18 @@ test("总览界面固定展示八种信用点、前五项、中文名与物品�
   assert.match(source, /最新版本 v\$\{latestVersion\}/);
   assert.match(source, /mwi-update-available/);
   assert.match(source, /raw\.githubusercontent\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
+  assert.match(source, /UPDATE_CHECK_TIMEOUT_MS = 8000/);
+  assert.match(source, /updateChecker\.latestVersion\(\)/);
+  assert.match(source, /releaseInfoApi\.createVersionChecker/);
   assert.match(buildSource, /@author       柆雨/);
-  assert.match(buildSource, /@license      Copyright 柆雨/);
+  assert.match(buildSource, /@license      MIT/);
+  assert.match(buildSource, /@homepageURL  https:\/\/github\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
   assert.match(buildSource, /公会信用点兑换与神龛升级的只读计算辅助/);
   assert.match(buildSource, /不会上传账号数据/);
   assert.match(buildSource, /MWI_GUILD_CREDIT_RUNTIME/);
   assert.match(buildSource, /window\.MwiGuildCreditVersion/);
   assert.match(buildSource, /source\("src\/bridge\.js"\)/);
+  assert.match(buildSource, /source\("src\/release-info\.js"\)/);
   assert.match(bridgeSource, /ObservedWebSocket/);
   assert.match(bridgeSource, /characterGuildBuffDict/);
   assert.doesNotMatch(source, /mwi-credit-tab-active/);

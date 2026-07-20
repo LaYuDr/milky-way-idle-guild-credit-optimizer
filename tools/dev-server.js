@@ -14,20 +14,23 @@ http.createServer((request, response) => {
     "/milky-way-idle-guild-credit-optimizer.user.js": "milky-way-idle-guild-credit-optimizer.user.js",
     "/milky-way-idle-guild-credit-dev-loader.user.js": "milky-way-idle-guild-credit-dev-loader.user.js",
     "/runtime.js": "runtime.js",
-    "/test-harness.html": "test-harness.html"
+    "/test-harness.html": "test-harness.html",
+    "/game_data/marketplace.json": "test-marketplace.json"
   };
   const filename = files[pathname];
   if (!filename) {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     return response.end("Not found");
   }
-  const file = path.join(dist, filename);
+  const file = pathname === "/game_data/marketplace.json"
+    ? path.join(root, "tools", filename)
+    : path.join(dist, filename);
   if (!fs.existsSync(file)) {
     response.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
     return response.end("Run npm run build first");
   }
   response.writeHead(200, {
-    "Content-Type": filename.endsWith(".html") ? "text/html; charset=utf-8" : "application/javascript; charset=utf-8",
+    "Content-Type": filename.endsWith(".html") ? "text/html; charset=utf-8" : filename.endsWith(".json") ? "application/json; charset=utf-8" : "application/javascript; charset=utf-8",
     "Cache-Control": "no-store, no-cache, must-revalidate",
     "Access-Control-Allow-Origin": "*"
   });

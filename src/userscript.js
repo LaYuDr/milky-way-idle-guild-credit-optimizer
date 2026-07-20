@@ -3,12 +3,14 @@
 
   const core = window.MwiGuildCreditCore;
   const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
-  if (!core || !itemNameCatalogApi) return;
+  const releaseInfoApi = window.MwiGuildCreditReleaseInfo;
+  if (!core || !itemNameCatalogApi || !releaseInfoApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
   const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
   const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
+  const UPDATE_CHECK_TIMEOUT_MS = 8000;
   const PRICE_REFERENCES = {
     a: { label: "左一", title: "左一：最低出售价，可立即买入" },
     b: { label: "右一", title: "右一：最高收购价，仅作理论参考" }
@@ -44,7 +46,8 @@
   };
   const savedUiState = loadSavedPluginUiState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -144,20 +147,6 @@
   function resolveItemName(itemHrid, englishFallback) {
     refreshOfficialItemNameCatalog();
     return itemNameCatalog.resolveItemName({ itemHrid, englishFallback, locale: currentGameLocale() });
-  }
-
-  function updateItemNameCoverage(panel, itemHrids) {
-    if (!panel) return;
-    refreshOfficialItemNameCatalog();
-    const coverage = itemNameCatalog.coverage(itemHrids);
-    const status = panel.querySelector('[data-role="item-name-catalog-status"]');
-    if (!status) return;
-    const missingCount = coverage.missingItemHrids.length;
-    const missingPreview = coverage.missingItemHrids.slice(0, 8).join("、");
-    const source = coverage.source === "unavailable" ? "当前页面未暴露官方 i18n，已使用英文原名" : coverage.source;
-    const missing = missingCount ? ` · ${missingCount} 项未命中${missingPreview ? `（${missingPreview}${missingCount > 8 ? " …" : ""}）` : ""}` : "";
-    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
-    status.title = missingCount ? coverage.missingItemHrids.join("\n") : "所有当前涉及 HRID 均已命中官方名称目录。";
   }
 
   function escapeHtml(value) {
@@ -545,12 +534,7 @@
     if (!status) return;
     status.textContent = `当前版本 v${PLUGIN_VERSION} · 最新版本：检查中...`;
     try {
-      const response = await fetch(UPDATE_SCRIPT_URL, { cache: "no-store" });
-      if (!response.ok) throw new Error(`更新信息请求失败 (${response.status})`);
-      const source = await response.text();
-      const match = source.match(/^\/\/ @version\s+(.+)$/m);
-      if (!match) throw new Error("未找到最新版本号");
-      const latestVersion = match[1].trim();
+      const latestVersion = await updateChecker.latestVersion();
       if (core.compareVersions(PLUGIN_VERSION, latestVersion) < 0) {
         status.classList.add("mwi-update-available");
         status.replaceChildren(`当前版本 v${PLUGIN_VERSION} · 最新版本 v${latestVersion} · 发现新版本`);
@@ -904,7 +888,6 @@
       results.replaceChildren();
       return;
     }
-    updateItemNameCoverage(panel, ["/items/guild_token", ...result.totals.map((item) => item.itemHrid)]);
     let estimate = null;
     let creditMaterialPlans = null;
     let materialInventory = null;
@@ -964,7 +947,7 @@
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
-        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
@@ -981,7 +964,6 @@
       </style>
       <h3>公会助手</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
-      <div class="mwi-item-name-catalog-status" data-role="item-name-catalog-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
         <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">信用点性价比</button>
         <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">神龛升级</button>
@@ -1158,7 +1140,6 @@
     results.replaceChildren();
 
     const creditGroups = CREDIT_TYPES.map(([creditItemHrid, color]) => ({ creditItemHrid, color, conversions: allConversions(creditItemHrid) }));
-    updateItemNameCoverage(panel, ["/items/guild_token", ...creditGroups.flatMap((group) => [group.creditItemHrid, ...group.conversions.map((conversion) => conversion.itemHrid)])]);
     const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
     if (!conversionCount) {
       status.textContent = "未读取到兑换规则。请刷新游戏页面后重新打开公会商店。";
@@ -1283,6 +1264,7 @@
     ui.card.hidden = true;
     ui.signature = "";
     ui.modal = null;
+    observeActiveGuildExchangeModal(null);
   }
 
   function calculateGuildExchangeAdvisorPosition(modalRect, cardRect) {
@@ -1375,6 +1357,7 @@
       ui.signature = markup;
     }
     ui.modal = modalData.modal;
+    observeActiveGuildExchangeModal(modalData.modal);
     ui.card.setAttribute("aria-label", "兑换最优推荐");
     ui.card.style.setProperty("--credit", data.color);
     return positionGuildExchangeAdvisor(ui, modalData.modal);
@@ -1472,38 +1455,59 @@
     });
   }
 
-  function mutationMayAffectGuildExchangeAdvisor(mutation) {
-    const activeModal = state.exchangeAdvisorUi && state.exchangeAdvisorUi.modal;
-    const target = mutation.target && (mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement);
-    if (activeModal) {
-      if (!activeModal.isConnected || mutation.target === activeModal || activeModal.contains(mutation.target)
-        || (mutation.type === "attributes" && target && target.contains && target.contains(activeModal))) return true;
-      return Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []))
-        .some((node) => node === activeModal || node.contains && node.contains(activeModal));
-    }
+  function guildExchangeMutationObserver() {
+    return pageWindow.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
+  }
 
-    if (target && target.closest && target.closest('[class*="GuildPanel_exchangeModalContent"]')) return true;
-    return Array.from(mutation.addedNodes || []).some((node) => node && node.nodeType === 1 && (
-      node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')
-    ));
+  function nodeMayContainGuildExchangeModal(node) {
+    if (!node || node.nodeType !== 1) return false;
+    const selector = '[class*="GuildPanel_exchangeModalContent"]';
+    if (node.matches(selector)) return true;
+    // Only child-list changes reach this observer. Inspecting each newly added
+    // subtree keeps portal mounting reliable without restoring the old, costly
+    // whole-page attributes/text observer.
+    return Boolean(node.querySelector(selector));
+  }
+
+  function observeActiveGuildExchangeModal(modal) {
+    if (state.exchangeAdvisorObservedModal === modal) return;
+    if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
+    state.exchangeAdvisorObservedModal = modal || null;
+    state.exchangeAdvisorModalObserver = null;
+    if (!modal || !modal.isConnected) return;
+    const Observer = guildExchangeMutationObserver();
+    if (!Observer) return;
+    state.exchangeAdvisorModalObserver = new Observer(() => scheduleGuildExchangeAdvisor());
+    state.exchangeAdvisorModalObserver.observe(modal, {
+      attributes: true,
+      attributeFilter: ["aria-hidden", "class", "hidden", "style"],
+      childList: true,
+      subtree: true
+    });
   }
 
   function watchGuildExchangeModals() {
-    if (!document.body || state.exchangeAdvisorObserver) return;
-    const Observer = pageWindow.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
+    if (!document.body || state.exchangeAdvisorRootObserver) return;
+    const Observer = guildExchangeMutationObserver();
     if (!Observer) return;
-    state.exchangeAdvisorObserver = new Observer((mutations) => {
-      if (Array.from(mutations || []).some(mutationMayAffectGuildExchangeAdvisor)) scheduleGuildExchangeAdvisor();
+    state.exchangeAdvisorRootObserver = new Observer((mutations) => {
+      const activeModal = state.exchangeAdvisorUi && state.exchangeAdvisorUi.modal;
+      if (activeModal && !activeModal.isConnected) {
+        scheduleGuildExchangeAdvisor();
+        return;
+      }
+      if (Array.from(mutations || []).some((mutation) => Array.from(mutation.addedNodes || []).some(nodeMayContainGuildExchangeModal))) {
+        scheduleGuildExchangeAdvisor();
+      }
     });
-    state.exchangeAdvisorObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["aria-label", "class", "hidden", "href", "style", "xlink:href"],
-      characterData: true,
+    state.exchangeAdvisorRootObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
     if (!state.exchangeAdvisorListenersInstalled) {
-      const reposition = () => scheduleGuildExchangeAdvisor();
+      const reposition = () => {
+        if (state.exchangeAdvisorUi && state.exchangeAdvisorUi.modal) scheduleGuildExchangeAdvisor();
+      };
       window.addEventListener("resize", reposition, { passive: true });
       window.addEventListener("orientationchange", reposition, { passive: true });
       window.addEventListener("scroll", reposition, { capture: true, passive: true });

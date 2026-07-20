@@ -4,18 +4,44 @@
   <title>MWI Credit Sidebar Harness</title>
   <style>
     body { margin: 0; min-height: 100vh; background: #10111c; color: #eee; font: 16px system-ui, sans-serif; }
-    #test-sidebar { position: fixed; right: 0; top: 0; width: 420px; height: 100vh; background: #202139; }
+    #test-sidebar-wrapper { position: fixed; right: 0; top: 0; display: flex; flex-direction: column; width: 420px; height: 100vh; background: #202139; }
     #test-tabs { display: flex; border-bottom: 1px solid #55567b; }
     #test-tabs button { flex: 1; border: 0; padding: 14px 6px; background: #292a46; color: #fff; font: inherit; cursor: pointer; }
     #test-tabs button:first-child { background: #5053ad; }
-    #native-content { padding: 16px; }
+    #native-content { flex: 1; min-height: 0; padding: 16px; }
   </style>
   <main>本地右侧栏自动化测试页</main>
+  <button id="close-exchange-modal" type="button">关闭测试兑换窗口</button>
+  <div class="Modal_modal__test" id="test-exchange-modal" role="dialog" aria-label="测试兑换窗口">
+    <div class="GuildPanel_exchangeModalContent__test">
+      <div class="Item_item__test"><svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg></div>
+      <div class="Item_item__test"><svg role="img" aria-label="Green Guild Credit"><use href="/assets/items_sprite.svg#green_guild_credit"></use></svg></div>
+      <input type="number" value="1" aria-label="兑换数量">
+    </div>
+  </div>
+  <div id="test-sidebar-wrapper">
   <aside id="test-sidebar">
-    <nav id="test-tabs">
+    <div class="sidebar-shell"><div class="tabs-shell"><nav id="test-tabs">
       <button type="button">库存</button><button type="button">装备</button><button type="button">技能</button><button type="button">房屋</button><button type="button">配装</button><button type="button">收获</button>
-    </nav>
-    <section id="native-content">原生右侧内容</section>
+    </nav></div></div>
   </aside>
+  <section class="tabPanelsContainer" id="native-content">原生右侧内容</section>
+  </div>
+  <script>
+    window.__mwiGuildCreditBridge = {
+      itemDetails: {
+        "/items/beast_hide": {
+          itemHrid: "/items/beast_hide",
+          name: "Beast Hide",
+          guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 4, creditCount: 1 }]
+        }
+      }
+    };
+  </script>
   <script src="/runtime.js"></script>
+  <script>
+    document.getElementById("close-exchange-modal").addEventListener("click", () => {
+      document.getElementById("test-exchange-modal")?.remove();
+    });
+  </script>
 </html>
