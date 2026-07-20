@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.54";
+window.MwiGuildCreditVersion = "0.4.55";
 
 (function () {
   "use strict";
@@ -11,8 +11,37 @@ window.MwiGuildCreditVersion = "0.4.54";
     guildBuffDetails: null,
     guildBuffLevels: null,
     guildShrineLevels: null,
+    guildShrineDetails: null,
     characterItems: null
   });
+
+  function levelRecordKey(record, fallbackKey) {
+    if (record && typeof record === "object") {
+      const explicitKey = record.guildShrineHrid || record.shrineHrid || record.guildBuildingHrid || record.hrid;
+      if (typeof explicitKey === "string" && explicitKey) return explicitKey;
+    }
+    return String(fallbackKey || "");
+  }
+
+  // Guild-building snapshots can arrive in separate WebSocket frames. Keep a
+  // union keyed by the game's own HRID instead of replacing a complete
+  // snapshot with a later, partial update.
+  function mergeGuildShrineLevels(previous, incoming) {
+    if (!incoming || typeof incoming !== "object") return previous;
+    const merged = Object.create(null);
+    const append = (source) => {
+      const entries = Array.isArray(source)
+        ? source.map((record, index) => [levelRecordKey(record, index), record])
+        : Object.entries(source || {});
+      for (const [fallbackKey, record] of entries) {
+        const key = levelRecordKey(record, fallbackKey);
+        if (key) merged[key] = record;
+      }
+    };
+    append(previous);
+    append(incoming);
+    return merged;
+  }
 
   function keepGuildData(message) {
     if (!message || typeof message !== "object") return;
@@ -27,12 +56,30 @@ window.MwiGuildCreditVersion = "0.4.54";
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
       const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
-      const guildShrineLevels = value.guildShrineMap || value.guildShrineDict || value.guildShrines || value.guildShrineLevelMap || value.guildShrineLevelDict || value.guildShrineLevels || value.guildBuildingMap || value.guildBuildingDict || value.guildBuildings || value.guildBuildingLevelMap || value.guildBuildingLevelDict || value.guildBuildingLevels;
+      const guildShrineLevelCandidates = [
+        value.guildShrineMap, value.guildShrineDict, value.guildShrines,
+        value.guildShrineLevelMap, value.guildShrineLevelDict, value.guildShrineLevels,
+        value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
+        value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
+      ];
+      const guildShrineDetailCandidates = [
+        value.guildShrineDetailMap, value.guildShrineDetailDict, value.guildShrineDetails,
+        value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
+      ];
       const characterItems = value.characterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
-      if (guildShrineLevels && typeof guildShrineLevels === "object") bridge.guildShrineLevels = guildShrineLevels;
+      for (const guildShrineLevels of guildShrineLevelCandidates) {
+        if (guildShrineLevels && typeof guildShrineLevels === "object") {
+          bridge.guildShrineLevels = mergeGuildShrineLevels(bridge.guildShrineLevels, guildShrineLevels);
+        }
+      }
+      for (const guildShrineDetails of guildShrineDetailCandidates) {
+        if (guildShrineDetails && typeof guildShrineDetails === "object") {
+          bridge.guildShrineDetails = mergeGuildShrineLevels(bridge.guildShrineDetails, guildShrineDetails);
+        }
+      }
       if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
       for (const child of Object.values(value)) pending.push(child);
     }
@@ -1228,7 +1275,7 @@ window.MwiGuildCreditVersion = "0.4.54";
     "Philosopher's Stone": "贤者之石"
   };
   const savedUiState = loadSavedPluginUiState();
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -1359,9 +1406,42 @@ window.MwiGuildCreditVersion = "0.4.54";
     return false;
   }
 
+  function guildShrineLevelRecordKey(record, fallbackKey) {
+    if (record && typeof record === "object") {
+      const explicitKey = record.guildShrineHrid || record.shrineHrid || record.guildBuildingHrid || record.hrid;
+      if (typeof explicitKey === "string" && explicitKey) return explicitKey;
+    }
+    return String(fallbackKey || "");
+  }
+
+  function mergeGuildShrineLevels(previous, incoming) {
+    if (!incoming || typeof incoming !== "object") return previous;
+    const merged = Object.create(null);
+    const append = (source) => {
+      const entries = Array.isArray(source)
+        ? source.map((record, index) => [guildShrineLevelRecordKey(record, index), record])
+        : Object.entries(source || {});
+      for (const [fallbackKey, record] of entries) {
+        const key = guildShrineLevelRecordKey(record, fallbackKey);
+        if (key) merged[key] = record;
+      }
+    };
+    append(previous);
+    append(incoming);
+    return merged;
+  }
+
   function setGuildShrineLevels(candidate) {
     if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
-      state.guildShrineLevels = candidate;
+      state.guildShrineLevels = mergeGuildShrineLevels(state.guildShrineLevels, candidate);
+      return true;
+    }
+    return false;
+  }
+
+  function setGuildShrineDetails(candidate) {
+    if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
+      state.guildShrineDetails = mergeGuildShrineLevels(state.guildShrineDetails, candidate);
       return true;
     }
     return false;
@@ -1385,10 +1465,26 @@ window.MwiGuildCreditVersion = "0.4.54";
 
   function setGuildShrineLevelsFrom(source) {
     if (!source || typeof source !== "object") return false;
-    return setGuildShrineLevels(
-      source.guildShrineMap || source.guildShrineDict || source.guildShrines || source.guildShrineLevelMap || source.guildShrineLevelDict || source.guildShrineLevels ||
-      source.guildBuildingMap || source.guildBuildingDict || source.guildBuildings || source.guildBuildingLevelMap || source.guildBuildingLevelDict || source.guildBuildingLevels
-    );
+    const candidates = [
+      source.guildShrineMap, source.guildShrineDict, source.guildShrines,
+      source.guildShrineLevelMap, source.guildShrineLevelDict, source.guildShrineLevels,
+      source.guildBuildingMap, source.guildBuildingDict, source.guildBuildings,
+      source.guildBuildingLevelMap, source.guildBuildingLevelDict, source.guildBuildingLevels
+    ];
+    let updated = false;
+    for (const candidate of candidates) updated = setGuildShrineLevels(candidate) || updated;
+    return updated;
+  }
+
+  function setGuildShrineDetailsFrom(source) {
+    if (!source || typeof source !== "object") return false;
+    const candidates = [
+      source.guildShrineDetailMap, source.guildShrineDetailDict, source.guildShrineDetails,
+      source.guildBuildingDetailMap, source.guildBuildingDetailDict, source.guildBuildingDetails
+    ];
+    let updated = false;
+    for (const candidate of candidates) updated = setGuildShrineDetails(candidate) || updated;
+    return updated;
   }
 
   // The game persists initClientData with LZString.compressToUTF16. Reading it
@@ -1491,8 +1587,9 @@ window.MwiGuildCreditVersion = "0.4.54";
       const hasGuildBuffs = !state.guildBuffDetails && setGuildBuffDetails(data.guildBuffDetailMap || data.guildBuffDetailDict);
       const hasGuildBuffLevels = !state.guildBuffLevels && (setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character));
       const hasGuildShrineLevels = !state.guildShrineLevels && (setGuildShrineLevelsFrom(data) || setGuildShrineLevelsFrom(data.guild));
+      const hasGuildShrineDetails = !state.guildShrineDetails && (setGuildShrineDetailsFrom(data) || setGuildShrineDetailsFrom(data.guild));
       const hasCharacterItems = !state.characterItems && setCharacterItems(data.characterItems || data.character && data.character.items);
-      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasGuildShrineLevels || hasCharacterItems;
+      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasGuildShrineLevels || hasGuildShrineDetails || hasCharacterItems;
     } catch (_) {
       return false;
     }
@@ -1523,6 +1620,7 @@ window.MwiGuildCreditVersion = "0.4.54";
         found = setGuildBuffDetails(candidate.guildBuffDetailMap || candidate.guildBuffDetailDict) || found;
         found = setGuildBuffLevelsFrom(candidate) || found;
         found = setGuildShrineLevelsFrom(candidate) || found;
+        found = setGuildShrineDetailsFrom(candidate) || found;
         found = setCharacterItems(candidate.characterItems) || found;
         if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
       }
@@ -1541,6 +1639,7 @@ window.MwiGuildCreditVersion = "0.4.54";
     setGuildBuffDetails(value.guildBuffDetailMap || value.guildBuffDetailDict);
     setGuildBuffLevelsFrom(value);
     setGuildShrineLevelsFrom(value);
+    setGuildShrineDetailsFrom(value);
     setCharacterItems(value.characterItems);
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
@@ -1552,9 +1651,10 @@ window.MwiGuildCreditVersion = "0.4.54";
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
+    setGuildShrineDetailsFrom(bridge);
     setCharacterItems(bridge.characterItems);
-    if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.guildShrineLevels || !state.characterItems)) {
-      for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.guildShrineLevels || !state.characterItems); index -= 1) {
+    if (Array.isArray(bridge.messages)) {
+      for (let index = bridge.messages.length - 1; index >= 0; index -= 1) {
         try {
           scanMessage(JSON.parse(bridge.messages[index]), 0);
         } catch (_) {
@@ -1773,21 +1873,39 @@ window.MwiGuildCreditVersion = "0.4.54";
   }
 
   function shrineLevelValue(value) {
-    const raw = value && typeof value === "object" ? value.level ?? value.currentLevel ?? value.guildBuildingLevel : value;
+    const raw = value && typeof value === "object" ? value.level ?? value.currentLevel ?? value.guildBuildingLevel ?? value.buildingLevel : value;
     const level = Number(raw);
     return Number.isSafeInteger(level) && level >= 0 ? level : null;
+  }
+
+  function shrineIdentityValues(record, fallbackHrid) {
+    const values = [fallbackHrid];
+    if (!record || typeof record !== "object") return values;
+    for (const key of ["guildShrineHrid", "shrineHrid", "guildBuildingHrid", "hrid", "id", "guildBuffHrid", "name", "displayName", "label"]) {
+      if (typeof record[key] === "string") values.push(record[key]);
+    }
+    return values;
+  }
+
+  function guildShrineDetailFor(record, fallbackHrid) {
+    const source = state.guildShrineDetails;
+    const entries = Array.isArray(source)
+      ? source.map((detail, index) => [guildShrineLevelRecordKey(detail, index), detail])
+      : Object.entries(source || {});
+    const identityValues = new Set(shrineIdentityValues(record, fallbackHrid));
+    for (const [detailKey, detail] of entries) {
+      const detailValues = shrineIdentityValues(detail, detailKey);
+      if (detailValues.some((value) => identityValues.has(value))) return detail;
+    }
+    return null;
   }
 
   function shrineLevelRecordMatches(record, fallbackHrid, shrineHrid) {
     const shrineKey = String(shrineHrid || "").split("/").pop().toLowerCase();
     if (!shrineKey) return false;
-    const candidates = [
-      fallbackHrid,
-      record && record.guildShrineHrid,
-      record && record.shrineHrid,
-      record && record.guildBuildingHrid,
-      record && record.hrid
-    ].filter((value) => typeof value === "string");
+    const detail = guildShrineDetailFor(record, fallbackHrid);
+    const candidates = [...shrineIdentityValues(record, fallbackHrid), ...shrineIdentityValues(detail, "")]
+      .filter((value) => typeof value === "string");
     return candidates.some((value) => {
       const normalized = value.toLowerCase();
       // Older and newer game payloads use both `tempo_shrine` and simply
@@ -1808,7 +1926,10 @@ window.MwiGuildCreditVersion = "0.4.54";
       const level = shrineLevelValue(record);
       if (level !== null) return level;
     }
-    return null;
+    // The game only includes built (non-zero) guild shrine buildings in this
+    // map. Once a guild-building snapshot exists, a missing shrine is the
+    // game's representation of level 0, not an unreadable level.
+    return source ? 0 : null;
   }
 
   function guildShrineTargetLevels(entries) {
@@ -1891,12 +2012,16 @@ window.MwiGuildCreditVersion = "0.4.54";
       const combat = domain === "combat";
       const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
       const ready = domainEntries.length > 0 && domainEntries.every((entry) => Object.hasOwn(targets, entry.detail.shrineHrid));
+      const missing = Array.from(new Set(domainEntries
+        .filter((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid))
+        .map((entry) => GUILD_SHRINE_NAMES[entry.detail.shrineHrid] || entry.detail.shrineHrid)));
       const button = panel.querySelector(`[data-role="set-guild-shrine-target"][data-domain="${domain}"]`);
       if (button) {
         button.disabled = !ready;
-        button.title = ready ? "按每座对应公会神龛的当前等级批量设定目标" : "尚未读取完整的公会神龛建筑等级";
+        button.title = ready ? "按每座对应公会神龛的当前等级批量设定目标" : `尚未读取完整的公会神龛建筑等级：${missing.join("、")}`;
       }
-      summaries.push(`${combat ? "战斗" : "生活"} ${ready ? `${domainEntries.length}/${domainEntries.length}` : `${Object.keys(targets).filter((shrineHrid) => domainEntries.some((entry) => entry.detail.shrineHrid === shrineHrid)).length}/${domainEntries.length}`}`);
+      const count = Object.keys(targets).filter((shrineHrid) => domainEntries.some((entry) => entry.detail.shrineHrid === shrineHrid)).length;
+      summaries.push(`${combat ? "战斗" : "生活"} ${count}/${domainEntries.length}${missing.length ? `（未识别：${missing.join("、")}）` : ""}`);
     }
     const status = panel.querySelector('[data-role="guild-shrine-target-status"]');
     if (status) status.textContent = state.guildShrineLevels ? `公会神龛等级已读取：${summaries.join(" · ")}。` : "正在读取当前公会神龛建筑等级…";

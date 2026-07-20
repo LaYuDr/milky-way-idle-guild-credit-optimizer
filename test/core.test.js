@@ -338,6 +338,40 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.messages.length, 1);
 });
 
+test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {
+    constructor() { this.listeners = new Map(); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    receive(data) { this.listeners.get("message")({ data }); }
+  }
+  const page = { WebSocket: FakeWebSocket };
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array });
+  const socket = new page.WebSocket("wss://example.invalid");
+  socket.receive(JSON.stringify({ payload: { guildBuildingMap: { "/guild_buildings/tempo": { level: 3 } } } }));
+  socket.receive(JSON.stringify({ payload: { guildBuildingMap: { "/guild_buildings/force": { level: 5 } } } }));
+  assert.equal(page.__mwiGuildCreditBridge.guildShrineLevels["/guild_buildings/tempo"].level, 3);
+  assert.equal(page.__mwiGuildCreditBridge.guildShrineLevels["/guild_buildings/force"].level, 5);
+});
+
+test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {
+    constructor() { this.listeners = new Map(); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    receive(data) { this.listeners.get("message")({ data }); }
+  }
+  const page = { WebSocket: FakeWebSocket };
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array });
+  const socket = new page.WebSocket("wss://example.invalid");
+  socket.receive(JSON.stringify({ payload: {
+    guildBuildingDetailMap: {
+      "/guild_buildings/alpha": { guildBuildingHrid: "/guild_buildings/alpha", guildShrineHrid: "/guild_shrines/force" }
+    }
+  } }));
+  assert.equal(page.__mwiGuildCreditBridge.guildShrineDetails["/guild_shrines/force"].guildBuildingHrid, "/guild_buildings/alpha");
+});
+
 test("总览界面固定展示八种信用点、前五项、中文名与物品图标", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
@@ -409,6 +443,10 @@ test("总览界面固定展示八种信用点、前五项、中文名与物品�
   assert.match(source, /guildBuildingMap/);
   assert.match(source, /function guildShrineTargetLevels/);
   assert.match(source, /function applyGuildShrineTargets/);
+  assert.match(source, /function mergeGuildShrineLevels/);
+  assert.match(source, /function guildShrineDetailFor/);
+  assert.match(source, /guildBuildingDetailMap/);
+  assert.match(source, /missing shrine is the[\s\S]*level 0/);
   assert.match(source, /tempo_shrine.*simply.*tempo/s);
   assert.doesNotMatch(source, /normalized\.includes\("shrine"\) && new RegExp/);
   assert.match(source, /设定当前公会建筑为目标等级（生活）/);
