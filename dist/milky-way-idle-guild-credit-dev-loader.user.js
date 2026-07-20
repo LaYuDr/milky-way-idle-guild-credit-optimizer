@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比 开发加载器
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.53
+// @version      0.4.54
 // @author       柆雨
 // @description  从本机开发服务加载银河奶牛信用点插件；仅用于开发和自动测试。
 // @match        https://www.milkywayidle.com/*

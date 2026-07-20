@@ -636,7 +636,11 @@
     ].filter((value) => typeof value === "string");
     return candidates.some((value) => {
       const normalized = value.toLowerCase();
-      return normalized === shrineHrid || (normalized.includes("shrine") && new RegExp(`(^|[/_-])${shrineKey}([/_-]|$)`).test(normalized));
+      // Older and newer game payloads use both `tempo_shrine` and simply
+      // `tempo` as guild-building IDs. This value is only inspected inside
+      // the captured guild-shrine/building maps, so an exact HRID segment is
+      // sufficient and avoids silently omitting valid shrine levels.
+      return normalized === shrineHrid || new RegExp(`(^|[/_-])${shrineKey}([/_-]|$)`).test(normalized);
     });
   }
 
