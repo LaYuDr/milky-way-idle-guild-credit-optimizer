@@ -2,8 +2,8 @@
   "use strict";
 
   const core = window.MwiGuildCreditCore;
-  const localization = window.MwiGuildCreditLocalization;
-  if (!core || !localization) return;
+  const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
+  if (!core || !itemNameCatalogApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
@@ -15,14 +15,14 @@
   };
 
   const CREDIT_TYPES = [
-    ["/items/green_guild_credit", "绿色", "#42c59f"],
-    ["/items/brown_guild_credit", "棕色", "#c58a42"],
-    ["/items/white_guild_credit", "白色", "#e8e9ef"],
-    ["/items/blue_guild_credit", "蓝色", "#4c99e8"],
-    ["/items/purple_guild_credit", "紫色", "#9567da"],
-    ["/items/red_guild_credit", "红色", "#df4c5a"],
-    ["/items/silver_guild_credit", "银色", "#c4cad5"],
-    ["/items/gold_guild_credit", "金色", "#d8a33c"]
+    ["/items/green_guild_credit", "#42c59f"],
+    ["/items/brown_guild_credit", "#c58a42"],
+    ["/items/white_guild_credit", "#e8e9ef"],
+    ["/items/blue_guild_credit", "#4c99e8"],
+    ["/items/purple_guild_credit", "#9567da"],
+    ["/items/red_guild_credit", "#df4c5a"],
+    ["/items/silver_guild_credit", "#c4cad5"],
+    ["/items/gold_guild_credit", "#d8a33c"]
   ];
   const GUILD_TOKEN_CREDIT_CONVERSIONS = [
     { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
@@ -42,39 +42,9 @@
     "/guild_shrines/rarity": "稀有神龛",
     "/guild_shrines/scholar": "学者神龛"
   };
-  // Recent game items are not present in the historical public translation map.
-  // Keep these overrides small and explicit so a new game item falls back to English
-  // instead of receiving an unreliable machine translation.
-  const chineseItemNames = {
-    ...(window.MwiGuildCreditChineseItems || {}),
-    "Shield Bash": "盾击",
-    "Fracturing Impact": "碎裂冲击",
-    "Life Drain": "生命汲取",
-    "Retribution": "复仇",
-    "Crippling Slash": "致残斩",
-    "Catalytic Tea": "催化茶",
-    "Red Culinary Hat": "红色厨师帽",
-    "Philosopher's Necklace": "贤者项链",
-    "Philosopher's Ring": "贤者戒指",
-    "Necklace Of Speed": "速度项链",
-    "Philosopher's Earrings": "贤者耳环",
-    "Advanced Melee Charm": "高级近战护符",
-    "Advanced Defense Charm": "高级防御护符",
-    "Advanced Intelligence Charm": "高级智力护符",
-    "Expert Melee Charm": "专家近战护符",
-    "Basic Attack Charm": "基础攻击护符",
-    "Labyrinth Refinement Shard": "迷宫精炼碎片",
-    "Thread Of Expertise": "专精丝线",
-    "Butter Of Proficiency": "熟练黄油",
-    "Guild Token": "公会代币",
-    "Master Magic Charm": "大师魔法护符",
-    "Master Ranged Charm": "大师远程护符",
-    "Master Stamina Charm": "大师体力护符",
-    "Philosopher's Mirror": "贤者之镜",
-    "Philosopher's Stone": "贤者之石"
-  };
   const savedUiState = loadSavedPluginUiState();
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -149,31 +119,37 @@
     return String(value || "").replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
-  // The Chinese UI translation writes the localized item name to the game's icon.
-  // Reuse that live, user-visible value instead of maintaining a second translation.
-  function refreshPageItemNames() {
-    const uses = document.querySelectorAll('svg[role="img"][aria-label] use');
-    for (const use of uses) {
-      if (use.closest("#mwi-credit-optimizer")) continue;
-      const icon = use.closest('svg[role="img"][aria-label]');
-      const name = icon && icon.getAttribute("aria-label") && icon.getAttribute("aria-label").trim();
-      const href = use.getAttribute("href") || use.getAttribute("xlink:href") || "";
-      const itemId = href.slice(href.lastIndexOf("#") + 1);
-      if (!itemId || !name || !/[\u3400-\u9fff]/.test(name)) continue;
-      state.pageItemNames[`/items/${itemId}`] = name;
+  function currentGameLocale() {
+    try {
+      return pageWindow.i18next && pageWindow.i18next.language || pageWindow.i18n && pageWindow.i18n.language || pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng") || document.documentElement.lang || "zh-CN";
+    } catch (_) {
+      return document.documentElement.lang || "zh-CN";
     }
   }
 
-  function localizedItemName(itemName, itemHrid) {
-    const visibleName = itemHrid && state.pageItemNames[itemHrid];
-    if (visibleName) return visibleName;
-    let locale = "zh-CN";
-    try {
-      locale = pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng") || document.documentElement.lang || locale;
-    } catch (_) {
-      // Keep Chinese as the personal plugin's default if browser storage is unavailable.
-    }
-    return localization.localizeItemName({ itemName, itemHrid, chineseNames: chineseItemNames, locale });
+  function refreshOfficialItemNameCatalog(force) {
+    const now = Date.now();
+    if (!force && now - state.itemNameCatalogLastRefresh < 3000) return;
+    state.itemNameCatalogLastRefresh = now;
+    itemNameCatalog.refresh();
+  }
+
+  // This is the sole item-name resolver used by the UI. It never translates
+  // names itself: zh-CN comes from the official game catalog or cached catalog,
+  // and any unresolved item remains the game's original English name.
+  function resolveItemName(itemHrid, englishFallback) {
+    refreshOfficialItemNameCatalog();
+    return itemNameCatalog.resolveItemName({ itemHrid, englishFallback, locale: currentGameLocale() });
+  }
+
+  function updateItemNameCoverage(panel, itemHrids) {
+    if (!panel) return;
+    refreshOfficialItemNameCatalog();
+    const coverage = itemNameCatalog.coverage(itemHrids);
+    const status = panel.querySelector('[data-role="item-name-catalog-status"]');
+    if (!status) return;
+    const missing = coverage.missingItemHrids.length ? ` · 未命中：${coverage.missingItemHrids.join("、")}` : "";
+    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${coverage.source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
   }
 
   function escapeHtml(value) {
@@ -497,7 +473,7 @@
     }
     return conversions.map((conversion) => ({
       ...conversion,
-      itemName: localizedItemName(conversion.itemName, conversion.itemHrid)
+      itemName: resolveItemName(conversion.itemHrid, conversion.itemName)
     }));
   }
 
@@ -527,7 +503,7 @@
   }
 
   function openMarketplaceForItem(itemHrid, itemName) {
-    const searchText = String(itemName || simpleItemName(itemHrid));
+    const searchText = resolveItemName(itemHrid, itemName);
     const navigate = Array.from(document.querySelectorAll("button,[role='button'],a,div")).find((element) => {
       if (element.closest("#mwi-credit-optimizer")) return false;
       return String(element.textContent || "").trim() === "市场";
@@ -609,13 +585,11 @@
   }
 
   function itemNameForMaterial(itemHrid) {
-    const credit = CREDIT_TYPES.find(([hrid]) => hrid === itemHrid);
-    if (credit) return `${credit[1]}公会信用点`;
     const details = Array.isArray(state.itemDetails)
       ? state.itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
       : Object.entries(state.itemDetails || {});
     const detail = details.find(([hrid]) => hrid === itemHrid);
-    return localizedItemName(detail && detail[1] && detail[1].name, itemHrid);
+    return resolveItemName(itemHrid, detail && detail[1] && detail[1].name);
   }
 
   function materialOrder(left, right) {
@@ -873,7 +847,7 @@
       const credit = CREDIT_TYPES.find(([creditItemHrid]) => creditItemHrid === item.itemHrid);
       const isGuildCredit = Boolean(credit);
       const plan = creditMaterialPlans && creditMaterialPlans[item.itemHrid];
-      const accent = credit ? credit[2] : item.itemHrid === "/items/guild_token" ? "#e65d68" : "#7778b4";
+      const accent = credit ? credit[1] : item.itemHrid === "/items/guild_token" ? "#e65d68" : "#7778b4";
       const conversionMarkup = row && row.missing > 0 && isGuildCredit
         ? plan
           ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>背包库存 ${hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : "未读取"}</small></span></div><div class="mwi-material-plan-need"><small>最优兑换需</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${formatNumber(plan.itemCount)} 个 → ${formatNumber(plan.creditCount)} 点</span>`
@@ -887,7 +861,7 @@
 
   async function refreshGuildUpgrade(panel) {
     const refreshId = ++state.upgradeRefreshId;
-    refreshPageItemNames();
+    refreshOfficialItemNameCatalog();
     const status = panel.querySelector('[data-role="upgrade-status"]');
     const results = panel.querySelector('[data-role="upgrade-results"]');
     const entries = guildBuffEntries();
@@ -914,6 +888,7 @@
       results.replaceChildren();
       return;
     }
+    updateItemNameCoverage(panel, ["/items/guild_token", ...result.totals.map((item) => item.itemHrid)]);
     let estimate = null;
     let creditMaterialPlans = null;
     let materialInventory = null;
@@ -973,7 +948,7 @@
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
-        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
+        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;word-break:break-word}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
@@ -990,6 +965,7 @@
       </style>
       <h3>公会助手</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
+      <div class="mwi-item-name-catalog-status" data-role="item-name-catalog-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
         <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">信用点性价比</button>
         <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">神龛升级</button>
@@ -1120,11 +1096,12 @@
     return panel;
   }
 
-  function renderCreditSection(creditItemHrid, label, color, ranked) {
+  function renderCreditSection(creditItemHrid, color, ranked) {
     const available = ranked.filter((row) => row.status === "ok").slice(0, 5);
-    const icon = iconMarkup(creditItemHrid, `${label}公会信用点`);
+    const creditName = itemNameForMaterial(creditItemHrid);
+    const icon = iconMarkup(creditItemHrid, creditName);
     const collapsed = state.collapsedCreditSections.has(creditItemHrid);
-    const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${label}信用点</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
+    const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
     if (!available.length) {
       return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><div class="mwi-empty">暂无可估算的市场价格</div></div></section>`;
     }
@@ -1132,24 +1109,24 @@
   }
 
   function renderGuildTokenValues(values) {
-    const creditMeta = new Map(CREDIT_TYPES.map(([creditItemHrid, label, color]) => [creditItemHrid, { label, color }]));
     const valuesByCredit = new Map(values.map((value) => [value.creditItemHrid, value]));
     const rows = GUILD_TOKEN_CREDIT_CONVERSIONS.map((rule) => {
       const value = valuesByCredit.get(rule.creditItemHrid) || { status: "unpriced", ...rule };
-      const meta = creditMeta.get(value.creditItemHrid) || { label: "未知", color: "#777" };
+      const creditName = itemNameForMaterial(value.creditItemHrid);
       const exchange = `${value.guildTokenCount} 代币 -> ${value.creditCount} 点`;
       if (value.status !== "ok") {
-        return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-token-value-unpriced">暂无市场估算</span></div>`;
+        return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-token-value-unpriced">暂无市场估算</span></div>`;
       }
-      return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} 金币</span></div>`;
+      return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} 金币</span></div>`;
     }).join("");
     const collapsed = state.guildTokenValuesCollapsed;
-    const heading = `<button class="mwi-credit-heading mwi-token-value-heading" data-role="toggle-token-values" type="button" aria-expanded="${String(!collapsed)}">${iconMarkup("/items/guild_token", "公会代币")}<span>公会代币兑换价值</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
+    const guildTokenName = itemNameForMaterial("/items/guild_token");
+    const heading = `<button class="mwi-credit-heading mwi-token-value-heading" data-role="toggle-token-values" type="button" aria-expanded="${String(!collapsed)}">${iconMarkup("/items/guild_token", guildTokenName)}<span>${escapeHtml(guildTokenName)}兑换价值</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
     return `<section class="mwi-token-value-section" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
   }
 
   async function refreshPanel(panel, forceSnapshot) {
-    refreshPageItemNames();
+    refreshOfficialItemNameCatalog();
     if (state.refreshInFlight) {
       state.refreshQueued = true;
       return;
@@ -1163,7 +1140,8 @@
     status.hidden = false;
     results.replaceChildren();
 
-    const creditGroups = CREDIT_TYPES.map(([creditItemHrid, label, color]) => ({ creditItemHrid, label, color, conversions: allConversions(creditItemHrid) }));
+    const creditGroups = CREDIT_TYPES.map(([creditItemHrid, color]) => ({ creditItemHrid, color, conversions: allConversions(creditItemHrid) }));
+    updateItemNameCoverage(panel, ["/items/guild_token", ...creditGroups.flatMap((group) => [group.creditItemHrid, ...group.conversions.map((conversion) => conversion.itemHrid)])]);
     const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
     if (!conversionCount) {
       status.textContent = "未读取到兑换规则。请刷新游戏页面后重新打开公会商店。";
@@ -1190,7 +1168,7 @@
       const tokenValues = core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked])));
       status.textContent = "";
       status.hidden = true;
-      results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
+      results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`;
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {
@@ -1347,12 +1325,12 @@
 
   function guildExchangeAdvisorMarkup(data) {
     const comparison = Boolean(data.selected && data.replacement);
-    const header = `<header class="head"><div class="title"><span>兑换最优推荐</span><span class="credit">${escapeHtml(data.creditLabel)}信用点</span></div><span class="reference">${escapeHtml(data.selected ? `卖出右一（税 2%）·买入${PRICE_REFERENCES[state.priceReference].label}` : `买入参考${PRICE_REFERENCES[state.priceReference].label}`)}</span></header>`;
+    const header = `<header class="head"><div class="title"><span>兑换最优推荐</span><span class="credit">${escapeHtml(data.creditName)}</span></div><span class="reference">${escapeHtml(data.selected ? `卖出右一（税 2%）·买入${PRICE_REFERENCES[state.priceReference].label}` : `买入参考${PRICE_REFERENCES[state.priceReference].label}`)}</span></header>`;
     let summary = "请选择兑换物品以计算卖出后替代方案。";
     if (data.selectedOptimal) summary = "当前选择已是最优物品，无需卖出再回购。";
     else if (!data.selected && data.unavailableReason) summary = data.unavailableReason;
-    else if (comparison && data.replacement.creditDifference > 0) summary = `卖出后改买可多获得 <strong>+${formatNumber(data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditLabel)}信用点。`;
-    else if (comparison && data.replacement.creditDifference < 0) summary = `直接兑换可多获得 <strong>${formatNumber(-data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditLabel)}信用点。`;
+    else if (comparison && data.replacement.creditDifference > 0) summary = `卖出后改买可多获得 <strong>+${formatNumber(data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditName)}。`;
+    else if (comparison && data.replacement.creditDifference < 0) summary = `直接兑换可多获得 <strong>${formatNumber(-data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditName)}。`;
     else if (comparison) summary = "两种方案可获得相同的信用点。";
     const selected = comparison ? advisorOptionMarkup("当前选择", data.selected, {
       credits: data.replacement.directCredits,
@@ -1450,10 +1428,10 @@
         }
       }
     }
-    const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
+    const creditName = itemNameForMaterial(modalData.creditItemHrid);
     return renderGuildExchangeAdvisor(modalData, {
-      creditLabel,
-      color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
+      creditName,
+      color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "#4fcdb5",
       best: replacement ? replacement.best : best,
       selected,
       selectedOptimal,
@@ -1600,7 +1578,7 @@
   }
 
   function ensureSidebarIntegration() {
-    refreshPageItemNames();
+    refreshOfficialItemNameCatalog();
     if (state.panel && state.panel.isConnected && state.creditTab && state.creditTab.isConnected) return;
     const integration = findSidebarTabBar();
     if (!integration || !integration.panelHost) return;
