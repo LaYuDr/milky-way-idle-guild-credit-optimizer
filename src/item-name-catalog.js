@@ -90,40 +90,57 @@
 
   function reactI18nRoots(documentRef) {
     if (!documentRef) return [];
-    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body];
+    const found = [];
+    const gamePageRoots = [];
     try {
-      roots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
+      gamePageRoots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
     } catch (_) {
       // A restricted document should still allow the direct window candidates.
     }
-    const fibers = [];
-    for (const root of roots) {
-      if (!root) continue;
+
+    function fibersFromRoot(root) {
+      if (!root) return [];
+      const fibers = [];
       for (const key of Reflect.ownKeys(root)) {
         const keyName = String(key);
         if (keyName.startsWith("__reactFiber$") || keyName.startsWith("__reactContainer$") || keyName.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
       }
+      return fibers;
     }
+
+    function addFiberCandidates(fiber) {
+      const candidates = [
+        fiber && fiber.memoizedProps,
+        fiber && fiber.pendingProps,
+        fiber && fiber.memoizedState,
+        fiber && fiber.stateNode && fiber.stateNode.state,
+        fiber && fiber.stateNode && fiber.stateNode.props,
+        fiber && fiber.stateNode
+      ];
+      for (const candidate of candidates) found.push(...i18nVariants(candidate));
+    }
+
+    // The game page is below the i18n provider. Walking its parent chain is
+    // dramatically cheaper than repeatedly traversing the entire React tree.
+    for (const root of gamePageRoots) {
+      for (const initialFiber of fibersFromRoot(root)) {
+        let fiber = initialFiber;
+        for (let depth = 0; fiber && depth < 24; depth += 1, fiber = fiber.return) addFiberCandidates(fiber);
+      }
+    }
+    if (found.length) return found;
+
+    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body].filter(Boolean);
+    const fibers = [];
+    for (const root of roots) fibers.push(...fibersFromRoot(root));
     const visited = new Set();
-    const found = [];
     let scanned = 0;
-    while (fibers.length && scanned < 6000) {
+    while (fibers.length && scanned < 1500) {
       const fiber = fibers.pop();
       if (!fiber || typeof fiber !== "object" || visited.has(fiber)) continue;
       visited.add(fiber);
       scanned += 1;
-      const candidates = [
-        fiber.memoizedProps,
-        fiber.pendingProps,
-        fiber.memoizedState,
-        fiber.stateNode && fiber.stateNode.state,
-        fiber.stateNode && fiber.stateNode.props,
-        fiber.stateNode
-      ];
-      for (const candidate of candidates) {
-        if (!candidate || typeof candidate !== "object") continue;
-        found.push(...i18nVariants(candidate));
-      }
+      addFiberCandidates(fiber);
       if (fiber.current) fibers.push(fiber.current);
       if (fiber.stateNode && fiber.stateNode.current) fibers.push(fiber.stateNode.current);
       if (fiber.child) fibers.push(fiber.child);

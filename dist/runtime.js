@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.57";
+window.MwiGuildCreditVersion = "0.4.58";
 
 (function () {
   "use strict";
@@ -200,40 +200,57 @@ window.MwiGuildCreditVersion = "0.4.57";
 
   function reactI18nRoots(documentRef) {
     if (!documentRef) return [];
-    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body];
+    const found = [];
+    const gamePageRoots = [];
     try {
-      roots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
+      gamePageRoots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
     } catch (_) {
       // A restricted document should still allow the direct window candidates.
     }
-    const fibers = [];
-    for (const root of roots) {
-      if (!root) continue;
+
+    function fibersFromRoot(root) {
+      if (!root) return [];
+      const fibers = [];
       for (const key of Reflect.ownKeys(root)) {
         const keyName = String(key);
         if (keyName.startsWith("__reactFiber$") || keyName.startsWith("__reactContainer$") || keyName.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
       }
+      return fibers;
     }
+
+    function addFiberCandidates(fiber) {
+      const candidates = [
+        fiber && fiber.memoizedProps,
+        fiber && fiber.pendingProps,
+        fiber && fiber.memoizedState,
+        fiber && fiber.stateNode && fiber.stateNode.state,
+        fiber && fiber.stateNode && fiber.stateNode.props,
+        fiber && fiber.stateNode
+      ];
+      for (const candidate of candidates) found.push(...i18nVariants(candidate));
+    }
+
+    // The game page is below the i18n provider. Walking its parent chain is
+    // dramatically cheaper than repeatedly traversing the entire React tree.
+    for (const root of gamePageRoots) {
+      for (const initialFiber of fibersFromRoot(root)) {
+        let fiber = initialFiber;
+        for (let depth = 0; fiber && depth < 24; depth += 1, fiber = fiber.return) addFiberCandidates(fiber);
+      }
+    }
+    if (found.length) return found;
+
+    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body].filter(Boolean);
+    const fibers = [];
+    for (const root of roots) fibers.push(...fibersFromRoot(root));
     const visited = new Set();
-    const found = [];
     let scanned = 0;
-    while (fibers.length && scanned < 6000) {
+    while (fibers.length && scanned < 1500) {
       const fiber = fibers.pop();
       if (!fiber || typeof fiber !== "object" || visited.has(fiber)) continue;
       visited.add(fiber);
       scanned += 1;
-      const candidates = [
-        fiber.memoizedProps,
-        fiber.pendingProps,
-        fiber.memoizedState,
-        fiber.stateNode && fiber.stateNode.state,
-        fiber.stateNode && fiber.stateNode.props,
-        fiber.stateNode
-      ];
-      for (const candidate of candidates) {
-        if (!candidate || typeof candidate !== "object") continue;
-        found.push(...i18nVariants(candidate));
-      }
+      addFiberCandidates(fiber);
       if (fiber.current) fibers.push(fiber.current);
       if (fiber.stateNode && fiber.stateNode.current) fibers.push(fiber.stateNode.current);
       if (fiber.child) fibers.push(fiber.child);
@@ -731,7 +748,7 @@ window.MwiGuildCreditVersion = "0.4.57";
   };
   const savedUiState = loadSavedPluginUiState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -815,10 +832,14 @@ window.MwiGuildCreditVersion = "0.4.57";
   }
 
   function refreshOfficialItemNameCatalog(force) {
+    if (!force && state.itemNameCatalogReady) return;
     const now = Date.now();
     if (!force && now - state.itemNameCatalogLastRefresh < 3000) return;
     state.itemNameCatalogLastRefresh = now;
     itemNameCatalog.refresh();
+    state.itemNameCatalogRetryCount += 1;
+    const metadata = itemNameCatalog.metadata();
+    state.itemNameCatalogReady = metadata.source === "window-i18n" || metadata.source === "react-provider" || state.itemNameCatalogRetryCount >= 5;
   }
 
   // This is the sole item-name resolver used by the UI. It never translates
