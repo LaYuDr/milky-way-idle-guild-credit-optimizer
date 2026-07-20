@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.0";
+window.MwiGuildCreditVersion = "1.1.1";
 
 (function () {
   "use strict";
@@ -510,6 +510,7 @@ window.MwiGuildCreditVersion = "1.1.0";
       buybackExchange: "回购兑换",
       purchaseCost: "买入成本",
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
+      noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       sidebarCredit: "信用"
     },
     en: {
@@ -621,6 +622,7 @@ window.MwiGuildCreditVersion = "1.1.0";
       buybackExchange: "Buy-back exchange",
       purchaseCost: "Purchase cost",
       noSellPrice: "This item has no public buy price, so sell-and-buy-back cannot be estimated.",
+      noAffordableReplacement: "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       sidebarCredit: "Credits"
     }
   };
@@ -2481,7 +2483,9 @@ window.MwiGuildCreditVersion = "1.1.0";
           selectedOptimal = true;
           replacement = null;
         } else if (replacement.status !== "ok") {
-          unavailableReason = t("noSellPrice");
+          unavailableReason = replacement.status === "no_affordable_conversion"
+            ? t("noAffordableReplacement", { gold: `${core.formatCompactCost(replacement.sale.net)} ${t("gold")}` })
+            : t("noSellPrice");
           replacement = null;
         } else {
           selected = selectedConversion;

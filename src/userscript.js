@@ -1448,7 +1448,9 @@
           selectedOptimal = true;
           replacement = null;
         } else if (replacement.status !== "ok") {
-          unavailableReason = t("noSellPrice");
+          unavailableReason = replacement.status === "no_affordable_conversion"
+            ? t("noAffordableReplacement", { gold: `${core.formatCompactCost(replacement.sale.net)} ${t("gold")}` })
+            : t("noSellPrice");
           replacement = null;
         } else {
           selected = selectedConversion;

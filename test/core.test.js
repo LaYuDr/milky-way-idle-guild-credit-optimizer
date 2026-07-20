@@ -19,6 +19,7 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
   assert.equal(localizer.number(1234567), "1,234,567");
+  assert.equal(localizer.t("noAffordableReplacement", { gold: "4,312 gold" }), "Selling this quantity yields 4,312 gold after tax, which is not enough to buy an alternative exchange item.");
 });
 
 test("中文游戏环境保留中文 UI 文案与数量格式", () => {
@@ -231,6 +232,26 @@ test("卖出后回购仍会选择当前物品时标记为已是最优", () => {
   assert.equal(result.status, "already_optimal");
   assert.equal(result.best.itemHrid, "/items/hammer");
   assert.equal(result.creditDifference, 0);
+});
+
+test("单批售出已有公开收购价但金额不足回购时，不误判为无市场价", () => {
+  const result = core.estimateSaleReplacement({
+    selectedConversion: { itemHrid: "/items/minor_heal", itemName: "Minor Heal", itemCount: 1, creditCount: 3 },
+    batches: 1,
+    sellPrice: 4400,
+    sellerTaxRate: 0.02,
+    conversions: [
+      { itemHrid: "/items/minor_heal", itemName: "Minor Heal", itemCount: 1, creditCount: 3 },
+      { itemHrid: "/items/snake_fang", itemName: "Snake Fang", itemCount: 1, creditCount: 10 }
+    ],
+    buyPrices: {
+      "/items/minor_heal": 4400,
+      "/items/snake_fang": 7800
+    }
+  });
+  assert.equal(result.status, "no_affordable_conversion");
+  assert.equal(result.sale.status, "ok");
+  assert.equal(result.sale.net, 4312);
 });
 
 test("强化装备使用对应强化等级的公开市场价格", () => {
