@@ -7,6 +7,7 @@
     itemDetails: null,
     guildBuffDetails: null,
     guildBuffLevels: null,
+    guildShrineLevels: null,
     characterItems: null
   });
 
@@ -23,10 +24,12 @@
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
       const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      const guildShrineLevels = value.guildShrineMap || value.guildShrineDict || value.guildShrines || value.guildShrineLevelMap || value.guildShrineLevelDict || value.guildShrineLevels || value.guildBuildingMap || value.guildBuildingDict || value.guildBuildings || value.guildBuildingLevelMap || value.guildBuildingLevelDict || value.guildBuildingLevels;
       const characterItems = value.characterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
+      if (guildShrineLevels && typeof guildShrineLevels === "object") bridge.guildShrineLevels = guildShrineLevels;
       if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
       for (const child of Object.values(value)) pending.push(child);
     }

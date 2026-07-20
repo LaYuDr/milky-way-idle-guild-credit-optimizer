@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.52";
+window.MwiGuildCreditVersion = "0.4.53";
 
 (function () {
   "use strict";
@@ -10,6 +10,7 @@ window.MwiGuildCreditVersion = "0.4.52";
     itemDetails: null,
     guildBuffDetails: null,
     guildBuffLevels: null,
+    guildShrineLevels: null,
     characterItems: null
   });
 
@@ -26,10 +27,12 @@ window.MwiGuildCreditVersion = "0.4.52";
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
       const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      const guildShrineLevels = value.guildShrineMap || value.guildShrineDict || value.guildShrines || value.guildShrineLevelMap || value.guildShrineLevelDict || value.guildShrineLevels || value.guildBuildingMap || value.guildBuildingDict || value.guildBuildings || value.guildBuildingLevelMap || value.guildBuildingLevelDict || value.guildBuildingLevels;
       const characterItems = value.characterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
+      if (guildShrineLevels && typeof guildShrineLevels === "object") bridge.guildShrineLevels = guildShrineLevels;
       if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
       for (const child of Object.values(value)) pending.push(child);
     }
@@ -1225,7 +1228,7 @@ window.MwiGuildCreditVersion = "0.4.52";
     "Philosopher's Stone": "贤者之石"
   };
   const savedUiState = loadSavedPluginUiState();
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -1356,6 +1359,14 @@ window.MwiGuildCreditVersion = "0.4.52";
     return false;
   }
 
+  function setGuildShrineLevels(candidate) {
+    if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
+      state.guildShrineLevels = candidate;
+      return true;
+    }
+    return false;
+  }
+
   function setCharacterItems(candidate) {
     if (Array.isArray(candidate)) {
       state.characterItems = candidate;
@@ -1369,6 +1380,14 @@ window.MwiGuildCreditVersion = "0.4.52";
     return setGuildBuffLevels(
       source.characterGuildBuffMap || source.characterGuildBuffDict || source.characterGuildBuffs || source.characterGuildBuffLevelMap || source.characterGuildBuffLevelDict ||
       source.guildBuffLevelMap || source.guildBuffLevelDict || source.guildBuffLevels || source.guildBuffMap || source.guildBuffDict
+    );
+  }
+
+  function setGuildShrineLevelsFrom(source) {
+    if (!source || typeof source !== "object") return false;
+    return setGuildShrineLevels(
+      source.guildShrineMap || source.guildShrineDict || source.guildShrines || source.guildShrineLevelMap || source.guildShrineLevelDict || source.guildShrineLevels ||
+      source.guildBuildingMap || source.guildBuildingDict || source.guildBuildings || source.guildBuildingLevelMap || source.guildBuildingLevelDict || source.guildBuildingLevels
     );
   }
 
@@ -1455,7 +1474,7 @@ window.MwiGuildCreditVersion = "0.4.52";
   }
 
   function hydrateLocalInitData() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
     let raw;
     try {
       raw = pageWindow.localStorage && pageWindow.localStorage.getItem("initClientData");
@@ -1471,15 +1490,16 @@ window.MwiGuildCreditVersion = "0.4.52";
       const hasItems = !state.itemDetails && setItemDetails(data.itemDetailMap || data.itemDetailDict);
       const hasGuildBuffs = !state.guildBuffDetails && setGuildBuffDetails(data.guildBuffDetailMap || data.guildBuffDetailDict);
       const hasGuildBuffLevels = !state.guildBuffLevels && (setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character));
+      const hasGuildShrineLevels = !state.guildShrineLevels && (setGuildShrineLevelsFrom(data) || setGuildShrineLevelsFrom(data.guild));
       const hasCharacterItems = !state.characterItems && setCharacterItems(data.characterItems || data.character && data.character.items);
-      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasCharacterItems;
+      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasGuildShrineLevels || hasCharacterItems;
     } catch (_) {
       return false;
     }
   }
 
   function extractItemDetailsFromReact() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
     const roots = [document.getElementById("root"), document.body].filter(Boolean);
     const visited = new Set();
     const stack = [];
@@ -1502,8 +1522,9 @@ window.MwiGuildCreditVersion = "0.4.52";
         found = setItemDetails(candidate.itemDetailMap || candidate.itemDetailDict) || found;
         found = setGuildBuffDetails(candidate.guildBuffDetailMap || candidate.guildBuffDetailDict) || found;
         found = setGuildBuffLevelsFrom(candidate) || found;
+        found = setGuildShrineLevelsFrom(candidate) || found;
         found = setCharacterItems(candidate.characterItems) || found;
-        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.characterItems) return true;
+        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
       }
       // React 18 containers point at a FiberRoot whose active tree is .current.
       if (fiber.current) stack.push(fiber.current);
@@ -1519,6 +1540,7 @@ window.MwiGuildCreditVersion = "0.4.52";
     setItemDetails(value.itemDetailMap || value.itemDetailDict);
     setGuildBuffDetails(value.guildBuffDetailMap || value.guildBuffDetailDict);
     setGuildBuffLevelsFrom(value);
+    setGuildShrineLevelsFrom(value);
     setCharacterItems(value.characterItems);
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
@@ -1529,9 +1551,10 @@ window.MwiGuildCreditVersion = "0.4.52";
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
+    setGuildShrineLevelsFrom(bridge);
     setCharacterItems(bridge.characterItems);
-    if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.characterItems)) {
-      for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.characterItems); index -= 1) {
+    if (Array.isArray(bridge.messages) && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.guildShrineLevels || !state.characterItems)) {
+      for (let index = bridge.messages.length - 1; index >= 0 && (!state.itemDetails || !state.guildBuffDetails || !state.guildBuffLevels || !state.guildShrineLevels || !state.characterItems); index -= 1) {
         try {
           scanMessage(JSON.parse(bridge.messages[index]), 0);
         } catch (_) {
@@ -1590,6 +1613,43 @@ window.MwiGuildCreditVersion = "0.4.52";
     const href = itemSpriteHref(itemHrid);
     if (!href) return '<span class="mwi-item-icon mwi-item-icon-fallback" aria-hidden="true"></span>';
     return `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`;
+  }
+
+  function marketItemIconMarkup(itemHrid, label, className = "") {
+    return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" type="button" title="在市场中查看${escapeHtml(label)}" aria-label="在市场中查看${escapeHtml(label)}">${iconMarkup(itemHrid, label)}</button>`;
+  }
+
+  function marketplaceSearchInput() {
+    return Array.from(document.querySelectorAll("input")).find((input) => {
+      if (input.closest("#mwi-credit-optimizer")) return false;
+      const text = `${input.getAttribute("placeholder") || ""} ${input.getAttribute("aria-label") || ""}`.toLowerCase();
+      return text.includes("物品搜索") || text.includes("search") || text.includes("item");
+    }) || null;
+  }
+
+  function openMarketplaceForItem(itemHrid, itemName) {
+    const searchText = String(itemName || simpleItemName(itemHrid));
+    const navigate = Array.from(document.querySelectorAll("button,[role='button'],a,div")).find((element) => {
+      if (element.closest("#mwi-credit-optimizer")) return false;
+      return String(element.textContent || "").trim() === "市场";
+    });
+    if (navigate) navigate.click();
+    let attempts = 0;
+    const search = () => {
+      const input = marketplaceSearchInput();
+      if (!input && attempts++ < 20) {
+        window.setTimeout(search, 80);
+        return;
+      }
+      if (!input) return;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+      if (setter && setter.set) setter.set.call(input, searchText);
+      else input.value = searchText;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.focus();
+    };
+    window.setTimeout(search, navigate ? 80 : 0);
   }
 
   function formatNumber(value, digits) {
@@ -1712,6 +1772,79 @@ window.MwiGuildCreditVersion = "0.4.52";
     return Number.isSafeInteger(level) && level >= 0 ? Math.min(level, entry.maxLevel) : 0;
   }
 
+  function shrineLevelValue(value) {
+    const raw = value && typeof value === "object" ? value.level ?? value.currentLevel ?? value.guildBuildingLevel : value;
+    const level = Number(raw);
+    return Number.isSafeInteger(level) && level >= 0 ? level : null;
+  }
+
+  function shrineLevelRecordMatches(record, fallbackHrid, shrineHrid) {
+    const shrineKey = String(shrineHrid || "").split("/").pop().toLowerCase();
+    if (!shrineKey) return false;
+    const candidates = [
+      fallbackHrid,
+      record && record.guildShrineHrid,
+      record && record.shrineHrid,
+      record && record.guildBuildingHrid,
+      record && record.hrid
+    ].filter((value) => typeof value === "string");
+    return candidates.some((value) => {
+      const normalized = value.toLowerCase();
+      return normalized === shrineHrid || (normalized.includes("shrine") && new RegExp(`(^|[/_-])${shrineKey}([/_-]|$)`).test(normalized));
+    });
+  }
+
+  function guildShrineLevelByHrid(shrineHrid) {
+    const source = state.guildShrineLevels;
+    const entries = Array.isArray(source)
+      ? source.map((record) => [record && (record.guildShrineHrid || record.shrineHrid || record.guildBuildingHrid || record.hrid), record])
+      : Object.entries(source || {});
+    for (const [fallbackHrid, record] of entries) {
+      if (!shrineLevelRecordMatches(record, fallbackHrid, shrineHrid)) continue;
+      const level = shrineLevelValue(record);
+      if (level !== null) return level;
+    }
+    return null;
+  }
+
+  function guildShrineTargetLevels(entries) {
+    const targets = Object.create(null);
+    for (const entry of entries) {
+      const shrineHrid = entry && entry.detail && entry.detail.shrineHrid;
+      if (!shrineHrid || Object.hasOwn(targets, shrineHrid)) continue;
+      const level = guildShrineLevelByHrid(shrineHrid);
+      if (level !== null) targets[shrineHrid] = Math.min(level, entry.maxLevel);
+    }
+    return targets;
+  }
+
+  function isCombatGuildBuff(entry) {
+    return entry && entry.detail && entry.detail.isCombat === true;
+  }
+
+  function applyGuildShrineTargets(entries, domain) {
+    const combat = domain === "combat";
+    const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+    const targets = guildShrineTargetLevels(domainEntries);
+    if (!domainEntries.length || domainEntries.some((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid))) return false;
+    const entriesByHrid = new Map(entries.map((entry) => [entry.hrid, entry]));
+    const preservedPlans = state.upgradePlans.filter((plan) => {
+      const entry = entriesByHrid.get(plan.guildBuffHrid);
+      return !entry || isCombatGuildBuff(entry) !== combat;
+    });
+    const planned = domainEntries.map((entry) => {
+      const startLevel = currentGuildBuffLevel(entry);
+      const targetLevel = targets[entry.detail.shrineHrid];
+      return targetLevel > startLevel ? { id: `plan-${state.nextUpgradePlanId++}`, guildBuffHrid: entry.hrid, startLevel, targetLevel } : null;
+    }).filter(Boolean);
+    state.upgradePlans = [...preservedPlans, ...planned];
+    state.suppressUpgradePlanAutofill = true;
+    state.upgradePresetNotice = planned.length
+      ? `已按当前公会神龛等级设定 ${combat ? "战斗" : "生活"}计划，共 ${planned.length} 项需要升级。`
+      : `当前${combat ? "战斗" : "生活"}神龛已达到对应公会建筑等级，无需额外材料。`;
+    return true;
+  }
+
   function normalizeUpgradePlan(plan, entries) {
     const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
     if (!entry) return null;
@@ -1731,18 +1864,38 @@ window.MwiGuildCreditVersion = "0.4.52";
     if (!entry) return false;
     const startLevel = currentGuildBuffLevel(entry);
     state.upgradePlans.push({ id: `plan-${state.nextUpgradePlanId++}`, guildBuffHrid: entry.hrid, startLevel, targetLevel: startLevel + 1 });
+    state.suppressUpgradePlanAutofill = false;
+    state.upgradePresetNotice = "";
     return true;
   }
 
   function ensureGuildUpgradePlans(entries) {
     state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
-    if (!state.upgradePlans.length) addGuildUpgradePlan(entries);
+    if (!state.upgradePlans.length && !state.suppressUpgradePlanAutofill) addGuildUpgradePlan(entries);
     persistPluginUiState();
   }
 
   function levelOptionMarkup(start, end, selected) {
     return Array.from({ length: Math.max(end - start + 1, 0) }, (_, index) => start + index)
       .map((level) => `<option value="${level}" ${level === selected ? "selected" : ""}>${level} 级</option>`).join("");
+  }
+
+  function updateGuildShrineTargetActions(panel, entries) {
+    const targets = guildShrineTargetLevels(entries);
+    const summaries = [];
+    for (const domain of ["life", "combat"]) {
+      const combat = domain === "combat";
+      const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+      const ready = domainEntries.length > 0 && domainEntries.every((entry) => Object.hasOwn(targets, entry.detail.shrineHrid));
+      const button = panel.querySelector(`[data-role="set-guild-shrine-target"][data-domain="${domain}"]`);
+      if (button) {
+        button.disabled = !ready;
+        button.title = ready ? "按每座对应公会神龛的当前等级批量设定目标" : "尚未读取完整的公会神龛建筑等级";
+      }
+      summaries.push(`${combat ? "战斗" : "生活"} ${ready ? `${domainEntries.length}/${domainEntries.length}` : `${Object.keys(targets).filter((shrineHrid) => domainEntries.some((entry) => entry.detail.shrineHrid === shrineHrid)).length}/${domainEntries.length}`}`);
+    }
+    const status = panel.querySelector('[data-role="guild-shrine-target-status"]');
+    if (status) status.textContent = state.guildShrineLevels ? `公会神龛等级已读取：${summaries.join(" · ")}。` : "正在读取当前公会神龛建筑等级…";
   }
 
   function renderGuildUpgradePlans(panel, entries) {
@@ -1759,6 +1912,7 @@ window.MwiGuildCreditVersion = "0.4.52";
         <button class="mwi-remove-plan" data-role="remove-plan" type="button" title="移除此项" aria-label="移除此项">×</button>
       </div>`;
     }).join("");
+    updateGuildShrineTargetActions(panel, entries);
   }
 
   function renderUpgradeCostText(gold, guildTokens) {
@@ -1794,11 +1948,11 @@ window.MwiGuildCreditVersion = "0.4.52";
       const accent = credit ? credit[2] : item.itemHrid === "/items/guild_token" ? "#e65d68" : "#7778b4";
       const conversionMarkup = row && row.missing > 0 && isGuildCredit
         ? plan
-          ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${iconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>背包库存 ${hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : "未读取"}</small></span></div><div class="mwi-material-plan-need"><small>最优兑换需</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${formatNumber(plan.itemCount)} 个 → ${formatNumber(plan.creditCount)} 点</span>`
+          ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>背包库存 ${hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : "未读取"}</small></span></div><div class="mwi-material-plan-need"><small>最优兑换需</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${formatNumber(plan.itemCount)} 个 → ${formatNumber(plan.creditCount)} 点</span>`
           : `<div class="mwi-material-plan-unavailable">最优兑换：暂无可用市场价格</div>`
         : "";
       const rowClass = item.itemHrid === "/items/guild_token" ? " mwi-material-row-token" : "";
-      return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small></span></div><div class="mwi-material-required"><small>本次所需</small><strong>${formatNumber(item.count)}</strong></div>${conversionMarkup ? `<div class="mwi-material-plan">${conversionMarkup}</div>` : ""}</article>`;
+      return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small></span></div><div class="mwi-material-required"><small>本次所需</small><strong>${formatNumber(item.count)}</strong></div>${conversionMarkup ? `<div class="mwi-material-plan">${conversionMarkup}</div>` : ""}</article>`;
     }).join("");
     return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
   }
@@ -1817,8 +1971,8 @@ window.MwiGuildCreditVersion = "0.4.52";
     ensureGuildUpgradePlans(entries);
     renderGuildUpgradePlans(panel, entries);
     if (!state.upgradePlans.length) {
-      status.textContent = "当前所有神龛增益均已满级。";
-      results.replaceChildren();
+      status.textContent = state.upgradePresetNotice || "当前所有神龛增益均已满级。";
+      results.innerHTML = `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || "当前没有需要计算的神龛升级材料。")}</div>`;
       return;
     }
 
@@ -1847,7 +2001,7 @@ window.MwiGuildCreditVersion = "0.4.52";
     }
     if (refreshId !== state.upgradeRefreshId) return;
     const hasInventory = Array.isArray(state.characterItems);
-    const notices = [state.guildBuffLevels ? `已合并 ${result.plans.length} 项神龛升级的材料成本。` : "未读取当前神龛等级，已按 0 级开始；请确认或手动调整“起始等级”。"];
+    const notices = [state.upgradePresetNotice || (state.guildBuffLevels ? `已合并 ${result.plans.length} 项神龛升级的材料成本。` : "未读取当前神龛等级，已按 0 级开始；请确认或手动调整“起始等级”。")];
     if (snapshotFailed) notices.push("公开市场快照读取失败，暂未估算金币成本。");
     if (!hasInventory) notices.push("未读取背包库存，缺口暂按 0 件库存计算。");
     status.textContent = notices.join(" ");
@@ -1899,10 +2053,11 @@ window.MwiGuildCreditVersion = "0.4.52";
         #mwi-credit-optimizer th,#mwi-credit-optimizer td{padding:5px 6px;border-top:1px solid #474969;text-align:right;white-space:nowrap}
         #mwi-credit-optimizer th:first-child,#mwi-credit-optimizer td:first-child{text-align:left} #mwi-credit-optimizer th{color:#bfc2de;font-weight:600}
         #mwi-credit-optimizer .mwi-item{display:flex;align-items:center;gap:5px;min-width:0}.mwi-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
+        #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}#mwi-credit-optimizer .mwi-market-item-link{display:inline-grid;place-items:center;flex:0 0 24px;width:24px;min-width:24px;height:24px;min-height:24px!important;padding:0!important;border:1px solid transparent!important;border-radius:5px!important;background:transparent!important;color:inherit!important;line-height:1;cursor:pointer}#mwi-credit-optimizer .mwi-market-item-link:hover,#mwi-credit-optimizer .mwi-market-item-link:focus-visible{border-color:#77f3d0!important;background:#2d6159!important;outline:none;box-shadow:0 0 0 2px #77f3d033}#mwi-credit-optimizer .mwi-market-item-link .mwi-item-icon{display:block}
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}#mwi-credit-optimizer .mwi-token-value-section{margin:10px 0;border:1px solid #3a7b70;border-top:3px solid #43c4ad;border-radius:6px;background:#203b3a;overflow:hidden}#mwi-credit-optimizer .mwi-token-value-heading{border-bottom:1px solid #3a7b70}#mwi-credit-optimizer .mwi-token-value-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}#mwi-credit-optimizer .mwi-token-value-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0}#mwi-credit-optimizer .mwi-token-value-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;min-width:0;padding:8px;border-top:1px solid #315d58}#mwi-credit-optimizer .mwi-token-value-row .mwi-item-icon{width:21px;height:21px;flex:0 0 21px}#mwi-credit-optimizer .mwi-token-value-exchange{color:#d7f6ef;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-row .mwi-cost{font-size:12px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-unpriced{color:#ffd17c;font-size:11px;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-upgrade-preset{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin:0 0 12px;padding:10px 11px;border:1px solid #3b8478;border-radius:9px;background:linear-gradient(135deg,#1f403d,#202f48);box-shadow:0 4px 14px #101d1c55}#mwi-credit-optimizer .mwi-upgrade-preset-copy{display:grid;gap:3px;min-width:0}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{color:#dffaf4;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-preset-copy small{color:#abd5cd;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{min-height:29px!important;padding:5px 8px!important;font-size:11px;white-space:nowrap;background:#43c4ad!important;color:#10201f!important}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button[data-domain="combat"]{background:#6ea9ff!important;color:#15233f!important}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button:disabled{background:#4d5968!important;color:#bec4ce!important;cursor:not-allowed}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:9px;align-items:end;padding:11px;border:1px solid #45486d;border-radius:8px;background:linear-gradient(135deg,#2c2e4d,#252640);box-shadow:0 4px 13px #13142555}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:36px;min-width:36px;padding:0!important;font-size:21px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:center;margin:12px 0 4px}
-        #mwi-credit-optimizer .mwi-material-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.mwi-material-row{position:relative;align-self:start;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px;border:1px solid #45486d;border-left:3px solid var(--mwi-material-accent);border-radius:8px;background:linear-gradient(135deg,#292b48,#23243d);box-shadow:0 4px 13px #13142544}.mwi-material-row-token{grid-column:1/-1;min-height:0;padding:9px 11px;background:linear-gradient(135deg,#2b2c49,#24253f)}.mwi-material-credit{display:flex;align-items:center;gap:8px;min-width:0}.mwi-material-copy{min-width:0;display:grid;gap:2px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f4f5ff;font-weight:700}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-required{display:grid;justify-items:end;align-content:center;gap:1px;text-align:right}.mwi-material-required small{color:#aeb1d3;font-size:10px}.mwi-material-required strong{color:#77f3d0;font-size:18px;line-height:1.1}.mwi-material-plan{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:10px;border:1px solid #356c63;border-radius:7px;background:linear-gradient(135deg,#1f3e3c,#1d3736);overflow:hidden}.mwi-material-plan-item{grid-row:1/-1;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 0 8px 8px}.mwi-material-plan-icon{display:grid!important;place-items:center;flex:0 0 52px!important;width:52px!important;height:52px!important;min-width:52px!important;padding:0!important;border:1px solid #4da496;border-radius:7px;background:linear-gradient(135deg,#306b62,#275a53);box-shadow:inset 0 1px #7bd8c822,0 2px 5px #10232166}.mwi-material-plan-icon .mwi-item-icon{width:50px!important;height:50px!important;flex:0 0 50px!important;max-width:50px;max-height:50px;object-fit:contain}.mwi-material-plan-item>span:last-child{min-width:0;display:grid;gap:3px}.mwi-material-plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3fbf5;font-size:14px;line-height:1.15}.mwi-material-plan-item small{color:#afd4cd;font-size:12px;line-height:1.15}.mwi-material-plan-need{display:grid;justify-items:end;gap:1px;padding:8px 9px 0 0}.mwi-material-plan-need small{color:#afd4cd;font-size:10px}.mwi-material-plan-need strong{color:#77f3d0;font-size:17px;line-height:1}.mwi-material-plan-rate{grid-column:2;align-self:end;padding:0 9px 9px 0;color:#c5e3dd;font-size:10px;text-align:right;white-space:nowrap}.mwi-material-plan-unavailable{color:#ffd17c;font-size:11px}.mwi-plan-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:12px 0 8px;color:#d7d9ed;font-size:12px}.mwi-plan-summary span:not(.mwi-plan-separator){padding:4px 7px;border:1px solid #45486d;border-radius:999px;background:#292a46}.mwi-plan-separator{display:none}.mwi-upgrade-cost-summary{display:grid;gap:7px;margin:8px 0 10px;padding:11px 12px;border:1px solid #3d8d80;border-radius:8px;background:linear-gradient(135deg,#1d3d3b,#203b3a);box-shadow:0 5px 14px #101d1c55}.mwi-upgrade-cost-title{color:#b7e6dc;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note):not(.mwi-upgrade-cost-title){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:15px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
+        #mwi-credit-optimizer .mwi-material-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.mwi-material-row{position:relative;align-self:start;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px;border:1px solid #45486d;border-left:3px solid var(--mwi-material-accent);border-radius:8px;background:linear-gradient(135deg,#292b48,#23243d);box-shadow:0 4px 13px #13142544}.mwi-material-row-token{grid-column:1/-1;min-height:0;padding:9px 11px;background:linear-gradient(135deg,#2b2c49,#24253f)}.mwi-material-credit{display:flex;align-items:center;gap:8px;min-width:0}.mwi-material-copy{min-width:0;display:grid;gap:2px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f4f5ff;font-weight:700}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-required{display:grid;justify-items:end;align-content:center;gap:1px;text-align:right}.mwi-material-required small{color:#aeb1d3;font-size:10px}.mwi-material-required strong{color:#77f3d0;font-size:18px;line-height:1.1}.mwi-material-plan{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:10px;border:1px solid #356c63;border-radius:7px;background:linear-gradient(135deg,#1f3e3c,#1d3736);overflow:hidden}.mwi-material-plan-item{grid-row:1/-1;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 0 8px 8px}.mwi-material-plan-icon{display:grid!important;place-items:center;flex:0 0 52px!important;width:52px!important;height:52px!important;min-width:52px!important;padding:0!important;border:1px solid #4da496;border-radius:7px;background:linear-gradient(135deg,#306b62,#275a53);box-shadow:inset 0 1px #7bd8c822,0 2px 5px #10232166}.mwi-material-plan-icon .mwi-market-item-link{width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;border:0!important;border-radius:7px!important}.mwi-material-plan-icon .mwi-item-icon{width:50px!important;height:50px!important;flex:0 0 50px!important;max-width:50px;max-height:50px;object-fit:contain}.mwi-material-plan-item>span:last-child{min-width:0;display:grid;gap:3px}.mwi-material-plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3fbf5;font-size:14px;line-height:1.15}.mwi-material-plan-item small{color:#afd4cd;font-size:12px;line-height:1.15}.mwi-material-plan-need{display:grid;justify-items:end;gap:1px;padding:8px 9px 0 0}.mwi-material-plan-need small{color:#afd4cd;font-size:10px}.mwi-material-plan-need strong{color:#77f3d0;font-size:17px;line-height:1}.mwi-material-plan-rate{grid-column:2;align-self:end;padding:0 9px 9px 0;color:#c5e3dd;font-size:10px;text-align:right;white-space:nowrap}.mwi-material-plan-unavailable{color:#ffd17c;font-size:11px}.mwi-plan-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:12px 0 8px;color:#d7d9ed;font-size:12px}.mwi-plan-summary span:not(.mwi-plan-separator){padding:4px 7px;border:1px solid #45486d;border-radius:999px;background:#292a46}.mwi-plan-separator{display:none}.mwi-upgrade-cost-summary{display:grid;gap:7px;margin:8px 0 10px;padding:11px 12px;border:1px solid #3d8d80;border-radius:8px;background:linear-gradient(135deg,#1d3d3b,#203b3a);box-shadow:0 5px 14px #101d1c55}.mwi-upgrade-cost-title{color:#b7e6dc;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note):not(.mwi-upgrade-cost-title){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:15px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:720px){#mwi-credit-optimizer .mwi-material-list{grid-template-columns:1fr}.mwi-material-row-token{grid-column:auto}}@media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}.mwi-material-plan{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}.mwi-material-plan-item{grid-row:auto}.mwi-material-plan-need{justify-items:start;grid-column:1;padding:0 9px 4px}.mwi-material-plan-rate{grid-column:1;padding:0 9px 9px;text-align:left}}
       </style>
       <h3>公会助手</h3>
@@ -1921,6 +2076,10 @@ window.MwiGuildCreditVersion = "0.4.52";
         <div data-role="results"></div>
       </div>
       <div data-role="upgrade-view" hidden>
+        <section class="mwi-upgrade-preset" aria-label="按公会神龛等级批量规划">
+          <div class="mwi-upgrade-preset-copy"><strong>按当前公会神龛等级批量规划</strong><small data-role="guild-shrine-target-status">正在读取当前公会神龛建筑等级…</small></div>
+          <div class="mwi-upgrade-preset-buttons"><button data-role="set-guild-shrine-target" data-domain="life" type="button">设定当前公会建筑为目标等级（生活）</button><button data-role="set-guild-shrine-target" data-domain="combat" type="button">设定当前公会建筑为目标等级（战斗）</button></div>
+        </section>
         <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
         <div class="mwi-upgrade-actions"><button data-role="add-upgrade-plan" type="button">添加神龛</button></div>
         <div class="mwi-status" data-role="upgrade-status">等待神龛升级数据...</div>
@@ -1979,7 +2138,21 @@ window.MwiGuildCreditVersion = "0.4.52";
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
+    panel.addEventListener("click", (event) => {
+      const button = event.target.closest('[data-role="market-item-link"]');
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openMarketplaceForItem(button.dataset.itemHrid, button.dataset.itemName);
+    });
     panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
+    panel.querySelector('.mwi-upgrade-preset-buttons').addEventListener("click", (event) => {
+      const button = event.target.closest('[data-role="set-guild-shrine-target"]');
+      if (!button || button.disabled) return;
+      if (!applyGuildShrineTargets(guildBuffEntries(), button.dataset.domain)) return;
+      persistPluginUiState();
+      refreshGuildUpgrade(panel);
+    });
     panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("change", (event) => {
       const row = event.target.closest("[data-plan-id]");
       const plan = row && state.upgradePlans.find((candidate) => candidate.id === row.dataset.planId);
@@ -2000,6 +2173,8 @@ window.MwiGuildCreditVersion = "0.4.52";
       } else if (event.target.matches('[data-role="plan-target"]')) {
         plan.targetLevel = Number(event.target.value);
       }
+      state.suppressUpgradePlanAutofill = false;
+      state.upgradePresetNotice = "";
       persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
@@ -2008,6 +2183,8 @@ window.MwiGuildCreditVersion = "0.4.52";
       const row = button && button.closest("[data-plan-id]");
       if (!row) return;
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== row.dataset.planId);
+      state.suppressUpgradePlanAutofill = false;
+      state.upgradePresetNotice = "";
       persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
@@ -2023,7 +2200,7 @@ window.MwiGuildCreditVersion = "0.4.52";
     if (!available.length) {
       return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><div class="mwi-empty">暂无可估算的市场价格</div></div></section>`;
     }
-    return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>物品</th><th>兑换</th><th>每点</th><th>目标成本</th></tr></thead><tbody>${available.map((row) => `<tr><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${iconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td>${row.itemCount} -> ${row.creditCount}</td><td class="mwi-cost">${formatNumber(row.costPerCredit, 2)}</td><td>${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
+    return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>物品</th><th>兑换</th><th>每点</th><th>目标成本</th></tr></thead><tbody>${available.map((row) => `<tr><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${marketItemIconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td>${row.itemCount} -> ${row.creditCount}</td><td class="mwi-cost">${formatNumber(row.costPerCredit, 2)}</td><td>${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
 
   function renderGuildTokenValues(values) {
@@ -2034,9 +2211,9 @@ window.MwiGuildCreditVersion = "0.4.52";
       const meta = creditMeta.get(value.creditItemHrid) || { label: "未知", color: "#777" };
       const exchange = `${value.guildTokenCount} 代币 -> ${value.creditCount} 点`;
       if (value.status !== "ok") {
-        return `<div class="mwi-token-value-row"><span class="mwi-item">${iconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-token-value-unpriced">暂无市场估算</span></div>`;
+        return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-token-value-unpriced">暂无市场估算</span></div>`;
       }
-      return `<div class="mwi-token-value-row"><span class="mwi-item">${iconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} 金币</span></div>`;
+      return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, `${meta.label}公会信用点`)}<span class="mwi-item-name">${meta.label}信用点</span></span><span class="mwi-token-value-exchange">${exchange}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} 金币</span></div>`;
     }).join("");
     const collapsed = state.guildTokenValuesCollapsed;
     const heading = `<button class="mwi-credit-heading mwi-token-value-heading" data-role="toggle-token-values" type="button" aria-expanded="${String(!collapsed)}">${iconMarkup("/items/guild_token", "公会代币")}<span>公会代币兑换价值</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
