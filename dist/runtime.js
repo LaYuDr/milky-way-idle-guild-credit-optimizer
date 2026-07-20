@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.56";
+window.MwiGuildCreditVersion = "0.4.57";
 
 (function () {
   "use strict";
@@ -157,14 +157,29 @@ window.MwiGuildCreditVersion = "0.4.56";
     ].filter((value) => value && typeof value === "object");
     const maps = [];
     for (const resources of resourceRoots) {
-      for (const localeKey of ["zh-CN", "zh_CN", "zh"]) {
+      for (const localeKey of ["zh", "zh-CN", "zh_CN", "zh-Hans", "zh-Hans-CN"]) {
         const locale = resources[localeKey];
         if (!locale || typeof locale !== "object") continue;
         const translation = locale.translation && typeof locale.translation === "object" ? locale.translation : locale;
         if (translation.itemNames && typeof translation.itemNames === "object") maps.push(translation.itemNames);
+        if (locale.itemNames && typeof locale.itemNames === "object") maps.push(locale.itemNames);
       }
     }
     return maps;
+  }
+
+  function i18nVariants(candidate) {
+    if (!candidate || typeof candidate !== "object") return [];
+    return [
+      candidate,
+      candidate.i18n,
+      candidate.i18next,
+      candidate.value,
+      candidate.value && candidate.value.i18n,
+      candidate.context,
+      candidate.context && candidate.context.i18n,
+      candidate.props && candidate.props.i18n
+    ].filter((value) => value && typeof value === "object");
   }
 
   function extractOfficialItemNameCatalog(roots, options) {
@@ -172,10 +187,12 @@ window.MwiGuildCreditVersion = "0.4.56";
     const candidates = Array.isArray(roots) ? roots : [roots];
     let best = null;
     for (const root of candidates) {
-      for (const itemNames of itemNameMapsFromI18n(root)) {
-        const names = catalogFromItemNames(itemNames);
-        const entryCount = Object.keys(names).length;
-        if (!best || entryCount > best.entryCount) best = { names, entryCount };
+      for (const candidate of i18nVariants(root)) {
+        for (const itemNames of itemNameMapsFromI18n(candidate)) {
+          const names = catalogFromItemNames(itemNames);
+          const entryCount = Object.keys(names).length;
+          if (!best || entryCount > best.entryCount) best = { names, entryCount };
+        }
       }
     }
     return best && best.entryCount >= minimumEntries ? { ...best, valid: true } : { names: Object.create(null), entryCount: best ? best.entryCount : 0, valid: false };
@@ -183,11 +200,18 @@ window.MwiGuildCreditVersion = "0.4.56";
 
   function reactI18nRoots(documentRef) {
     if (!documentRef) return [];
-    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body].filter(Boolean);
+    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body];
+    try {
+      roots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
+    } catch (_) {
+      // A restricted document should still allow the direct window candidates.
+    }
     const fibers = [];
     for (const root of roots) {
-      for (const key of Object.keys(root)) {
-        if (key.startsWith("__reactFiber$") || key.startsWith("__reactContainer$") || key.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
+      if (!root) continue;
+      for (const key of Reflect.ownKeys(root)) {
+        const keyName = String(key);
+        if (keyName.startsWith("__reactFiber$") || keyName.startsWith("__reactContainer$") || keyName.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
       }
     }
     const visited = new Set();
@@ -198,15 +222,23 @@ window.MwiGuildCreditVersion = "0.4.56";
       if (!fiber || typeof fiber !== "object" || visited.has(fiber)) continue;
       visited.add(fiber);
       scanned += 1;
-      const candidates = [fiber.memoizedProps, fiber.pendingProps, fiber.memoizedState, fiber.stateNode && fiber.stateNode.state, fiber.stateNode];
+      const candidates = [
+        fiber.memoizedProps,
+        fiber.pendingProps,
+        fiber.memoizedState,
+        fiber.stateNode && fiber.stateNode.state,
+        fiber.stateNode && fiber.stateNode.props,
+        fiber.stateNode
+      ];
       for (const candidate of candidates) {
         if (!candidate || typeof candidate !== "object") continue;
-        found.push(candidate, candidate.i18n, candidate.i18next, candidate.value, candidate.context);
+        found.push(...i18nVariants(candidate));
       }
       if (fiber.current) fibers.push(fiber.current);
       if (fiber.stateNode && fiber.stateNode.current) fibers.push(fiber.stateNode.current);
       if (fiber.child) fibers.push(fiber.child);
       if (fiber.sibling) fibers.push(fiber.sibling);
+      if (fiber.return) fibers.push(fiber.return);
     }
     return found.filter((value) => value && typeof value === "object");
   }
@@ -240,7 +272,7 @@ window.MwiGuildCreditVersion = "0.4.56";
 
   function pageI18nRoots(pageWindow) {
     if (!pageWindow || typeof pageWindow !== "object") return [];
-    return [pageWindow.i18next, pageWindow.i18n].filter((value) => value && typeof value === "object");
+    return [pageWindow.i18next, pageWindow.i18n, pageWindow.mwi && pageWindow.mwi.lang].filter((value) => value && typeof value === "object");
   }
 
   function createItemNameCatalog(options) {
@@ -803,8 +835,12 @@ window.MwiGuildCreditVersion = "0.4.56";
     const coverage = itemNameCatalog.coverage(itemHrids);
     const status = panel.querySelector('[data-role="item-name-catalog-status"]');
     if (!status) return;
-    const missing = coverage.missingItemHrids.length ? ` · 未命中：${coverage.missingItemHrids.join("、")}` : "";
-    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${coverage.source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
+    const missingCount = coverage.missingItemHrids.length;
+    const missingPreview = coverage.missingItemHrids.slice(0, 8).join("、");
+    const source = coverage.source === "unavailable" ? "当前页面未暴露官方 i18n，已使用英文原名" : coverage.source;
+    const missing = missingCount ? ` · ${missingCount} 项未命中${missingPreview ? `（${missingPreview}${missingCount > 8 ? " …" : ""}）` : ""}` : "";
+    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
+    status.title = missingCount ? coverage.missingItemHrids.join("\n") : "所有当前涉及 HRID 均已命中官方名称目录。";
   }
 
   function escapeHtml(value) {
@@ -1603,7 +1639,7 @@ window.MwiGuildCreditVersion = "0.4.56";
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
-        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;word-break:break-word}
+        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}

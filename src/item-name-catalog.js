@@ -47,14 +47,29 @@
     ].filter((value) => value && typeof value === "object");
     const maps = [];
     for (const resources of resourceRoots) {
-      for (const localeKey of ["zh-CN", "zh_CN", "zh"]) {
+      for (const localeKey of ["zh", "zh-CN", "zh_CN", "zh-Hans", "zh-Hans-CN"]) {
         const locale = resources[localeKey];
         if (!locale || typeof locale !== "object") continue;
         const translation = locale.translation && typeof locale.translation === "object" ? locale.translation : locale;
         if (translation.itemNames && typeof translation.itemNames === "object") maps.push(translation.itemNames);
+        if (locale.itemNames && typeof locale.itemNames === "object") maps.push(locale.itemNames);
       }
     }
     return maps;
+  }
+
+  function i18nVariants(candidate) {
+    if (!candidate || typeof candidate !== "object") return [];
+    return [
+      candidate,
+      candidate.i18n,
+      candidate.i18next,
+      candidate.value,
+      candidate.value && candidate.value.i18n,
+      candidate.context,
+      candidate.context && candidate.context.i18n,
+      candidate.props && candidate.props.i18n
+    ].filter((value) => value && typeof value === "object");
   }
 
   function extractOfficialItemNameCatalog(roots, options) {
@@ -62,10 +77,12 @@
     const candidates = Array.isArray(roots) ? roots : [roots];
     let best = null;
     for (const root of candidates) {
-      for (const itemNames of itemNameMapsFromI18n(root)) {
-        const names = catalogFromItemNames(itemNames);
-        const entryCount = Object.keys(names).length;
-        if (!best || entryCount > best.entryCount) best = { names, entryCount };
+      for (const candidate of i18nVariants(root)) {
+        for (const itemNames of itemNameMapsFromI18n(candidate)) {
+          const names = catalogFromItemNames(itemNames);
+          const entryCount = Object.keys(names).length;
+          if (!best || entryCount > best.entryCount) best = { names, entryCount };
+        }
       }
     }
     return best && best.entryCount >= minimumEntries ? { ...best, valid: true } : { names: Object.create(null), entryCount: best ? best.entryCount : 0, valid: false };
@@ -73,11 +90,18 @@
 
   function reactI18nRoots(documentRef) {
     if (!documentRef) return [];
-    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body].filter(Boolean);
+    const roots = [documentRef.getElementById && documentRef.getElementById("root"), documentRef.body];
+    try {
+      roots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
+    } catch (_) {
+      // A restricted document should still allow the direct window candidates.
+    }
     const fibers = [];
     for (const root of roots) {
-      for (const key of Object.keys(root)) {
-        if (key.startsWith("__reactFiber$") || key.startsWith("__reactContainer$") || key.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
+      if (!root) continue;
+      for (const key of Reflect.ownKeys(root)) {
+        const keyName = String(key);
+        if (keyName.startsWith("__reactFiber$") || keyName.startsWith("__reactContainer$") || keyName.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
       }
     }
     const visited = new Set();
@@ -88,15 +112,23 @@
       if (!fiber || typeof fiber !== "object" || visited.has(fiber)) continue;
       visited.add(fiber);
       scanned += 1;
-      const candidates = [fiber.memoizedProps, fiber.pendingProps, fiber.memoizedState, fiber.stateNode && fiber.stateNode.state, fiber.stateNode];
+      const candidates = [
+        fiber.memoizedProps,
+        fiber.pendingProps,
+        fiber.memoizedState,
+        fiber.stateNode && fiber.stateNode.state,
+        fiber.stateNode && fiber.stateNode.props,
+        fiber.stateNode
+      ];
       for (const candidate of candidates) {
         if (!candidate || typeof candidate !== "object") continue;
-        found.push(candidate, candidate.i18n, candidate.i18next, candidate.value, candidate.context);
+        found.push(...i18nVariants(candidate));
       }
       if (fiber.current) fibers.push(fiber.current);
       if (fiber.stateNode && fiber.stateNode.current) fibers.push(fiber.stateNode.current);
       if (fiber.child) fibers.push(fiber.child);
       if (fiber.sibling) fibers.push(fiber.sibling);
+      if (fiber.return) fibers.push(fiber.return);
     }
     return found.filter((value) => value && typeof value === "object");
   }
@@ -130,7 +162,7 @@
 
   function pageI18nRoots(pageWindow) {
     if (!pageWindow || typeof pageWindow !== "object") return [];
-    return [pageWindow.i18next, pageWindow.i18n].filter((value) => value && typeof value === "object");
+    return [pageWindow.i18next, pageWindow.i18n, pageWindow.mwi && pageWindow.mwi.lang].filter((value) => value && typeof value === "object");
   }
 
   function createItemNameCatalog(options) {

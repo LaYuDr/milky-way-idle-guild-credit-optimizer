@@ -148,8 +148,12 @@
     const coverage = itemNameCatalog.coverage(itemHrids);
     const status = panel.querySelector('[data-role="item-name-catalog-status"]');
     if (!status) return;
-    const missing = coverage.missingItemHrids.length ? ` · 未命中：${coverage.missingItemHrids.join("、")}` : "";
-    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${coverage.source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
+    const missingCount = coverage.missingItemHrids.length;
+    const missingPreview = coverage.missingItemHrids.slice(0, 8).join("、");
+    const source = coverage.source === "unavailable" ? "当前页面未暴露官方 i18n，已使用英文原名" : coverage.source;
+    const missing = missingCount ? ` · ${missingCount} 项未命中${missingPreview ? `（${missingPreview}${missingCount > 8 ? " …" : ""}）` : ""}` : "";
+    status.textContent = `官方名称目录：${coverage.officialHitCount}/${coverage.requestedCount} 命中 · ${source} · 目录 ${coverage.catalogEntryCount} 项${missing}`;
+    status.title = missingCount ? coverage.missingItemHrids.join("\n") : "所有当前涉及 HRID 均已命中官方名称目录。";
   }
 
   function escapeHtml(value) {
@@ -948,7 +952,7 @@
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
-        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;word-break:break-word}
+        #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}#mwi-credit-optimizer .mwi-item-name-catalog-status{margin:-5px 0 9px;color:#9fd9ce;font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
