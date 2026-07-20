@@ -10,26 +10,60 @@
     #test-tabs button:first-child { background: #5053ad; }
     #native-content { flex: 1; min-height: 0; padding: 16px; }
   </style>
-  <main>本地右侧栏自动化测试页</main>
+  <main id="test-page-title">本地右侧栏自动化测试页</main>
   <button id="close-exchange-modal" type="button">关闭测试兑换窗口</button>
   <div class="Modal_modal__test" id="test-exchange-modal" role="dialog" aria-label="测试兑换窗口">
     <div class="GuildPanel_exchangeModalContent__test">
       <div class="Item_item__test"><svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg></div>
       <div class="Item_item__test"><svg role="img" aria-label="Green Guild Credit"><use href="/assets/items_sprite.svg#green_guild_credit"></use></svg></div>
-      <input type="number" value="1" aria-label="兑换数量">
+      <input id="test-exchange-count" type="number" value="1" aria-label="兑换数量">
     </div>
   </div>
   <div id="test-sidebar-wrapper">
   <aside id="test-sidebar">
     <div class="sidebar-shell"><div class="tabs-shell"><nav id="test-tabs">
-      <button type="button">库存</button><button type="button">装备</button><button type="button">技能</button><button type="button">房屋</button><button type="button">配装</button><button type="button">收获</button>
+      <button data-tab-key="inventory" type="button">库存</button><button data-tab-key="equipment" type="button">装备</button><button data-tab-key="skills" type="button">技能</button><button data-tab-key="house" type="button">房屋</button><button data-tab-key="loadout" type="button">配装</button><button data-tab-key="harvest" type="button">收获</button>
     </nav></div></div>
   </aside>
   <section class="tabPanelsContainer" id="native-content">原生右侧内容</section>
   </div>
   <script>
+    const english = new URLSearchParams(location.search).get("locale") === "en";
+    const copy = english ? {
+      pageTitle: "Local sidebar automation harness",
+      close: "Close test exchange modal",
+      dialog: "Test exchange modal",
+      exchangeCount: "Exchange quantity",
+      nativeContent: "Native sidebar content",
+      tabs: { inventory: "Inventory", equipment: "Equipment", skills: "Skills", house: "House", loadout: "Loadout", harvest: "Harvest" }
+    } : {
+      pageTitle: "本地右侧栏自动化测试页",
+      close: "关闭测试兑换窗口",
+      dialog: "测试兑换窗口",
+      exchangeCount: "兑换数量",
+      nativeContent: "原生右侧内容",
+      tabs: { inventory: "库存", equipment: "装备", skills: "技能", house: "房屋", loadout: "配装", harvest: "收获" }
+    };
+    document.documentElement.lang = english ? "en" : "zh-CN";
+    window.i18next = { language: document.documentElement.lang };
+    document.title = copy.pageTitle;
+    document.getElementById("test-page-title").textContent = copy.pageTitle;
+    document.getElementById("close-exchange-modal").textContent = copy.close;
+    document.getElementById("test-exchange-modal").setAttribute("aria-label", copy.dialog);
+    document.getElementById("test-exchange-count").setAttribute("aria-label", copy.exchangeCount);
+    document.getElementById("native-content").textContent = copy.nativeContent;
+    document.querySelectorAll("[data-tab-key]").forEach((tab) => { tab.textContent = copy.tabs[tab.dataset.tabKey]; });
     window.__mwiGuildCreditBridge = {
       itemDetails: {
+        "/items/guild_token": { itemHrid: "/items/guild_token", name: "Guild Token" },
+        "/items/green_guild_credit": { itemHrid: "/items/green_guild_credit", name: "Green Guild Credit" },
+        "/items/brown_guild_credit": { itemHrid: "/items/brown_guild_credit", name: "Brown Guild Credit" },
+        "/items/white_guild_credit": { itemHrid: "/items/white_guild_credit", name: "White Guild Credit" },
+        "/items/blue_guild_credit": { itemHrid: "/items/blue_guild_credit", name: "Blue Guild Credit" },
+        "/items/purple_guild_credit": { itemHrid: "/items/purple_guild_credit", name: "Purple Guild Credit" },
+        "/items/red_guild_credit": { itemHrid: "/items/red_guild_credit", name: "Red Guild Credit" },
+        "/items/silver_guild_credit": { itemHrid: "/items/silver_guild_credit", name: "Silver Guild Credit" },
+        "/items/gold_guild_credit": { itemHrid: "/items/gold_guild_credit", name: "Gold Guild Credit" },
         "/items/beast_hide": {
           itemHrid: "/items/beast_hide",
           name: "Beast Hide",

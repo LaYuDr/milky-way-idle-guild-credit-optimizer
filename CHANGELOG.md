@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.0] - 2026-07-20
+
+### Added
+
+- Full runtime English UI for non-Chinese game locales, including the sidebar tab, credit rankings, shrine planner, market links, update status, material estimates, and exchange-advisor overlay.
+- A locale-aware local test harness (`?locale=en`) and tests for English copy, plural quantities, locale formatting, and the absence of hard-coded Chinese UI copy.
+
+### Changed
+
+- Centralized all player-facing text in `src/localization.js`; Chinese remains the default for Chinese game locales and English is used for every other locale.
+- Sidebar discovery now recognizes both Chinese and English native tab labels, so the plugin can mount in either official client language.
+
 ## [1.0.0] - 2026-07-20
 
 ### Added

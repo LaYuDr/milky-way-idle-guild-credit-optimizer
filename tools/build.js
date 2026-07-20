@@ -25,7 +25,7 @@ const header = `// ==UserScript==
 
 `;
 
-const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
+const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
 fs.writeFileSync(output, bundle);
