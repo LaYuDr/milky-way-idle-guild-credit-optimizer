@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.5] - 2026-07-22
+
+### Fixed
+
+- Native market navigation now always passes enhancement level `0` for plugin recommendation materials, matching the game's own inventory flow and preventing an undefined order-book key from crashing the market view.
+
 ## [1.1.4] - 2026-07-22
 
 ### Changed

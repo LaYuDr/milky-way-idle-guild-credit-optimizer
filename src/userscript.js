@@ -547,7 +547,10 @@
   function openMarketplaceForItem(itemHrid, itemName) {
     const bridge = pageWindow.__mwiGuildCreditBridge;
     try {
-      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid)) return;
+      // Our recommendation rows are unenhanced materials. Mirror the native
+      // inventory action by explicitly using level 0 instead of leaving the
+      // market order-book selection undefined.
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) return;
     } catch (_) {
       // Fall through to the compatibility path if the game changes its React internals.
     }

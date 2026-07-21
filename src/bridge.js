@@ -55,8 +55,14 @@
     if (typeof itemHrid !== "string" || !itemHrid.startsWith("/items/")) return false;
     const controller = findMarketplaceController();
     if (!controller) return false;
+    // The native item UI always supplies a numeric level (0 for ordinary
+    // materials). An undefined level builds an invalid market order-book key
+    // and can make the game's market renderer fail before it can recover.
+    const normalizedEnhancementLevel = Number.isInteger(enhancementLevel) && enhancementLevel >= 0
+      ? enhancementLevel
+      : 0;
     try {
-      controller.handleGoToMarketplace(itemHrid, enhancementLevel);
+      controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
       return true;
     } catch (_) {
       return false;

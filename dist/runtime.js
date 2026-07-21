@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.4";
+window.MwiGuildCreditVersion = "1.1.5";
 
 (function () {
   "use strict";
@@ -58,8 +58,14 @@ window.MwiGuildCreditVersion = "1.1.4";
     if (typeof itemHrid !== "string" || !itemHrid.startsWith("/items/")) return false;
     const controller = findMarketplaceController();
     if (!controller) return false;
+    // The native item UI always supplies a numeric level (0 for ordinary
+    // materials). An undefined level builds an invalid market order-book key
+    // and can make the game's market renderer fail before it can recover.
+    const normalizedEnhancementLevel = Number.isInteger(enhancementLevel) && enhancementLevel >= 0
+      ? enhancementLevel
+      : 0;
     try {
-      controller.handleGoToMarketplace(itemHrid, enhancementLevel);
+      controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
       return true;
     } catch (_) {
       return false;
@@ -1633,7 +1639,10 @@ window.MwiGuildCreditVersion = "1.1.4";
   function openMarketplaceForItem(itemHrid, itemName) {
     const bridge = pageWindow.__mwiGuildCreditBridge;
     try {
-      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid)) return;
+      // Our recommendation rows are unenhanced materials. Mirror the native
+      // inventory action by explicitly using level 0 instead of leaving the
+      // market order-book selection undefined.
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) return;
     } catch (_) {
       // Fall through to the compatibility path if the game changes its React internals.
     }
