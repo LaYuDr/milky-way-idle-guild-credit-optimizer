@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.6] - 2026-07-22
+
+### Added
+
+- Added a Tampermonkey fallback installer link in the plugin footer and installation documentation for players who cannot open the Greasy Fork script page. Automatic update checks remain on the official release source.
+
 ## [1.1.5] - 2026-07-22
 
 ### Fixed

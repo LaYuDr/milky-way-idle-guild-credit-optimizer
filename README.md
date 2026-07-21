@@ -20,6 +20,7 @@
 
 - GitHub 项目页：[LaYuDr/milky-way-idle-guild-credit-optimizer](https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer)
 - Greasy Fork 安装页：[银河奶牛公会信用点性价比](https://greasyfork.org/zh-CN/scripts/586873-%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94)
+- 若设备无法打开 Greasy Fork，请使用 [Tampermonkey 备用分发安装链接](https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js)。该链接仅用于手动安装或重新安装；自动更新仍使用正式脚本源。
 - 安装脚本：[`dist/milky-way-idle-guild-credit-optimizer.user.js`](dist/milky-way-idle-guild-credit-optimizer.user.js)
 - 建议使用 Tampermonkey 安装。脚本匹配 `www.milkywayidle.com` 和 `www.milkywayidlecn.com` 的 HTTPS 页面。
 
