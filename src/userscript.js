@@ -519,7 +519,7 @@
     }) || null;
   }
 
-  function openMarketplaceForItem(itemHrid, itemName) {
+  function openMarketplaceFallback(itemHrid, itemName) {
     const searchText = resolveItemName(itemHrid, itemName);
     const navigate = Array.from(document.querySelectorAll("button,[role='button'],a,div")).find((element) => {
       if (element.closest("#mwi-credit-optimizer")) return false;
@@ -542,6 +542,16 @@
       input.focus();
     };
     window.setTimeout(search, navigate ? 80 : 0);
+  }
+
+  function openMarketplaceForItem(itemHrid, itemName) {
+    const bridge = pageWindow.__mwiGuildCreditBridge;
+    try {
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid)) return;
+    } catch (_) {
+      // Fall through to the compatibility path if the game changes its React internals.
+    }
+    openMarketplaceFallback(itemHrid, itemName);
   }
 
   function formatNumber(value, digits) {

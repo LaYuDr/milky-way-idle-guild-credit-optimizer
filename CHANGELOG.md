@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.4] - 2026-07-22
+
+### Changed
+
+- Item icons now use the game's own `Go to Marketplace` controller, so the native market item selection and navigation state are preserved. The previous search-field navigation remains only as a compatibility fallback if the game no longer exposes its controller.
+
 ## [1.1.3] - 2026-07-22
 
 ### Fixed

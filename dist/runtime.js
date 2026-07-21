@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.3";
+window.MwiGuildCreditVersion = "1.1.4";
 
 (function () {
   "use strict";
@@ -14,6 +14,57 @@ window.MwiGuildCreditVersion = "1.1.3";
     guildShrineDetails: null,
     characterItems: null
   });
+
+  // The game owns the market navigation state. Reuse its controller instead
+  // of reconstructing navigation and the market search field in the plugin.
+  // React keeps this controller private, so resolve it only when the player
+  // clicks one of our item links; never retain a stale component instance.
+  function reactFiberRoots() {
+    const documentRef = page.document;
+    const root = documentRef && documentRef.getElementById && documentRef.getElementById("root");
+    if (!root) return [];
+    const roots = [];
+    const append = (value) => {
+      if (value && typeof value === "object") roots.push(value);
+    };
+    for (const key of Object.getOwnPropertyNames(root)) {
+      if (key.startsWith("__reactContainer$") || key.startsWith("__reactFiber$")) append(root[key]);
+    }
+    append(root._reactRootContainer);
+    append(root._reactRootContainer && root._reactRootContainer._internalRoot);
+    return roots;
+  }
+
+  function findMarketplaceController() {
+    const pending = reactFiberRoots();
+    const visited = new Set();
+    let inspected = 0;
+    while (pending.length && inspected < 50000) {
+      const fiber = pending.pop();
+      if (!fiber || typeof fiber !== "object" || visited.has(fiber)) continue;
+      visited.add(fiber);
+      inspected += 1;
+      const stateNode = fiber.stateNode;
+      if (stateNode && typeof stateNode.handleGoToMarketplace === "function") return stateNode;
+      if (fiber.current) pending.push(fiber.current);
+      if (fiber.child) pending.push(fiber.child);
+      if (fiber.sibling) pending.push(fiber.sibling);
+      if (fiber.alternate) pending.push(fiber.alternate);
+    }
+    return null;
+  }
+
+  bridge.goToMarketplace = function (itemHrid, enhancementLevel) {
+    if (typeof itemHrid !== "string" || !itemHrid.startsWith("/items/")) return false;
+    const controller = findMarketplaceController();
+    if (!controller) return false;
+    try {
+      controller.handleGoToMarketplace(itemHrid, enhancementLevel);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
 
   function levelRecordKey(record, fallbackKey) {
     if (record && typeof record === "object") {
@@ -1554,7 +1605,7 @@ window.MwiGuildCreditVersion = "1.1.3";
     }) || null;
   }
 
-  function openMarketplaceForItem(itemHrid, itemName) {
+  function openMarketplaceFallback(itemHrid, itemName) {
     const searchText = resolveItemName(itemHrid, itemName);
     const navigate = Array.from(document.querySelectorAll("button,[role='button'],a,div")).find((element) => {
       if (element.closest("#mwi-credit-optimizer")) return false;
@@ -1577,6 +1628,16 @@ window.MwiGuildCreditVersion = "1.1.3";
       input.focus();
     };
     window.setTimeout(search, navigate ? 80 : 0);
+  }
+
+  function openMarketplaceForItem(itemHrid, itemName) {
+    const bridge = pageWindow.__mwiGuildCreditBridge;
+    try {
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid)) return;
+    } catch (_) {
+      // Fall through to the compatibility path if the game changes its React internals.
+    }
+    openMarketplaceFallback(itemHrid, itemName);
   }
 
   function formatNumber(value, digits) {
