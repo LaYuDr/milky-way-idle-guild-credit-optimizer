@@ -27,7 +27,7 @@
       domainCombat: "战斗",
       shrineWithDomain: "{shrine}（{domain}）",
       guildTargetApplied: "已按当前公会神龛等级设定{domain}计划，共 {count} 项需要升级。",
-      guildTargetComplete: "当前{domain}神龛已达到对应公会建筑等级，无需额外材料。",
+      guildTargetComplete: "当前已达到最大等级（{domain}）。",
       plansCleared: "已清空全部神龛升级计划。",
       level: "{level} 级",
       targetButtonReady: "按每座对应公会神龛的当前等级批量设定目标",
