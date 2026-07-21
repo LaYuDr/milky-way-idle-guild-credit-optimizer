@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.3] - 2026-07-22
+
+### Fixed
+
+- Material recommendation cards now switch to one column in narrow plugin panels, with an additional compact layout for their item, inventory, and best-exchange details.
+
 ## [1.1.2] - 2026-07-22
 
 ### Changed
