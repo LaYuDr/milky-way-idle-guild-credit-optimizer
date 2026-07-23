@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.7] - 2026-07-24
+
+### Changed
+
+- The assistant page now uses a transparent outer background, allowing the game's native starfield background to show through while retaining readable inner cards.
+
 ## [1.1.6] - 2026-07-22
 
 ### Added
