@@ -2,6 +2,7 @@
   "use strict";
 
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
+  const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
   const bridge = page.__mwiGuildCreditBridge || (page.__mwiGuildCreditBridge = {
     messages: [],
     itemDetails: null,
@@ -9,8 +10,33 @@
     guildBuffLevels: null,
     guildShrineLevels: null,
     guildShrineDetails: null,
-    characterItems: null
+    characterItems: null,
+    marketOrderBooks: Object.create(null),
+    marketOrderBookRevision: 0
   });
+  if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
+  if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
+  if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+
+  function keepMarketData(message) {
+    if (!marketDataApi || !message || String(message.type || "") !== "market_item_order_books_updated") return;
+    const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
+    if (!update) return;
+    const revision = Math.min(Number.MAX_SAFE_INTEGER, bridge.marketOrderBookRevision + 1);
+    bridge.marketOrderBookRevision = revision;
+    bridge.marketOrderBooks[update.itemHrid] = {
+      update,
+      revision,
+      receivedAt: Date.now()
+    };
+    if (typeof bridge.onMarketOrderBooksUpdated === "function") {
+      try {
+        bridge.onMarketOrderBooksUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
 
   // The game owns the market navigation state. Reuse its controller instead
   // of reconstructing navigation and the market search field in the plugin.
@@ -148,7 +174,9 @@
       bridge.messages.push(event.data);
       if (bridge.messages.length > 80) bridge.messages.shift();
       try {
-        keepGuildData(JSON.parse(event.data));
+        const message = JSON.parse(event.data);
+        keepMarketData(message);
+        keepGuildData(message);
       } catch (_) {
         // Ignore non-JSON protocol frames.
       }
@@ -159,4 +187,5 @@
   Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
   ObservedWebSocket.__mwiGuildCreditBridge = true;
   page.WebSocket = ObservedWebSocket;
+  bridge.marketObserverActive = true;
 })();

@@ -2,10 +2,11 @@
   "use strict";
 
   const core = window.MwiGuildCreditCore;
+  const marketDataApi = window.MwiGuildCreditMarketData;
   const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
   const releaseInfoApi = window.MwiGuildCreditReleaseInfo;
   const localizationApi = window.MwiGuildCreditLocalization;
-  if (!core || !itemNameCatalogApi || !releaseInfoApi || !localizationApi) return;
+  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
@@ -49,7 +50,7 @@
   const savedUiState = loadSavedPluginUiState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: Object.create(null), marketLiveRevision: 0, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -439,31 +440,97 @@
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
 
+  function rememberLiveMarketUpdate(update, receivedAt) {
+    if (!update) return false;
+    const signature = JSON.stringify(update.levels);
+    if (state.marketUpdateSignatures[update.itemHrid] === signature) return false;
+    state.marketUpdateSignatures[update.itemHrid] = signature;
+    state.marketLiveRevision = Math.min(Number.MAX_SAFE_INTEGER, state.marketLiveRevision + 1);
+    const changed = marketDataApi.applyLiveMarketUpdate(state.marketLiveData, update, {
+      revision: state.marketLiveRevision,
+      receivedAt: Number(receivedAt) || Date.now()
+    });
+    if (changed) scheduleMarketDataRefresh();
+    return changed;
+  }
+
+  function rememberLiveMarketMessage(message, receivedAt) {
+    if (!message || String(message.type || "") !== "market_item_order_books_updated") return false;
+    return rememberLiveMarketUpdate(
+      marketDataApi.normalizeMarketOrderBooksUpdate(message),
+      receivedAt
+    );
+  }
+
   function hydrateBridgeData() {
     const bridge = pageWindow.__mwiGuildCreditBridge;
-    if (!bridge || typeof bridge !== "object") return;
+    if (!bridge || typeof bridge !== "object") return false;
+    let marketChanged = false;
+    bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
     setGuildShrineDetailsFrom(bridge);
     setCharacterItems(bridge.characterItems);
+    const bridgeRevision = Number(bridge.marketOrderBookRevision);
+    if (Number.isSafeInteger(bridgeRevision) && bridgeRevision > state.marketBridgeRevision) {
+      const records = Object.values(bridge.marketOrderBooks || {})
+        .filter((record) => record && Number(record.revision) > state.marketBridgeRevision)
+        .sort((left, right) => Number(left.revision) - Number(right.revision));
+      for (const record of records) {
+        marketChanged = rememberLiveMarketUpdate(record.update, record.receivedAt) || marketChanged;
+      }
+      state.marketBridgeRevision = bridgeRevision;
+    }
+    if (Array.isArray(bridge.messages) && bridge.marketObserverActive !== true) {
+      const latestMarketUpdates = new Map();
+      for (const rawMessage of bridge.messages) {
+        try {
+          const message = JSON.parse(rawMessage);
+          if (String(message && message.type || "") !== "market_item_order_books_updated") continue;
+          const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
+          if (update) latestMarketUpdates.set(update.itemHrid, update);
+        } catch (_) {
+          // Ignore non-JSON protocol frames.
+        }
+      }
+      for (const update of latestMarketUpdates.values()) {
+        marketChanged = rememberLiveMarketUpdate(update) || marketChanged;
+      }
+    }
     if (Array.isArray(bridge.messages)) {
       for (let index = bridge.messages.length - 1; index >= 0; index -= 1) {
+        const rawMessage = bridge.messages[index];
         try {
-          scanMessage(JSON.parse(bridge.messages[index]), 0);
+          const message = JSON.parse(rawMessage);
+          scanMessage(message, 0);
         } catch (_) {
           // Ignore non-JSON protocol frames.
         }
       }
     }
+    return marketChanged;
   }
 
   async function loadSnapshot(force) {
     if (state.snapshot && !force) return state.snapshot;
+    const liveRevisionAtRequestStart = state.marketLiveRevision;
     const response = await fetch("/game_data/marketplace.json", { cache: "no-store" });
     if (!response.ok) throw new Error(t("snapshotLoadFailed", { message: response.status }));
-    state.snapshot = await response.json();
+    const snapshot = await response.json();
+    const nextTimestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+    if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
+      return state.snapshot;
+    }
+    const expiredLiveData = marketDataApi.expireLiveMarketData(state.marketLiveData, {
+      previousSnapshotTimestamp: state.snapshotTimestamp,
+      nextSnapshotTimestamp: nextTimestamp,
+      coveredRevision: liveRevisionAtRequestStart
+    });
+    if (expiredLiveData) state.marketUpdateSignatures = Object.create(null);
+    state.snapshot = snapshot;
+    state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
     return state.snapshot;
   }
 
@@ -473,7 +540,13 @@
   }
 
   function snapshotPrice(itemHrid, field, enhancementLevel = 0) {
-    return core.snapshotMarketPrice(state.snapshot, itemHrid, enhancementLevel, field);
+    return marketDataApi.resolveMarketPrice(
+      state.snapshot,
+      state.marketLiveData,
+      itemHrid,
+      enhancementLevel,
+      field
+    );
   }
 
   function snapshotImmediateSellPrice(itemHrid, enhancementLevel = 0) {
@@ -1227,6 +1300,18 @@
     state.refreshQueued = false;
     window.clearTimeout(state.refreshTimer);
     state.refreshTimer = window.setTimeout(() => refreshPanel(panel), 250);
+  }
+
+  function scheduleMarketDataRefresh() {
+    window.clearTimeout(state.marketDataRefreshTimer);
+    state.marketDataRefreshTimer = window.setTimeout(() => {
+      state.marketDataRefreshTimer = null;
+      if (state.panel && state.panel.isConnected && !state.panel.hidden) {
+        if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
+        else refreshPanel(state.panel);
+      }
+      scheduleGuildExchangeAdvisor(true);
+    }, 120);
   }
 
   function isVisible(node) {

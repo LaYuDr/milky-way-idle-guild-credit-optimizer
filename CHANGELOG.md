@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.8] - 2026-07-26
+
+### Changed
+
+- Market estimates now use the live best ask and bid passively received when the player opens an item's native market page, overriding the older public snapshot for that item.
+- Live overrides remain available until the same item's next order-book update or a genuinely newer public marketplace snapshot supersedes them; unchanged or older API responses no longer discard fresher data.
+
 ## [1.1.7] - 2026-07-24
 
 ### Changed

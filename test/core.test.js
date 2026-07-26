@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../src/core.js");
+const marketDataApi = require("../src/market-data.js");
 const itemNameCatalogApi = require("../src/item-name-catalog.js");
 const releaseInfoApi = require("../src/release-info.js");
 const localizationApi = require("../src/localization.js");
@@ -52,6 +53,63 @@ test("订单簿不足时不虚报总价", () => {
   assert.equal(quote.status, "insufficient_depth");
   assert.equal(quote.cost, null);
   assert.equal(quote.availableQuantity, 3);
+});
+
+test("实时市场订单簿提取最低卖价、最高买价并保留无报价状态", () => {
+  const update = marketDataApi.normalizeMarketOrderBooksUpdate({
+    type: "market_item_order_books_updated",
+    marketItemOrderBooks: {
+      itemHrid: "/items/beast_hide",
+      orderBooks: {
+        0: {
+          asks: [{ price: 53, quantity: 4 }, { price: 51, quantity: 2 }],
+          bids: [{ price: 48, quantity: 9 }, { price: 50, quantity: 1 }]
+        },
+        1: { asks: [], bids: [] }
+      }
+    }
+  });
+  assert.equal(update.itemHrid, "/items/beast_hide");
+  assert.deepEqual({ ...update.levels["0"] }, { a: 51, b: 50 });
+  assert.deepEqual({ ...update.levels["1"] }, { a: -1, b: -1 });
+});
+
+test("实时市场价格覆盖历史 API，API 时间戳真正更新后才清理旧覆盖", () => {
+  const snapshot = {
+    timestamp: "2026-07-26T00:00:00Z",
+    marketData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
+  };
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, { revision: 1, receivedAt: 1000 });
+  assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 51);
+
+  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
+    previousSnapshotTimestamp: snapshot.timestamp,
+    nextSnapshotTimestamp: snapshot.timestamp,
+    coveredRevision: 1
+  }), false);
+  assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 51);
+
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 49, b: 48 } }
+  }, { revision: 2, receivedAt: 2000 });
+  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
+    previousSnapshotTimestamp: snapshot.timestamp,
+    nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
+    coveredRevision: 1
+  }), false);
+  assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 49);
+
+  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
+    previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
+    nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
+    coveredRevision: 2
+  }), true);
+  assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 60);
 });
 
 test("更新信息只解析 Userscript 头中的版本号", () => {
@@ -469,6 +527,29 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.messages.length, 1);
 });
 
+test("正式版桥接被动保存玩家打开商品时收到的实时市场价格", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {
+    constructor() { this.listeners = new Map(); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    receive(data) { this.listeners.get("message")({ data }); }
+  }
+  const page = { WebSocket: FakeWebSocket, MwiGuildCreditMarketData: marketDataApi };
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array, Date, Number });
+  const socket = new page.WebSocket("wss://example.invalid");
+  socket.receive(JSON.stringify({
+    type: "market_item_order_books_updated",
+    marketItemOrderBooks: {
+      itemHrid: "/items/snake_fang",
+      orderBooks: { 0: { asks: [{ price: 7600, quantity: 5 }], bids: [{ price: 7200, quantity: 3 }] } }
+    }
+  }));
+  const bridge = page.__mwiGuildCreditBridge;
+  assert.equal(bridge.marketOrderBookRevision, 1);
+  assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].a, 7600);
+  assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].b, 7200);
+});
+
 test("正式版桥接通过游戏原生控制器打开指定市场物品", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {}
@@ -727,8 +808,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(buildSource, /MWI_GUILD_CREDIT_RUNTIME/);
   assert.match(buildSource, /window\.MwiGuildCreditVersion/);
   assert.match(buildSource, /source\("src\/bridge\.js"\)/);
+  assert.match(buildSource, /source\("src\/market-data\.js"\)/);
   assert.match(buildSource, /source\("src\/release-info\.js"\)/);
   assert.match(bridgeSource, /ObservedWebSocket/);
+  assert.match(bridgeSource, /market_item_order_books_updated/);
   assert.match(bridgeSource, /characterGuildBuffDict/);
   assert.doesNotMatch(source, /mwi-credit-tab-active/);
   assert.doesNotMatch(source, /upgrade-refresh/);

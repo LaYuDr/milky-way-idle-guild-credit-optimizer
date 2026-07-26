@@ -1,10 +1,179 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.7";
+window.MwiGuildCreditVersion = "1.1.8";
+
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditMarketData = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  function normalizeMarketTimestamp(value) {
+    if (typeof value !== "number" && typeof value !== "string") return 0;
+    const normalized = typeof value === "string" ? value.trim() : value;
+    if (normalized === "") return 0;
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) {
+      const timestamp = numeric > 0 && numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+      return timestamp > 0 && Number.isFinite(new Date(timestamp).getTime()) ? timestamp : 0;
+    }
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function normalizeEnhancementLevel(value) {
+    const level = Number(value);
+    return Number.isSafeInteger(level) && level >= 0 ? level : null;
+  }
+
+  function edgePrice(entries, useLowest) {
+    if (!Array.isArray(entries)) return null;
+    let result = null;
+    for (const entry of entries) {
+      const price = Number(entry && typeof entry === "object" ? entry.price : entry);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      if (result === null || (useLowest ? price < result : price > result)) result = price;
+    }
+    // An explicitly empty side of a complete order book means there is no
+    // current public quote. Preserve that fact instead of falling back to a
+    // potentially stale static snapshot.
+    return result === null ? -1 : result;
+  }
+
+  function normalizeMarketOrderBooksUpdate(payload) {
+    const source = payload && (
+      payload.marketItemOrderBooks
+      || payload.data && payload.data.marketItemOrderBooks
+      || payload
+    );
+    const itemHrid = String(source && source.itemHrid || "").trim();
+    if (!itemHrid.startsWith("/items/")) return null;
+
+    const hasDirectBook = source
+      && (Object.prototype.hasOwnProperty.call(source, "asks")
+        || Object.prototype.hasOwnProperty.call(source, "bids"));
+    let rawBooks = source && source.orderBooks;
+    if (!rawBooks && hasDirectBook) {
+      const level = Object.prototype.hasOwnProperty.call(source, "enhancementLevel")
+        ? normalizeEnhancementLevel(source.enhancementLevel)
+        : 0;
+      if (level === null) return null;
+      rawBooks = { [level]: source };
+    }
+    if (!rawBooks || typeof rawBooks !== "object" || Array.isArray(rawBooks)) return null;
+
+    const levels = Object.create(null);
+    for (const [rawLevel, rawBook] of Object.entries(rawBooks)) {
+      const level = normalizeEnhancementLevel(rawLevel);
+      if (level === null || !rawBook || typeof rawBook !== "object" || Array.isArray(rawBook)) continue;
+      const quote = Object.create(null);
+      if (Object.prototype.hasOwnProperty.call(rawBook, "asks")) quote.a = edgePrice(rawBook.asks, true);
+      if (Object.prototype.hasOwnProperty.call(rawBook, "bids")) quote.b = edgePrice(rawBook.bids, false);
+      if (Object.keys(quote).length) levels[String(level)] = quote;
+    }
+    return Object.keys(levels).length ? { itemHrid, levels } : null;
+  }
+
+  function applyLiveMarketUpdate(liveData, update, options) {
+    if (!liveData || typeof liveData !== "object" || !update) return false;
+    const revision = Number(options && options.revision);
+    const receivedAt = Number(options && options.receivedAt);
+    if (!Number.isSafeInteger(revision) || revision <= 0 || !Number.isFinite(receivedAt) || receivedAt <= 0) return false;
+
+    const existing = liveData[update.itemHrid] || {};
+    const levels = { ...(existing.levels || {}) };
+    const revisionByLevel = { ...(existing.revisionByLevel || {}) };
+    const receivedAtByLevel = { ...(existing.receivedAtByLevel || {}) };
+    for (const [level, quote] of Object.entries(update.levels || {})) {
+      // A newly opened order book is authoritative for that item and level.
+      // Replace, rather than merge, so an absent side cannot leave stale data.
+      levels[level] = { ...quote };
+      revisionByLevel[level] = revision;
+      receivedAtByLevel[level] = receivedAt;
+    }
+    if (!Object.keys(levels).length) return false;
+    liveData[update.itemHrid] = {
+      levels,
+      revisionByLevel,
+      receivedAtByLevel,
+      revision,
+      receivedAt
+    };
+    return true;
+  }
+
+  function expireLiveMarketData(liveData, options) {
+    if (!liveData || typeof liveData !== "object") return false;
+    const previousTimestamp = normalizeMarketTimestamp(options && options.previousSnapshotTimestamp);
+    const nextTimestamp = normalizeMarketTimestamp(options && options.nextSnapshotTimestamp);
+    const coveredRevision = Number(options && options.coveredRevision);
+    if (previousTimestamp <= 0 || nextTimestamp <= previousTimestamp || !Number.isSafeInteger(coveredRevision)) return false;
+
+    let changed = false;
+    for (const [itemHrid, entry] of Object.entries(liveData)) {
+      const levels = { ...(entry && entry.levels || {}) };
+      const revisionByLevel = { ...(entry && entry.revisionByLevel || {}) };
+      const receivedAtByLevel = { ...(entry && entry.receivedAtByLevel || {}) };
+      for (const level of Object.keys(levels)) {
+        const revision = Number(revisionByLevel[level] ?? entry.revision);
+        if (Number.isSafeInteger(revision) && revision <= coveredRevision) {
+          delete levels[level];
+          delete revisionByLevel[level];
+          delete receivedAtByLevel[level];
+          changed = true;
+        }
+      }
+      if (!Object.keys(levels).length) {
+        delete liveData[itemHrid];
+      } else {
+        const revisions = Object.values(revisionByLevel).map(Number).filter(Number.isSafeInteger);
+        const receivedTimes = Object.values(receivedAtByLevel).map(Number).filter(Number.isFinite);
+        liveData[itemHrid] = {
+          levels,
+          revisionByLevel,
+          receivedAtByLevel,
+          revision: revisions.length ? Math.max(...revisions) : entry.revision,
+          receivedAt: receivedTimes.length ? Math.max(...receivedTimes) : entry.receivedAt
+        };
+      }
+    }
+    return changed;
+  }
+
+  function resolveMarketPrice(snapshot, liveData, itemHrid, enhancementLevel, field) {
+    const level = normalizeEnhancementLevel(enhancementLevel);
+    if (!itemHrid || level === null || (field !== "a" && field !== "b")) return null;
+    const liveQuote = liveData
+      && liveData[itemHrid]
+      && liveData[itemHrid].levels
+      && liveData[itemHrid].levels[String(level)];
+    if (liveQuote && Object.prototype.hasOwnProperty.call(liveQuote, field)) {
+      const livePrice = Number(liveQuote[field]);
+      return Number.isFinite(livePrice) && livePrice > 0 ? livePrice : null;
+    }
+    const snapshotQuote = snapshot
+      && snapshot.marketData
+      && snapshot.marketData[itemHrid]
+      && snapshot.marketData[itemHrid][String(level)];
+    const snapshotPrice = Number(snapshotQuote && snapshotQuote[field]);
+    return Number.isFinite(snapshotPrice) && snapshotPrice > 0 ? snapshotPrice : null;
+  }
+
+  return {
+    normalizeMarketTimestamp,
+    normalizeMarketOrderBooksUpdate,
+    applyLiveMarketUpdate,
+    expireLiveMarketData,
+    resolveMarketPrice
+  };
+});
+
 
 (function () {
   "use strict";
 
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
+  const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
   const bridge = page.__mwiGuildCreditBridge || (page.__mwiGuildCreditBridge = {
     messages: [],
     itemDetails: null,
@@ -12,8 +181,33 @@ window.MwiGuildCreditVersion = "1.1.7";
     guildBuffLevels: null,
     guildShrineLevels: null,
     guildShrineDetails: null,
-    characterItems: null
+    characterItems: null,
+    marketOrderBooks: Object.create(null),
+    marketOrderBookRevision: 0
   });
+  if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
+  if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
+  if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+
+  function keepMarketData(message) {
+    if (!marketDataApi || !message || String(message.type || "") !== "market_item_order_books_updated") return;
+    const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
+    if (!update) return;
+    const revision = Math.min(Number.MAX_SAFE_INTEGER, bridge.marketOrderBookRevision + 1);
+    bridge.marketOrderBookRevision = revision;
+    bridge.marketOrderBooks[update.itemHrid] = {
+      update,
+      revision,
+      receivedAt: Date.now()
+    };
+    if (typeof bridge.onMarketOrderBooksUpdated === "function") {
+      try {
+        bridge.onMarketOrderBooksUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
 
   // The game owns the market navigation state. Reuse its controller instead
   // of reconstructing navigation and the market search field in the plugin.
@@ -151,7 +345,9 @@ window.MwiGuildCreditVersion = "1.1.7";
       bridge.messages.push(event.data);
       if (bridge.messages.length > 80) bridge.messages.shift();
       try {
-        keepGuildData(JSON.parse(event.data));
+        const message = JSON.parse(event.data);
+        keepMarketData(message);
+        keepGuildData(message);
       } catch (_) {
         // Ignore non-JSON protocol frames.
       }
@@ -162,6 +358,7 @@ window.MwiGuildCreditVersion = "1.1.7";
   Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
   ObservedWebSocket.__mwiGuildCreditBridge = true;
   page.WebSocket = ObservedWebSocket;
+  bridge.marketObserverActive = true;
 })();
 
 
@@ -1096,10 +1293,11 @@ window.MwiGuildCreditVersion = "1.1.7";
   "use strict";
 
   const core = window.MwiGuildCreditCore;
+  const marketDataApi = window.MwiGuildCreditMarketData;
   const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
   const releaseInfoApi = window.MwiGuildCreditReleaseInfo;
   const localizationApi = window.MwiGuildCreditLocalization;
-  if (!core || !itemNameCatalogApi || !releaseInfoApi || !localizationApi) return;
+  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
@@ -1143,7 +1341,7 @@ window.MwiGuildCreditVersion = "1.1.7";
   const savedUiState = loadSavedPluginUiState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: Object.create(null), marketLiveRevision: 0, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -1533,31 +1731,97 @@ window.MwiGuildCreditVersion = "1.1.7";
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
 
+  function rememberLiveMarketUpdate(update, receivedAt) {
+    if (!update) return false;
+    const signature = JSON.stringify(update.levels);
+    if (state.marketUpdateSignatures[update.itemHrid] === signature) return false;
+    state.marketUpdateSignatures[update.itemHrid] = signature;
+    state.marketLiveRevision = Math.min(Number.MAX_SAFE_INTEGER, state.marketLiveRevision + 1);
+    const changed = marketDataApi.applyLiveMarketUpdate(state.marketLiveData, update, {
+      revision: state.marketLiveRevision,
+      receivedAt: Number(receivedAt) || Date.now()
+    });
+    if (changed) scheduleMarketDataRefresh();
+    return changed;
+  }
+
+  function rememberLiveMarketMessage(message, receivedAt) {
+    if (!message || String(message.type || "") !== "market_item_order_books_updated") return false;
+    return rememberLiveMarketUpdate(
+      marketDataApi.normalizeMarketOrderBooksUpdate(message),
+      receivedAt
+    );
+  }
+
   function hydrateBridgeData() {
     const bridge = pageWindow.__mwiGuildCreditBridge;
-    if (!bridge || typeof bridge !== "object") return;
+    if (!bridge || typeof bridge !== "object") return false;
+    let marketChanged = false;
+    bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
     setGuildShrineDetailsFrom(bridge);
     setCharacterItems(bridge.characterItems);
+    const bridgeRevision = Number(bridge.marketOrderBookRevision);
+    if (Number.isSafeInteger(bridgeRevision) && bridgeRevision > state.marketBridgeRevision) {
+      const records = Object.values(bridge.marketOrderBooks || {})
+        .filter((record) => record && Number(record.revision) > state.marketBridgeRevision)
+        .sort((left, right) => Number(left.revision) - Number(right.revision));
+      for (const record of records) {
+        marketChanged = rememberLiveMarketUpdate(record.update, record.receivedAt) || marketChanged;
+      }
+      state.marketBridgeRevision = bridgeRevision;
+    }
+    if (Array.isArray(bridge.messages) && bridge.marketObserverActive !== true) {
+      const latestMarketUpdates = new Map();
+      for (const rawMessage of bridge.messages) {
+        try {
+          const message = JSON.parse(rawMessage);
+          if (String(message && message.type || "") !== "market_item_order_books_updated") continue;
+          const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
+          if (update) latestMarketUpdates.set(update.itemHrid, update);
+        } catch (_) {
+          // Ignore non-JSON protocol frames.
+        }
+      }
+      for (const update of latestMarketUpdates.values()) {
+        marketChanged = rememberLiveMarketUpdate(update) || marketChanged;
+      }
+    }
     if (Array.isArray(bridge.messages)) {
       for (let index = bridge.messages.length - 1; index >= 0; index -= 1) {
+        const rawMessage = bridge.messages[index];
         try {
-          scanMessage(JSON.parse(bridge.messages[index]), 0);
+          const message = JSON.parse(rawMessage);
+          scanMessage(message, 0);
         } catch (_) {
           // Ignore non-JSON protocol frames.
         }
       }
     }
+    return marketChanged;
   }
 
   async function loadSnapshot(force) {
     if (state.snapshot && !force) return state.snapshot;
+    const liveRevisionAtRequestStart = state.marketLiveRevision;
     const response = await fetch("/game_data/marketplace.json", { cache: "no-store" });
     if (!response.ok) throw new Error(t("snapshotLoadFailed", { message: response.status }));
-    state.snapshot = await response.json();
+    const snapshot = await response.json();
+    const nextTimestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+    if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
+      return state.snapshot;
+    }
+    const expiredLiveData = marketDataApi.expireLiveMarketData(state.marketLiveData, {
+      previousSnapshotTimestamp: state.snapshotTimestamp,
+      nextSnapshotTimestamp: nextTimestamp,
+      coveredRevision: liveRevisionAtRequestStart
+    });
+    if (expiredLiveData) state.marketUpdateSignatures = Object.create(null);
+    state.snapshot = snapshot;
+    state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
     return state.snapshot;
   }
 
@@ -1567,7 +1831,13 @@ window.MwiGuildCreditVersion = "1.1.7";
   }
 
   function snapshotPrice(itemHrid, field, enhancementLevel = 0) {
-    return core.snapshotMarketPrice(state.snapshot, itemHrid, enhancementLevel, field);
+    return marketDataApi.resolveMarketPrice(
+      state.snapshot,
+      state.marketLiveData,
+      itemHrid,
+      enhancementLevel,
+      field
+    );
   }
 
   function snapshotImmediateSellPrice(itemHrid, enhancementLevel = 0) {
@@ -2321,6 +2591,18 @@ window.MwiGuildCreditVersion = "1.1.7";
     state.refreshQueued = false;
     window.clearTimeout(state.refreshTimer);
     state.refreshTimer = window.setTimeout(() => refreshPanel(panel), 250);
+  }
+
+  function scheduleMarketDataRefresh() {
+    window.clearTimeout(state.marketDataRefreshTimer);
+    state.marketDataRefreshTimer = window.setTimeout(() => {
+      state.marketDataRefreshTimer = null;
+      if (state.panel && state.panel.isConnected && !state.panel.hidden) {
+        if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
+        else refreshPanel(state.panel);
+      }
+      scheduleGuildExchangeAdvisor(true);
+    }, 120);
   }
 
   function isVisible(node) {
