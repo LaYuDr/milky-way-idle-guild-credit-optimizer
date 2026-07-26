@@ -28,7 +28,12 @@
   <section class="tabPanelsContainer" id="native-content">原生右侧内容</section>
   </div>
   <script>
-    const english = new URLSearchParams(location.search).get("locale") === "en";
+    const searchParams = new URLSearchParams(location.search);
+    const english = searchParams.get("locale") === "en";
+    const sidebarWidth = Number(searchParams.get("sidebarWidth"));
+    if (Number.isFinite(sidebarWidth) && sidebarWidth >= 320 && sidebarWidth <= 1200) {
+      document.getElementById("test-sidebar-wrapper").style.width = `${sidebarWidth}px`;
+    }
     const copy = english ? {
       pageTitle: "Local sidebar automation harness",
       close: "Close test exchange modal",
@@ -69,7 +74,41 @@
           name: "Beast Hide",
           guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 4, creditCount: 1 }]
         }
-      }
+      },
+      guildBuffDetails: {
+        "/guild_buffs/tempo_life": {
+          guildBuffHrid: "/guild_buffs/tempo_life",
+          shrineHrid: "/guild_shrines/tempo",
+          isCombat: false,
+          levelCosts: [
+            null,
+            { guildTokenCost: 1200, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 6000 }] },
+            { guildTokenCost: 1800, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] }
+          ]
+        },
+        "/guild_buffs/tempo_combat": {
+          guildBuffHrid: "/guild_buffs/tempo_combat",
+          shrineHrid: "/guild_shrines/tempo",
+          isCombat: true,
+          levelCosts: [
+            null,
+            { guildTokenCost: 900, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 4500 }] },
+            { guildTokenCost: 1500, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 1600 }] }
+          ]
+        }
+      },
+      characterGuildBuffMap: {
+        "/guild_buffs/tempo_life": { guildBuffHrid: "/guild_buffs/tempo_life", level: 1 },
+        "/guild_buffs/tempo_combat": { guildBuffHrid: "/guild_buffs/tempo_combat", level: 0 }
+      },
+      guildShrineMap: {
+        "/guild_shrines/tempo": { guildShrineHrid: "/guild_shrines/tempo", level: 2 }
+      },
+      characterItems: [
+        { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 4750 },
+        { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 6000 },
+        { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
+      ]
     };
   </script>
   <script src="/runtime.js"></script>

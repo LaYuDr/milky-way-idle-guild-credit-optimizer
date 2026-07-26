@@ -617,6 +617,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   const buildSource = fs.readFileSync(path.join(__dirname, "..", "tools", "build.js"), "utf8");
+  const harnessSource = fs.readFileSync(path.join(__dirname, "..", "tools", "test-harness.html"), "utf8");
   assert.equal((source.match(/guild_credit/g) || []).length >= 8, true);
   assert.match(source, /filter\(\(row\) => row\.status === "ok"\)\.slice\(0, 5\)/);
   assert.match(source, /MwiGuildCreditItemNameCatalog/);
@@ -647,9 +648,14 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /guildTokenValuesCollapsed: state\.guildTokenValuesCollapsed/);
   assert.match(source, /targetCredit: state\.targetCredit/);
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
-  assert.match(source, /grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,300px\),1fr\)\)/);
+  assert.match(source, /--mwi-entry-min-width:300px/);
+  assert.match(source, /--mwi-entry-gap:10px/);
+  assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list,#mwi-credit-optimizer \.mwi-upgrade-plan-list,#mwi-credit-optimizer \.mwi-material-list\{grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,var\(--mwi-entry-min-width\)\),1fr\)\)\}/);
+  assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);
+  assert.match(harnessSource, /guildBuffDetails/);
   assert.match(source, /mwi-token-value-exchange/);
   assert.match(source, /mwi-token-value-row/);
+  assert.match(source, /mwi-token-value-list\{[^}]*margin-inline:-1px/);
   assert.match(source, /\.mwi-token-value-body\[hidden\]\{display:none!important\}/);
   assert.doesNotMatch(source, /mwi-token-value-list table/);
   assert.match(buildSource, /银河奶牛公会信用点性价比-v\$\{version\}\.user\.js/);
@@ -670,7 +676,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /String\(child\.innerText \|\| child\.textContent \|\| ""\)\.replaceAll/);
   assert.doesNotMatch(source, /child\.innerText\.replaceAll/);
   assert.match(source, /overflow-y:auto/);
-  assert.equal((source.match(/repeat\(auto-fit,minmax\(min\(100%,300px\),1fr\)\)/g) || []).length >= 2, true);
   assert.match(source, /data-role="toggle-credit-section"/);
   assert.match(source, /collapsedCreditSections/);
   assert.match(source, /mwi-credit-body/);
@@ -753,8 +758,11 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /mwi-material-plan-item/);
   assert.match(source, /mwi-material-plan-icon/);
   assert.match(source, /mwi-material-row-token/);
-  assert.match(source, /@container \(max-width:760px\)/);
-  assert.match(source, /mwi-material-list\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.doesNotMatch(source, /mwi-material-row-token\{grid-column:1\/-1/);
+  assert.doesNotMatch(source, /@container \(max-width:760px\)/);
+  assert.doesNotMatch(source, /@media \(max-width:720px\)/);
+  assert.doesNotMatch(source, /\.mwi-material-list\{display:grid;grid-template-columns:repeat\(2/);
+  assert.doesNotMatch(source, /\.mwi-material-list\{grid-template-columns:minmax\(0,1fr\)\}/);
   assert.match(source, /@container \(max-width:460px\)/);
   assert.match(source, /costSummary/);
   assert.match(source, /plan\.requiredItems/);

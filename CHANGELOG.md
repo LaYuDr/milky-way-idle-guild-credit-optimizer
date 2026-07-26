@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.9] - 2026-07-26
+
+### Changed
+
+- Credit rankings, guild-token values, shrine plans, and every estimated-material card now share the same compact `300px` responsive track width, so every section switches column count at the same available panel width.
+- Removed the material-only one-column breakpoints while preserving the compact internal material-card layout for genuinely narrow panels.
+
 ## [1.1.8] - 2026-07-26
 
 ### Changed
