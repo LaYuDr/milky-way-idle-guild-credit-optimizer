@@ -38,6 +38,16 @@
     }
   }
 
+  function isGameWebSocketUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      return url.protocol === "wss:"
+        && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+    } catch (_) {
+      return false;
+    }
+  }
+
   // The game owns the market navigation state. Reuse its controller instead
   // of reconstructing navigation and the market search field in the plugin.
   // React keeps this controller private, so resolve it only when the player
@@ -167,8 +177,14 @@
 
   const NativeWebSocket = page.WebSocket;
   if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) return;
-  function ObservedWebSocket(...args) {
-    const socket = new NativeWebSocket(...args);
+  const instrumentedSockets = new WeakSet();
+
+  function instrumentSocket(socket) {
+    if (!socket || !isGameWebSocketUrl(socket.url)
+      || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+      return socket;
+    }
+    instrumentedSockets.add(socket);
     socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       bridge.messages.push(event.data);
@@ -182,6 +198,10 @@
       }
     });
     return socket;
+  }
+
+  function ObservedWebSocket(...args) {
+    return instrumentSocket(new NativeWebSocket(...args));
   }
   ObservedWebSocket.prototype = NativeWebSocket.prototype;
   Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);

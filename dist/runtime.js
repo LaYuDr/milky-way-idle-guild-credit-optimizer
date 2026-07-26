@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.10";
+window.MwiGuildCreditVersion = "1.1.11";
 
 (function (root, factory) {
   const api = factory();
@@ -8,7 +8,8 @@ window.MwiGuildCreditVersion = "1.1.10";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 1;
+  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 2;
+  const SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS = new Set([1, 2]);
   const MAX_CACHED_ITEMS = 2000;
   const MAX_LEVELS_PER_ITEM = 101;
 
@@ -33,6 +34,90 @@ window.MwiGuildCreditVersion = "1.1.10";
   function normalizeCachedPrice(value) {
     const price = Number(value);
     return Number.isFinite(price) && (price > 0 || price === -1) ? price : null;
+  }
+
+  function metadataFieldValue(levelMap, level, field, fallback) {
+    const levelValue = levelMap && levelMap[level];
+    if (levelValue && typeof levelValue === "object" && !Array.isArray(levelValue)
+      && Object.prototype.hasOwnProperty.call(levelValue, field)) {
+      return levelValue[field];
+    }
+    return levelValue !== undefined && (typeof levelValue !== "object" || levelValue === null)
+      ? levelValue
+      : fallback;
+  }
+
+  function sanitizeMarketData(rawMarketData) {
+    const marketData = Object.create(null);
+    if (!rawMarketData || typeof rawMarketData !== "object" || Array.isArray(rawMarketData)) {
+      return marketData;
+    }
+    for (const [itemHrid, levelMap] of Object.entries(rawMarketData)) {
+      if (!itemHrid.startsWith("/items/")
+        || !levelMap || typeof levelMap !== "object" || Array.isArray(levelMap)) continue;
+      const levels = Object.create(null);
+      for (const [rawLevel, rawQuote] of Object.entries(levelMap)) {
+        const level = normalizeEnhancementLevel(rawLevel);
+        if (level === null || !rawQuote || typeof rawQuote !== "object" || Array.isArray(rawQuote)) continue;
+        const quote = Object.create(null);
+        for (const field of ["a", "b"]) {
+          if (!Object.prototype.hasOwnProperty.call(rawQuote, field)) {
+            quote[field] = -1;
+            continue;
+          }
+          const price = Number(rawQuote[field]);
+          if (Number.isFinite(price)) quote[field] = price;
+        }
+        if (Object.keys(quote).length) levels[String(level)] = quote;
+      }
+      if (Object.keys(levels).length) marketData[itemHrid] = levels;
+    }
+    return marketData;
+  }
+
+  function createMarketStructure(marketData) {
+    return Object.entries(marketData || {})
+      .map(([itemHrid, levelMap]) => [
+        itemHrid,
+        Object.entries(levelMap || {})
+          .filter(([, quote]) => quote && typeof quote === "object" && !Array.isArray(quote))
+          .map(([level, quote]) => [
+            level,
+            ["a", "b"].filter((field) => (
+              Object.prototype.hasOwnProperty.call(quote, field)
+              && Number.isFinite(Number(quote[field]))
+            ))
+          ])
+          .sort((left, right) => left[0].localeCompare(right[0]))
+      ])
+      .sort((left, right) => left[0].localeCompare(right[0]));
+  }
+
+  function countMissingMarketEntries(confirmedMarketData, incomingMarketData) {
+    const incomingItems = new Map(createMarketStructure(incomingMarketData));
+    let missingCount = 0;
+    for (const [itemHrid, confirmedLevels] of createMarketStructure(confirmedMarketData)) {
+      const incomingLevels = incomingItems.get(itemHrid);
+      if (!incomingLevels) {
+        missingCount += 1 + confirmedLevels.reduce(
+          (total, [, fields]) => total + 1 + fields.length,
+          0
+        );
+        continue;
+      }
+      const incomingLevelsByHrid = new Map(incomingLevels);
+      for (const [level, confirmedFields] of confirmedLevels) {
+        const incomingFields = incomingLevelsByHrid.get(level);
+        if (!incomingFields) {
+          missingCount += 1 + confirmedFields.length;
+          continue;
+        }
+        for (const field of confirmedFields) {
+          if (!incomingFields.includes(field)) missingCount += 1;
+        }
+      }
+    }
+    return missingCount;
   }
 
   function edgePrice(entries, useLowest) {
@@ -94,14 +179,52 @@ window.MwiGuildCreditVersion = "1.1.10";
     const revisionByLevel = { ...(existing.revisionByLevel || {}) };
     const receivedAtByLevel = { ...(existing.receivedAtByLevel || {}) };
     const snapshotTimestampByLevel = { ...(existing.snapshotTimestampByLevel || {}) };
+    const snapshotConflictDeferredByLevel = { ...(existing.snapshotConflictDeferredByLevel || {}) };
     const snapshotTimestamp = normalizeMarketTimestamp(options && options.snapshotTimestamp);
+    for (const [level, quote] of Object.entries(levels)) {
+      const fieldRevisions = Object.create(null);
+      const fieldTimes = Object.create(null);
+      const fieldSnapshotTimestamps = Object.create(null);
+      const fieldConflictDeferrals = Object.create(null);
+      for (const field of ["a", "b"]) {
+        if (!Object.prototype.hasOwnProperty.call(quote || {}, field)) continue;
+        fieldRevisions[field] = Number(metadataFieldValue(
+          revisionByLevel, level, field, existing.revision
+        ));
+        fieldTimes[field] = Number(metadataFieldValue(
+          receivedAtByLevel, level, field, existing.receivedAt
+        ));
+        fieldSnapshotTimestamps[field] = normalizeMarketTimestamp(metadataFieldValue(
+          snapshotTimestampByLevel, level, field, existing.snapshotTimestamp
+        ));
+        fieldConflictDeferrals[field] = metadataFieldValue(
+          snapshotConflictDeferredByLevel, level, field, false
+        ) === true;
+      }
+      revisionByLevel[level] = fieldRevisions;
+      receivedAtByLevel[level] = fieldTimes;
+      snapshotTimestampByLevel[level] = fieldSnapshotTimestamps;
+      snapshotConflictDeferredByLevel[level] = fieldConflictDeferrals;
+    }
     for (const [level, quote] of Object.entries(update.levels || {})) {
-      // A newly opened order book is authoritative for that item and level.
-      // Replace, rather than merge, so an absent side cannot leave stale data.
-      levels[level] = { ...quote };
-      revisionByLevel[level] = revision;
-      receivedAtByLevel[level] = receivedAt;
-      snapshotTimestampByLevel[level] = snapshotTimestamp;
+      const mergedQuote = { ...(levels[level] || {}) };
+      const fieldRevisions = { ...(revisionByLevel[level] || {}) };
+      const fieldTimes = { ...(receivedAtByLevel[level] || {}) };
+      const fieldSnapshotTimestamps = { ...(snapshotTimestampByLevel[level] || {}) };
+      const fieldConflictDeferrals = { ...(snapshotConflictDeferredByLevel[level] || {}) };
+      for (const field of ["a", "b"]) {
+        if (!Object.prototype.hasOwnProperty.call(quote, field)) continue;
+        mergedQuote[field] = quote[field];
+        fieldRevisions[field] = revision;
+        fieldTimes[field] = receivedAt;
+        fieldSnapshotTimestamps[field] = snapshotTimestamp;
+        fieldConflictDeferrals[field] = false;
+      }
+      levels[level] = mergedQuote;
+      revisionByLevel[level] = fieldRevisions;
+      receivedAtByLevel[level] = fieldTimes;
+      snapshotTimestampByLevel[level] = fieldSnapshotTimestamps;
+      snapshotConflictDeferredByLevel[level] = fieldConflictDeferrals;
     }
     if (!Object.keys(levels).length) return false;
     liveData[update.itemHrid] = {
@@ -109,6 +232,7 @@ window.MwiGuildCreditVersion = "1.1.10";
       revisionByLevel,
       receivedAtByLevel,
       snapshotTimestampByLevel,
+      snapshotConflictDeferredByLevel,
       revision,
       receivedAt
     };
@@ -119,6 +243,7 @@ window.MwiGuildCreditVersion = "1.1.10";
     if (!liveData || typeof liveData !== "object") return { changed: false, expired: false };
     const previousTimestamp = normalizeMarketTimestamp(options && options.previousSnapshotTimestamp);
     const nextTimestamp = normalizeMarketTimestamp(options && options.nextSnapshotTimestamp);
+    const snapshotData = options && options.snapshotData;
     const coveredRevision = Number(options && options.coveredRevision);
     if (nextTimestamp <= 0 || !Number.isSafeInteger(coveredRevision) || coveredRevision < 0) {
       return { changed: false, expired: false };
@@ -131,45 +256,83 @@ window.MwiGuildCreditVersion = "1.1.10";
       const revisionByLevel = { ...(entry && entry.revisionByLevel || {}) };
       const receivedAtByLevel = { ...(entry && entry.receivedAtByLevel || {}) };
       const snapshotTimestampByLevel = { ...(entry && entry.snapshotTimestampByLevel || {}) };
-      for (const level of Object.keys(levels)) {
-        const revision = Number(revisionByLevel[level] ?? entry.revision);
-        const baselineTimestamp = normalizeMarketTimestamp(
-          snapshotTimestampByLevel[level]
-          ?? entry.snapshotTimestamp
-          ?? previousTimestamp
-        );
-        if (Number.isSafeInteger(revision) && revision > coveredRevision) {
-          if (nextTimestamp > baselineTimestamp) {
-            snapshotTimestampByLevel[level] = nextTimestamp;
+      const snapshotConflictDeferredByLevel = {
+        ...(entry && entry.snapshotConflictDeferredByLevel || {})
+      };
+      const snapshotLevels = snapshotData && snapshotData[itemHrid];
+      for (const [level, quote] of Object.entries(levels)) {
+        const fieldRevisions = Object.create(null);
+        const fieldTimes = Object.create(null);
+        const fieldSnapshotTimestamps = Object.create(null);
+        const fieldConflictDeferrals = Object.create(null);
+        const snapshotQuote = snapshotLevels && snapshotLevels[level];
+        for (const field of ["a", "b"]) {
+          if (!Object.prototype.hasOwnProperty.call(quote || {}, field)) continue;
+          const revision = Number(metadataFieldValue(
+            revisionByLevel, level, field, entry.revision
+          ));
+          const receivedAt = Number(metadataFieldValue(
+            receivedAtByLevel, level, field, entry.receivedAt
+          ));
+          const baselineTimestamp = normalizeMarketTimestamp(metadataFieldValue(
+            snapshotTimestampByLevel,
+            level,
+            field,
+            entry.snapshotTimestamp ?? previousTimestamp
+          ));
+          const conflictWasDeferred = metadataFieldValue(
+            snapshotConflictDeferredByLevel, level, field, false
+          ) === true;
+          const snapshotHasField = Object.prototype.hasOwnProperty.call(snapshotQuote || {}, field);
+          const snapshotMatchesLive = snapshotHasField
+            && Number(snapshotQuote[field]) === Number(quote[field]);
+          const arrivedDuringRequest = Number.isSafeInteger(revision) && revision > coveredRevision;
+          const snapshotIsNewer = nextTimestamp > baselineTimestamp;
+          const shouldDeferConflict = !snapshotMatchesLive
+            && (arrivedDuringRequest || (snapshotIsNewer && !conflictWasDeferred));
+          const isCoveredBySnapshot = snapshotMatchesLive
+            || (!arrivedDuringRequest && snapshotIsNewer && conflictWasDeferred);
+          if (isCoveredBySnapshot) {
+            delete quote[field];
             changed = true;
+            expired = true;
+            continue;
           }
-          continue;
+          fieldRevisions[field] = revision;
+          fieldTimes[field] = receivedAt;
+          fieldSnapshotTimestamps[field] = baselineTimestamp <= 0
+            ? nextTimestamp
+            : (shouldDeferConflict ? Math.max(baselineTimestamp, nextTimestamp) : baselineTimestamp);
+          fieldConflictDeferrals[field] = shouldDeferConflict || conflictWasDeferred;
+          if (fieldSnapshotTimestamps[field] !== baselineTimestamp
+            || fieldConflictDeferrals[field] !== conflictWasDeferred) changed = true;
         }
-        if (baselineTimestamp > 0 && nextTimestamp > baselineTimestamp) {
+        if (!Object.keys(quote).length) {
           delete levels[level];
           delete revisionByLevel[level];
           delete receivedAtByLevel[level];
           delete snapshotTimestampByLevel[level];
-          changed = true;
-          expired = true;
-        } else if (baselineTimestamp <= 0) {
-          // A live quote can arrive before the plugin has loaded its first
-          // public snapshot. Treat that first snapshot as the quote's baseline
-          // instead of discarding a potentially newer live observation.
-          snapshotTimestampByLevel[level] = nextTimestamp;
-          changed = true;
+          delete snapshotConflictDeferredByLevel[level];
+        } else {
+          revisionByLevel[level] = fieldRevisions;
+          receivedAtByLevel[level] = fieldTimes;
+          snapshotTimestampByLevel[level] = fieldSnapshotTimestamps;
+          snapshotConflictDeferredByLevel[level] = fieldConflictDeferrals;
         }
       }
       if (!Object.keys(levels).length) {
         delete liveData[itemHrid];
       } else {
-        const revisions = Object.values(revisionByLevel).map(Number).filter(Number.isSafeInteger);
-        const receivedTimes = Object.values(receivedAtByLevel).map(Number).filter(Number.isFinite);
+        const revisions = Object.values(revisionByLevel)
+          .flatMap((value) => Object.values(value || {})).map(Number).filter(Number.isSafeInteger);
+        const receivedTimes = Object.values(receivedAtByLevel)
+          .flatMap((value) => Object.values(value || {})).map(Number).filter(Number.isFinite);
         liveData[itemHrid] = {
           levels,
           revisionByLevel,
           receivedAtByLevel,
           snapshotTimestampByLevel,
+          snapshotConflictDeferredByLevel,
           revision: revisions.length ? Math.max(...revisions) : entry.revision,
           receivedAt: receivedTimes.length ? Math.max(...receivedTimes) : entry.receivedAt
         };
@@ -190,7 +353,7 @@ window.MwiGuildCreditVersion = "1.1.10";
       return { liveData: Object.create(null), revision: 0, valid: false };
     }
     if (!stored || typeof stored !== "object" || Array.isArray(stored)
-      || stored.schemaVersion !== LIVE_MARKET_CACHE_SCHEMA_VERSION
+      || !SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS.has(stored.schemaVersion)
       || !stored.items || typeof stored.items !== "object" || Array.isArray(stored.items)) {
       return { liveData: Object.create(null), revision: 0, valid: false };
     }
@@ -205,50 +368,62 @@ window.MwiGuildCreditVersion = "1.1.10";
       const revisionByLevel = Object.create(null);
       const receivedAtByLevel = Object.create(null);
       const snapshotTimestampByLevel = Object.create(null);
+      const snapshotConflictDeferredByLevel = Object.create(null);
       let levelCount = 0;
       for (const [rawLevel, rawQuote] of Object.entries(entry.levels || {})) {
         if (levelCount >= MAX_LEVELS_PER_ITEM) break;
         const level = normalizeEnhancementLevel(rawLevel);
         if (level === null || !rawQuote || typeof rawQuote !== "object" || Array.isArray(rawQuote)) continue;
         const quote = Object.create(null);
+        const fieldRevisions = Object.create(null);
+        const fieldTimes = Object.create(null);
+        const fieldSnapshotTimestamps = Object.create(null);
+        const fieldConflictDeferrals = Object.create(null);
         for (const field of ["a", "b"]) {
           if (!Object.prototype.hasOwnProperty.call(rawQuote, field)) continue;
           const price = normalizeCachedPrice(rawQuote[field]);
-          if (price !== null) quote[field] = price;
+          if (price === null) continue;
+          const levelKey = String(level);
+          const levelRevision = Number(metadataFieldValue(
+            entry.revisionByLevel, levelKey, field, entry.revision
+          ));
+          const receivedAt = Number(metadataFieldValue(
+            entry.receivedAtByLevel, levelKey, field, entry.receivedAt
+          ));
+          if (!Number.isSafeInteger(levelRevision) || levelRevision <= 0
+            || !Number.isFinite(receivedAt) || receivedAt <= 0) continue;
+          quote[field] = price;
+          fieldRevisions[field] = levelRevision;
+          fieldTimes[field] = receivedAt;
+          fieldSnapshotTimestamps[field] = normalizeMarketTimestamp(metadataFieldValue(
+            entry.snapshotTimestampByLevel,
+            levelKey,
+            field,
+            entry.snapshotTimestamp
+          ));
+          fieldConflictDeferrals[field] = metadataFieldValue(
+            entry.snapshotConflictDeferredByLevel, levelKey, field, false
+          ) === true;
+          revision = Math.max(revision, levelRevision);
         }
         if (!Object.keys(quote).length) continue;
         const levelKey = String(level);
-        const levelRevision = Number(
-          entry.revisionByLevel && entry.revisionByLevel[levelKey] !== undefined
-            ? entry.revisionByLevel[levelKey]
-            : entry.revision
-        );
-        const receivedAt = Number(
-          entry.receivedAtByLevel && entry.receivedAtByLevel[levelKey] !== undefined
-            ? entry.receivedAtByLevel[levelKey]
-            : entry.receivedAt
-        );
-        if (!Number.isSafeInteger(levelRevision) || levelRevision <= 0
-          || !Number.isFinite(receivedAt) || receivedAt <= 0) continue;
         levels[levelKey] = quote;
-        revisionByLevel[levelKey] = levelRevision;
-        receivedAtByLevel[levelKey] = receivedAt;
-        snapshotTimestampByLevel[levelKey] = normalizeMarketTimestamp(
-          entry.snapshotTimestampByLevel && entry.snapshotTimestampByLevel[levelKey] !== undefined
-            ? entry.snapshotTimestampByLevel[levelKey]
-            : entry.snapshotTimestamp
-        );
-        revision = Math.max(revision, levelRevision);
+        revisionByLevel[levelKey] = fieldRevisions;
+        receivedAtByLevel[levelKey] = fieldTimes;
+        snapshotTimestampByLevel[levelKey] = fieldSnapshotTimestamps;
+        snapshotConflictDeferredByLevel[levelKey] = fieldConflictDeferrals;
         levelCount += 1;
       }
       if (!Object.keys(levels).length) continue;
-      const revisions = Object.values(revisionByLevel);
-      const receivedTimes = Object.values(receivedAtByLevel);
+      const revisions = Object.values(revisionByLevel).flatMap((value) => Object.values(value));
+      const receivedTimes = Object.values(receivedAtByLevel).flatMap((value) => Object.values(value));
       liveData[itemHrid] = {
         levels,
         revisionByLevel,
         receivedAtByLevel,
         snapshotTimestampByLevel,
+        snapshotConflictDeferredByLevel,
         revision: Math.max(...revisions),
         receivedAt: Math.max(...receivedTimes)
       };
@@ -295,6 +470,9 @@ window.MwiGuildCreditVersion = "1.1.10";
 
   return {
     normalizeMarketTimestamp,
+    sanitizeMarketData,
+    createMarketStructure,
+    countMissingMarketEntries,
     normalizeMarketOrderBooksUpdate,
     applyLiveMarketUpdate,
     reconcileLiveMarketData,
@@ -343,6 +521,16 @@ window.MwiGuildCreditVersion = "1.1.10";
       } catch (_) {
         // The observer is optional and must never affect the game socket.
       }
+    }
+  }
+
+  function isGameWebSocketUrl(value) {
+    try {
+      const url = new URL(String(value || ""));
+      return url.protocol === "wss:"
+        && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -475,8 +663,14 @@ window.MwiGuildCreditVersion = "1.1.10";
 
   const NativeWebSocket = page.WebSocket;
   if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) return;
-  function ObservedWebSocket(...args) {
-    const socket = new NativeWebSocket(...args);
+  const instrumentedSockets = new WeakSet();
+
+  function instrumentSocket(socket) {
+    if (!socket || !isGameWebSocketUrl(socket.url)
+      || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+      return socket;
+    }
+    instrumentedSockets.add(socket);
     socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       bridge.messages.push(event.data);
@@ -490,6 +684,10 @@ window.MwiGuildCreditVersion = "1.1.10";
       }
     });
     return socket;
+  }
+
+  function ObservedWebSocket(...args) {
+    return instrumentSocket(new NativeWebSocket(...args));
   }
   ObservedWebSocket.prototype = NativeWebSocket.prototype;
   Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
@@ -1480,7 +1678,7 @@ window.MwiGuildCreditVersion = "1.1.10";
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -1974,20 +2172,53 @@ window.MwiGuildCreditVersion = "1.1.10";
     return marketChanged;
   }
 
+  function clearMarketSnapshotCandidate() {
+    state.marketSnapshotCandidateSignature = "";
+    state.marketSnapshotCandidateTimestamp = 0;
+    state.marketSnapshotCandidateConfirmations = 0;
+  }
+
+  function confirmMissingMarketSnapshot(marketData, marketTimestamp) {
+    const signature = JSON.stringify(marketDataApi.createMarketStructure(marketData));
+    const normalizedTimestamp = marketDataApi.normalizeMarketTimestamp(marketTimestamp);
+    const matchesCandidate = state.marketSnapshotCandidateSignature === signature
+      && normalizedTimestamp >= state.marketSnapshotCandidateTimestamp;
+    state.marketSnapshotCandidateSignature = signature;
+    state.marketSnapshotCandidateTimestamp = normalizedTimestamp;
+    state.marketSnapshotCandidateConfirmations = matchesCandidate
+      ? Math.min(2, state.marketSnapshotCandidateConfirmations + 1)
+      : 1;
+    return state.marketSnapshotCandidateConfirmations >= 2;
+  }
+
   async function loadSnapshot(force) {
     if (state.snapshot && !force) return state.snapshot;
     const liveRevisionAtRequestStart = state.marketLiveRevision;
     const response = await fetch("/game_data/marketplace.json", { cache: "no-store" });
     if (!response.ok) throw new Error(t("snapshotLoadFailed", { message: response.status }));
-    const snapshot = await response.json();
+    const rawSnapshot = await response.json();
+    const marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
+    if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
+    const snapshot = { ...rawSnapshot, marketData };
     const nextTimestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+    if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
     if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
+      return state.snapshot;
+    }
+    const confirmedMarketData = state.snapshot && state.snapshot.marketData;
+    const missingCount = marketDataApi.countMissingMarketEntries(confirmedMarketData, marketData);
+    if (missingCount > 0 && nextTimestamp === state.snapshotTimestamp) {
+      clearMarketSnapshotCandidate();
+      return state.snapshot;
+    }
+    if (missingCount > 0 && !confirmMissingMarketSnapshot(marketData, nextTimestamp)) {
       return state.snapshot;
     }
     const reconciliation = marketDataApi.reconcileLiveMarketData(state.marketLiveData, {
       previousSnapshotTimestamp: state.snapshotTimestamp,
       nextSnapshotTimestamp: nextTimestamp,
-      coveredRevision: liveRevisionAtRequestStart
+      coveredRevision: liveRevisionAtRequestStart,
+      snapshotData: marketData
     });
     if (reconciliation.changed) {
       state.marketUpdateSignatures = Object.create(null);
@@ -1995,6 +2226,7 @@ window.MwiGuildCreditVersion = "1.1.10";
     }
     state.snapshot = snapshot;
     state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
+    clearMarketSnapshotCandidate();
     return state.snapshot;
   }
 

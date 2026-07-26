@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.11] - 2026-07-26
+
+### Changed
+
+- Reworked live market quote handling around the proven reference-script model: ask and bid updates are tracked independently, official game WebSocket messages remain passive, and current-session quotes continue to override older public snapshots.
+- Conflicting public snapshots now defer live-quote eviction once to avoid races with a WebSocket response that arrived during the request.
+- Public marketplace snapshots that unexpectedly omit previously confirmed entries must be observed consistently before they can replace complete data.
+- Existing v1 live-quote caches are migrated to the new per-field metadata format instead of being discarded.
+
 ## [1.1.10] - 2026-07-26
 
 ### Fixed

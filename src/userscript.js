@@ -52,7 +52,7 @@
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -546,20 +546,53 @@
     return marketChanged;
   }
 
+  function clearMarketSnapshotCandidate() {
+    state.marketSnapshotCandidateSignature = "";
+    state.marketSnapshotCandidateTimestamp = 0;
+    state.marketSnapshotCandidateConfirmations = 0;
+  }
+
+  function confirmMissingMarketSnapshot(marketData, marketTimestamp) {
+    const signature = JSON.stringify(marketDataApi.createMarketStructure(marketData));
+    const normalizedTimestamp = marketDataApi.normalizeMarketTimestamp(marketTimestamp);
+    const matchesCandidate = state.marketSnapshotCandidateSignature === signature
+      && normalizedTimestamp >= state.marketSnapshotCandidateTimestamp;
+    state.marketSnapshotCandidateSignature = signature;
+    state.marketSnapshotCandidateTimestamp = normalizedTimestamp;
+    state.marketSnapshotCandidateConfirmations = matchesCandidate
+      ? Math.min(2, state.marketSnapshotCandidateConfirmations + 1)
+      : 1;
+    return state.marketSnapshotCandidateConfirmations >= 2;
+  }
+
   async function loadSnapshot(force) {
     if (state.snapshot && !force) return state.snapshot;
     const liveRevisionAtRequestStart = state.marketLiveRevision;
     const response = await fetch("/game_data/marketplace.json", { cache: "no-store" });
     if (!response.ok) throw new Error(t("snapshotLoadFailed", { message: response.status }));
-    const snapshot = await response.json();
+    const rawSnapshot = await response.json();
+    const marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
+    if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
+    const snapshot = { ...rawSnapshot, marketData };
     const nextTimestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+    if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
     if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
+      return state.snapshot;
+    }
+    const confirmedMarketData = state.snapshot && state.snapshot.marketData;
+    const missingCount = marketDataApi.countMissingMarketEntries(confirmedMarketData, marketData);
+    if (missingCount > 0 && nextTimestamp === state.snapshotTimestamp) {
+      clearMarketSnapshotCandidate();
+      return state.snapshot;
+    }
+    if (missingCount > 0 && !confirmMissingMarketSnapshot(marketData, nextTimestamp)) {
       return state.snapshot;
     }
     const reconciliation = marketDataApi.reconcileLiveMarketData(state.marketLiveData, {
       previousSnapshotTimestamp: state.snapshotTimestamp,
       nextSnapshotTimestamp: nextTimestamp,
-      coveredRevision: liveRevisionAtRequestStart
+      coveredRevision: liveRevisionAtRequestStart,
+      snapshotData: marketData
     });
     if (reconciliation.changed) {
       state.marketUpdateSignatures = Object.create(null);
@@ -567,6 +600,7 @@
     }
     state.snapshot = snapshot;
     state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
+    clearMarketSnapshotCandidate();
     return state.snapshot;
   }
 

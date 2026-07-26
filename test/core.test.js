@@ -74,7 +74,7 @@ test("实时市场订单簿提取最低卖价、最高买价并保留无报价�
   assert.deepEqual({ ...update.levels["1"] }, { a: -1, b: -1 });
 });
 
-test("实时市场价格覆盖历史 API，API 时间戳真正更新后才清理旧覆盖", () => {
+test("实时市场价格覆盖历史 API，并避免 API 与 WebSocket 并发时过早清理", () => {
   const snapshot = {
     timestamp: "2026-07-26T00:00:00Z",
     marketData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
@@ -89,7 +89,8 @@ test("实时市场价格覆盖历史 API，API 时间戳真正更新后才清理
   assert.equal(marketDataApi.expireLiveMarketData(liveData, {
     previousSnapshotTimestamp: snapshot.timestamp,
     nextSnapshotTimestamp: snapshot.timestamp,
-    coveredRevision: 1
+    coveredRevision: 1,
+    snapshotData: snapshot.marketData
   }), false);
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 51);
 
@@ -100,14 +101,16 @@ test("实时市场价格覆盖历史 API，API 时间戳真正更新后才清理
   assert.equal(marketDataApi.expireLiveMarketData(liveData, {
     previousSnapshotTimestamp: snapshot.timestamp,
     nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    coveredRevision: 1
+    coveredRevision: 1,
+    snapshotData: snapshot.marketData
   }), false);
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 49);
 
   assert.equal(marketDataApi.expireLiveMarketData(liveData, {
     previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
     nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
-    coveredRevision: 2
+    coveredRevision: 2,
+    snapshotData: snapshot.marketData
   }), true);
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 60);
 });
@@ -129,7 +132,10 @@ test("实时市场缓存序列化后可在页面重载时恢复", () => {
   const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(serialized));
   assert.equal(restored.valid, true);
   assert.equal(restored.revision, 7);
-  assert.equal(restored.liveData["/items/beast_hide"].snapshotTimestampByLevel["0"], Date.parse("2026-07-26T00:00:00Z"));
+  assert.deepEqual(
+    { ...restored.liveData["/items/beast_hide"].snapshotTimestampByLevel["0"] },
+    { a: Date.parse("2026-07-26T00:00:00Z"), b: Date.parse("2026-07-26T00:00:00Z") }
+  );
   assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
 });
 
@@ -147,10 +153,30 @@ test("再次打开同一商品市场时以新订单簿替换持久缓存", () =>
     marketDataApi.serializeLiveMarketData(liveData, { revision: 2 })
   ));
   assert.deepEqual({ ...restored.liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: -1 });
-  assert.equal(restored.liveData["/items/beast_hide"].receivedAtByLevel["0"], 2000);
+  assert.deepEqual(
+    { ...restored.liveData["/items/beast_hide"].receivedAtByLevel["0"] },
+    { a: 2000, b: 2000 }
+  );
 });
 
-test("重载后的实时缓存仅在 API 时间戳真正前进时淘汰", () => {
+test("只返回单边订单簿时仅更新对应报价字段", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, { revision: 1, receivedAt: 1000 });
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 49 } }
+  }, { revision: 2, receivedAt: 2000 });
+  assert.deepEqual({ ...liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: 50 });
+  assert.deepEqual(
+    { ...liveData["/items/beast_hide"].revisionByLevel["0"] },
+    { a: 2, b: 1 }
+  );
+});
+
+test("重载后的实时缓存遇到冲突快照时延迟一次再淘汰", () => {
   const liveData = Object.create(null);
   marketDataApi.applyLiveMarketUpdate(liveData, {
     itemHrid: "/items/beast_hide",
@@ -162,13 +188,22 @@ test("重载后的实时缓存仅在 API 时间戳真正前进时淘汰", () => 
   assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
     previousSnapshotTimestamp: 0,
     nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
-    coveredRevision: restored.revision
+    coveredRevision: restored.revision,
+    snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
   }), { changed: false, expired: false });
   assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
   assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
     previousSnapshotTimestamp: 0,
     nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    coveredRevision: restored.revision
+    coveredRevision: restored.revision,
+    snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
+  }), { changed: true, expired: false });
+  assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
+  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
+    previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
+    nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
+    coveredRevision: restored.revision,
+    snapshotData: { "/items/beast_hide": { 0: { a: 61, b: 56 } } }
   }), { changed: true, expired: true });
   assert.equal(Object.keys(restored.liveData).length, 0);
 });
@@ -184,8 +219,45 @@ test("首次 API 快照为无基线实时缓存建立基线而不误删", () => 
     nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
     coveredRevision: 1
   }), { changed: true, expired: false });
-  assert.equal(liveData["/items/beast_hide"].snapshotTimestampByLevel["0"], Date.parse("2026-07-26T00:00:00Z"));
+  assert.deepEqual(
+    { ...liveData["/items/beast_hide"].snapshotTimestampByLevel["0"] },
+    { a: Date.parse("2026-07-26T00:00:00Z"), b: Date.parse("2026-07-26T00:00:00Z") }
+  );
   assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "a"), 51);
+});
+
+test("旧版实时市场缓存会迁移为逐字段元数据", () => {
+  const restored = marketDataApi.restoreLiveMarketData({
+    schemaVersion: 1,
+    revision: 4,
+    items: {
+      "/items/beast_hide": {
+        levels: { 0: { a: 51, b: 50 } },
+        revisionByLevel: { 0: 4 },
+        receivedAtByLevel: { 0: 2000 },
+        snapshotTimestampByLevel: { 0: Date.parse("2026-07-26T00:00:00Z") },
+        revision: 4,
+        receivedAt: 2000
+      }
+    }
+  });
+  assert.equal(restored.valid, true);
+  assert.deepEqual(
+    { ...restored.liveData["/items/beast_hide"].revisionByLevel["0"] },
+    { a: 4, b: 4 }
+  );
+});
+
+test("缺项市场快照结构可被识别，避免不完整 API 覆盖完整数据", () => {
+  const confirmed = marketDataApi.sanitizeMarketData({
+    "/items/beast_hide": { 0: { a: 51, b: 50 } },
+    "/items/snake_fang": { 0: { a: 7600, b: 7200 } }
+  });
+  const incomplete = marketDataApi.sanitizeMarketData({
+    "/items/beast_hide": { 0: { a: 51, b: 50 } }
+  });
+  assert.equal(marketDataApi.countMissingMarketEntries(confirmed, incomplete) > 0, true);
+  assert.equal(marketDataApi.countMissingMarketEntries(confirmed, confirmed), 0);
 });
 
 test("损坏或旧版本的实时市场缓存会被安全忽略", () => {
@@ -593,7 +665,8 @@ test("支持游戏初始化消息使用的 itemDetailMap 对象结构", () => {
 test("正式版桥接保留游戏实时神龛等级", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor() {
+    constructor(url) {
+      this.url = url;
       this.listeners = new Map();
     }
 
@@ -606,8 +679,8 @@ test("正式版桥接保留游戏实时神龛等级", () => {
     }
   }
   const page = { WebSocket: FakeWebSocket };
-  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set });
-  const socket = new page.WebSocket("wss://example.invalid");
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String });
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
   socket.receive(JSON.stringify({ payload: {
     characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } },
     guildBuildingMap: { "/guild_buildings/tempo_shrine": { level: 4 } },
@@ -622,13 +695,13 @@ test("正式版桥接保留游戏实时神龛等级", () => {
 test("正式版桥接被动保存玩家打开商品时收到的实时市场价格", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor() { this.listeners = new Map(); }
+    constructor(url) { this.url = url; this.listeners = new Map(); }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
     receive(data) { this.listeners.get("message")({ data }); }
   }
   const page = { WebSocket: FakeWebSocket, MwiGuildCreditMarketData: marketDataApi };
-  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array, Date, Number });
-  const socket = new page.WebSocket("wss://example.invalid");
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number });
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
   socket.receive(JSON.stringify({
     type: "market_item_order_books_updated",
     marketItemOrderBooks: {
@@ -642,6 +715,22 @@ test("正式版桥接被动保存玩家打开商品时收到的实时市场价�
   assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].b, 7200);
 });
 
+test("正式版桥接只监听官方游戏 WebSocket", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {
+    constructor(url) { this.url = url; this.listeners = new Map(); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+  }
+  const page = { WebSocket: FakeWebSocket, MwiGuildCreditMarketData: marketDataApi };
+  vm.runInNewContext(bridgeSource, {
+    window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number
+  });
+  const unrelatedSocket = new page.WebSocket("wss://example.invalid/ws");
+  assert.equal(unrelatedSocket.listeners.has("message"), false);
+  const gameSocket = new page.WebSocket("wss://api-test.milkywayidlecn.com/ws");
+  assert.equal(gameSocket.listeners.has("message"), true);
+});
+
 test("正式版把实时市场价格接入浏览器持久缓存", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   assert.match(source, /mwi-guild-credit-live-market-v1/);
@@ -649,6 +738,8 @@ test("正式版把实时市场价格接入浏览器持久缓存", () => {
   assert.match(source, /serializeLiveMarketData\(state\.marketLiveData/);
   assert.match(source, /persistLiveMarketData\(\);\s+scheduleMarketDataRefresh\(\)/);
   assert.match(source, /reconcileLiveMarketData\(state\.marketLiveData/);
+  assert.match(source, /confirmMissingMarketSnapshot\(marketData, nextTimestamp\)/);
+  assert.match(source, /snapshotData: marketData/);
 });
 
 test("正式版桥接通过游戏原生控制器打开指定市场物品", () => {
@@ -671,7 +762,7 @@ test("正式版桥接通过游戏原生控制器打开指定市场物品", () =>
     WebSocket: FakeWebSocket,
     document: { getElementById: (id) => id === "root" ? root : null }
   };
-  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array });
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
   const bridge = page.__mwiGuildCreditBridge;
   assert.equal(bridge.goToMarketplace("/items/snake_fang", 6), true);
   assert.deepEqual(calls, [["/items/snake_fang", 6]]);
@@ -683,13 +774,13 @@ test("正式版桥接通过游戏原生控制器打开指定市场物品", () =>
 test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor() { this.listeners = new Map(); }
+    constructor(url) { this.url = url; this.listeners = new Map(); }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
     receive(data) { this.listeners.get("message")({ data }); }
   }
   const page = { WebSocket: FakeWebSocket };
-  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array });
-  const socket = new page.WebSocket("wss://example.invalid");
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
   socket.receive(JSON.stringify({ payload: { guildBuildingMap: { "/guild_buildings/tempo": { level: 3 } } } }));
   socket.receive(JSON.stringify({ payload: { guildBuildingMap: { "/guild_buildings/force": { level: 5 } } } }));
   assert.equal(page.__mwiGuildCreditBridge.guildShrineLevels["/guild_buildings/tempo"].level, 3);
@@ -699,13 +790,13 @@ test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
 test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor() { this.listeners = new Map(); }
+    constructor(url) { this.url = url; this.listeners = new Map(); }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
     receive(data) { this.listeners.get("message")({ data }); }
   }
   const page = { WebSocket: FakeWebSocket };
-  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, String, Array });
-  const socket = new page.WebSocket("wss://example.invalid");
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
   socket.receive(JSON.stringify({ payload: {
     guildBuildingDetailMap: {
       "/guild_buildings/alpha": { guildBuildingHrid: "/guild_buildings/alpha", guildShrineHrid: "/guild_shrines/force" }
