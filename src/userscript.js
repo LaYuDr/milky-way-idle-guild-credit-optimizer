@@ -16,6 +16,7 @@
   const FALLBACK_INSTALL_URL = "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
   const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
   const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
+  const MARKET_LIVE_STORAGE_KEY = "mwi-guild-credit-live-market-v1";
   const UPDATE_CHECK_TIMEOUT_MS = 8000;
   const PRICE_REFERENCES = { a: {}, b: {} };
 
@@ -48,9 +49,10 @@
     "/guild_shrines/scholar": "shrineScholar"
   };
   const savedUiState = loadSavedPluginUiState();
+  const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: Object.create(null), marketLiveRevision: 0, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
@@ -95,6 +97,31 @@
       }));
     } catch (_) {
       // Keep the current page state when browser storage is unavailable.
+    }
+  }
+
+  function loadSavedLiveMarketData() {
+    try {
+      const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(MARKET_LIVE_STORAGE_KEY);
+      return marketDataApi.restoreLiveMarketData(raw);
+    } catch (_) {
+      return { liveData: Object.create(null), revision: 0, valid: false };
+    }
+  }
+
+  function persistLiveMarketData() {
+    try {
+      if (!pageWindow.localStorage) return;
+      if (!Object.keys(state.marketLiveData).length) {
+        pageWindow.localStorage.removeItem(MARKET_LIVE_STORAGE_KEY);
+        return;
+      }
+      const cache = marketDataApi.serializeLiveMarketData(state.marketLiveData, {
+        revision: state.marketLiveRevision
+      });
+      pageWindow.localStorage.setItem(MARKET_LIVE_STORAGE_KEY, JSON.stringify(cache));
+    } catch (_) {
+      // A storage quota or privacy restriction must not interrupt the game.
     }
   }
 
@@ -443,14 +470,20 @@
   function rememberLiveMarketUpdate(update, receivedAt) {
     if (!update) return false;
     const signature = JSON.stringify(update.levels);
-    if (state.marketUpdateSignatures[update.itemHrid] === signature) return false;
+    const observedAt = Number(receivedAt);
+    if ((!Number.isFinite(observedAt) || observedAt <= 0)
+      && state.marketUpdateSignatures[update.itemHrid] === signature) return false;
     state.marketUpdateSignatures[update.itemHrid] = signature;
     state.marketLiveRevision = Math.min(Number.MAX_SAFE_INTEGER, state.marketLiveRevision + 1);
     const changed = marketDataApi.applyLiveMarketUpdate(state.marketLiveData, update, {
       revision: state.marketLiveRevision,
-      receivedAt: Number(receivedAt) || Date.now()
+      receivedAt: observedAt || Date.now(),
+      snapshotTimestamp: state.snapshotTimestamp
     });
-    if (changed) scheduleMarketDataRefresh();
+    if (changed) {
+      persistLiveMarketData();
+      scheduleMarketDataRefresh();
+    }
     return changed;
   }
 
@@ -523,12 +556,15 @@
     if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
       return state.snapshot;
     }
-    const expiredLiveData = marketDataApi.expireLiveMarketData(state.marketLiveData, {
+    const reconciliation = marketDataApi.reconcileLiveMarketData(state.marketLiveData, {
       previousSnapshotTimestamp: state.snapshotTimestamp,
       nextSnapshotTimestamp: nextTimestamp,
       coveredRevision: liveRevisionAtRequestStart
     });
-    if (expiredLiveData) state.marketUpdateSignatures = Object.create(null);
+    if (reconciliation.changed) {
+      state.marketUpdateSignatures = Object.create(null);
+      persistLiveMarketData();
+    }
     state.snapshot = snapshot;
     state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
     return state.snapshot;

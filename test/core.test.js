@@ -112,6 +112,98 @@ test("实时市场价格覆盖历史 API，API 时间戳真正更新后才清理
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 60);
 });
 
+test("实时市场缓存序列化后可在页面重载时恢复", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, {
+    revision: 7,
+    receivedAt: 2000,
+    snapshotTimestamp: "2026-07-26T00:00:00Z"
+  });
+  const serialized = marketDataApi.serializeLiveMarketData(liveData, {
+    revision: 7,
+    storedAt: 3000
+  });
+  const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(serialized));
+  assert.equal(restored.valid, true);
+  assert.equal(restored.revision, 7);
+  assert.equal(restored.liveData["/items/beast_hide"].snapshotTimestampByLevel["0"], Date.parse("2026-07-26T00:00:00Z"));
+  assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
+});
+
+test("再次打开同一商品市场时以新订单簿替换持久缓存", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 49, b: -1 } }
+  }, { revision: 2, receivedAt: 2000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
+  const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(
+    marketDataApi.serializeLiveMarketData(liveData, { revision: 2 })
+  ));
+  assert.deepEqual({ ...restored.liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: -1 });
+  assert.equal(restored.liveData["/items/beast_hide"].receivedAtByLevel["0"], 2000);
+});
+
+test("重载后的实时缓存仅在 API 时间戳真正前进时淘汰", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
+  const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(
+    marketDataApi.serializeLiveMarketData(liveData, { revision: 1 })
+  ));
+  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
+    previousSnapshotTimestamp: 0,
+    nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
+    coveredRevision: restored.revision
+  }), { changed: false, expired: false });
+  assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
+  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
+    previousSnapshotTimestamp: 0,
+    nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
+    coveredRevision: restored.revision
+  }), { changed: true, expired: true });
+  assert.equal(Object.keys(restored.liveData).length, 0);
+});
+
+test("首次 API 快照为无基线实时缓存建立基线而不误删", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(liveData, {
+    itemHrid: "/items/beast_hide",
+    levels: { 0: { a: 51, b: 50 } }
+  }, { revision: 1, receivedAt: 1000 });
+  assert.deepEqual(marketDataApi.reconcileLiveMarketData(liveData, {
+    previousSnapshotTimestamp: 0,
+    nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
+    coveredRevision: 1
+  }), { changed: true, expired: false });
+  assert.equal(liveData["/items/beast_hide"].snapshotTimestampByLevel["0"], Date.parse("2026-07-26T00:00:00Z"));
+  assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "a"), 51);
+});
+
+test("损坏或旧版本的实时市场缓存会被安全忽略", () => {
+  assert.deepEqual(marketDataApi.restoreLiveMarketData("{broken"), {
+    liveData: Object.create(null),
+    revision: 0,
+    valid: false
+  });
+  assert.deepEqual(marketDataApi.restoreLiveMarketData(JSON.stringify({
+    schemaVersion: 999,
+    items: {}
+  })), {
+    liveData: Object.create(null),
+    revision: 0,
+    valid: false
+  });
+});
+
 test("更新信息只解析 Userscript 头中的版本号", () => {
   assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n// @version      1.0.0\n// ==/UserScript=="), "1.0.0");
   assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n"), null);
@@ -548,6 +640,15 @@ test("正式版桥接被动保存玩家打开商品时收到的实时市场价�
   assert.equal(bridge.marketOrderBookRevision, 1);
   assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].a, 7600);
   assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].b, 7200);
+});
+
+test("正式版把实时市场价格接入浏览器持久缓存", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  assert.match(source, /mwi-guild-credit-live-market-v1/);
+  assert.match(source, /restoreLiveMarketData\(raw\)/);
+  assert.match(source, /serializeLiveMarketData\(state\.marketLiveData/);
+  assert.match(source, /persistLiveMarketData\(\);\s+scheduleMarketDataRefresh\(\)/);
+  assert.match(source, /reconcileLiveMarketData\(state\.marketLiveData/);
 });
 
 test("正式版桥接通过游戏原生控制器打开指定市场物品", () => {

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.10] - 2026-07-26
+
+### Fixed
+
+- Live market quotes received from native item market pages are now persisted across page reloads and browser restarts instead of existing only in the current page's memory.
+- Persisted quotes retain their public-snapshot baseline, are replaced by the next native order-book update for the same item and level, and are removed only after a genuinely newer public marketplace snapshot supersedes them.
+- Invalid or incompatible cached market data is ignored safely without affecting the game.
+
 ## [1.1.9] - 2026-07-26
 
 ### Changed
