@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.12";
+window.MwiGuildCreditVersion = "1.1.16";
 
 (function (root, factory) {
   const api = factory();
@@ -484,12 +484,134 @@ window.MwiGuildCreditVersion = "1.1.12";
 });
 
 
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditMarketDom = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const ITEM_HRID_PATTERN = /^[a-z0-9_]+$/;
+
+  function parseCompactMarketValue(value) {
+    const normalized = String(value || "")
+      .replace(/,/g, "")
+      .replace(/\s+/g, "")
+      .trim();
+    const match = normalized.match(/^([0-9]+(?:\.[0-9]+)?)([KMBT]?)$/i);
+    if (!match) return null;
+    const multiplier = {
+      "": 1,
+      K: 1_000,
+      M: 1_000_000,
+      B: 1_000_000_000,
+      T: 1_000_000_000_000
+    }[match[2].toUpperCase()];
+    const result = Number(match[1]) * multiplier;
+    return Number.isFinite(result) && result >= 0 ? Math.round(result) : null;
+  }
+
+  function orderBookEntries(table) {
+    const entries = [];
+    for (const row of Array.from(table.querySelectorAll("tbody tr"))) {
+      const cells = Array.from(row.querySelectorAll("td"));
+      if (cells.length < 2) continue;
+      const quantity = parseCompactMarketValue(cells[0].textContent);
+      const price = parseCompactMarketValue(cells[1].textContent);
+      if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) continue;
+      entries.push({ price, quantity });
+    }
+    return entries;
+  }
+
+  function tableSide(table) {
+    const actions = Array.from(table.querySelectorAll("button"))
+      .map((button) => String(button.textContent || "").trim())
+      .filter(Boolean);
+    if (actions.some((value) => ["购买", "Buy"].includes(value))) return "asks";
+    if (actions.some((value) => ["出售", "Sell"].includes(value))) return "bids";
+    const heading = String(table.querySelector("thead") && table.querySelector("thead").textContent || "");
+    if (/出售价|Sell Price/i.test(heading)) return "asks";
+    if (/收购价|Buy Price/i.test(heading)) return "bids";
+    return "";
+  }
+
+  function currentMarketIdentity(documentRef) {
+    const currentItem = documentRef.querySelector('[class*="MarketplacePanel_currentItem"]');
+    if (!currentItem) return null;
+    const use = currentItem.querySelector(
+      '[class*="Item_itemContainer"] svg[role="img"] use[href*="items_sprite"],'
+      + '[class*="Item_itemContainer"] svg[role="img"] use[xlink\\:href*="items_sprite"]'
+    );
+    const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
+    const fragment = String(href || "").split("#").pop();
+    if (!ITEM_HRID_PATTERN.test(fragment)) return null;
+    const enhancementNode = currentItem.querySelector('[class*="Item_enhancementLevel"]');
+    const enhancementMatch = String(enhancementNode && enhancementNode.textContent || "").match(/\+?(\d+)/);
+    const enhancementLevel = enhancementMatch ? Number(enhancementMatch[1]) : 0;
+    return {
+      itemHrid: `/items/${fragment}`,
+      enhancementLevel: Number.isSafeInteger(enhancementLevel) && enhancementLevel >= 0
+        ? enhancementLevel
+        : 0
+    };
+  }
+
+  function readMarketDomSnapshot(documentRef) {
+    if (!documentRef || typeof documentRef.querySelector !== "function") return null;
+    const identity = currentMarketIdentity(documentRef);
+    const booksContainer = documentRef.querySelector('[class*="MarketplacePanel_orderBooksContainer"]');
+    if (!identity || !booksContainer) return null;
+    const snapshot = {
+      ...identity,
+      asks: null,
+      bids: null
+    };
+    for (const table of Array.from(
+      booksContainer.querySelectorAll('table[class*="MarketplacePanel_orderBookTable"]')
+    )) {
+      const side = tableSide(table);
+      if (side) snapshot[side] = orderBookEntries(table);
+    }
+    if (!Array.isArray(snapshot.asks) && !Array.isArray(snapshot.bids)) return null;
+    snapshot.signature = JSON.stringify([
+      snapshot.itemHrid,
+      snapshot.enhancementLevel,
+      snapshot.asks,
+      snapshot.bids
+    ]);
+    return snapshot;
+  }
+
+  function createMarketMessage(snapshot) {
+    if (!snapshot || !snapshot.itemHrid) return null;
+    const book = {
+      itemHrid: snapshot.itemHrid,
+      enhancementLevel: snapshot.enhancementLevel
+    };
+    if (Array.isArray(snapshot.asks)) book.asks = snapshot.asks;
+    if (Array.isArray(snapshot.bids)) book.bids = snapshot.bids;
+    return {
+      type: "market_item_order_books_updated",
+      marketItemOrderBooks: book
+    };
+  }
+
+  return Object.freeze({
+    parseCompactMarketValue,
+    readMarketDomSnapshot,
+    createMarketMessage
+  });
+});
+
+
 (function () {
   "use strict";
 
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
-  const bridge = page.__mwiGuildCreditBridge || (page.__mwiGuildCreditBridge = {
+  const marketDomApi = page.MwiGuildCreditMarketDom || window.MwiGuildCreditMarketDom;
+  const bridge = window.__mwiGuildCreditBridge || (window.__mwiGuildCreditBridge = {
     messages: [],
     itemDetails: null,
     guildBuffDetails: null,
@@ -503,18 +625,66 @@ window.MwiGuildCreditVersion = "1.1.12";
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+  const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
+  const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
+  const DIAGNOSTICS_ATTRIBUTE = "data-mwi-credit-bridge-diagnostics";
+  const diagnostics = bridge.diagnostics && typeof bridge.diagnostics === "object"
+    ? bridge.diagnostics
+    : (bridge.diagnostics = {
+      scriptStartedAt: Date.now(),
+      injectionAttempted: false,
+      injectionReady: false,
+      installMode: "initializing",
+      observerActive: false,
+      messageCount: 0,
+      lastMessageAt: 0,
+      lastMessageType: "",
+      lastMarketItemHrid: "",
+      lastMarketLevels: null,
+      lastMarketReceivedAt: 0,
+      lastMarketSource: "",
+      domObserverActive: false,
+      domSnapshotCount: 0
+    });
 
-  function keepMarketData(message) {
+  function publishBridgeDiagnostics() {
+    const documentRef = window.document;
+    const root = documentRef && documentRef.documentElement;
+    if (!root || typeof root.setAttribute !== "function") return false;
+    try {
+      root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
+        ...diagnostics,
+        marketOrderBookRevision: bridge.marketOrderBookRevision
+      }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  publishBridgeDiagnostics();
+  if (window.document && !window.document.documentElement && typeof window.addEventListener === "function") {
+    window.addEventListener("DOMContentLoaded", publishBridgeDiagnostics, { once: true });
+  }
+
+  function keepMarketData(message, source) {
     if (!marketDataApi || !message || String(message.type || "") !== "market_item_order_books_updated") return;
     const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
     if (!update) return;
+    const normalizedSource = source === "market_dom" ? "market_dom" : "websocket";
+    const receivedAt = Date.now();
     const revision = Math.min(Number.MAX_SAFE_INTEGER, bridge.marketOrderBookRevision + 1);
     bridge.marketOrderBookRevision = revision;
     bridge.marketOrderBooks[update.itemHrid] = {
       update,
       revision,
-      receivedAt: Date.now()
+      receivedAt,
+      source: normalizedSource
     };
+    diagnostics.lastMarketItemHrid = update.itemHrid;
+    diagnostics.lastMarketLevels = update.levels;
+    diagnostics.lastMarketReceivedAt = receivedAt;
+    diagnostics.lastMarketSource = normalizedSource;
+    publishBridgeDiagnostics();
     if (typeof bridge.onMarketOrderBooksUpdated === "function") {
       try {
         bridge.onMarketOrderBooksUpdated();
@@ -661,8 +831,179 @@ window.MwiGuildCreditVersion = "1.1.12";
     }
   }
 
+  function keepSocketMessage(rawMessage) {
+    if (typeof rawMessage !== "string") return;
+    bridge.messages.push(rawMessage);
+    if (bridge.messages.length > 80) bridge.messages.shift();
+    diagnostics.messageCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.messageCount + 1);
+    diagnostics.lastMessageAt = Date.now();
+    try {
+      const message = JSON.parse(rawMessage);
+      diagnostics.lastMessageType = String(message && message.type || "");
+      keepMarketData(message, "websocket");
+      keepGuildData(message);
+    } catch (_) {
+      diagnostics.lastMessageType = "non_json";
+      // Ignore non-JSON protocol frames.
+    }
+    publishBridgeDiagnostics();
+  }
+
+  let lastMarketDomSignature = "";
+  let marketDomScanScheduled = false;
+  let marketDomObserver = null;
+
+  function scanMarketDom() {
+    marketDomScanScheduled = false;
+    if (!marketDomApi || typeof marketDomApi.readMarketDomSnapshot !== "function") return false;
+    const snapshot = marketDomApi.readMarketDomSnapshot(window.document);
+    if (!snapshot || snapshot.signature === lastMarketDomSignature) return false;
+    const message = marketDomApi.createMarketMessage(snapshot);
+    if (!message) return false;
+    lastMarketDomSignature = snapshot.signature;
+    diagnostics.domSnapshotCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.domSnapshotCount + 1);
+    keepMarketData(message, "market_dom");
+    return true;
+  }
+
+  function scheduleMarketDomScan() {
+    if (marketDomScanScheduled) return;
+    marketDomScanScheduled = true;
+    const schedule = typeof window.setTimeout === "function"
+      ? window.setTimeout.bind(window)
+      : setTimeout;
+    schedule(scanMarketDom, 40);
+  }
+
+  function installMarketDomObserver() {
+    if (marketDomObserver || !marketDomApi || !window.document) return false;
+    const root = window.document.documentElement;
+    const Observer = window.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
+    if (!root || typeof Observer !== "function") return false;
+    marketDomObserver = new Observer(scheduleMarketDomScan);
+    marketDomObserver.observe(root, { subtree: true, childList: true, characterData: true });
+    bridge.marketDomObserverActive = true;
+    diagnostics.domObserverActive = true;
+    publishBridgeDiagnostics();
+    scheduleMarketDomScan();
+    return true;
+  }
+
+  if (!installMarketDomObserver() && typeof window.addEventListener === "function") {
+    window.addEventListener("DOMContentLoaded", installMarketDomObserver, { once: true });
+  }
+
+  // Tampermonkey can expose unsafeWindow through an isolated-world proxy whose
+  // expando assignments do not replace the game's real globals. Inject the
+  // socket wrapper into MAIN_WORLD and carry only string payloads back through
+  // DOM events, which are shared across the two worlds.
+  function installPageSocketTap(messageEventName, readyEventName) {
+    const dispatchReady = (active) => {
+      window.dispatchEvent(new CustomEvent(readyEventName, { detail: active ? "1" : "0" }));
+    };
+    const NativeWebSocket = window.WebSocket;
+    if (typeof NativeWebSocket !== "function") {
+      dispatchReady(false);
+      return;
+    }
+    if (NativeWebSocket.__mwiGuildCreditBridge === true) {
+      dispatchReady(true);
+      return;
+    }
+    const instrumentedSockets = new WeakSet();
+    const isOfficialSocket = (value) => {
+      try {
+        const url = new URL(String(value || ""));
+        return url.protocol === "wss:"
+          && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+      } catch (_) {
+        return false;
+      }
+    };
+    const instrumentSocket = (socket) => {
+      if (!socket || !isOfficialSocket(socket.url)
+        || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+        return socket;
+      }
+      instrumentedSockets.add(socket);
+      socket.addEventListener("message", (event) => {
+        if (typeof event.data !== "string") return;
+        window.dispatchEvent(new CustomEvent(messageEventName, { detail: event.data }));
+      });
+      return socket;
+    };
+    function ObservedWebSocket(...args) {
+      return instrumentSocket(new NativeWebSocket(...args));
+    }
+    ObservedWebSocket.prototype = NativeWebSocket.prototype;
+    try {
+      Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
+    } catch (_) {
+      // Static WebSocket constants are copied below when inheritance is blocked.
+    }
+    for (const constant of ["CONNECTING", "OPEN", "CLOSING", "CLOSED"]) {
+      if (constant in ObservedWebSocket) continue;
+      try {
+        Object.defineProperty(ObservedWebSocket, constant, {
+          configurable: true,
+          enumerable: true,
+          value: NativeWebSocket[constant]
+        });
+      } catch (_) {
+        // Missing constants do not affect socket construction or observation.
+      }
+    }
+    Object.defineProperty(ObservedWebSocket, "__mwiGuildCreditBridge", { value: true });
+    try {
+      window.WebSocket = ObservedWebSocket;
+      dispatchReady(window.WebSocket === ObservedWebSocket);
+    } catch (_) {
+      dispatchReady(false);
+    }
+  }
+
+  let pageSocketTapInstalled = false;
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener(SOCKET_MESSAGE_EVENT, (event) => {
+      keepSocketMessage(event && event.detail);
+    });
+    window.addEventListener(SOCKET_READY_EVENT, (event) => {
+      pageSocketTapInstalled = Boolean(event && event.detail === "1");
+      diagnostics.injectionReady = pageSocketTapInstalled;
+      diagnostics.installMode = pageSocketTapInstalled ? "gm_add_element_main_world" : "gm_add_element_rejected";
+      diagnostics.observerActive = pageSocketTapInstalled;
+      publishBridgeDiagnostics();
+    }, { once: true });
+  }
+  if (typeof GM_addElement === "function") {
+    diagnostics.injectionAttempted = true;
+    diagnostics.installMode = "gm_add_element_pending";
+    publishBridgeDiagnostics();
+    try {
+      const source = `;(${installPageSocketTap.toString()})(${JSON.stringify(SOCKET_MESSAGE_EVENT)},${JSON.stringify(SOCKET_READY_EVENT)});`;
+      const injected = GM_addElement("script", { textContent: source });
+      if (injected && typeof injected.remove === "function") injected.remove();
+    } catch (error) {
+      diagnostics.installMode = "gm_add_element_error";
+      diagnostics.injectionError = String(error && error.message || error || "unknown");
+      publishBridgeDiagnostics();
+      // Fall back to unsafeWindow for userscript managers without GM_addElement.
+    }
+  }
+  if (pageSocketTapInstalled) {
+    bridge.marketObserverActive = true;
+    diagnostics.observerActive = true;
+    publishBridgeDiagnostics();
+    return;
+  }
+
   const NativeWebSocket = page.WebSocket;
-  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) return;
+  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) {
+    diagnostics.installMode = NativeWebSocket ? "existing_wrapper" : "websocket_unavailable";
+    diagnostics.observerActive = Boolean(NativeWebSocket && NativeWebSocket.__mwiGuildCreditBridge);
+    publishBridgeDiagnostics();
+    return;
+  }
   const instrumentedSockets = new WeakSet();
 
   function instrumentSocket(socket) {
@@ -672,16 +1013,7 @@ window.MwiGuildCreditVersion = "1.1.12";
     }
     instrumentedSockets.add(socket);
     socket.addEventListener("message", (event) => {
-      if (typeof event.data !== "string") return;
-      bridge.messages.push(event.data);
-      if (bridge.messages.length > 80) bridge.messages.shift();
-      try {
-        const message = JSON.parse(event.data);
-        keepMarketData(message);
-        keepGuildData(message);
-      } catch (_) {
-        // Ignore non-JSON protocol frames.
-      }
+      keepSocketMessage(event.data);
     });
     return socket;
   }
@@ -694,6 +1026,10 @@ window.MwiGuildCreditVersion = "1.1.12";
   ObservedWebSocket.__mwiGuildCreditBridge = true;
   page.WebSocket = ObservedWebSocket;
   bridge.marketObserverActive = true;
+  diagnostics.installMode = page === window ? "direct_main_world" : "unsafe_window_fallback";
+  diagnostics.injectionReady = page.WebSocket === ObservedWebSocket;
+  diagnostics.observerActive = true;
+  publishBridgeDiagnostics();
 })();
 
 
@@ -1039,6 +1375,11 @@ window.MwiGuildCreditVersion = "1.1.12";
       inventoryNotRead: "库存未读取",
       backpackInventory: "背包库存 {count}",
       notRead: "未读取",
+      useGuildTokensForMissingCredits: "缺少的信用点全部用公会代币兑换",
+      useGuildTokensForMissingCreditsHint: "启用后按公会商店固定比例计算，再次点击恢复最优物品方案。",
+      guildTokenCreditPlanActive: "缺少的信用点已全部按公会代币兑换计算。",
+      guildTokenCreditPlanSummary: "其中 {count} 公会代币用于兑换信用点。",
+      guildTokenExchangeNeeds: "代币兑换需",
       optimalExchangeNeeds: "最优兑换需",
       exchangeRate: "{items} → {credits}",
       itemQuantity: "{count} 个",
@@ -1152,6 +1493,11 @@ window.MwiGuildCreditVersion = "1.1.12";
       inventoryNotRead: "Inventory unavailable",
       backpackInventory: "Backpack: {count}",
       notRead: "unavailable",
+      useGuildTokensForMissingCredits: "Exchange every missing credit with guild tokens",
+      useGuildTokensForMissingCreditsHint: "Uses the fixed guild-shop rates; click again to restore the best-item plan.",
+      guildTokenCreditPlanActive: "Every missing credit is calculated as a guild-token exchange.",
+      guildTokenCreditPlanSummary: "{count} guild tokens are allocated to credit exchanges.",
+      guildTokenExchangeNeeds: "Tokens needed",
       optimalExchangeNeeds: "Best exchange needs",
       exchangeRate: "{items} → {credits}",
       itemQuantity: "{count} {unit}",
@@ -1551,15 +1897,27 @@ window.MwiGuildCreditVersion = "1.1.12";
     };
   }
 
-  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts) {
+  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts, options) {
     const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
     const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
+    const settings = options && typeof options === "object" ? options : {};
+    const useGuildTokensForMissingCredits = settings.useGuildTokensForMissingCredits === true;
+    const guildTokenCreditRules = new Map();
+    for (const rule of Array.isArray(settings.guildTokenCreditConversions) ? settings.guildTokenCreditConversions : []) {
+      const creditItemHrid = rule && rule.creditItemHrid;
+      const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+      const creditCount = positiveInteger(rule && rule.creditCount);
+      if (!creditItemHrid || !guildTokenCount || !creditCount || guildTokenCreditRules.has(creditItemHrid)) continue;
+      guildTokenCreditRules.set(creditItemHrid, { creditItemHrid, guildTokenCount, creditCount });
+    }
     const rows = [];
     const unpricedItemHrids = [];
     let totalGold = 0;
     let missingGold = 0;
     let guildTokensRequired = 0;
-    let guildTokensOwned = 0;
+    const guildTokensOwned = Math.max(0, Number(inventory["/items/guild_token"]) || 0);
+    let guildTokenCreditExchangeRequired = 0;
+    let guildTokenRow = null;
 
     for (const item of Array.isArray(totals) ? totals : []) {
       const itemHrid = item && item.itemHrid;
@@ -1569,8 +1927,30 @@ window.MwiGuildCreditVersion = "1.1.12";
       const missing = Math.max(0, required - owned);
       if (itemHrid === "/items/guild_token") {
         guildTokensRequired += required;
-        guildTokensOwned += owned;
-        rows.push({ itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null });
+        guildTokenRow = { itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null };
+        rows.push(guildTokenRow);
+        continue;
+      }
+      const guildTokenRule = useGuildTokensForMissingCredits && guildTokenCreditRules.get(itemHrid);
+      if (guildTokenRule) {
+        const batches = missing > 0 ? Math.ceil(missing / guildTokenRule.creditCount) : 0;
+        const requiredGuildTokens = batches * guildTokenRule.guildTokenCount;
+        guildTokenCreditExchangeRequired += requiredGuildTokens;
+        rows.push({
+          itemHrid,
+          required,
+          owned,
+          missing,
+          unitCost: null,
+          totalCost: null,
+          missingCost: null,
+          guildTokenExchange: {
+            ...guildTokenRule,
+            batches,
+            actualCredits: batches * guildTokenRule.creditCount,
+            requiredGuildTokens
+          }
+        });
         continue;
       }
       const unitCost = Number(unitCosts[itemHrid]);
@@ -1592,13 +1972,37 @@ window.MwiGuildCreditVersion = "1.1.12";
       });
     }
 
+    guildTokensRequired += guildTokenCreditExchangeRequired;
+    const guildTokensMissing = Math.max(0, guildTokensRequired - guildTokensOwned);
+    if (guildTokensRequired > 0) {
+      if (!guildTokenRow) {
+        guildTokenRow = {
+          itemHrid: "/items/guild_token",
+          required: guildTokensRequired,
+          owned: guildTokensOwned,
+          missing: guildTokensMissing,
+          unitCost: null,
+          totalCost: null,
+          missingCost: null
+        };
+        rows.push(guildTokenRow);
+      } else {
+        guildTokenRow.required = guildTokensRequired;
+        guildTokenRow.missing = guildTokensMissing;
+      }
+      guildTokenRow.shrineRequired = guildTokensRequired - guildTokenCreditExchangeRequired;
+      guildTokenRow.creditExchangeRequired = guildTokenCreditExchangeRequired;
+    }
+
     return {
       status: unpricedItemHrids.length ? "partial" : "ok",
       totalGold,
       missingGold,
       guildTokensRequired,
       guildTokensOwned,
-      guildTokensMissing: Math.max(0, guildTokensRequired - guildTokensOwned),
+      guildTokensMissing,
+      guildTokenCreditExchangeRequired,
+      useGuildTokensForMissingCredits,
       unpricedItemHrids,
       rows
     };
@@ -1678,10 +2082,10 @@ window.MwiGuildCreditVersion = "1.1.12";
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", useGuildTokensForMissingCredits: savedUiState.useGuildTokensForMissingCredits, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
-    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
+    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, useGuildTokensForMissingCredits: false, targetCredit: 1, upgradePlans: [] };
     try {
       const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(UI_STATE_STORAGE_KEY);
       if (!raw) return fallback;
@@ -1700,6 +2104,7 @@ window.MwiGuildCreditVersion = "1.1.12";
       return {
         collapsedCreditSections,
         guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
+        useGuildTokensForMissingCredits: stored.useGuildTokensForMissingCredits === true,
         targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
         upgradePlans
       };
@@ -1718,6 +2123,7 @@ window.MwiGuildCreditVersion = "1.1.12";
       pageWindow.localStorage && pageWindow.localStorage.setItem(UI_STATE_STORAGE_KEY, JSON.stringify({
         collapsedCreditSections: Array.from(state.collapsedCreditSections),
         guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
+        useGuildTokensForMissingCredits: state.useGuildTokensForMissingCredits,
         targetCredit: state.targetCredit,
         upgradePlans
       }));
@@ -2122,7 +2528,7 @@ window.MwiGuildCreditVersion = "1.1.12";
   }
 
   function hydrateBridgeData() {
-    const bridge = pageWindow.__mwiGuildCreditBridge;
+    const bridge = window.__mwiGuildCreditBridge;
     if (!bridge || typeof bridge !== "object") return false;
     let marketChanged = false;
     bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
@@ -2318,7 +2724,7 @@ window.MwiGuildCreditVersion = "1.1.12";
   }
 
   function openMarketplaceForItem(itemHrid, itemName) {
-    const bridge = pageWindow.__mwiGuildCreditBridge;
+    const bridge = window.__mwiGuildCreditBridge;
     try {
       // Our recommendation rows are unenhanced materials. Mirror the native
       // inventory action by explicitly using level 0 instead of leaving the
@@ -2629,9 +3035,19 @@ window.MwiGuildCreditVersion = "1.1.12";
     updateGuildShrineTargetActions(panel, entries);
   }
 
-  function renderUpgradeCostText(gold, guildTokens) {
+  function updateGuildTokenCreditPlanButton(panel) {
+    const button = panel.querySelector('[data-role="toggle-guild-token-credit-plan"]');
+    if (!button) return;
+    const active = state.useGuildTokensForMissingCredits;
+    button.dataset.active = String(active);
+    button.setAttribute("aria-pressed", String(active));
+    const indicator = button.querySelector(".mwi-token-credit-plan-indicator");
+    if (indicator) indicator.textContent = active ? "✓" : "";
+  }
+
+  function renderUpgradeCostText(gold, guildTokens, showZeroGuildTokens) {
     const parts = [`${core.formatCompactCost(gold)} ${t("gold")}`];
-    if (guildTokens > 0) parts.push(`${formatNumber(guildTokens)} ${t("guildTokens")}`);
+    if (guildTokens > 0 || showZeroGuildTokens) parts.push(`${formatNumber(guildTokens)} ${t("guildTokens")}`);
     return parts.join(" + ");
   }
 
@@ -2643,7 +3059,10 @@ window.MwiGuildCreditVersion = "1.1.12";
     const missingLabel = partial ? t("partialAfterInventory") : t("afterInventory");
     const inventoryNote = hasInventory ? "" : `<div class="mwi-upgrade-cost-note">${escapeHtml(t("inventoryUnavailable"))}</div>`;
     const priceNote = partial ? `<div class="mwi-upgrade-cost-note">${escapeHtml(t("noCreditPrice", { items: missingNames }))}</div>` : "";
-    return `<section class="mwi-upgrade-cost-summary"><div class="mwi-upgrade-cost-title">${escapeHtml(t("costSummary"))}</div><div><span>${escapeHtml(totalLabel)}</span><strong>${renderUpgradeCostText(estimate.totalGold, estimate.guildTokensRequired)}</strong></div><div><span>${escapeHtml(missingLabel)}</span><strong>${renderUpgradeCostText(estimate.missingGold, estimate.guildTokensMissing)}</strong></div>${inventoryNote}${priceNote}</section>`;
+    const tokenExchangeNote = estimate.useGuildTokensForMissingCredits
+      ? `<div class="mwi-upgrade-cost-note mwi-upgrade-token-note">${escapeHtml(t("guildTokenCreditPlanSummary", { count: formatNumber(estimate.guildTokenCreditExchangeRequired) }))}</div>`
+      : "";
+    return `<section class="mwi-upgrade-cost-summary"><div class="mwi-upgrade-cost-title">${escapeHtml(t("costSummary"))}</div><div><span>${escapeHtml(totalLabel)}</span><strong>${renderUpgradeCostText(estimate.totalGold, estimate.guildTokensRequired)}</strong></div><div><span>${escapeHtml(missingLabel)}</span><strong>${renderUpgradeCostText(estimate.missingGold, estimate.guildTokensMissing, estimate.useGuildTokensForMissingCredits)}</strong></div>${tokenExchangeNote}${inventoryNote}${priceNote}</section>`;
   }
 
   function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans, materialInventory) {
@@ -2653,17 +3072,23 @@ window.MwiGuildCreditVersion = "1.1.12";
       return `<span>${escapeHtml(label)} ${plan.startLevel} -> ${plan.targetLevel}</span>`;
     }).join(`<span class="mwi-plan-separator">${ui().locale === "zh-CN" ? "，" : ", "}</span>`);
     const estimateRows = Object.fromEntries((estimate && estimate.rows || []).map((row) => [row.itemHrid, row]));
-    const materials = [...totals].sort(materialOrder).map((item) => {
+    const displayTotals = estimate && estimate.rows.length
+      ? estimate.rows.map((row) => ({ itemHrid: row.itemHrid, count: row.required }))
+      : totals;
+    const materials = [...displayTotals].sort(materialOrder).map((item) => {
       const row = estimateRows[item.itemHrid];
       const inventoryText = row ? t("inventoryAndMissing", { owned: formatNumber(row.owned), missing: formatNumber(row.missing) }) : t("inventoryNotRead");
       const credit = CREDIT_TYPES.find(([creditItemHrid]) => creditItemHrid === item.itemHrid);
       const isGuildCredit = Boolean(credit);
       const plan = creditMaterialPlans && creditMaterialPlans[item.itemHrid];
+      const tokenExchange = row && row.guildTokenExchange;
       const accent = credit ? credit[1] : item.itemHrid === "/items/guild_token" ? "#e65d68" : "#7778b4";
       const conversionMarkup = row && row.missing > 0 && isGuildCredit
-        ? plan
-          ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`
-          : `<div class="mwi-material-plan-unavailable">${escapeHtml(t("optimalExchangeUnavailable"))}</div>`
+        ? tokenExchange
+          ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${iconMarkup("/items/guild_token", itemNameForMaterial("/items/guild_token"))}</span><span><b>${escapeHtml(itemNameForMaterial("/items/guild_token"))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory["/items/guild_token"]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("guildTokenExchangeNeeds"))}</small><strong>${formatNumber(tokenExchange.requiredGuildTokens)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: `${formatNumber(tokenExchange.guildTokenCount)} ${t("guildTokens")}`, credits: creditQuantity(tokenExchange.creditCount) }))}</span>`
+          : plan
+            ? `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`
+            : `<div class="mwi-material-plan-unavailable">${escapeHtml(t("optimalExchangeUnavailable"))}</div>`
         : "";
       const rowClass = item.itemHrid === "/items/guild_token" ? " mwi-material-row-token" : "";
       return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${conversionMarkup ? `<div class="mwi-material-plan">${conversionMarkup}</div>` : ""}</article>`;
@@ -2673,6 +3098,7 @@ window.MwiGuildCreditVersion = "1.1.12";
 
   async function refreshGuildUpgrade(panel) {
     const refreshId = ++state.upgradeRefreshId;
+    updateGuildTokenCreditPlanButton(panel);
     refreshOfficialItemNameCatalog();
     const status = panel.querySelector('[data-role="upgrade-status"]');
     const results = panel.querySelector('[data-role="upgrade-results"]');
@@ -2702,20 +3128,27 @@ window.MwiGuildCreditVersion = "1.1.12";
     }
     let estimate = null;
     let creditMaterialPlans = null;
-    let materialInventory = null;
+    let materialInventory = inventoryItemCounts();
     let snapshotFailed = false;
     try {
-      await loadSnapshot(false);
-      if (refreshId !== state.upgradeRefreshId) return;
-      materialInventory = inventoryItemCounts();
-      estimate = core.estimateGuildUpgradeCosts(result.totals, bestCreditUnitCosts(), materialInventory);
-      creditMaterialPlans = bestCreditMaterialPlans(estimate);
+      if (state.useGuildTokensForMissingCredits) {
+        estimate = core.estimateGuildUpgradeCosts(result.totals, {}, materialInventory, {
+          useGuildTokensForMissingCredits: true,
+          guildTokenCreditConversions: GUILD_TOKEN_CREDIT_CONVERSIONS
+        });
+      } else {
+        await loadSnapshot(false);
+        if (refreshId !== state.upgradeRefreshId) return;
+        estimate = core.estimateGuildUpgradeCosts(result.totals, bestCreditUnitCosts(), materialInventory);
+        creditMaterialPlans = bestCreditMaterialPlans(estimate);
+      }
     } catch (_) {
       snapshotFailed = true;
     }
     if (refreshId !== state.upgradeRefreshId) return;
     const hasInventory = Array.isArray(state.characterItems);
     const notices = [state.upgradePresetNotice || (state.guildBuffLevels ? t("mergedUpgradePlans", { count: formatNumber(result.plans.length) }) : t("unknownCurrentLevels"))];
+    if (state.useGuildTokensForMissingCredits) notices.push(t("guildTokenCreditPlanActive"));
     if (snapshotFailed) notices.push(t("snapshotFailed"));
     if (!hasInventory) notices.push(t("inventoryUnavailable"));
     status.textContent = notices.join(" ");
@@ -2772,7 +3205,7 @@ window.MwiGuildCreditVersion = "1.1.12";
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}#mwi-credit-optimizer .mwi-token-value-section{margin:10px 0;border:1px solid #3a7b70;border-top:3px solid #43c4ad;border-radius:6px;background:#203b3a;overflow:hidden}#mwi-credit-optimizer .mwi-token-value-heading{border-bottom:1px solid #3a7b70}#mwi-credit-optimizer .mwi-token-value-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}#mwi-credit-optimizer .mwi-token-value-list{display:grid;column-gap:var(--mwi-entry-gap);row-gap:0;margin-inline:-1px}#mwi-credit-optimizer .mwi-token-value-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;min-width:0;padding:8px;border-top:1px solid #315d58}#mwi-credit-optimizer .mwi-token-value-row .mwi-item-icon{width:21px;height:21px;flex:0 0 21px}#mwi-credit-optimizer .mwi-token-value-exchange{color:#d7f6ef;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-row .mwi-cost{font-size:12px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-unpriced{color:#ffd17c;font-size:11px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-upgrade-preset{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin:0 0 12px;padding:10px 11px;border:1px solid #3b8478;border-radius:9px;background:linear-gradient(135deg,#1f403d,#202f48);box-shadow:0 4px 14px #101d1c55}#mwi-credit-optimizer .mwi-upgrade-preset-copy{display:grid;gap:3px;min-width:0}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{color:#dffaf4;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-preset-copy small{color:#abd5cd;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{min-height:29px!important;padding:5px 8px!important;font-size:11px;white-space:nowrap;background:#43c4ad!important;color:#10201f!important}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button[data-domain="combat"]{background:#6ea9ff!important;color:#15233f!important}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button:disabled{background:#4d5968!important;color:#bec4ce!important;cursor:not-allowed}
         @container (max-width:960px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{flex:1 1 280px;min-width:0}}@container (max-width:620px){#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%}}
-        #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;gap:var(--mwi-entry-gap)}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:9px;align-items:end;padding:11px;border:1px solid #45486d;border-radius:8px;background:linear-gradient(135deg,#2c2e4d,#252640);box-shadow:0 4px 13px #13142555}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:36px;min-width:36px;padding:0!important;font-size:21px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:center;gap:9px;margin:12px 0 4px}#mwi-credit-optimizer .mwi-clear-upgrade-plans{background:#a04455!important;color:#fff!important}#mwi-credit-optimizer .mwi-clear-upgrade-plans:hover{background:#bd4d61!important}
+        #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;gap:var(--mwi-entry-gap)}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:9px;align-items:end;padding:11px;border:1px solid #45486d;border-radius:8px;background:linear-gradient(135deg,#2c2e4d,#252640);box-shadow:0 4px 13px #13142555}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:36px;min-width:36px;padding:0!important;font-size:21px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:center;gap:9px;margin:12px 0 4px}#mwi-credit-optimizer .mwi-clear-upgrade-plans{background:#a04455!important;color:#fff!important}#mwi-credit-optimizer .mwi-clear-upgrade-plans:hover{background:#bd4d61!important}#mwi-credit-optimizer .mwi-token-credit-plan-toggle{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;column-gap:9px;width:100%;margin:9px 0 4px;padding:9px 11px!important;border:1px solid #56597f!important;border-radius:8px!important;background:linear-gradient(135deg,#30314f,#292a46)!important;color:#e8e9f6!important;text-align:left}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"]{border-color:#43c4ad!important;background:linear-gradient(135deg,#20453f,#243e3c)!important;color:#e4fff8!important;box-shadow:0 0 0 1px #43c4ad33}#mwi-credit-optimizer .mwi-token-credit-plan-indicator{display:grid;place-items:center;width:24px;height:24px;border:2px solid #777aa4;border-radius:6px;background:#20213a;color:#10201f;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] .mwi-token-credit-plan-indicator{border-color:#77f3d0;background:#77f3d0}#mwi-credit-optimizer .mwi-token-credit-plan-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-token-credit-plan-copy strong{font-size:12px}#mwi-credit-optimizer .mwi-token-credit-plan-copy small{color:#bfc2de;font-size:10px;font-weight:500;line-height:1.35}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] small{color:#bce8de}
         #mwi-credit-optimizer .mwi-material-list{display:grid;gap:var(--mwi-entry-gap);margin-top:12px}.mwi-material-row{position:relative;align-self:start;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px;border:1px solid #45486d;border-left:3px solid var(--mwi-material-accent);border-radius:8px;background:linear-gradient(135deg,#292b48,#23243d);box-shadow:0 4px 13px #13142544}.mwi-material-row-token{min-height:0;padding:9px 11px;background:linear-gradient(135deg,#2b2c49,#24253f)}.mwi-material-credit{display:flex;align-items:center;gap:8px;min-width:0}.mwi-material-copy{min-width:0;display:grid;gap:2px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f4f5ff;font-weight:700}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-required{display:grid;justify-items:end;align-content:center;gap:1px;text-align:right}.mwi-material-required small{color:#aeb1d3;font-size:10px}.mwi-material-required strong{color:#77f3d0;font-size:18px;line-height:1.1}.mwi-material-plan{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:10px;border:1px solid #356c63;border-radius:7px;background:linear-gradient(135deg,#1f3e3c,#1d3736);overflow:hidden}.mwi-material-plan-item{grid-row:1/-1;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 0 8px 8px}.mwi-material-plan-icon{display:grid!important;place-items:center;flex:0 0 52px!important;width:52px!important;height:52px!important;min-width:52px!important;padding:0!important;border:1px solid #4da496;border-radius:7px;background:linear-gradient(135deg,#306b62,#275a53);box-shadow:inset 0 1px #7bd8c822,0 2px 5px #10232166}.mwi-material-plan-icon .mwi-market-item-link{width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;border:0!important;border-radius:7px!important}.mwi-material-plan-icon .mwi-item-icon{width:50px!important;height:50px!important;flex:0 0 50px!important;max-width:50px;max-height:50px;object-fit:contain}.mwi-material-plan-item>span:last-child{min-width:0;display:grid;gap:3px}.mwi-material-plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3fbf5;font-size:14px;line-height:1.15}.mwi-material-plan-item small{color:#afd4cd;font-size:12px;line-height:1.15}.mwi-material-plan-need{display:grid;justify-items:end;gap:1px;padding:8px 9px 0 0}.mwi-material-plan-need small{color:#afd4cd;font-size:10px}.mwi-material-plan-need strong{color:#77f3d0;font-size:17px;line-height:1}.mwi-material-plan-rate{grid-column:2;align-self:end;padding:0 9px 9px 0;color:#c5e3dd;font-size:10px;text-align:right;white-space:nowrap}.mwi-material-plan-unavailable{color:#ffd17c;font-size:11px}.mwi-plan-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:12px 0 8px;color:#d7d9ed;font-size:12px}.mwi-plan-summary span:not(.mwi-plan-separator){padding:4px 7px;border:1px solid #45486d;border-radius:999px;background:#292a46}.mwi-plan-separator{display:none}.mwi-upgrade-cost-summary{display:grid;gap:7px;margin:8px 0 10px;padding:11px 12px;border:1px solid #3d8d80;border-radius:8px;background:linear-gradient(135deg,#1d3d3b,#203b3a);box-shadow:0 5px 14px #101d1c55}.mwi-upgrade-cost-title{color:#b7e6dc;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note):not(.mwi-upgrade-cost-title){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:15px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link,#mwi-credit-optimizer .mwi-plugin-footer a{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover,#mwi-credit-optimizer .mwi-plugin-footer a:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @container (max-width:460px){#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-material-required{justify-items:start;text-align:left}#mwi-credit-optimizer .mwi-material-plan{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}#mwi-credit-optimizer .mwi-material-plan-item{grid-row:auto}#mwi-credit-optimizer .mwi-material-plan-need{justify-items:start;grid-column:1;padding:0 9px 4px}#mwi-credit-optimizer .mwi-material-plan-rate{grid-column:1;padding:0 9px 9px;text-align:left}}
         @media (max-width:430px){.mwi-material-plan{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}.mwi-material-plan-item{grid-row:auto}.mwi-material-plan-need{justify-items:start;grid-column:1;padding:0 9px 4px}.mwi-material-plan-rate{grid-column:1;padding:0 9px 9px;text-align:left}}
@@ -2799,6 +3232,7 @@ window.MwiGuildCreditVersion = "1.1.12";
         </section>
         <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
         <div class="mwi-upgrade-actions"><button data-role="add-upgrade-plan" type="button">${escapeHtml(t("addShrine"))}</button><button class="mwi-clear-upgrade-plans" data-role="clear-upgrade-plans" type="button">${escapeHtml(t("clearAll"))}</button></div>
+        <button class="mwi-token-credit-plan-toggle" data-role="toggle-guild-token-credit-plan" data-active="${String(state.useGuildTokensForMissingCredits)}" type="button" aria-pressed="${String(state.useGuildTokensForMissingCredits)}"><span class="mwi-token-credit-plan-indicator" aria-hidden="true">${state.useGuildTokensForMissingCredits ? "✓" : ""}</span><span class="mwi-token-credit-plan-copy"><strong>${escapeHtml(t("useGuildTokensForMissingCredits"))}</strong><small>${escapeHtml(t("useGuildTokensForMissingCreditsHint"))}</small></span></button>
         <div class="mwi-status" data-role="upgrade-status">${escapeHtml(t("waitingUpgradeRules"))}</div>
         <div data-role="upgrade-results"></div>
       </div>
@@ -2864,6 +3298,12 @@ window.MwiGuildCreditVersion = "1.1.12";
     });
     panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="clear-upgrade-plans"]').addEventListener("click", () => { clearGuildUpgradePlans(); persistPluginUiState(); refreshGuildUpgrade(panel); });
+    panel.querySelector('[data-role="toggle-guild-token-credit-plan"]').addEventListener("click", () => {
+      state.useGuildTokensForMissingCredits = !state.useGuildTokensForMissingCredits;
+      updateGuildTokenCreditPlanButton(panel);
+      persistPluginUiState();
+      refreshGuildUpgrade(panel);
+    });
     panel.querySelector('.mwi-upgrade-preset-buttons').addEventListener("click", (event) => {
       const button = event.target.closest('[data-role="set-guild-shrine-target"]');
       if (!button || button.disabled) return;

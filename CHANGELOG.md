@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.16] - 2026-08-01
+
+### Added
+
+- Added a shrine-planning toggle that converts every missing guild credit through the fixed guild-token exchange rates, merges those tokens into the total requirement and inventory gap, and replaces market-item recommendations with per-credit token exchange details.
+
+## [1.1.15] - 2026-07-31
+
+### Fixed
+
+- Added an isolated-world-safe native market DOM observer as a fallback data channel. Whenever the player opens or refreshes an item market page, it records that item's HRID, enhancement level, full visible ask/bid depth, source, and timestamp even if page-world WebSocket wrapping is unavailable.
+
+## [1.1.14] - 2026-07-31
+
+### Fixed
+
+- The production userscript now explicitly requests Tampermonkey's raw page sandbox before installing its passive WebSocket observer, avoiding isolated-world `unsafeWindow` proxy assignments that do not replace the game's real constructor.
+- Added machine-readable bridge diagnostics so live verification can prove which injection path ran and which market item, ask, bid, and timestamp were most recently observed.
+
+## [1.1.13] - 2026-07-31
+
+### Fixed
+
+- The production userscript now requests Tampermonkey's `unsafeWindow` bridge so its passive WebSocket observer is installed in the game page context and can receive native live market order-book updates.
+
 ## [1.1.12] - 2026-07-31
 
 ### Changed

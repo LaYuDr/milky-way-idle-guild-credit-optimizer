@@ -3,7 +3,8 @@
 
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
-  const bridge = page.__mwiGuildCreditBridge || (page.__mwiGuildCreditBridge = {
+  const marketDomApi = page.MwiGuildCreditMarketDom || window.MwiGuildCreditMarketDom;
+  const bridge = window.__mwiGuildCreditBridge || (window.__mwiGuildCreditBridge = {
     messages: [],
     itemDetails: null,
     guildBuffDetails: null,
@@ -17,18 +18,66 @@
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+  const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
+  const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
+  const DIAGNOSTICS_ATTRIBUTE = "data-mwi-credit-bridge-diagnostics";
+  const diagnostics = bridge.diagnostics && typeof bridge.diagnostics === "object"
+    ? bridge.diagnostics
+    : (bridge.diagnostics = {
+      scriptStartedAt: Date.now(),
+      injectionAttempted: false,
+      injectionReady: false,
+      installMode: "initializing",
+      observerActive: false,
+      messageCount: 0,
+      lastMessageAt: 0,
+      lastMessageType: "",
+      lastMarketItemHrid: "",
+      lastMarketLevels: null,
+      lastMarketReceivedAt: 0,
+      lastMarketSource: "",
+      domObserverActive: false,
+      domSnapshotCount: 0
+    });
 
-  function keepMarketData(message) {
+  function publishBridgeDiagnostics() {
+    const documentRef = window.document;
+    const root = documentRef && documentRef.documentElement;
+    if (!root || typeof root.setAttribute !== "function") return false;
+    try {
+      root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
+        ...diagnostics,
+        marketOrderBookRevision: bridge.marketOrderBookRevision
+      }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  publishBridgeDiagnostics();
+  if (window.document && !window.document.documentElement && typeof window.addEventListener === "function") {
+    window.addEventListener("DOMContentLoaded", publishBridgeDiagnostics, { once: true });
+  }
+
+  function keepMarketData(message, source) {
     if (!marketDataApi || !message || String(message.type || "") !== "market_item_order_books_updated") return;
     const update = marketDataApi.normalizeMarketOrderBooksUpdate(message);
     if (!update) return;
+    const normalizedSource = source === "market_dom" ? "market_dom" : "websocket";
+    const receivedAt = Date.now();
     const revision = Math.min(Number.MAX_SAFE_INTEGER, bridge.marketOrderBookRevision + 1);
     bridge.marketOrderBookRevision = revision;
     bridge.marketOrderBooks[update.itemHrid] = {
       update,
       revision,
-      receivedAt: Date.now()
+      receivedAt,
+      source: normalizedSource
     };
+    diagnostics.lastMarketItemHrid = update.itemHrid;
+    diagnostics.lastMarketLevels = update.levels;
+    diagnostics.lastMarketReceivedAt = receivedAt;
+    diagnostics.lastMarketSource = normalizedSource;
+    publishBridgeDiagnostics();
     if (typeof bridge.onMarketOrderBooksUpdated === "function") {
       try {
         bridge.onMarketOrderBooksUpdated();
@@ -175,8 +224,179 @@
     }
   }
 
+  function keepSocketMessage(rawMessage) {
+    if (typeof rawMessage !== "string") return;
+    bridge.messages.push(rawMessage);
+    if (bridge.messages.length > 80) bridge.messages.shift();
+    diagnostics.messageCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.messageCount + 1);
+    diagnostics.lastMessageAt = Date.now();
+    try {
+      const message = JSON.parse(rawMessage);
+      diagnostics.lastMessageType = String(message && message.type || "");
+      keepMarketData(message, "websocket");
+      keepGuildData(message);
+    } catch (_) {
+      diagnostics.lastMessageType = "non_json";
+      // Ignore non-JSON protocol frames.
+    }
+    publishBridgeDiagnostics();
+  }
+
+  let lastMarketDomSignature = "";
+  let marketDomScanScheduled = false;
+  let marketDomObserver = null;
+
+  function scanMarketDom() {
+    marketDomScanScheduled = false;
+    if (!marketDomApi || typeof marketDomApi.readMarketDomSnapshot !== "function") return false;
+    const snapshot = marketDomApi.readMarketDomSnapshot(window.document);
+    if (!snapshot || snapshot.signature === lastMarketDomSignature) return false;
+    const message = marketDomApi.createMarketMessage(snapshot);
+    if (!message) return false;
+    lastMarketDomSignature = snapshot.signature;
+    diagnostics.domSnapshotCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.domSnapshotCount + 1);
+    keepMarketData(message, "market_dom");
+    return true;
+  }
+
+  function scheduleMarketDomScan() {
+    if (marketDomScanScheduled) return;
+    marketDomScanScheduled = true;
+    const schedule = typeof window.setTimeout === "function"
+      ? window.setTimeout.bind(window)
+      : setTimeout;
+    schedule(scanMarketDom, 40);
+  }
+
+  function installMarketDomObserver() {
+    if (marketDomObserver || !marketDomApi || !window.document) return false;
+    const root = window.document.documentElement;
+    const Observer = window.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
+    if (!root || typeof Observer !== "function") return false;
+    marketDomObserver = new Observer(scheduleMarketDomScan);
+    marketDomObserver.observe(root, { subtree: true, childList: true, characterData: true });
+    bridge.marketDomObserverActive = true;
+    diagnostics.domObserverActive = true;
+    publishBridgeDiagnostics();
+    scheduleMarketDomScan();
+    return true;
+  }
+
+  if (!installMarketDomObserver() && typeof window.addEventListener === "function") {
+    window.addEventListener("DOMContentLoaded", installMarketDomObserver, { once: true });
+  }
+
+  // Tampermonkey can expose unsafeWindow through an isolated-world proxy whose
+  // expando assignments do not replace the game's real globals. Inject the
+  // socket wrapper into MAIN_WORLD and carry only string payloads back through
+  // DOM events, which are shared across the two worlds.
+  function installPageSocketTap(messageEventName, readyEventName) {
+    const dispatchReady = (active) => {
+      window.dispatchEvent(new CustomEvent(readyEventName, { detail: active ? "1" : "0" }));
+    };
+    const NativeWebSocket = window.WebSocket;
+    if (typeof NativeWebSocket !== "function") {
+      dispatchReady(false);
+      return;
+    }
+    if (NativeWebSocket.__mwiGuildCreditBridge === true) {
+      dispatchReady(true);
+      return;
+    }
+    const instrumentedSockets = new WeakSet();
+    const isOfficialSocket = (value) => {
+      try {
+        const url = new URL(String(value || ""));
+        return url.protocol === "wss:"
+          && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+      } catch (_) {
+        return false;
+      }
+    };
+    const instrumentSocket = (socket) => {
+      if (!socket || !isOfficialSocket(socket.url)
+        || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+        return socket;
+      }
+      instrumentedSockets.add(socket);
+      socket.addEventListener("message", (event) => {
+        if (typeof event.data !== "string") return;
+        window.dispatchEvent(new CustomEvent(messageEventName, { detail: event.data }));
+      });
+      return socket;
+    };
+    function ObservedWebSocket(...args) {
+      return instrumentSocket(new NativeWebSocket(...args));
+    }
+    ObservedWebSocket.prototype = NativeWebSocket.prototype;
+    try {
+      Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
+    } catch (_) {
+      // Static WebSocket constants are copied below when inheritance is blocked.
+    }
+    for (const constant of ["CONNECTING", "OPEN", "CLOSING", "CLOSED"]) {
+      if (constant in ObservedWebSocket) continue;
+      try {
+        Object.defineProperty(ObservedWebSocket, constant, {
+          configurable: true,
+          enumerable: true,
+          value: NativeWebSocket[constant]
+        });
+      } catch (_) {
+        // Missing constants do not affect socket construction or observation.
+      }
+    }
+    Object.defineProperty(ObservedWebSocket, "__mwiGuildCreditBridge", { value: true });
+    try {
+      window.WebSocket = ObservedWebSocket;
+      dispatchReady(window.WebSocket === ObservedWebSocket);
+    } catch (_) {
+      dispatchReady(false);
+    }
+  }
+
+  let pageSocketTapInstalled = false;
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener(SOCKET_MESSAGE_EVENT, (event) => {
+      keepSocketMessage(event && event.detail);
+    });
+    window.addEventListener(SOCKET_READY_EVENT, (event) => {
+      pageSocketTapInstalled = Boolean(event && event.detail === "1");
+      diagnostics.injectionReady = pageSocketTapInstalled;
+      diagnostics.installMode = pageSocketTapInstalled ? "gm_add_element_main_world" : "gm_add_element_rejected";
+      diagnostics.observerActive = pageSocketTapInstalled;
+      publishBridgeDiagnostics();
+    }, { once: true });
+  }
+  if (typeof GM_addElement === "function") {
+    diagnostics.injectionAttempted = true;
+    diagnostics.installMode = "gm_add_element_pending";
+    publishBridgeDiagnostics();
+    try {
+      const source = `;(${installPageSocketTap.toString()})(${JSON.stringify(SOCKET_MESSAGE_EVENT)},${JSON.stringify(SOCKET_READY_EVENT)});`;
+      const injected = GM_addElement("script", { textContent: source });
+      if (injected && typeof injected.remove === "function") injected.remove();
+    } catch (error) {
+      diagnostics.installMode = "gm_add_element_error";
+      diagnostics.injectionError = String(error && error.message || error || "unknown");
+      publishBridgeDiagnostics();
+      // Fall back to unsafeWindow for userscript managers without GM_addElement.
+    }
+  }
+  if (pageSocketTapInstalled) {
+    bridge.marketObserverActive = true;
+    diagnostics.observerActive = true;
+    publishBridgeDiagnostics();
+    return;
+  }
+
   const NativeWebSocket = page.WebSocket;
-  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) return;
+  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) {
+    diagnostics.installMode = NativeWebSocket ? "existing_wrapper" : "websocket_unavailable";
+    diagnostics.observerActive = Boolean(NativeWebSocket && NativeWebSocket.__mwiGuildCreditBridge);
+    publishBridgeDiagnostics();
+    return;
+  }
   const instrumentedSockets = new WeakSet();
 
   function instrumentSocket(socket) {
@@ -186,16 +406,7 @@
     }
     instrumentedSockets.add(socket);
     socket.addEventListener("message", (event) => {
-      if (typeof event.data !== "string") return;
-      bridge.messages.push(event.data);
-      if (bridge.messages.length > 80) bridge.messages.shift();
-      try {
-        const message = JSON.parse(event.data);
-        keepMarketData(message);
-        keepGuildData(message);
-      } catch (_) {
-        // Ignore non-JSON protocol frames.
-      }
+      keepSocketMessage(event.data);
     });
     return socket;
   }
@@ -208,4 +419,8 @@
   ObservedWebSocket.__mwiGuildCreditBridge = true;
   page.WebSocket = ObservedWebSocket;
   bridge.marketObserverActive = true;
+  diagnostics.installMode = page === window ? "direct_main_world" : "unsafe_window_fallback";
+  diagnostics.injectionReady = page.WebSocket === ObservedWebSocket;
+  diagnostics.observerActive = true;
+  publishBridgeDiagnostics();
 })();
