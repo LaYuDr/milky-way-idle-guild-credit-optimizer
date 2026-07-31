@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.12] - 2026-07-31
+
+### Changed
+
+- Rebuilt the official userscript entry points from the completed live-market reconciliation implementation so distributed builds consistently report version 1.1.12.
+
 ## [1.1.11] - 2026-07-26
 
 ### Changed

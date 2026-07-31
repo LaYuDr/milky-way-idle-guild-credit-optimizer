@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.11";
+window.MwiGuildCreditVersion = "1.1.12";
 
 (function (root, factory) {
   const api = factory();
