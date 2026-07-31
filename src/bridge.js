@@ -12,11 +12,13 @@
     guildShrineLevels: null,
     guildShrineDetails: null,
     characterItems: null,
+    characterItemsRevision: 0,
     marketOrderBooks: Object.create(null),
     marketOrderBookRevision: 0
   });
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
+  if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
@@ -32,6 +34,8 @@
       messageCount: 0,
       lastMessageAt: 0,
       lastMessageType: "",
+      lastCharacterItemsUpdatedAt: 0,
+      lastCharacterItemsSource: "",
       lastMarketItemHrid: "",
       lastMarketLevels: null,
       lastMarketReceivedAt: 0,
@@ -47,6 +51,7 @@
     try {
       root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
         ...diagnostics,
+        characterItemsRevision: bridge.characterItemsRevision,
         marketOrderBookRevision: bridge.marketOrderBookRevision
       }));
       return true;
@@ -182,11 +187,91 @@
     return merged;
   }
 
+  function characterItemKey(record) {
+    if (!record || typeof record !== "object") return "";
+    if (typeof record.hash === "string" && record.hash) return `hash:${record.hash}`;
+    if (typeof record.itemHrid !== "string" || !record.itemHrid.startsWith("/items/")) return "";
+    if (typeof record.itemLocationHrid !== "string" || !record.itemLocationHrid.startsWith("/item_locations/")) return "";
+    const enhancementLevel = Number(record.enhancementLevel) || 0;
+    return `stack:${record.itemLocationHrid}::${record.itemHrid}::${enhancementLevel}`;
+  }
+
+  function characterItemCount(record) {
+    const count = Number(record && record.count);
+    return Number.isFinite(count) ? count : null;
+  }
+
+  function characterItemsEqual(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    const leftCounts = new Map();
+    for (const record of left) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (key && count !== null) leftCounts.set(key, count);
+    }
+    if (leftCounts.size !== right.length) return false;
+    for (const record of right) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (!key || count === null || leftCounts.get(key) !== count) return false;
+    }
+    return true;
+  }
+
+  function replaceCharacterItems(incoming) {
+    if (!Array.isArray(incoming)) return false;
+    const next = incoming.filter((record) => {
+      const count = characterItemCount(record);
+      return characterItemKey(record) && count !== null && count !== 0;
+    });
+    if (characterItemsEqual(bridge.characterItems, next)) return false;
+    bridge.characterItems = next;
+    return true;
+  }
+
+  // Runtime inventory changes arrive as endCharacterItems. The game applies
+  // those records by stack hash and deletes a stack when its count reaches 0.
+  function mergeCharacterItems(incoming) {
+    if (!Array.isArray(incoming) || !incoming.length) return false;
+    const itemMap = new Map();
+    for (const record of bridge.characterItems || []) {
+      const key = characterItemKey(record);
+      if (key) itemMap.set(key, record);
+    }
+    for (const record of incoming) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (!key || count === null) continue;
+      if (count === 0) itemMap.delete(key);
+      else itemMap.set(key, record);
+    }
+    const next = Array.from(itemMap.values());
+    if (characterItemsEqual(bridge.characterItems, next)) return false;
+    bridge.characterItems = next;
+    return true;
+  }
+
+  function publishCharacterItemsUpdate(source) {
+    bridge.characterItemsRevision = Math.min(Number.MAX_SAFE_INTEGER, bridge.characterItemsRevision + 1);
+    diagnostics.lastCharacterItemsUpdatedAt = Date.now();
+    diagnostics.lastCharacterItemsSource = source;
+    publishBridgeDiagnostics();
+    if (typeof bridge.onCharacterItemsUpdated === "function") {
+      try {
+        bridge.onCharacterItemsUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
+
   function keepGuildData(message) {
     if (!message || typeof message !== "object") return;
     const visited = new Set();
     const pending = [message];
     let scanned = 0;
+    let characterItemsChanged = false;
+    let characterItemsSource = "";
     while (pending.length && scanned < 400) {
       const value = pending.pop();
       if (!value || typeof value !== "object" || visited.has(value)) continue;
@@ -206,6 +291,7 @@
         value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
       ];
       const characterItems = value.characterItems;
+      const endCharacterItems = value.endCharacterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
@@ -219,9 +305,17 @@
           bridge.guildShrineDetails = mergeGuildShrineLevels(bridge.guildShrineDetails, guildShrineDetails);
         }
       }
-      if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
+      if (Array.isArray(characterItems) && replaceCharacterItems(characterItems)) {
+        characterItemsChanged = true;
+        characterItemsSource = "snapshot";
+      }
+      if (Array.isArray(endCharacterItems) && mergeCharacterItems(endCharacterItems)) {
+        characterItemsChanged = true;
+        characterItemsSource = "incremental";
+      }
       for (const child of Object.values(value)) pending.push(child);
     }
+    if (characterItemsChanged) publishCharacterItemsUpdate(characterItemsSource);
   }
 
   function keepSocketMessage(rawMessage) {

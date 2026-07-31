@@ -52,7 +52,7 @@
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", useGuildTokensForMissingCredits: savedUiState.useGuildTokensForMissingCredits, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", useGuildTokensForMissingCredits: savedUiState.useGuildTokensForMissingCredits, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, useGuildTokensForMissingCredits: false, targetCredit: 1, upgradePlans: [] };
@@ -502,12 +502,23 @@
     if (!bridge || typeof bridge !== "object") return false;
     let marketChanged = false;
     bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
+    bridge.onCharacterItemsUpdated = hydrateBridgeData;
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
     setGuildShrineDetailsFrom(bridge);
-    setCharacterItems(bridge.characterItems);
+    const characterItemsRevision = Number(bridge.characterItemsRevision);
+    if (Number.isSafeInteger(characterItemsRevision)) {
+      if (characterItemsRevision > state.characterItemsBridgeRevision) {
+        if (setCharacterItems(bridge.characterItems)) scheduleInventoryDataRefresh();
+        state.characterItemsBridgeRevision = characterItemsRevision;
+      } else if (!state.characterItems) {
+        setCharacterItems(bridge.characterItems);
+      }
+    } else {
+      setCharacterItems(bridge.characterItems);
+    }
     const bridgeRevision = Number(bridge.marketOrderBookRevision);
     if (Number.isSafeInteger(bridgeRevision) && bridgeRevision > state.marketBridgeRevision) {
       const records = Object.values(bridge.marketOrderBooks || {})
@@ -534,7 +545,10 @@
         marketChanged = rememberLiveMarketUpdate(update) || marketChanged;
       }
     }
-    if (Array.isArray(bridge.messages)) {
+    // Current bridges already reconcile characterItems snapshots with
+    // endCharacterItems deltas. Only replay raw messages for an older bridge;
+    // otherwise an old initialization frame could overwrite the live array.
+    if (Array.isArray(bridge.messages) && !Number.isSafeInteger(characterItemsRevision)) {
       for (let index = bridge.messages.length - 1; index >= 0; index -= 1) {
         const rawMessage = bridge.messages[index];
         try {
@@ -1416,6 +1430,17 @@
       if (state.panel && state.panel.isConnected && !state.panel.hidden) {
         if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
         else refreshPanel(state.panel);
+      }
+      scheduleGuildExchangeAdvisor(true);
+    }, 120);
+  }
+
+  function scheduleInventoryDataRefresh() {
+    window.clearTimeout(state.inventoryDataRefreshTimer);
+    state.inventoryDataRefreshTimer = window.setTimeout(() => {
+      state.inventoryDataRefreshTimer = null;
+      if (state.panel && state.panel.isConnected && !state.panel.hidden && state.panel.dataset.activeView === "upgrade") {
+        refreshGuildUpgrade(state.panel);
       }
       scheduleGuildExchangeAdvisor(true);
     }, 120);

@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.17] - 2026-08-01
+
+### Fixed
+
+- Shrine-plan inventory now follows the game's `endCharacterItems` WebSocket deltas in real time, merging stacks by the native item hash and removing zero-count stacks.
+- Visible shrine plans and guild-exchange advice now recalculate after an inventory revision instead of continuing to display the initialization snapshot.
+
 ## [1.1.16] - 2026-08-01
 
 ### Added

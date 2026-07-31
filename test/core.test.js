@@ -817,6 +817,59 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.messages.length, 1);
 });
 
+test("正式版桥接按游戏原生 endCharacterItems 增量实时更新库存", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {
+    constructor(url) { this.url = url; this.listeners = new Map(); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    receive(data) { this.listeners.get("message")({ data }); }
+  }
+  const page = { WebSocket: FakeWebSocket };
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number });
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
+  socket.receive(JSON.stringify({ payload: { characterItems: [
+    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 10750 },
+    { hash: "1::/item_locations/inventory::/items/green_guild_credit::0", itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 6000 }
+  ] } }));
+  const bridge = page.__mwiGuildCreditBridge;
+  assert.equal(bridge.characterItemsRevision, 1);
+  let callbackCount = 0;
+  bridge.onCharacterItemsUpdated = () => { callbackCount += 1; };
+
+  socket.receive(JSON.stringify({ type: "action_type_consumable_slots_updated", endCharacterItems: [
+    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 8450 }
+  ] }));
+  assert.equal(bridge.characterItems.find((item) => item.itemHrid === "/items/guild_token").count, 8450);
+  assert.equal(bridge.characterItems.find((item) => item.itemHrid === "/items/green_guild_credit").count, 6000);
+  assert.equal(bridge.characterItemsRevision, 2);
+  assert.equal(callbackCount, 1);
+  assert.equal(bridge.diagnostics.lastCharacterItemsSource, "incremental");
+
+  socket.receive(JSON.stringify({ type: "items_updated", payload: { endCharacterItems: [
+    { hash: "1::/item_locations/inventory::/items/green_guild_credit::0", itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 0 }
+  ] } }));
+  assert.equal(bridge.characterItems.some((item) => item.itemHrid === "/items/green_guild_credit"), false);
+  assert.equal(bridge.characterItemsRevision, 3);
+  assert.equal(callbackCount, 2);
+
+  socket.receive(JSON.stringify({ type: "items_updated", endCharacterItems: [
+    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 8450 }
+  ] }));
+  assert.equal(bridge.characterItemsRevision, 3);
+  assert.equal(callbackCount, 2);
+});
+
+test("正式版库存修订会触发神龛计划与兑换顾问刷新", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  assert.match(source, /bridge\.onCharacterItemsUpdated = hydrateBridgeData/);
+  assert.match(source, /characterItemsRevision > state\.characterItemsBridgeRevision/);
+  assert.match(source, /setCharacterItems\(bridge\.characterItems\)\) scheduleInventoryDataRefresh\(\)/);
+  assert.match(source, /function scheduleInventoryDataRefresh\(\)/);
+  assert.match(source, /refreshGuildUpgrade\(state\.panel\)/);
+  assert.match(source, /scheduleGuildExchangeAdvisor\(true\)/);
+  assert.match(source, /!Number\.isSafeInteger\(characterItemsRevision\)/);
+});
+
 test("正式版桥接被动保存玩家打开商品时收到的实时市场价格", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {

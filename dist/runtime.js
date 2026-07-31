@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.16";
+window.MwiGuildCreditVersion = "1.1.17";
 
 (function (root, factory) {
   const api = factory();
@@ -619,11 +619,13 @@ window.MwiGuildCreditVersion = "1.1.16";
     guildShrineLevels: null,
     guildShrineDetails: null,
     characterItems: null,
+    characterItemsRevision: 0,
     marketOrderBooks: Object.create(null),
     marketOrderBookRevision: 0
   });
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
+  if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
@@ -639,6 +641,8 @@ window.MwiGuildCreditVersion = "1.1.16";
       messageCount: 0,
       lastMessageAt: 0,
       lastMessageType: "",
+      lastCharacterItemsUpdatedAt: 0,
+      lastCharacterItemsSource: "",
       lastMarketItemHrid: "",
       lastMarketLevels: null,
       lastMarketReceivedAt: 0,
@@ -654,6 +658,7 @@ window.MwiGuildCreditVersion = "1.1.16";
     try {
       root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
         ...diagnostics,
+        characterItemsRevision: bridge.characterItemsRevision,
         marketOrderBookRevision: bridge.marketOrderBookRevision
       }));
       return true;
@@ -789,11 +794,91 @@ window.MwiGuildCreditVersion = "1.1.16";
     return merged;
   }
 
+  function characterItemKey(record) {
+    if (!record || typeof record !== "object") return "";
+    if (typeof record.hash === "string" && record.hash) return `hash:${record.hash}`;
+    if (typeof record.itemHrid !== "string" || !record.itemHrid.startsWith("/items/")) return "";
+    if (typeof record.itemLocationHrid !== "string" || !record.itemLocationHrid.startsWith("/item_locations/")) return "";
+    const enhancementLevel = Number(record.enhancementLevel) || 0;
+    return `stack:${record.itemLocationHrid}::${record.itemHrid}::${enhancementLevel}`;
+  }
+
+  function characterItemCount(record) {
+    const count = Number(record && record.count);
+    return Number.isFinite(count) ? count : null;
+  }
+
+  function characterItemsEqual(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    const leftCounts = new Map();
+    for (const record of left) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (key && count !== null) leftCounts.set(key, count);
+    }
+    if (leftCounts.size !== right.length) return false;
+    for (const record of right) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (!key || count === null || leftCounts.get(key) !== count) return false;
+    }
+    return true;
+  }
+
+  function replaceCharacterItems(incoming) {
+    if (!Array.isArray(incoming)) return false;
+    const next = incoming.filter((record) => {
+      const count = characterItemCount(record);
+      return characterItemKey(record) && count !== null && count !== 0;
+    });
+    if (characterItemsEqual(bridge.characterItems, next)) return false;
+    bridge.characterItems = next;
+    return true;
+  }
+
+  // Runtime inventory changes arrive as endCharacterItems. The game applies
+  // those records by stack hash and deletes a stack when its count reaches 0.
+  function mergeCharacterItems(incoming) {
+    if (!Array.isArray(incoming) || !incoming.length) return false;
+    const itemMap = new Map();
+    for (const record of bridge.characterItems || []) {
+      const key = characterItemKey(record);
+      if (key) itemMap.set(key, record);
+    }
+    for (const record of incoming) {
+      const key = characterItemKey(record);
+      const count = characterItemCount(record);
+      if (!key || count === null) continue;
+      if (count === 0) itemMap.delete(key);
+      else itemMap.set(key, record);
+    }
+    const next = Array.from(itemMap.values());
+    if (characterItemsEqual(bridge.characterItems, next)) return false;
+    bridge.characterItems = next;
+    return true;
+  }
+
+  function publishCharacterItemsUpdate(source) {
+    bridge.characterItemsRevision = Math.min(Number.MAX_SAFE_INTEGER, bridge.characterItemsRevision + 1);
+    diagnostics.lastCharacterItemsUpdatedAt = Date.now();
+    diagnostics.lastCharacterItemsSource = source;
+    publishBridgeDiagnostics();
+    if (typeof bridge.onCharacterItemsUpdated === "function") {
+      try {
+        bridge.onCharacterItemsUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
+
   function keepGuildData(message) {
     if (!message || typeof message !== "object") return;
     const visited = new Set();
     const pending = [message];
     let scanned = 0;
+    let characterItemsChanged = false;
+    let characterItemsSource = "";
     while (pending.length && scanned < 400) {
       const value = pending.pop();
       if (!value || typeof value !== "object" || visited.has(value)) continue;
@@ -813,6 +898,7 @@ window.MwiGuildCreditVersion = "1.1.16";
         value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
       ];
       const characterItems = value.characterItems;
+      const endCharacterItems = value.endCharacterItems;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
@@ -826,9 +912,17 @@ window.MwiGuildCreditVersion = "1.1.16";
           bridge.guildShrineDetails = mergeGuildShrineLevels(bridge.guildShrineDetails, guildShrineDetails);
         }
       }
-      if (Array.isArray(characterItems)) bridge.characterItems = characterItems;
+      if (Array.isArray(characterItems) && replaceCharacterItems(characterItems)) {
+        characterItemsChanged = true;
+        characterItemsSource = "snapshot";
+      }
+      if (Array.isArray(endCharacterItems) && mergeCharacterItems(endCharacterItems)) {
+        characterItemsChanged = true;
+        characterItemsSource = "incremental";
+      }
       for (const child of Object.values(value)) pending.push(child);
     }
+    if (characterItemsChanged) publishCharacterItemsUpdate(characterItemsSource);
   }
 
   function keepSocketMessage(rawMessage) {
@@ -2082,7 +2176,7 @@ window.MwiGuildCreditVersion = "1.1.16";
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", useGuildTokensForMissingCredits: savedUiState.useGuildTokensForMissingCredits, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", useGuildTokensForMissingCredits: savedUiState.useGuildTokensForMissingCredits, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, useGuildTokensForMissingCredits: false, targetCredit: 1, upgradePlans: [] };
@@ -2532,12 +2626,23 @@ window.MwiGuildCreditVersion = "1.1.16";
     if (!bridge || typeof bridge !== "object") return false;
     let marketChanged = false;
     bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
+    bridge.onCharacterItemsUpdated = hydrateBridgeData;
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
     setGuildShrineDetailsFrom(bridge);
-    setCharacterItems(bridge.characterItems);
+    const characterItemsRevision = Number(bridge.characterItemsRevision);
+    if (Number.isSafeInteger(characterItemsRevision)) {
+      if (characterItemsRevision > state.characterItemsBridgeRevision) {
+        if (setCharacterItems(bridge.characterItems)) scheduleInventoryDataRefresh();
+        state.characterItemsBridgeRevision = characterItemsRevision;
+      } else if (!state.characterItems) {
+        setCharacterItems(bridge.characterItems);
+      }
+    } else {
+      setCharacterItems(bridge.characterItems);
+    }
     const bridgeRevision = Number(bridge.marketOrderBookRevision);
     if (Number.isSafeInteger(bridgeRevision) && bridgeRevision > state.marketBridgeRevision) {
       const records = Object.values(bridge.marketOrderBooks || {})
@@ -2564,7 +2669,10 @@ window.MwiGuildCreditVersion = "1.1.16";
         marketChanged = rememberLiveMarketUpdate(update) || marketChanged;
       }
     }
-    if (Array.isArray(bridge.messages)) {
+    // Current bridges already reconcile characterItems snapshots with
+    // endCharacterItems deltas. Only replay raw messages for an older bridge;
+    // otherwise an old initialization frame could overwrite the live array.
+    if (Array.isArray(bridge.messages) && !Number.isSafeInteger(characterItemsRevision)) {
       for (let index = bridge.messages.length - 1; index >= 0; index -= 1) {
         const rawMessage = bridge.messages[index];
         try {
@@ -3446,6 +3554,17 @@ window.MwiGuildCreditVersion = "1.1.16";
       if (state.panel && state.panel.isConnected && !state.panel.hidden) {
         if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
         else refreshPanel(state.panel);
+      }
+      scheduleGuildExchangeAdvisor(true);
+    }, 120);
+  }
+
+  function scheduleInventoryDataRefresh() {
+    window.clearTimeout(state.inventoryDataRefreshTimer);
+    state.inventoryDataRefreshTimer = window.setTimeout(() => {
+      state.inventoryDataRefreshTimer = null;
+      if (state.panel && state.panel.isConnected && !state.panel.hidden && state.panel.dataset.activeView === "upgrade") {
+        refreshGuildUpgrade(state.panel);
       }
       scheduleGuildExchangeAdvisor(true);
     }, 120);
