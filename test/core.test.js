@@ -7,6 +7,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../src/core.js");
 const marketDataApi = require("../src/market-data.js");
+const marketDomApi = require("../src/market-dom.js");
 const itemNameCatalogApi = require("../src/item-name-catalog.js");
 const releaseInfoApi = require("../src/release-info.js");
 const localizationApi = require("../src/localization.js");
@@ -16,6 +17,7 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.locale, "en");
   assert.equal(localizer.t("panelTitle"), "Guild Assistant");
   assert.equal(localizer.t("setGuildLifeTarget"), "Set guild building levels as targets (Life)");
+  assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Exchange every missing credit with guild tokens");
   assert.equal(localizer.quantity("itemQuantity", 1), "1 item");
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
@@ -28,6 +30,7 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.locale, "zh-CN");
   assert.equal(localizer.t("panelTitle"), "公会助手");
   assert.equal(localizer.t("guildTargetComplete", { domain: "生活" }), "当前已达到最大等级（生活）。");
+  assert.equal(localizer.t("guildTokenCreditPlanSummary", { count: "1,200" }), "其中 1,200 公会代币用于兑换信用点。");
   assert.equal(localizer.quantity("itemQuantity", 4), "4 个");
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
 });
@@ -72,6 +75,77 @@ test("实时市场订单簿提取最低卖价、最高买价并保留无报价�
   assert.equal(update.itemHrid, "/items/beast_hide");
   assert.deepEqual({ ...update.levels["0"] }, { a: 51, b: 50 });
   assert.deepEqual({ ...update.levels["1"] }, { a: -1, b: -1 });
+});
+
+test("原生市场 DOM 价格支持完整数值与 K/M/B/T 缩写", () => {
+  assert.equal(marketDomApi.parseCompactMarketValue("2,450"), 2450);
+  assert.equal(marketDomApi.parseCompactMarketValue("2400K"), 2400000);
+  assert.equal(marketDomApi.parseCompactMarketValue("2.35M"), 2350000);
+  assert.equal(marketDomApi.parseCompactMarketValue("1.2B"), 1200000000);
+  assert.equal(marketDomApi.parseCompactMarketValue("-"), null);
+});
+
+test("原生市场 DOM 兜底会识别商品 HRID 并保留完整 ask/bid 深度", () => {
+  const row = (quantity, price) => ({
+    querySelectorAll(selector) {
+      return selector === "td" ? [{ textContent: quantity }, { textContent: price }] : [];
+    }
+  });
+  const table = (action, entries) => ({
+    querySelectorAll(selector) {
+      if (selector === "button") return [{ textContent: action }];
+      if (selector === "tbody tr") return entries.map(([quantity, price]) => row(quantity, price));
+      return [];
+    },
+    querySelector() {
+      return null;
+    }
+  });
+  const currentItem = {
+    querySelector(selector) {
+      if (selector.includes("Item_itemContainer")) {
+        return {
+          getAttribute(name) {
+            return name === "href"
+              ? "/static/media/items_sprite.svg#basic_brewing_charm"
+              : null;
+          }
+        };
+      }
+      return null;
+    }
+  };
+  const booksContainer = {
+    querySelectorAll() {
+      return [
+        table("购买", [["7", "2400K"], ["1", "2450K"]]),
+        table("出售", [["10", "2350K"], ["2", "2300K"]])
+      ];
+    }
+  };
+  const documentRef = {
+    querySelector(selector) {
+      if (selector.includes("MarketplacePanel_currentItem")) return currentItem;
+      if (selector.includes("MarketplacePanel_orderBooksContainer")) return booksContainer;
+      return null;
+    }
+  };
+  const snapshot = marketDomApi.readMarketDomSnapshot(documentRef);
+  assert.equal(snapshot.itemHrid, "/items/basic_brewing_charm");
+  assert.equal(snapshot.enhancementLevel, 0);
+  assert.deepEqual(snapshot.asks, [
+    { price: 2400000, quantity: 7 },
+    { price: 2450000, quantity: 1 }
+  ]);
+  assert.deepEqual(snapshot.bids, [
+    { price: 2350000, quantity: 10 },
+    { price: 2300000, quantity: 2 }
+  ]);
+  const update = marketDataApi.normalizeMarketOrderBooksUpdate(
+    marketDomApi.createMarketMessage(snapshot)
+  );
+  assert.equal(update.levels["0"].a, 2400000);
+  assert.equal(update.levels["0"].b, 2350000);
 });
 
 test("实时市场价格覆盖历史 API，并避免 API 与 WebSocket 并发时过早清理", () => {
@@ -587,6 +661,57 @@ test("神龛升级分别计算全部信用点成本与扣除库存后的缺口�
   });
 });
 
+test("神龛信用点缺口可全部改用公会代币并合并到代币总需求", () => {
+  const estimate = core.estimateGuildUpgradeCosts([
+    { itemHrid: "/items/guild_token", count: 1600 },
+    { itemHrid: "/items/green_guild_credit", count: 12001 },
+    { itemHrid: "/items/white_guild_credit", count: 6000 },
+    { itemHrid: "/items/blue_guild_credit", count: 6000 }
+  ], {
+    "/items/green_guild_credit": 200,
+    "/items/white_guild_credit": 700,
+    "/items/blue_guild_credit": 800
+  }, {
+    "/items/guild_token": 10750,
+    "/items/green_guild_credit": 6000,
+    "/items/white_guild_credit": 0,
+    "/items/blue_guild_credit": 98000
+  }, {
+    useGuildTokensForMissingCredits: true,
+    guildTokenCreditConversions: [
+      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+      { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
+      { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 }
+    ]
+  });
+  assert.equal(estimate.status, "ok");
+  assert.equal(estimate.totalGold, 0);
+  assert.equal(estimate.missingGold, 0);
+  assert.equal(estimate.guildTokenCreditExchangeRequired, 1201);
+  assert.equal(estimate.guildTokensRequired, 2801);
+  assert.equal(estimate.guildTokensMissing, 0);
+  assert.deepEqual(estimate.rows.find((row) => row.itemHrid === "/items/guild_token"), {
+    itemHrid: "/items/guild_token",
+    required: 2801,
+    owned: 10750,
+    missing: 0,
+    unitCost: null,
+    totalCost: null,
+    missingCost: null,
+    shrineRequired: 1600,
+    creditExchangeRequired: 1201
+  });
+  assert.deepEqual(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").guildTokenExchange, {
+    creditItemHrid: "/items/green_guild_credit",
+    guildTokenCount: 1,
+    creditCount: 10,
+    batches: 601,
+    actualCredits: 6010,
+    requiredGuildTokens: 601
+  });
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit").guildTokenExchange.requiredGuildTokens, 0);
+});
+
 test("神龛升级缺少信用点价格时不伪造总价", () => {
   const estimate = core.estimateGuildUpgradeCosts([
     { itemHrid: "/items/red_guild_credit", count: 10 }
@@ -731,6 +856,112 @@ test("正式版桥接只监听官方游戏 WebSocket", () => {
   assert.equal(gameSocket.listeners.has("message"), true);
 });
 
+test("正式版桥接在 unsafeWindow 代理隔离时注入游戏主世界", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class PageWebSocket {
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+    receive(data) {
+      this.listeners.get("message")({ data });
+    }
+  }
+  class SandboxWebSocket {}
+  class FakeCustomEvent {
+    constructor(type, options) {
+      this.type = type;
+      this.detail = options && options.detail;
+    }
+  }
+  const listeners = new Map();
+  const addEventListener = (type, listener) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(listener);
+  };
+  const dispatchEvent = (event) => {
+    for (const listener of listeners.get(event.type) || []) listener(event);
+    return true;
+  };
+  const page = { WebSocket: PageWebSocket, addEventListener, dispatchEvent };
+  const sandboxWindow = {
+    WebSocket: SandboxWebSocket,
+    MwiGuildCreditMarketData: marketDataApi,
+    addEventListener,
+    dispatchEvent
+  };
+  const pageContext = vm.createContext({
+    window: page,
+    CustomEvent: FakeCustomEvent,
+    JSON,
+    Map,
+    Object,
+    Set,
+    WeakSet,
+    URL,
+    String,
+    Array,
+    Date,
+    Number
+  });
+  const proxyExpando = Object.create(null);
+  const isolatedUnsafeWindow = new Proxy(page, {
+    get(target, key) {
+      return Object.prototype.hasOwnProperty.call(proxyExpando, key) ? proxyExpando[key] : target[key];
+    },
+    set(_target, key, value) {
+      proxyExpando[key] = value;
+      return true;
+    }
+  });
+  vm.runInNewContext(bridgeSource, {
+    window: sandboxWindow,
+    unsafeWindow: isolatedUnsafeWindow,
+    GM_addElement(tagName, attributes) {
+      assert.equal(tagName, "script");
+      vm.runInContext(attributes.textContent, pageContext);
+      return { remove() {} };
+    },
+    JSON,
+    Map,
+    Object,
+    Set,
+    WeakSet,
+    URL,
+    String,
+    Array,
+    Date,
+    Number
+  });
+  assert.equal(page.WebSocket.__mwiGuildCreditBridge, true);
+  assert.equal(sandboxWindow.WebSocket, SandboxWebSocket);
+  const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
+  socket.receive(JSON.stringify({
+    type: "market_item_order_books_updated",
+    marketItemOrderBooks: {
+      itemHrid: "/items/brewing_speed_amulet",
+      orderBooks: {
+        0: {
+          asks: [{ price: 2400000, quantity: 7 }, { price: 2450000, quantity: 1 }],
+          bids: [{ price: 2350000, quantity: 10 }]
+        }
+      }
+    }
+  }));
+  assert.equal(page.__mwiGuildCreditBridge, undefined);
+  assert.equal(sandboxWindow.__mwiGuildCreditBridge.marketOrderBookRevision, 1);
+  assert.equal(sandboxWindow.__mwiGuildCreditBridge.diagnostics.installMode, "gm_add_element_main_world");
+  assert.equal(sandboxWindow.__mwiGuildCreditBridge.diagnostics.lastMarketItemHrid, "/items/brewing_speed_amulet");
+  assert.equal(sandboxWindow.__mwiGuildCreditBridge.diagnostics.lastMarketLevels["0"].a, 2400000);
+  assert.equal(
+    sandboxWindow.__mwiGuildCreditBridge.marketOrderBooks["/items/brewing_speed_amulet"].update.levels["0"].a,
+    2400000
+  );
+});
+
 test("正式版把实时市场价格接入浏览器持久缓存", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   assert.match(source, /mwi-guild-credit-live-market-v1/);
@@ -838,6 +1069,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function persistPluginUiState\(\)/);
   assert.match(source, /collapsedCreditSections: Array\.from\(state\.collapsedCreditSections\)/);
   assert.match(source, /guildTokenValuesCollapsed: state\.guildTokenValuesCollapsed/);
+  assert.match(source, /useGuildTokensForMissingCredits: state\.useGuildTokensForMissingCredits/);
   assert.match(source, /targetCredit: state\.targetCredit/);
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
@@ -877,6 +1109,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="upgrade-plan-list"/);
   assert.match(source, /mwi-upgrade-actions.*data-role="add-upgrade-plan"/);
   assert.match(source, /data-role="clear-upgrade-plans"/);
+  assert.match(source, /data-role="toggle-guild-token-credit-plan"/);
+  assert.match(source, /guildTokenCreditConversions: GUILD_TOKEN_CREDIT_CONVERSIONS/);
+  assert.match(source, /guildTokenCreditPlanSummary/);
   assert.match(source, /function clearGuildUpgradePlans\(\)/);
   assert.match(source, /state\.suppressUpgradePlanAutofill = true/);
   assert.match(source, /clearGuildUpgradePlans\(\); persistPluginUiState\(\); refreshGuildUpgrade\(panel\);/);
@@ -1002,11 +1237,15 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /releaseInfoApi\.createVersionChecker/);
   assert.match(buildSource, /@author       柆雨/);
   assert.match(buildSource, /@license      MIT/);
+  assert.match(buildSource, /@grant        GM_addElement/);
+  assert.match(buildSource, /@grant        unsafeWindow/);
+  assert.match(buildSource, /@sandbox      raw/);
   assert.match(buildSource, /@homepageURL  https:\/\/github\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
   assert.match(buildSource, /公会信用点兑换与神龛升级的只读计算辅助/);
   assert.match(buildSource, /不会上传账号数据/);
   assert.match(buildSource, /MWI_GUILD_CREDIT_RUNTIME/);
   assert.match(buildSource, /window\.MwiGuildCreditVersion/);
+  assert.match(buildSource, /source\("src\/market-dom\.js"\)/);
   assert.match(buildSource, /source\("src\/bridge\.js"\)/);
   assert.match(buildSource, /source\("src\/market-data\.js"\)/);
   assert.match(buildSource, /source\("src\/release-info\.js"\)/);

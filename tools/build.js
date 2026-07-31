@@ -19,13 +19,15 @@ const header = `// ==UserScript==
 // @description  公会信用点兑换与神龛升级的只读计算辅助；不会自动交易、兑换或升级，也不会上传账号数据。
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
-// @grant        none
+// @grant        GM_addElement
+// @grant        unsafeWindow
+// @sandbox      raw
 // @run-at       document-start
 // ==/UserScript==
 
 `;
 
-const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/market-data.js")}\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
+const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/market-data.js")}\n\n${source("src/market-dom.js")}\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
 fs.writeFileSync(output, bundle);

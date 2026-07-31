@@ -298,15 +298,27 @@
     };
   }
 
-  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts) {
+  function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts, options) {
     const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
     const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
+    const settings = options && typeof options === "object" ? options : {};
+    const useGuildTokensForMissingCredits = settings.useGuildTokensForMissingCredits === true;
+    const guildTokenCreditRules = new Map();
+    for (const rule of Array.isArray(settings.guildTokenCreditConversions) ? settings.guildTokenCreditConversions : []) {
+      const creditItemHrid = rule && rule.creditItemHrid;
+      const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+      const creditCount = positiveInteger(rule && rule.creditCount);
+      if (!creditItemHrid || !guildTokenCount || !creditCount || guildTokenCreditRules.has(creditItemHrid)) continue;
+      guildTokenCreditRules.set(creditItemHrid, { creditItemHrid, guildTokenCount, creditCount });
+    }
     const rows = [];
     const unpricedItemHrids = [];
     let totalGold = 0;
     let missingGold = 0;
     let guildTokensRequired = 0;
-    let guildTokensOwned = 0;
+    const guildTokensOwned = Math.max(0, Number(inventory["/items/guild_token"]) || 0);
+    let guildTokenCreditExchangeRequired = 0;
+    let guildTokenRow = null;
 
     for (const item of Array.isArray(totals) ? totals : []) {
       const itemHrid = item && item.itemHrid;
@@ -316,8 +328,30 @@
       const missing = Math.max(0, required - owned);
       if (itemHrid === "/items/guild_token") {
         guildTokensRequired += required;
-        guildTokensOwned += owned;
-        rows.push({ itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null });
+        guildTokenRow = { itemHrid, required, owned, missing, unitCost: null, totalCost: null, missingCost: null };
+        rows.push(guildTokenRow);
+        continue;
+      }
+      const guildTokenRule = useGuildTokensForMissingCredits && guildTokenCreditRules.get(itemHrid);
+      if (guildTokenRule) {
+        const batches = missing > 0 ? Math.ceil(missing / guildTokenRule.creditCount) : 0;
+        const requiredGuildTokens = batches * guildTokenRule.guildTokenCount;
+        guildTokenCreditExchangeRequired += requiredGuildTokens;
+        rows.push({
+          itemHrid,
+          required,
+          owned,
+          missing,
+          unitCost: null,
+          totalCost: null,
+          missingCost: null,
+          guildTokenExchange: {
+            ...guildTokenRule,
+            batches,
+            actualCredits: batches * guildTokenRule.creditCount,
+            requiredGuildTokens
+          }
+        });
         continue;
       }
       const unitCost = Number(unitCosts[itemHrid]);
@@ -339,13 +373,37 @@
       });
     }
 
+    guildTokensRequired += guildTokenCreditExchangeRequired;
+    const guildTokensMissing = Math.max(0, guildTokensRequired - guildTokensOwned);
+    if (guildTokensRequired > 0) {
+      if (!guildTokenRow) {
+        guildTokenRow = {
+          itemHrid: "/items/guild_token",
+          required: guildTokensRequired,
+          owned: guildTokensOwned,
+          missing: guildTokensMissing,
+          unitCost: null,
+          totalCost: null,
+          missingCost: null
+        };
+        rows.push(guildTokenRow);
+      } else {
+        guildTokenRow.required = guildTokensRequired;
+        guildTokenRow.missing = guildTokensMissing;
+      }
+      guildTokenRow.shrineRequired = guildTokensRequired - guildTokenCreditExchangeRequired;
+      guildTokenRow.creditExchangeRequired = guildTokenCreditExchangeRequired;
+    }
+
     return {
       status: unpricedItemHrids.length ? "partial" : "ok",
       totalGold,
       missingGold,
       guildTokensRequired,
       guildTokensOwned,
-      guildTokensMissing: Math.max(0, guildTokensRequired - guildTokensOwned),
+      guildTokensMissing,
+      guildTokenCreditExchangeRequired,
+      useGuildTokensForMissingCredits,
       unpricedItemHrids,
       rows
     };
