@@ -230,12 +230,54 @@
       const materialRows = Array.from(root.querySelectorAll(".mwi-material-row"));
       const plannedMaterialRow = materialRows.find((row) => row.querySelector(".mwi-material-plan"));
       const plannedMaterialMethods = plannedMaterialRow && plannedMaterialRow.querySelector(".mwi-material-plans");
-      const overflow = Array.from(root.querySelectorAll(".mwi-upgrade-planner,.mwi-upgrade-preset,.mwi-upgrade-plan,.mwi-token-budget,.mwi-upgrade-cost-summary,.mwi-material-row,.mwi-material-plans,button,input,select")).filter((element) => element.scrollWidth > element.clientWidth + 2).map((element) => ({
+      const auditElements = Array.from(root.querySelectorAll(".mwi-upgrade-planner,.mwi-upgrade-planner *,.mwi-token-budget,.mwi-token-budget *,.mwi-upgrade-cost-summary,.mwi-upgrade-cost-summary *,.mwi-material-row,.mwi-material-row *"));
+      const visibleAuditElements = auditElements.filter((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      });
+      const overflow = visibleAuditElements.filter((element) => {
+        const style = getComputedStyle(element);
+        const intentionallyEllipsized = style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+        return (!intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2) || element.scrollHeight > element.clientHeight + 2;
+      }).map((element) => ({
         className: String(element.className || ""),
         role: element.getAttribute("data-role") || "",
         clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth
+        clientHeight: element.clientHeight,
+        scrollWidth: element.scrollWidth,
+        scrollHeight: element.scrollHeight
       }));
+      const boundaryOverflow = visibleAuditElements.filter((element) => {
+        const parent = element.parentElement;
+        if (!parent || parent === root || getComputedStyle(parent).overflow === "visible") return false;
+        const rect = element.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        return rect.left < parentRect.left - 1 || rect.right > parentRect.right + 1 || rect.top < parentRect.top - 1 || rect.bottom > parentRect.bottom + 1;
+      }).map((element) => ({
+        className: String(element.className || ""),
+        role: element.getAttribute("data-role") || "",
+        parentClassName: String(element.parentElement?.className || "")
+      }));
+      const interactiveElements = visibleAuditElements.filter((element) => ["BUTTON", "INPUT", "SELECT"].includes(element.tagName));
+      const controlOverlaps = [];
+      for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
+          const left = interactiveElements[leftIndex];
+          const right = interactiveElements[rightIndex];
+          if (left.contains(right) || right.contains(left)) continue;
+          const leftRect = left.getBoundingClientRect();
+          const rightRect = right.getBoundingClientRect();
+          const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
+          const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
+          if (overlapWidth > 1 && overlapHeight > 1) controlOverlaps.push({
+            leftRole: left.getAttribute("data-role") || left.tagName,
+            rightRole: right.getAttribute("data-role") || right.tagName,
+            overlapWidth,
+            overlapHeight
+          });
+        }
+      }
       const headingRect = elementRect(budgetHeading);
       const inputsRect = elementRect(budgetInputs);
       const availableRect = elementRect(budgetAvailable);
@@ -254,6 +296,8 @@
           scrollHeight: root.scrollHeight
         },
         overflow,
+        boundaryOverflow,
+        controlOverlaps,
         shrine: {
           count: planRows.length,
           mode: planColumns && getComputedStyle(planColumns).display !== "none" ? "inline" : "condensed",

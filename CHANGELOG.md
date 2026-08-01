@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.30] - 2026-08-01
+
+### Changed
+
+- Redesigned the shrine upgrade workspace as a compact connected route, with a calmer preset toolbar, clearer numeric hierarchy, visible keyboard focus, and reduced-motion support.
+- Kept four shrine plans on single lines at a 420px sidebar while reserving the two-line layout for narrower panels; widened material totals so five-digit values remain inside their cards.
+
+### Verified
+
+- Extended the responsive harness to report text overflow, child boundary escapes, and interactive-control overlap in addition to whole-panel horizontal overflow.
+- Browser-tested dense Chinese and English states from 320px through 900px, including empty/add/remove plan transitions and synchronized token-budget input.
+
 ## [1.1.29] - 2026-08-01
 
 ### Removed
