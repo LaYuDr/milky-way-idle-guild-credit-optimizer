@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.32] - 2026-08-01
+
+### Fixed
+
+- Prevented periodic live-data refreshes from rebuilding unchanged shrine selectors and result cards, eliminating the recurring planner flicker.
+- Removed decorative plan-number circles, route accents, green row highlights, and row-entry animation from the shrine planner.
+
+### Verified
+
+- Added a planner-stability audit that simulates three live inventory revisions and checks that unchanged plan DOM nodes are preserved without mutations or horizontal overflow.
+
 ## [1.1.31] - 2026-08-01
 
 ### Fixed

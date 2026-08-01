@@ -46,6 +46,7 @@
     const searchParams = new URLSearchParams(location.search);
     const surplusPlan = searchParams.get("surplusPlan") === "1";
     const layoutAudit = searchParams.get("layoutAudit") === "1";
+    const stabilityAudit = searchParams.get("stabilityAudit") === "1";
     if (layoutAudit) document.body.dataset.layoutAudit = "true";
     if ((surplusPlan || layoutAudit) && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
     document.body.dataset.sidebarLayout = "wide";
@@ -351,5 +352,37 @@
     };
 
     window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
+
+    const runPlanStabilityAudit = async () => {
+      await window.__mwiLayoutAuditReady;
+      const list = await waitFor(() => document.querySelector('[data-role="upgrade-plan-list"]'));
+      const firstPlan = await waitFor(() => list.querySelector(".mwi-upgrade-plan"));
+      let mutationCount = 0;
+      const observer = new MutationObserver((records) => { mutationCount += records.length; });
+      observer.observe(list, { attributes: true, childList: true, subtree: true });
+      const bridge = window.__mwiGuildCreditBridge;
+      for (let index = 0; index < 3; index += 1) {
+        bridge.characterItems = bridge.characterItems.map((item) => item.itemHrid === "/items/guild_token" ? { ...item, count: item.count + 1 } : item);
+        bridge.characterItemsRevision = Number(bridge.characterItemsRevision || 0) + 1;
+        bridge.onCharacterItemsUpdated?.();
+        await new Promise((resolve) => setTimeout(resolve, 220));
+      }
+      observer.disconnect();
+      return {
+        mutationCount,
+        sameFirstPlan: list.querySelector(".mwi-upgrade-plan") === firstPlan,
+        indexCount: list.querySelectorAll(".mwi-upgrade-plan-index").length,
+        animationName: getComputedStyle(firstPlan).animationName,
+        rootOverflow: document.getElementById("mwi-credit-optimizer").scrollWidth - document.getElementById("mwi-credit-optimizer").clientWidth
+      };
+    };
+
+    if (stabilityAudit) {
+      window.__mwiPlanStabilityReady = runPlanStabilityAudit().then((report) => {
+        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+        document.body.dataset.planStabilityReady = "true";
+        return report;
+      });
+    }
   </script>
 </html>

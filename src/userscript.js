@@ -24,6 +24,7 @@
   const PRICE_REFERENCES = { a: {}, b: {} };
   const GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = [20, 40, 50, 60, 80, 100];
   const GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE = 2.5;
+  const RENDERED_MARKUP_PROPERTY = "__mwiGuildCreditRenderedMarkup";
 
   const CREDIT_TYPES = [
     ["/items/green_guild_credit", "#42c59f"],
@@ -60,6 +61,13 @@
   const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
   let sidebarIntegrationTimer = null;
   let guildTokenBudgetRefreshTimer = null;
+
+  function updateRenderedMarkup(element, markup) {
+    if (!element || element[RENDERED_MARKUP_PROPERTY] === markup) return false;
+    element.innerHTML = markup;
+    element[RENDERED_MARKUP_PROPERTY] = markup;
+    return true;
+  }
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, targetCredit: 1, upgradePlans: [] };
@@ -1043,12 +1051,11 @@
   function renderGuildUpgradePlans(panel, entries) {
     const list = panel.querySelector('[data-role="upgrade-plan-list"]');
     const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
-    const plansMarkup = state.upgradePlans.map((plan, index) => {
+    const plansMarkup = state.upgradePlans.map((plan) => {
       const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
       if (!entry) return "";
       const buffOptions = entries.map((candidate) => `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(guildBuffLabel(candidate.detail, candidate.hrid))}</option>`).join("");
       return `<div class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}">
-        <span class="mwi-upgrade-plan-index" aria-hidden="true">${formatNumber(index + 1)}</span>
         <label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label>
         <label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label>
         <span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span>
@@ -1056,8 +1063,8 @@
         <button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("removePlan"))}">×</button>
       </div>`;
     }).join("");
-    const columnHeaders = state.upgradePlans.length ? `<div class="mwi-upgrade-plan-columns" aria-hidden="true"><span></span><span>${escapeHtml(t("shrine"))}</span><span>${escapeHtml(t("startLevel"))}</span><span></span><span>${escapeHtml(t("targetLevel"))}</span><span></span></div>` : "";
-    list.innerHTML = columnHeaders + plansMarkup;
+    const columnHeaders = state.upgradePlans.length ? `<div class="mwi-upgrade-plan-columns" aria-hidden="true"><span>${escapeHtml(t("shrine"))}</span><span>${escapeHtml(t("startLevel"))}</span><span></span><span>${escapeHtml(t("targetLevel"))}</span><span></span></div>` : "";
+    updateRenderedMarkup(list, columnHeaders + plansMarkup);
     const count = panel.querySelector('[data-role="upgrade-plan-count"]');
     if (count) count.textContent = t("selectedUpgradePlanCount", { count: formatNumber(state.upgradePlans.length) });
     updateGuildShrineTargetActions(panel, entries);
@@ -1233,7 +1240,7 @@
     if (!entries.length) {
       updateGuildTokenBudgetControl(panel, null, false);
       status.textContent = t("noGuildRules");
-      results.replaceChildren();
+      updateRenderedMarkup(results, "");
       return;
     }
     ensureGuildUpgradePlans(entries);
@@ -1241,7 +1248,7 @@
     if (!state.upgradePlans.length) {
       updateGuildTokenBudgetControl(panel, null, Array.isArray(state.characterItems));
       status.textContent = state.upgradePresetNotice || t("allBuffsMaxed");
-      results.innerHTML = `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || t("noUpgradeMaterials"))}</div>`;
+      updateRenderedMarkup(results, `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || t("noUpgradeMaterials"))}</div>`);
       return;
     }
 
@@ -1252,7 +1259,7 @@
     if (result.status !== "ok") {
       const failed = result.result || {};
       status.textContent = failed.status === "missing_cost" ? t("missingLevelCost", { level: formatNumber(failed.missingLevel) }) : t("invalidLevels");
-      results.replaceChildren();
+      updateRenderedMarkup(results, "");
       return;
     }
     let estimate = null;
@@ -1290,7 +1297,7 @@
     if (snapshotFailed) notices.push(t("snapshotFailed"));
     if (!hasInventory) notices.push(t("inventoryUnavailable"));
     status.textContent = notices.join(" ");
-    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory, creditMaterialPlans, materialInventory);
+    updateRenderedMarkup(results, renderMaterialTotals(result.plans, result.totals, estimate, hasInventory, creditMaterialPlans, materialInventory));
   }
 
   function setPanelView(panel, view) {
@@ -1352,18 +1359,17 @@
         #mwi-credit-optimizer .mwi-upgrade-preset-copy{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 9px}
         #mwi-credit-optimizer .mwi-upgrade-preset-buttons button{min-height:28px!important;padding:4px 8px!important}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
-        #mwi-credit-optimizer .mwi-upgrade-plan-columns,#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:28px minmax(140px,1.5fr) minmax(70px,.65fr) 18px minmax(70px,.65fr) 32px;gap:6px}
+        #mwi-credit-optimizer .mwi-upgrade-plan-columns,#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(140px,1.5fr) minmax(70px,.65fr) 18px minmax(70px,.65fr) 32px;gap:6px}
         #mwi-credit-optimizer .mwi-upgrade-plan-columns{align-items:end;padding:4px 8px 2px;border-bottom:1px solid #3e4264;background:#252742;color:#aeb1d3;font-size:10px}
         #mwi-credit-optimizer .mwi-upgrade-plan{align-items:center;padding:6px 8px;border:0;border-bottom:1px solid #3e4264;border-radius:0;background:#282a46;box-shadow:none}
-        #mwi-credit-optimizer .mwi-upgrade-plan-index{display:grid;place-items:center;align-self:center;width:25px;height:25px;border-radius:999px;background:#373a5a;color:#d8daed;font-size:11px}
         #mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;font-size:11px}
         #mwi-credit-optimizer .mwi-upgrade-field-label{display:none}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:2;grid-row:1}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:3;grid-row:1}
-        #mwi-credit-optimizer .mwi-upgrade-level-arrow{grid-column:4;grid-row:1;align-self:center;justify-self:center;color:#aeb2d0}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:5;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:1;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:2;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-level-arrow{grid-column:3;grid-row:1;align-self:center;justify-self:center;color:#aeb2d0}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:4;grid-row:1}
         #mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;min-height:31px;max-width:none;min-width:0}
-        #mwi-credit-optimizer .mwi-remove-plan{grid-column:6;grid-row:1;width:32px;min-width:32px;min-height:31px;padding:0!important;border:1px solid #74414b!important;border-radius:6px!important;background:#56323b!important;color:#ffdce2!important;font-size:18px;line-height:1}
+        #mwi-credit-optimizer .mwi-remove-plan{grid-column:5;grid-row:1;width:32px;min-width:32px;min-height:31px;padding:0!important;border:1px solid #74414b!important;border-radius:6px!important;background:#56323b!important;color:#ffdce2!important;font-size:18px;line-height:1}
         #mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:0;padding:7px 9px;background:#292b48}
         #mwi-credit-optimizer .mwi-upgrade-actions small{color:#bfc2de;font-size:10px}
         #mwi-credit-optimizer .mwi-upgrade-actions>span{display:flex;gap:7px}
@@ -1408,7 +1414,7 @@
         #mwi-credit-optimizer .mwi-material-plan-covered{align-self:center;color:#9bdab8;font-size:11px}
         @container (max-width:650px){#mwi-credit-optimizer .mwi-plan-summary{display:none}}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) minmax(220px,1.2fr)}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:1/-1;justify-self:start}#mwi-credit-optimizer .mwi-plan-summary{display:none}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(125px,1fr) 62px 58px}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}}
-        @container (max-width:400px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{display:none}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0;padding-inline:4px!important}#mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}#mwi-credit-optimizer .mwi-upgrade-plan{grid-template-columns:28px minmax(0,1fr) 18px minmax(0,1fr) 32px;align-items:end}#mwi-credit-optimizer .mwi-upgrade-field-label{display:block}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:2/5;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:3;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:4;grid-row:2}#mwi-credit-optimizer .mwi-remove-plan{grid-column:5;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-actions{align-items:center;flex-direction:row}#mwi-credit-optimizer .mwi-upgrade-actions>span{display:flex}#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start}#mwi-credit-optimizer .mwi-upgrade-cost-summary{align-items:flex-start;flex-direction:column;gap:4px;padding:6px 7px}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-material-required{grid-column:2;grid-row:1}#mwi-credit-optimizer .mwi-material-exchange-mode,#mwi-credit-optimizer .mwi-material-exchange-mode-spacer{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plan{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto}#mwi-credit-optimizer .mwi-material-plan-item{grid-row:1/-1}#mwi-credit-optimizer .mwi-material-plan-need{grid-column:2;justify-items:end;padding:5px 6px 0 0}#mwi-credit-optimizer .mwi-material-plan-rate{grid-column:2;padding:0 6px 6px 0;text-align:right}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{display:none}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0;padding-inline:4px!important}#mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}#mwi-credit-optimizer .mwi-upgrade-plan{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) 32px;align-items:end}#mwi-credit-optimizer .mwi-upgrade-field-label{display:block}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:1/4;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:3;grid-row:2}#mwi-credit-optimizer .mwi-remove-plan{grid-column:4;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-actions{align-items:center;flex-direction:row}#mwi-credit-optimizer .mwi-upgrade-actions>span{display:flex}#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start}#mwi-credit-optimizer .mwi-upgrade-cost-summary{align-items:flex-start;flex-direction:column;gap:4px;padding:6px 7px}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-material-required{grid-column:2;grid-row:1}#mwi-credit-optimizer .mwi-material-exchange-mode,#mwi-credit-optimizer .mwi-material-exchange-mode-spacer{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plan{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto}#mwi-credit-optimizer .mwi-material-plan-item{grid-row:1/-1}#mwi-credit-optimizer .mwi-material-plan-need{grid-column:2;justify-items:end;padding:5px 6px 0 0}#mwi-credit-optimizer .mwi-material-plan-rate{grid-column:2;padding:0 6px 6px 0;text-align:right}}
         @container (max-width:650px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start;justify-self:end}}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:76px}#mwi-credit-optimizer .mwi-token-budget-inputs label>span{display:none}#mwi-credit-optimizer .mwi-token-budget-percent{min-width:34px;padding-inline:4px}}
         /* Shrine route workspace: one visual signature, compact utility controls, and explicit overflow safety. */
@@ -1418,7 +1424,6 @@
           --mwi-panel:#2a2c49;
           --mwi-mint:#43c4ad;
           --mwi-mint-data:#77f3d0;
-          --mwi-route:#7579b8;
           --mwi-amber:#e2b45e;
           --mwi-danger:#b64b63;
         }
@@ -1478,28 +1483,9 @@
           background:#344f7d!important;
           color:#eef5ff!important;
         }
-        #mwi-credit-optimizer .mwi-upgrade-plan-list{
-          --mwi-route-top:39px;
-          position:relative;
-          isolation:isolate;
-        }
-        #mwi-credit-optimizer .mwi-upgrade-plan-list::before{
-          content:"";
-          position:absolute;
-          z-index:0;
-          left:19.5px;
-          top:var(--mwi-route-top);
-          bottom:20px;
-          width:2px;
-          border-radius:2px;
-          background:linear-gradient(180deg,var(--mwi-route),var(--mwi-mint));
-          opacity:.78;
-          pointer-events:none;
-        }
-        #mwi-credit-optimizer .mwi-upgrade-plan-list:empty::before{display:none}
         #mwi-credit-optimizer .mwi-upgrade-plan-columns,
         #mwi-credit-optimizer .mwi-upgrade-plan{
-          grid-template-columns:26px minmax(108px,1.6fr) minmax(54px,.7fr) 12px minmax(54px,.7fr) 30px;
+          grid-template-columns:minmax(108px,1.6fr) minmax(54px,.7fr) 12px minmax(54px,.7fr) 30px;
           gap:5px;
         }
         #mwi-credit-optimizer .mwi-upgrade-plan-columns{
@@ -1519,44 +1505,22 @@
           padding:5px 7px;
           border-bottom-color:#3c405f;
           background:#292b47e8;
-          transition:background-color .16s ease,box-shadow .16s ease;
-          animation:mwi-route-arrive .18s ease-out both;
+          transition:background-color .16s ease;
         }
         #mwi-credit-optimizer .mwi-upgrade-plan:hover,
         #mwi-credit-optimizer .mwi-upgrade-plan:focus-within{
           background:#303250;
-          box-shadow:inset 3px 0 #43c4ad66;
-        }
-        #mwi-credit-optimizer .mwi-upgrade-plan-index{
-          position:relative;
-          z-index:2;
-          width:24px;
-          height:24px;
-          border:1px solid #626799;
-          background:#343756;
-          color:#e8e9f8;
-          font-family:inherit;
-          font-style:normal;
-          font-size:10px;
-          font-variant-numeric:tabular-nums;
-          font-feature-settings:"tnum" 1;
-          box-shadow:0 0 0 3px #282a46;
-        }
-        #mwi-credit-optimizer .mwi-upgrade-plan:last-child .mwi-upgrade-plan-index{
-          border-color:var(--mwi-mint);
-          background:#28534e;
-          color:#eafff9;
         }
         #mwi-credit-optimizer .mwi-upgrade-plan label{
           min-width:0;
           gap:2px;
         }
         #mwi-credit-optimizer .mwi-upgrade-field-label{display:none}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:2;grid-row:1}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:3;grid-row:1}
-        #mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:4;grid-row:1}
-        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:5;grid-row:1}
-        #mwi-credit-optimizer .mwi-remove-plan{grid-column:6;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:1;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:2;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:3;grid-row:1}
+        #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:4;grid-row:1}
+        #mwi-credit-optimizer .mwi-remove-plan{grid-column:5;grid-row:1}
         #mwi-credit-optimizer .mwi-upgrade-plan select{
           min-width:0;
           min-height:30px;
@@ -1597,16 +1561,6 @@
           min-width:0;
           overflow-wrap:anywhere;
         }
-        #mwi-credit-optimizer .mwi-upgrade-actions small::before{
-          content:"";
-          display:inline-block;
-          width:5px;
-          height:5px;
-          margin:0 6px 1px 0;
-          border-radius:50%;
-          background:var(--mwi-mint);
-          box-shadow:0 0 0 3px #43c4ad1f;
-        }
         #mwi-credit-optimizer .mwi-upgrade-actions>span{min-width:0;flex:0 0 auto}
         #mwi-credit-optimizer .mwi-upgrade-actions button{
           min-width:0;
@@ -1639,10 +1593,6 @@
         #mwi-credit-optimizer .mwi-material-row{
           background:linear-gradient(105deg,#292b48,#242640);
         }
-        @keyframes mwi-route-arrive{
-          from{opacity:.45;transform:translateY(3px)}
-          to{opacity:1;transform:translateY(0)}
-        }
         @container (max-width:400px){
           #mwi-credit-optimizer .mwi-upgrade-preset{
             grid-template-columns:minmax(0,1fr);
@@ -1653,12 +1603,11 @@
             display:grid;
             grid-template-columns:repeat(2,minmax(0,1fr));
           }
-          #mwi-credit-optimizer .mwi-upgrade-plan-list{--mwi-route-top:20px}
           #mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}
         }
         @container (max-width:350px){
           #mwi-credit-optimizer .mwi-upgrade-plan{
-            grid-template-columns:24px minmax(0,1fr) 12px minmax(0,1fr) 30px;
+            grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr) 30px;
             align-items:end;
             padding-block:6px;
           }
@@ -1672,11 +1621,11 @@
             text-overflow:ellipsis;
             white-space:nowrap;
           }
-          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:2/5;grid-row:1}
-          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:2;grid-row:2}
-          #mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:3;grid-row:2}
-          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:4;grid-row:2}
-          #mwi-credit-optimizer .mwi-remove-plan{grid-column:5;grid-row:1}
+          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:1/4;grid-row:1}
+          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:1;grid-row:2}
+          #mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:2;grid-row:2}
+          #mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:3;grid-row:2}
+          #mwi-credit-optimizer .mwi-remove-plan{grid-column:4;grid-row:1}
           #mwi-credit-optimizer .mwi-upgrade-actions{
             align-items:flex-start;
             flex-direction:column;
@@ -1687,7 +1636,7 @@
         }
         @media (prefers-reduced-motion:reduce){
           #mwi-credit-optimizer .mwi-upgrade-plan,
-          #mwi-credit-optimizer .mwi-remove-plan{animation:none;transition:none}
+          #mwi-credit-optimizer .mwi-remove-plan{transition:none}
         }
       </style>
       <h3>${escapeHtml(t("panelTitle"))}</h3>
