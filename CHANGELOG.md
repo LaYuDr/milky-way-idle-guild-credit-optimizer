@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.31] - 2026-08-01
+
+### Fixed
+
+- Removed the forced monospace fallback from shrine-plan amounts, percentages, number inputs, and route markers so Chinese labels and numbers use the same system font as the rest of the plugin while retaining tabular numeral alignment.
+
 ## [1.1.30] - 2026-08-01
 
 ### Changed

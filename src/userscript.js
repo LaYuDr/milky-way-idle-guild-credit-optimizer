@@ -1535,9 +1535,11 @@
           border:1px solid #626799;
           background:#343756;
           color:#e8e9f8;
-          font-family:ui-monospace,"SFMono-Regular","Cascadia Mono",monospace;
+          font-family:inherit;
+          font-style:normal;
           font-size:10px;
           font-variant-numeric:tabular-nums;
+          font-feature-settings:"tnum" 1;
           box-shadow:0 0 0 3px #282a46;
         }
         #mwi-credit-optimizer .mwi-upgrade-plan:last-child .mwi-upgrade-plan-index{
@@ -1625,8 +1627,10 @@
         #mwi-credit-optimizer .mwi-upgrade-cost-summary strong,
         #mwi-credit-optimizer .mwi-material-required strong,
         #mwi-credit-optimizer .mwi-material-plan-need strong{
-          font-family:ui-monospace,"SFMono-Regular","Cascadia Mono",monospace;
+          font-family:inherit;
+          font-style:normal;
           font-variant-numeric:tabular-nums;
+          font-feature-settings:"tnum" 1;
         }
         #mwi-credit-optimizer .mwi-upgrade-cost-summary{
           border-color:#3c857a;

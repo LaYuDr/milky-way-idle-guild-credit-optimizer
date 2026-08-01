@@ -1351,6 +1351,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /@container \(max-width:520px\)/);
   assert.match(source, /@container \(max-width:400px\)/);
   assert.match(source, /mwi-upgrade-plan-columns/);
+  assert.doesNotMatch(source, /font-family:ui-monospace/);
   assert.match(source, /function marketItemIconMarkup/);
   assert.match(source, /function openMarketplaceForItem/);
   assert.match(source, /bridge\.goToMarketplace\(itemHrid, 0\)/);
