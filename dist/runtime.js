@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.33";
+window.MwiGuildCreditVersion = "1.1.34";
 
 (function (root, factory) {
   const api = factory();
@@ -3509,7 +3509,8 @@ window.MwiGuildCreditVersion = "1.1.33";
       }
       if (row && row.missing <= 0 && isGuildCredit) conversionPlans.push(`<div class="mwi-material-plan-covered">✓ ${escapeHtml(t("inventoryCoveredNoExchange"))}</div>`);
       const rowClass = item.itemHrid === "/items/guild_token" ? " mwi-material-row-token" : "";
-      return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
+      const materialIcon = isGuildCredit || item.itemHrid === "/items/guild_token" || item.itemHrid === "/items/coin" ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid)) : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
+      return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
     }).join("");
     return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
   }
@@ -4433,9 +4434,9 @@ window.MwiGuildCreditVersion = "1.1.33";
       const creditName = itemNameForMaterial(value.creditItemHrid);
       const exchange = t("exchangeRate", { items: `${formatNumber(value.guildTokenCount)} ${t("guildTokens")}`, credits: creditQuantity(value.creditCount) });
       if (value.status !== "ok") {
-        return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${escapeHtml(exchange)}</span><span class="mwi-token-value-unpriced">${escapeHtml(t("noMarketValue"))}</span></div>`;
+        return `<div class="mwi-token-value-row"><span class="mwi-item">${iconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${escapeHtml(exchange)}</span><span class="mwi-token-value-unpriced">${escapeHtml(t("noMarketValue"))}</span></div>`;
       }
-      return `<div class="mwi-token-value-row"><span class="mwi-item">${marketItemIconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${escapeHtml(exchange)}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} ${escapeHtml(t("gold"))}</span></div>`;
+      return `<div class="mwi-token-value-row"><span class="mwi-item">${iconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${escapeHtml(exchange)}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} ${escapeHtml(t("gold"))}</span></div>`;
     }).join("");
     const collapsed = state.guildTokenValuesCollapsed;
     const guildTokenName = itemNameForMaterial("/items/guild_token");
