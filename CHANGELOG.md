@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.28] - 2026-08-01
+
+### Changed
+
+- Refined the arbitrary-item exchange lookup with a clearer centered layout, stronger focus and hover feedback, animated result cards, and denser responsive metrics.
+
 ## [1.1.27] - 2026-08-01
 
 ### Added
