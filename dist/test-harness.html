@@ -95,6 +95,7 @@
         "/items/red_guild_credit": { itemHrid: "/items/red_guild_credit", name: "Red Guild Credit" },
         "/items/silver_guild_credit": { itemHrid: "/items/silver_guild_credit", name: "Silver Guild Credit" },
         "/items/gold_guild_credit": { itemHrid: "/items/gold_guild_credit", name: "Gold Guild Credit" },
+        "/items/cheese": { itemHrid: "/items/cheese", name: "Cheese" },
         "/items/beast_hide": {
           itemHrid: "/items/beast_hide",
           name: "Beast Hide",
@@ -281,6 +282,33 @@
           planHeight: elementRect(root.querySelector(".mwi-plan-summary"))?.height || 0,
           costHeight: elementRect(root.querySelector(".mwi-upgrade-cost-summary"))?.height || 0
         }
+      };
+    };
+
+    window.__mwiRunItemQueryAudit = async (query = "Beast Hide") => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const input = await waitFor(() => document.querySelector('[data-role="item-query-input"]'));
+      input.value = query;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      const result = await waitFor(() => {
+        const root = document.querySelector('[data-role="item-query-result"]');
+        return root && (root.querySelector(".mwi-item-query-card") || root.querySelector(".mwi-item-query-warning")) && root;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      const panel = document.getElementById("mwi-credit-optimizer");
+      const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab"), (tab) => ({ role: tab.dataset.role, text: tab.textContent.trim(), selected: tab.getAttribute("aria-selected") }));
+      return {
+        query,
+        tabs,
+        cardCount: result.querySelectorAll(".mwi-item-query-card").length,
+        warning: result.querySelector(".mwi-item-query-warning")?.textContent.trim() || "",
+        text: result.textContent.replace(/\s+/g, " ").trim(),
+        panelOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth),
+        queryOverflow: Array.from(panel.querySelectorAll(".mwi-item-query,.mwi-item-query-card,.mwi-item-query-metrics,input,button"))
+          .filter((element) => element.scrollWidth > element.clientWidth + 2)
+          .map((element) => ({ className: String(element.className || ""), role: element.dataset.role || "", clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
       };
     };
 

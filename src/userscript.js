@@ -60,6 +60,7 @@
   const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
   let sidebarIntegrationTimer = null;
   let guildTokenBudgetRefreshTimer = null;
+  let itemQueryRefreshTimer = null;
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, targetCredit: 1, upgradePlans: [] };
@@ -675,6 +676,116 @@
       ...conversion,
       itemName: resolveItemName(conversion.itemHrid, conversion.itemName)
     }));
+  }
+
+  function creditConversionGroups() {
+    return CREDIT_TYPES.map(([creditItemHrid, color]) => ({ creditItemHrid, color, conversions: allConversions(creditItemHrid) }));
+  }
+
+  function itemQueryEntries() {
+    hydrateBridgeData();
+    extractItemDetailsFromReact();
+    if (!state.itemDetails) hydrateLocalInitData();
+    const details = Array.isArray(state.itemDetails)
+      ? state.itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
+      : Object.entries(state.itemDetails || {});
+    const unique = new Map();
+    for (const [fallbackHrid, detail] of details) {
+      const itemHrid = detail && (detail.itemHrid || detail.hrid) || fallbackHrid;
+      if (!String(itemHrid || "").startsWith("/items/") || unique.has(itemHrid)) continue;
+      const englishName = String(detail && detail.name || itemHrid);
+      unique.set(itemHrid, { itemHrid, englishName, itemName: resolveItemName(itemHrid, englishName) });
+    }
+    return Array.from(unique.values()).sort((left, right) => left.itemName.localeCompare(right.itemName, ui().locale));
+  }
+
+  function resolveItemQuery(entries, rawQuery, selectedHrid) {
+    const query = String(rawQuery || "").trim().toLocaleLowerCase(ui().locale);
+    if (!query) return { entry: null, matches: [] };
+    if (selectedHrid) {
+      const selected = entries.find((entry) => entry.itemHrid === selectedHrid);
+      if (selected) return { entry: selected, matches: [selected] };
+    }
+    const exactHrid = entries.find((entry) => entry.itemHrid.toLowerCase() === query || entry.itemHrid.split("/").pop().toLowerCase() === query);
+    if (exactHrid) return { entry: exactHrid, matches: [exactHrid] };
+    const exactNames = entries.filter((entry) => entry.itemName.toLocaleLowerCase(ui().locale) === query || entry.englishName.toLowerCase() === query);
+    if (exactNames.length === 1) return { entry: exactNames[0], matches: exactNames };
+    if (exactNames.length > 1) return { entry: null, matches: exactNames };
+    const partial = entries.filter((entry) => (
+      entry.itemName.toLocaleLowerCase(ui().locale).includes(query)
+      || entry.englishName.toLowerCase().includes(query)
+      || entry.itemHrid.toLowerCase().includes(query)
+    ));
+    return { entry: partial.length === 1 ? partial[0] : null, matches: partial };
+  }
+
+  function updateItemQueryOptions(panel, entries) {
+    const list = panel.querySelector('[data-role="item-query-options"]');
+    if (!list) return;
+    const last = entries[entries.length - 1];
+    const signature = `${entries.length}:${entries[0] && entries[0].itemHrid || ""}:${last && last.itemHrid || ""}:${ui().locale}`;
+    if (list.dataset.signature === signature) return;
+    list.dataset.signature = signature;
+    list.innerHTML = entries.map((entry) => `<option value="${escapeHtml(entry.itemName)}" label="${escapeHtml(entry.itemHrid)}"></option>`).join("");
+  }
+
+  function renderItemQueryCard(entry, group, result) {
+    const creditName = itemNameForMaterial(group.creditItemHrid);
+    const marketPrice = snapshotPrice(entry.itemHrid, state.priceReference);
+    const ratio = t("exchangeRate", { items: itemQuantity(result.itemCount), credits: creditQuantity(result.creditCount) });
+    const rank = result.rank === null ? "-" : t("itemQueryRankValue", { rank: formatNumber(result.rank), total: formatNumber(result.rankedCount) });
+    const verdict = result.status !== "ok"
+      ? t("itemQueryNoMarketPrice")
+      : result.premiumPercentage !== null && result.premiumPercentage <= 0.05
+        ? t("itemQueryBestValue", { credit: creditName })
+        : t("itemQueryComparedWithBest", { best: result.bestItemName || "-", percent: formatNumber(result.premiumPercentage, 1) });
+    return `<article class="mwi-item-query-card" data-priced="${String(result.status === "ok")}" style="--mwi-query-color:${group.color}">
+      <div class="mwi-item-query-card-heading"><span class="mwi-item">${marketItemIconMarkup(entry.itemHrid, entry.itemName)}<strong class="mwi-item-name">${escapeHtml(entry.itemName)}</strong></span><span class="mwi-item-query-arrow" aria-hidden="true">→</span><span class="mwi-item">${iconMarkup(group.creditItemHrid, creditName)}<strong class="mwi-item-name">${escapeHtml(creditName)}</strong></span></div>
+      <div class="mwi-item-query-metrics">
+        <span><small>${escapeHtml(t("itemQueryExchangeRatio"))}</small><strong>${escapeHtml(ratio)}</strong></span>
+        <span><small>${escapeHtml(t("itemQueryMarketPrice"))}</small><strong>${marketPrice === null ? "-" : escapeHtml(formatNumber(marketPrice, 2))}</strong></span>
+        <span><small>${escapeHtml(t("itemQueryUnitCost"))}</small><strong>${result.costPerCredit === null ? "-" : escapeHtml(formatNumber(result.costPerCredit, 2))}</strong></span>
+        <span><small>${escapeHtml(t("itemQueryTargetCost"))}</small><strong>${result.cost === null ? "-" : escapeHtml(core.formatCompactCost(result.cost))}</strong></span>
+        <span><small>${escapeHtml(t("itemQueryRank"))}</small><strong>${escapeHtml(rank)}</strong></span>
+      </div>
+      <div class="mwi-item-query-verdict">${escapeHtml(verdict)}</div>
+    </article>`;
+  }
+
+  function renderItemQuery(panel, creditGroups = creditConversionGroups()) {
+    const input = panel.querySelector('[data-role="item-query-input"]');
+    const output = panel.querySelector('[data-role="item-query-result"]');
+    if (!input || !output) return;
+    const entries = itemQueryEntries();
+    updateItemQueryOptions(panel, entries);
+    const query = String(input.value || "").trim();
+    if (!query) {
+      output.innerHTML = `<div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div>`;
+      return;
+    }
+    const resolved = resolveItemQuery(entries, query, input.dataset.itemHrid);
+    if (!resolved.entry) {
+      if (!resolved.matches.length) {
+        output.innerHTML = `<div class="mwi-item-query-message mwi-item-query-warning">${escapeHtml(t("itemQueryNoMatch"))}</div>`;
+        return;
+      }
+      const suggestions = resolved.matches.slice(0, 8).map((entry) => `<button data-role="item-query-suggestion" data-item-hrid="${escapeHtml(entry.itemHrid)}" data-item-name="${escapeHtml(entry.itemName)}" type="button">${escapeHtml(entry.itemName)}</button>`).join("");
+      output.innerHTML = `<div class="mwi-item-query-message">${escapeHtml(t("itemQueryMultiple", { count: formatNumber(resolved.matches.length) }))}<div class="mwi-item-query-suggestions">${suggestions}</div></div>`;
+      return;
+    }
+    input.dataset.itemHrid = resolved.entry.itemHrid;
+    const rawTarget = Number(panel.querySelector('[data-role="target"]').value);
+    const target = Number.isSafeInteger(rawTarget) && rawTarget > 0 ? rawTarget : state.targetCredit;
+    const results = creditGroups.flatMap((group) => {
+      const books = Object.fromEntries(group.conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
+      return core.analyzeItemConversion(group.conversions, books, resolved.entry.itemHrid, target).map((result) => ({ group, result }));
+    });
+    if (!results.length) {
+      const hasRules = creditGroups.some((group) => group.conversions.length);
+      output.innerHTML = `<div class="mwi-item-query-message mwi-item-query-warning">${escapeHtml(hasRules ? t("itemQueryNotExchangeable", { item: resolved.entry.itemName }) : t("noExchangeRules"))}</div>`;
+      return;
+    }
+    output.innerHTML = `<div class="mwi-item-query-cards">${results.map(({ group, result }) => renderItemQueryCard(resolved.entry, group, result)).join("")}</div>`;
   }
 
   function itemSpriteHref(itemHrid) {
@@ -1324,6 +1435,7 @@
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs{display:flex;border-bottom:1px solid #474969;margin:0 0 10px}.mwi-view-tab{min-height:30px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:5px 10px!important}.mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;color:#fff!important}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
+        #mwi-credit-optimizer .mwi-item-query{display:grid;grid-template-columns:minmax(150px,.45fr) minmax(260px,1fr);gap:7px 12px;align-items:center;margin:9px 0;padding:8px 9px;border:1px solid #4e5278;border-radius:8px;background:linear-gradient(135deg,#292b48,#24253f)}#mwi-credit-optimizer .mwi-item-query-heading{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-item-query-heading strong{font-size:12px}#mwi-credit-optimizer .mwi-item-query-heading small{color:#bfc2de;font-size:10px;line-height:1.3}#mwi-credit-optimizer .mwi-item-query-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}#mwi-credit-optimizer .mwi-item-query-form input{width:100%;min-width:0}#mwi-credit-optimizer .mwi-item-query-form button{padding-inline:10px}#mwi-credit-optimizer .mwi-item-query-result{grid-column:1/-1;min-width:0}#mwi-credit-optimizer .mwi-item-query-message{padding:5px 2px;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-item-query-warning{color:#ffd17c}#mwi-credit-optimizer .mwi-item-query-suggestions{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}#mwi-credit-optimizer .mwi-item-query-suggestions button{min-height:25px!important;padding:3px 7px!important;border:1px solid #676a91!important;border-radius:999px!important;background:#353653!important;color:#e7e8f6!important;font-size:10px}#mwi-credit-optimizer .mwi-item-query-cards{display:grid;gap:6px}#mwi-credit-optimizer .mwi-item-query-card{display:grid;gap:6px;padding:7px 8px;border:1px solid #4b4f75;border-left:3px solid var(--mwi-query-color);border-radius:7px;background:#242641}#mwi-credit-optimizer .mwi-item-query-card-heading{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:7px}#mwi-credit-optimizer .mwi-item-query-card-heading>.mwi-item:last-child{justify-content:flex-end}#mwi-credit-optimizer .mwi-item-query-card-heading .mwi-item-icon{width:22px;height:22px;flex-basis:22px}#mwi-credit-optimizer .mwi-item-query-arrow{color:#8f93b8}#mwi-credit-optimizer .mwi-item-query-metrics{display:grid;grid-template-columns:repeat(5,minmax(88px,1fr));gap:5px}#mwi-credit-optimizer .mwi-item-query-metrics>span{display:grid;gap:1px;padding:5px 6px;border-radius:5px;background:#2d2f4d}#mwi-credit-optimizer .mwi-item-query-metrics small{color:#aeb1d3;font-size:9px}#mwi-credit-optimizer .mwi-item-query-metrics strong{overflow:hidden;text-overflow:ellipsis;color:#77f3d0;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-item-query-verdict{color:#bfe8df;font-size:10px}#mwi-credit-optimizer .mwi-item-query-card[data-priced="false"] .mwi-item-query-verdict{color:#ffd17c}@container (max-width:650px){#mwi-credit-optimizer .mwi-item-query{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-item-query-result{grid-column:1}#mwi-credit-optimizer .mwi-item-query-metrics{grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-item-query-form{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-item-query-form button{width:100%}}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
@@ -1411,8 +1523,8 @@
       <h3>${escapeHtml(t("panelTitle"))}</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
-        <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">${escapeHtml(t("creditValue"))}</button>
         <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
+        <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">${escapeHtml(t("creditValue"))}</button>
       </div>
       <div data-role="credit-view">
         <div class="mwi-controls">
@@ -1420,6 +1532,11 @@
           <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
           <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
         </div>
+        <section class="mwi-item-query" aria-label="${escapeHtml(t("itemQueryTitle"))}">
+          <div class="mwi-item-query-heading"><strong>${escapeHtml(t("itemQueryTitle"))}</strong><small>${escapeHtml(t("itemQueryHint"))}</small></div>
+          <form class="mwi-item-query-form" data-role="item-query-form"><input data-role="item-query-input" type="search" list="mwi-item-query-options" autocomplete="off" placeholder="${escapeHtml(t("itemQueryPlaceholder"))}"><datalist id="mwi-item-query-options" data-role="item-query-options"></datalist><button type="submit">${escapeHtml(t("itemQueryAction"))}</button></form>
+          <div class="mwi-item-query-result" data-role="item-query-result" aria-live="polite"><div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div></div>
+        </section>
         <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
         <div data-role="results"></div>
       </div>
@@ -1490,6 +1607,24 @@
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
+    const itemQueryInput = panel.querySelector('[data-role="item-query-input"]');
+    panel.querySelector('[data-role="item-query-form"]').addEventListener("submit", (event) => {
+      event.preventDefault();
+      window.clearTimeout(itemQueryRefreshTimer);
+      renderItemQuery(panel);
+    });
+    itemQueryInput.addEventListener("input", () => {
+      delete itemQueryInput.dataset.itemHrid;
+      window.clearTimeout(itemQueryRefreshTimer);
+      itemQueryRefreshTimer = window.setTimeout(() => renderItemQuery(panel), 120);
+    });
+    panel.querySelector('[data-role="item-query-result"]').addEventListener("click", (event) => {
+      const suggestion = event.target.closest('[data-role="item-query-suggestion"]');
+      if (!suggestion) return;
+      itemQueryInput.value = suggestion.dataset.itemName;
+      itemQueryInput.dataset.itemHrid = suggestion.dataset.itemHrid;
+      renderItemQuery(panel);
+    });
     panel.addEventListener("click", (event) => {
       const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
       if (modeButton) {
@@ -1619,7 +1754,8 @@
     status.hidden = false;
     results.replaceChildren();
 
-    const creditGroups = CREDIT_TYPES.map(([creditItemHrid, color]) => ({ creditItemHrid, color, conversions: allConversions(creditItemHrid) }));
+    const creditGroups = creditConversionGroups();
+    renderItemQuery(panel, creditGroups);
     const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
     if (!conversionCount) {
       status.textContent = t("noExchangeRules");
@@ -1644,6 +1780,7 @@
         };
       });
       const tokenValues = core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked])));
+      renderItemQuery(panel, creditGroups);
       status.textContent = "";
       status.hidden = true;
       results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`;

@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.27] - 2026-08-01
+
+### Added
+
+- Added an arbitrary-item exchange lookup that searches localized names, English names, or item HRIDs and reports the official guild-credit ratio, current market reference, cost per credit, target cost, same-credit ranking, and relative gap from the best item.
+- Items that exist in game data but cannot be exchanged, ambiguous searches, missing items, and missing market quotes now have distinct, explicit states.
+
+### Changed
+
+- Reordered the internal tabs so Shrine Upgrade appears before Credit Value while preserving Credit Value as the default open view.
+- Added compact responsive query cards that remain free of horizontal overflow from 288px to 868px of tested panel width.
+
 ## [1.1.26] - 2026-08-01
 
 ### Fixed
