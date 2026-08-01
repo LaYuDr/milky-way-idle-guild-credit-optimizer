@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.21] - 2026-08-01
+
+### Added
+
+- Automatically allocates available guild tokens to missing shrine credits from highest to lowest current market exchange value, while keeping the best-item recommendation for any partially covered remainder.
+- Added synchronized slider and number inputs for limiting the automatic guild-token budget; the chosen limit is saved between page loads.
+
+### Changed
+
+- Automatic allocations reserve shrine token costs and manually selected credit exchanges first, and skip credit types without a verified market price.
+
 ## [1.1.20] - 2026-08-01
 
 ### Fixed

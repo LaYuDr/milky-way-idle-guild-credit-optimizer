@@ -39,6 +39,8 @@
   </div>
   <script>
     const searchParams = new URLSearchParams(location.search);
+    const surplusPlan = searchParams.get("surplusPlan") === "1";
+    if (surplusPlan && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -90,6 +92,16 @@
           itemHrid: "/items/beast_hide",
           name: "Beast Hide",
           guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 4, creditCount: 1 }]
+        },
+        "/items/purple_plan_material": {
+          itemHrid: "/items/purple_plan_material",
+          name: "Purple Plan Material",
+          guildCreditConversions: [{ creditItemHrid: "/items/purple_guild_credit", itemCount: 1, creditCount: 1 }]
+        },
+        "/items/silver_plan_material": {
+          itemHrid: "/items/silver_plan_material",
+          name: "Silver Plan Material",
+          guildCreditConversions: [{ creditItemHrid: "/items/silver_guild_credit", itemCount: 1, creditCount: 1 }]
         }
       },
       guildBuffDetails: {
@@ -97,7 +109,14 @@
           guildBuffHrid: "/guild_buffs/tempo_life",
           shrineHrid: "/guild_shrines/tempo",
           isCombat: false,
-          levelCosts: [
+          levelCosts: surplusPlan ? [
+            null,
+            { guildTokenCost: 0, creditCosts: [
+              { itemHrid: "/items/purple_guild_credit", count: 3000 },
+              { itemHrid: "/items/silver_guild_credit", count: 3000 },
+              { itemHrid: "/items/green_guild_credit", count: 3000 }
+            ] }
+          ] : [
             null,
             { guildTokenCost: 1200, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 6000 }] },
             { guildTokenCost: 1800, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] }
@@ -115,13 +134,18 @@
         }
       },
       characterGuildBuffMap: {
-        "/guild_buffs/tempo_life": { guildBuffHrid: "/guild_buffs/tempo_life", level: 1 },
+        "/guild_buffs/tempo_life": { guildBuffHrid: "/guild_buffs/tempo_life", level: surplusPlan ? 0 : 1 },
         "/guild_buffs/tempo_combat": { guildBuffHrid: "/guild_buffs/tempo_combat", level: 0 }
       },
       guildShrineMap: {
         "/guild_shrines/tempo": { guildShrineHrid: "/guild_shrines/tempo", level: 2 }
       },
-      characterItems: [
+      characterItems: surplusPlan ? [
+        { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 10000 },
+        { itemHrid: "/items/purple_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
+        { itemHrid: "/items/silver_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
+        { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
+      ] : [
         { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 4750 },
         { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 6000 },
         { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }

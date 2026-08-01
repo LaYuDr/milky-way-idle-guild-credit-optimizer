@@ -1,5 +1,8 @@
 {
+  "timestamp": "2026-08-01T00:00:00Z",
   "marketData": {
-    "/items/beast_hide": { "0": { "a": 100, "b": 90 } }
+    "/items/beast_hide": { "0": { "a": 100, "b": 90 } },
+    "/items/purple_plan_material": { "0": { "a": 11000, "b": 10500 } },
+    "/items/silver_plan_material": { "0": { "a": 55000, "b": 52000 } }
   }
 }

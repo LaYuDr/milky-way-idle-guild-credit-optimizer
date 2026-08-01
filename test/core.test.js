@@ -663,6 +663,85 @@ test("神龛升级分别计算全部信用点成本与扣除库存后的缺口�
   });
 });
 
+test("剩余公会代币按兑换价值依次覆盖紫色、银色并保留其余缺口", () => {
+  const result = core.allocateSurplusGuildTokens([
+    { itemHrid: "/items/purple_guild_credit", missing: 3000, unitCost: 11000 },
+    { itemHrid: "/items/silver_guild_credit", missing: 3000, unitCost: 55000 },
+    { itemHrid: "/items/green_guild_credit", missing: 3000, unitCost: 400 }
+  ], [
+    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+    { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 }
+  ], 10000);
+
+  assert.equal(result.spentGuildTokens, 10000);
+  assert.equal(result.remainingGuildTokens, 0);
+  assert.deepEqual(result.allocations.map((allocation) => ({
+    creditItemHrid: allocation.creditItemHrid,
+    spentGuildTokens: allocation.spentGuildTokens,
+    coveredCredits: allocation.coveredCredits
+  })), [
+    { creditItemHrid: "/items/purple_guild_credit", spentGuildTokens: 3000, coveredCredits: 3000 },
+    { creditItemHrid: "/items/silver_guild_credit", spentGuildTokens: 7000, coveredCredits: 700 }
+  ]);
+});
+
+test("自动兑换预算限制代币用量并保留部分信用点的物品缺口", () => {
+  const estimate = core.estimateGuildUpgradeCosts([
+    { itemHrid: "/items/purple_guild_credit", count: 3000 },
+    { itemHrid: "/items/silver_guild_credit", count: 3000 },
+    { itemHrid: "/items/green_guild_credit", count: 3000 }
+  ], {
+    "/items/purple_guild_credit": 11000,
+    "/items/silver_guild_credit": 55000,
+    "/items/green_guild_credit": 400
+  }, {
+    "/items/guild_token": 10000
+  }, {
+    autoAllocateSurplusGuildTokens: true,
+    autoGuildTokenBudget: 5000,
+    guildTokenCreditConversions: [
+      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+      { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+      { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 }
+    ]
+  });
+
+  assert.equal(estimate.autoGuildTokenBudgetAvailable, 10000);
+  assert.equal(estimate.autoGuildTokenBudget, 5000);
+  assert.equal(estimate.autoGuildTokenCreditExchangeUsed, 5000);
+  assert.equal(estimate.guildTokensRequired, 5000);
+  assert.equal(estimate.guildTokensMissing, 0);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/purple_guild_credit").remainingMissing, 0);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/silver_guild_credit").remainingMissing, 2800);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").remainingMissing, 3000);
+});
+
+test("自动兑换只使用扣除神龛和手动兑换后的库存代币", () => {
+  const estimate = core.estimateGuildUpgradeCosts([
+    { itemHrid: "/items/guild_token", count: 1000 },
+    { itemHrid: "/items/red_guild_credit", count: 500 },
+    { itemHrid: "/items/purple_guild_credit", count: 3000 }
+  ], {
+    "/items/purple_guild_credit": 11000
+  }, {
+    "/items/guild_token": 10000
+  }, {
+    autoAllocateSurplusGuildTokens: true,
+    guildTokenCreditHrids: ["/items/red_guild_credit"],
+    guildTokenCreditConversions: [
+      { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
+      { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 }
+    ]
+  });
+
+  assert.equal(estimate.manualGuildTokenCreditExchangeRequired, 500);
+  assert.equal(estimate.autoGuildTokenBudgetAvailable, 8500);
+  assert.equal(estimate.autoGuildTokenCreditExchangeUsed, 3000);
+  assert.equal(estimate.guildTokensRequired, 4500);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/purple_guild_credit").remainingMissing, 0);
+});
+
 test("神龛信用点缺口可全部改用公会代币并合并到代币总需求", () => {
   const estimate = core.estimateGuildUpgradeCosts([
     { itemHrid: "/items/guild_token", count: 1600 },
@@ -1285,6 +1364,12 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /options\.single/);
   assert.match(source, /core\.rankConversions\(conversions, books, targetCredits\)/);
   assert.match(source, /function bestCreditMaterialPlans\(estimate\)/);
+  assert.match(source, /row\.remainingMissing \?\? row\.missing/);
+  assert.match(source, /data-role="guild-token-budget-range"/);
+  assert.match(source, /data-role="guild-token-budget-number"/);
+  assert.match(source, /autoGuildTokenBudget: state\.autoGuildTokenBudget/);
+  assert.match(source, /autoAllocateSurplusGuildTokens: hasInventory/);
+  assert.match(source, /mwi-material-plan-auto/);
   assert.match(source, /marketItemIconMarkup\(plan\.itemHrid/);
   assert.match(source, /materialInventory\[plan\.itemHrid\]/);
   assert.match(source, /backpackInventory/);

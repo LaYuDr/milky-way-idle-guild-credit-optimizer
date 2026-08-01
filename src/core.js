@@ -298,10 +298,64 @@
     };
   }
 
+  function allocateSurplusGuildTokens(creditRows, exchangeRules, availableGuildTokens) {
+    const budget = Math.max(0, Math.floor(Number(availableGuildTokens) || 0));
+    const rules = new Map();
+    for (const rule of Array.isArray(exchangeRules) ? exchangeRules : []) {
+      const creditItemHrid = rule && rule.creditItemHrid;
+      const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+      const creditCount = positiveInteger(rule && rule.creditCount);
+      if (!creditItemHrid || !guildTokenCount || !creditCount || rules.has(creditItemHrid)) continue;
+      rules.set(creditItemHrid, { creditItemHrid, guildTokenCount, creditCount });
+    }
+
+    const candidates = (Array.isArray(creditRows) ? creditRows : []).map((row) => {
+      const rule = row && rules.get(row.itemHrid);
+      const missing = Math.max(0, Number(row && row.missing) || 0);
+      const unitCost = Number(row && row.unitCost);
+      if (!rule || missing <= 0 || !Number.isFinite(unitCost) || unitCost <= 0) return null;
+      return {
+        ...rule,
+        missing,
+        goldValuePerToken: unitCost * rule.creditCount / rule.guildTokenCount
+      };
+    }).filter(Boolean).sort((left, right) => (
+      right.goldValuePerToken - left.goldValuePerToken
+      || left.creditItemHrid.localeCompare(right.creditItemHrid)
+    ));
+
+    let remainingGuildTokens = budget;
+    const allocations = [];
+    for (const candidate of candidates) {
+      const affordableBatches = Math.floor(remainingGuildTokens / candidate.guildTokenCount);
+      const requiredBatches = Math.ceil(candidate.missing / candidate.creditCount);
+      const batches = Math.min(affordableBatches, requiredBatches);
+      if (batches <= 0) continue;
+      const spentGuildTokens = batches * candidate.guildTokenCount;
+      const actualCredits = batches * candidate.creditCount;
+      allocations.push({
+        ...candidate,
+        batches,
+        actualCredits,
+        coveredCredits: Math.min(candidate.missing, actualCredits),
+        spentGuildTokens
+      });
+      remainingGuildTokens -= spentGuildTokens;
+    }
+
+    return {
+      availableGuildTokens: budget,
+      spentGuildTokens: budget - remainingGuildTokens,
+      remainingGuildTokens,
+      allocations
+    };
+  }
+
   function estimateGuildUpgradeCosts(totals, creditUnitCosts, inventoryCounts, options) {
     const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
     const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
     const settings = options && typeof options === "object" ? options : {};
+    const autoAllocateSurplusGuildTokens = settings.autoAllocateSurplusGuildTokens === true;
     const useGuildTokensForAllMissingCredits = settings.useGuildTokensForMissingCredits === true;
     const guildTokenCreditHrids = new Set(
       Array.isArray(settings.guildTokenCreditHrids)
@@ -380,6 +434,40 @@
       });
     }
 
+    const manualGuildTokenCreditExchangeRequired = guildTokenCreditExchangeRequired;
+    const reservedGuildTokens = guildTokensRequired + manualGuildTokenCreditExchangeRequired;
+    const availableSurplusGuildTokens = autoAllocateSurplusGuildTokens
+      ? Math.max(0, Math.floor(guildTokensOwned - reservedGuildTokens))
+      : 0;
+    const requestedAutoGuildTokenBudget = Number(settings.autoGuildTokenBudget);
+    const hasConfiguredAutoGuildTokenBudget = settings.autoGuildTokenBudget !== null
+      && settings.autoGuildTokenBudget !== undefined
+      && Number.isFinite(requestedAutoGuildTokenBudget)
+      && requestedAutoGuildTokenBudget >= 0;
+    const autoGuildTokenBudget = hasConfiguredAutoGuildTokenBudget
+      ? Math.min(availableSurplusGuildTokens, Math.floor(requestedAutoGuildTokenBudget))
+      : availableSurplusGuildTokens;
+    const autoGuildTokenPlan = allocateSurplusGuildTokens(rows, Array.from(guildTokenCreditRules.values()), autoGuildTokenBudget);
+    const autoAllocationsByCredit = new Map(autoGuildTokenPlan.allocations.map((allocation) => [allocation.creditItemHrid, allocation]));
+    if (autoAllocateSurplusGuildTokens) {
+      for (const row of rows) {
+        if (!guildTokenCreditRules.has(row.itemHrid) || row.guildTokenExchange) continue;
+        const allocation = autoAllocationsByCredit.get(row.itemHrid);
+        row.remainingMissing = row.missing;
+        if (!allocation) continue;
+        row.autoGuildTokenExchange = allocation;
+        row.remainingMissing = Math.max(0, row.missing - allocation.coveredCredits);
+        if (row.unitCost !== null) {
+          const coveredGold = allocation.coveredCredits * row.unitCost;
+          totalGold = Math.max(0, totalGold - coveredGold);
+          missingGold = Math.max(0, missingGold - coveredGold);
+          row.totalCost = Math.max(0, row.totalCost - coveredGold);
+          row.missingCost = row.remainingMissing * row.unitCost;
+        }
+      }
+    }
+    const autoGuildTokenCreditExchangeUsed = autoGuildTokenPlan.spentGuildTokens;
+    guildTokenCreditExchangeRequired += autoGuildTokenCreditExchangeUsed;
     guildTokensRequired += guildTokenCreditExchangeRequired;
     const guildTokensMissing = Math.max(0, guildTokensRequired - guildTokensOwned);
     if (guildTokensRequired > 0) {
@@ -400,6 +488,10 @@
       }
       guildTokenRow.shrineRequired = guildTokensRequired - guildTokenCreditExchangeRequired;
       guildTokenRow.creditExchangeRequired = guildTokenCreditExchangeRequired;
+      if (autoAllocateSurplusGuildTokens) {
+        guildTokenRow.manualCreditExchangeRequired = manualGuildTokenCreditExchangeRequired;
+        guildTokenRow.autoCreditExchangeUsed = autoGuildTokenCreditExchangeUsed;
+      }
     }
 
     return {
@@ -410,7 +502,12 @@
       guildTokensOwned,
       guildTokensMissing,
       guildTokenCreditExchangeRequired,
-      useGuildTokensForMissingCredits,
+      manualGuildTokenCreditExchangeRequired,
+      autoGuildTokenCreditExchangeUsed,
+      autoGuildTokenBudgetAvailable: availableSurplusGuildTokens,
+      autoGuildTokenBudget,
+      autoGuildTokenAllocations: autoGuildTokenPlan.allocations,
+      useGuildTokensForMissingCredits: useGuildTokensForMissingCredits || autoGuildTokenCreditExchangeUsed > 0,
       guildTokenCreditHrids: Array.from(guildTokenCreditHrids),
       unpricedItemHrids,
       rows
@@ -433,5 +530,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
