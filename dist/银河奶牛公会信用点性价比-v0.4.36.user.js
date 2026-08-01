@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
-// @version      0.4.46
+// @version      0.4.36
 // @author       柆雨
 // @license      Copyright 柆雨
-// @description  公会信用点兑换与神龛升级的只读计算辅助；不会自动交易、兑换或升级，也不会上传账号数据。
+// @description  只读计算八种公会信用点性价比与神龛升级材料；不会自动交易、兑换或升级。
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
 // @grant        none
@@ -12,7 +12,7 @@
 // ==/UserScript==
 
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "0.4.46";
+window.MwiGuildCreditVersion = "0.4.36";
 
 (function () {
   "use strict";
@@ -951,38 +951,6 @@ window.MwiGuildCreditVersion = "0.4.46";
     return candidates[0] || null;
   }
 
-  function estimateSaleReplacement(options) {
-    const selectedConversion = options && options.selectedConversion;
-    const batches = positiveInteger(options && options.batches);
-    const selectedItemCount = positiveInteger(selectedConversion && selectedConversion.itemCount);
-    const selectedCreditCount = positiveInteger(selectedConversion && selectedConversion.creditCount);
-    if (!batches || !selectedItemCount || !selectedCreditCount) {
-      return { status: "invalid_selection", options };
-    }
-
-    const directCredits = batches * selectedCreditCount;
-    const sale = calculateSaleProceeds(
-      batches * selectedItemCount,
-      options && options.sellPrice,
-      options && options.sellerTaxRate
-    );
-    if (sale.status !== "ok") return { status: sale.status, directCredits, sale };
-
-    const best = bestConversionForBudget(options && options.conversions, options && options.buyPrices, sale.net);
-    if (!best) return { status: "no_affordable_conversion", directCredits, sale, best: null };
-    if (best.itemHrid === selectedConversion.itemHrid) {
-      return { status: "already_optimal", directCredits, sale, best, creditDifference: 0 };
-    }
-
-    return {
-      status: "ok",
-      directCredits,
-      sale,
-      best,
-      creditDifference: best.actualCredits - directCredits
-    };
-  }
-
   function calculateSaleProceeds(quantity, sellPrice, sellerTaxRate) {
     const itemQuantity = positiveInteger(quantity);
     const price = Number(sellPrice);
@@ -1158,7 +1126,7 @@ window.MwiGuildCreditVersion = "0.4.46";
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, estimateGuildUpgradeCosts, conversionsFromItemDetails };
 });
 
 
@@ -1172,7 +1140,6 @@ window.MwiGuildCreditVersion = "0.4.46";
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
   const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
-  const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
   const PRICE_REFERENCES = {
     a: { label: "左一", title: "左一：最低出售价，可立即买入" },
     b: { label: "右一", title: "右一：最高收购价，仅作理论参考" }
@@ -1198,7 +1165,6 @@ window.MwiGuildCreditVersion = "0.4.46";
     { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
     { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
   ];
-  const SELLER_TAX_RATE = 0.02;
   const GUILD_SHRINE_NAMES = {
     "/guild_shrines/force": "力量神龛",
     "/guild_shrines/tempo": "节奏神龛",
@@ -1237,54 +1203,7 @@ window.MwiGuildCreditVersion = "0.4.46";
     "Philosopher's Mirror": "贤者之镜",
     "Philosopher's Stone": "贤者之石"
   };
-  const savedUiState = loadSavedPluginUiState();
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, snapshot: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorObserver: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
-
-  function loadSavedPluginUiState() {
-    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, targetCredit: 1, upgradePlans: [] };
-    try {
-      const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(UI_STATE_STORAGE_KEY);
-      if (!raw) return fallback;
-      const stored = JSON.parse(raw);
-      if (!stored || typeof stored !== "object") return fallback;
-      const creditHrids = new Set(CREDIT_TYPES.map(([hrid]) => hrid));
-      const collapsedCreditSections = Array.isArray(stored.collapsedCreditSections)
-        ? Array.from(new Set(stored.collapsedCreditSections.filter((hrid) => creditHrids.has(hrid))))
-        : [];
-      const upgradePlans = Array.isArray(stored.upgradePlans)
-        ? stored.upgradePlans
-          .filter((plan) => plan && typeof plan.guildBuffHrid === "string" && Number.isSafeInteger(plan.startLevel) && Number.isSafeInteger(plan.targetLevel))
-          .map((plan) => ({ guildBuffHrid: plan.guildBuffHrid, startLevel: plan.startLevel, targetLevel: plan.targetLevel }))
-        : [];
-      const targetCredit = Number(stored.targetCredit);
-      return {
-        collapsedCreditSections,
-        guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
-        targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
-        upgradePlans
-      };
-    } catch (_) {
-      return fallback;
-    }
-  }
-
-  function persistPluginUiState() {
-    const upgradePlans = state.upgradePlans.map((plan) => ({
-      guildBuffHrid: plan.guildBuffHrid,
-      startLevel: plan.startLevel,
-      targetLevel: plan.targetLevel
-    }));
-    try {
-      pageWindow.localStorage && pageWindow.localStorage.setItem(UI_STATE_STORAGE_KEY, JSON.stringify({
-        collapsedCreditSections: Array.from(state.collapsedCreditSections),
-        guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
-        targetCredit: state.targetCredit,
-        upgradePlans
-      }));
-    } catch (_) {
-      // Keep the current page state when browser storage is unavailable.
-    }
-  }
+  const state = { itemDetails: null, guildBuffDetails: null, guildBuffLevels: null, characterItems: null, pageItemNames: Object.create(null), upgradePlans: [], nextUpgradePlanId: 1, snapshot: null, priceReference: savedPriceReference(), panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(), guildTokenValuesCollapsed: false, upgradeRefreshId: 0, exchangeAdvisor: null, exchangeAdvisorTimer: null, exchangeAdvisorSuppressedModal: null, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
 
   function savedPriceReference() {
     try {
@@ -1346,7 +1265,6 @@ window.MwiGuildCreditVersion = "0.4.46";
 
   function setItemDetails(candidate) {
     if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
-      if (state.itemDetails !== candidate) state.conversionCache.clear();
       state.itemDetails = candidate;
       return true;
     }
@@ -1579,12 +1497,7 @@ window.MwiGuildCreditVersion = "0.4.46";
       hydrateBridgeData();
       extractItemDetailsFromReact();
     }
-    let conversions = state.conversionCache.get(creditItemHrid);
-    if (!conversions) {
-      conversions = core.conversionsFromItemDetails(state.itemDetails, creditItemHrid);
-      state.conversionCache.set(creditItemHrid, conversions);
-    }
-    return conversions.map((conversion) => ({
+    return core.conversionsFromItemDetails(state.itemDetails, creditItemHrid).map((conversion) => ({
       ...conversion,
       itemName: localizedItemName(conversion.itemName, conversion.itemHrid)
     }));
@@ -1695,23 +1608,13 @@ window.MwiGuildCreditVersion = "0.4.46";
     return counts;
   }
 
-  function bestCreditConversions(targetCreditsByHrid) {
+  function bestCreditUnitCosts() {
     return Object.fromEntries(CREDIT_TYPES.map(([creditItemHrid]) => {
-      const targetCredits = targetCreditsByHrid ? Number(targetCreditsByHrid[creditItemHrid]) : 1;
-      if (!Number.isSafeInteger(targetCredits) || targetCredits <= 0) return [creditItemHrid, null];
       const conversions = allConversions(creditItemHrid);
       const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
-      return [creditItemHrid, core.rankConversions(conversions, books, targetCredits).find((row) => row.status === "ok") || null];
+      const best = core.rankConversions(conversions, books, 1).find((row) => row.status === "ok");
+      return [creditItemHrid, best ? best.costPerCredit : null];
     }));
-  }
-
-  function bestCreditUnitCosts() {
-    return Object.fromEntries(Object.entries(bestCreditConversions()).map(([creditItemHrid, best]) => [creditItemHrid, best ? best.costPerCredit : null]));
-  }
-
-  function bestCreditMaterialPlans(estimate) {
-    const missingCredits = Object.fromEntries((estimate && estimate.rows || []).map((row) => [row.itemHrid, row.missing]));
-    return bestCreditConversions(missingCredits);
   }
 
   function currentGuildBuffLevel(entry) {
@@ -1748,7 +1651,6 @@ window.MwiGuildCreditVersion = "0.4.46";
   function ensureGuildUpgradePlans(entries) {
     state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
     if (!state.upgradePlans.length) addGuildUpgradePlan(entries);
-    persistPluginUiState();
   }
 
   function levelOptionMarkup(start, end, selected) {
@@ -1789,7 +1691,7 @@ window.MwiGuildCreditVersion = "0.4.46";
     return `<div class="mwi-upgrade-cost-summary"><div><span>${totalLabel}</span><strong>${renderUpgradeCostText(estimate.totalGold, estimate.guildTokensRequired)}</strong></div><div><span>${missingLabel}</span><strong>${renderUpgradeCostText(estimate.missingGold, estimate.guildTokensMissing)}</strong></div>${inventoryNote}${priceNote}</div>`;
   }
 
-  function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans) {
+  function renderMaterialTotals(results, totals, estimate, hasInventory) {
     const planSummary = results.map((plan) => {
       const entry = guildBuffEntries().find((candidate) => candidate.hrid === plan.guildBuffHrid);
       const label = entry ? guildBuffLabel(entry.detail, entry.hrid) : plan.guildBuffHrid;
@@ -1799,14 +1701,7 @@ window.MwiGuildCreditVersion = "0.4.46";
     const materials = totals.sort(materialOrder).map((item) => {
       const row = estimateRows[item.itemHrid];
       const inventoryText = row ? `库存 ${formatNumber(row.owned)} · 缺 ${formatNumber(row.missing)}` : "库存未读取";
-      const isGuildCredit = CREDIT_TYPES.some(([creditItemHrid]) => creditItemHrid === item.itemHrid);
-      const plan = creditMaterialPlans && creditMaterialPlans[item.itemHrid];
-      const conversionText = row && row.missing > 0 && isGuildCredit
-        ? plan
-          ? `按最优兑换需 ${formatNumber(plan.requiredItems)} 个${itemNameForMaterial(plan.itemHrid)}（${formatNumber(plan.itemCount)} 个 -> ${formatNumber(plan.creditCount)} 点）`
-          : "最优兑换：暂无可用市场价格"
-        : "";
-      return `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small>${conversionText ? `<small class="mwi-material-plan">${escapeHtml(conversionText)}</small>` : ""}</span><strong>${formatNumber(item.count)}</strong></div>`;
+      return `<div class="mwi-material-row">${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : "库存未读取"}</small></span><strong>${formatNumber(item.count)}</strong></div>`;
     }).join("");
     return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
   }
@@ -1841,13 +1736,11 @@ window.MwiGuildCreditVersion = "0.4.46";
       return;
     }
     let estimate = null;
-    let creditMaterialPlans = null;
     let snapshotFailed = false;
     try {
       await loadSnapshot(false);
       if (refreshId !== state.upgradeRefreshId) return;
       estimate = core.estimateGuildUpgradeCosts(result.totals, bestCreditUnitCosts(), inventoryItemCounts());
-      creditMaterialPlans = bestCreditMaterialPlans(estimate);
     } catch (_) {
       snapshotFailed = true;
     }
@@ -1857,7 +1750,7 @@ window.MwiGuildCreditVersion = "0.4.46";
     if (snapshotFailed) notices.push("公开市场快照读取失败，暂未估算金币成本。");
     if (!hasInventory) notices.push("未读取背包库存，缺口暂按 0 件库存计算。");
     status.textContent = notices.join(" ");
-    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory, creditMaterialPlans);
+    results.innerHTML = renderMaterialTotals(result.plans, result.totals, estimate, hasInventory);
   }
 
   function setPanelView(panel, view) {
@@ -1899,7 +1792,7 @@ window.MwiGuildCreditVersion = "0.4.46";
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
-        #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
         #mwi-credit-optimizer .mwi-credit-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}.mwi-credit-section table{width:100%;border-collapse:collapse;font-size:11px}
         #mwi-credit-optimizer th,#mwi-credit-optimizer td{padding:5px 6px;border-top:1px solid #474969;text-align:right;white-space:nowrap}
@@ -1908,7 +1801,7 @@ window.MwiGuildCreditVersion = "0.4.46";
         #mwi-credit-optimizer .mwi-item-icon{display:inline-block;width:24px;height:24px;flex:0 0 24px;vertical-align:middle}.mwi-item-icon-fallback{border-radius:4px;background:#45476b}
         #mwi-credit-optimizer .mwi-cost{color:#77f3d0;font-weight:700} #mwi-credit-optimizer .mwi-empty{padding:8px;color:#ffd17c;font-size:12px}#mwi-credit-optimizer .mwi-token-value-section{margin:10px 0;border:1px solid #3a7b70;border-top:3px solid #43c4ad;border-radius:6px;background:#203b3a;overflow:hidden}#mwi-credit-optimizer .mwi-token-value-heading{border-bottom:1px solid #3a7b70}#mwi-credit-optimizer .mwi-token-value-heading .mwi-item-icon{width:22px;height:22px;flex:0 0 22px}#mwi-credit-optimizer .mwi-token-value-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0}#mwi-credit-optimizer .mwi-token-value-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;min-width:0;padding:8px;border-top:1px solid #315d58}#mwi-credit-optimizer .mwi-token-value-row .mwi-item-icon{width:21px;height:21px;flex:0 0 21px}#mwi-credit-optimizer .mwi-token-value-exchange{color:#d7f6ef;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-row .mwi-cost{font-size:12px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-value-unpriced{color:#ffd17c;font-size:11px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;gap:8px;align-items:end;padding:8px;border:1px solid #474969;border-radius:4px;background:#292a46}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:32px;min-width:32px;padding:0!important;font-size:20px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{margin-top:10px}
-        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-copy .mwi-material-plan{color:#77f3d0;font-weight:600}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
+        #mwi-credit-optimizer .mwi-material-list{border-top:1px solid #474969}.mwi-material-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #474969}.mwi-material-copy{flex:1;min-width:0;display:grid;gap:1px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-row strong{color:#77f3d0;font-size:15px}.mwi-plan-summary{display:flex;flex-wrap:wrap;gap:2px 0;margin:10px 0 6px;color:#c9cbeb;font-size:12px}.mwi-plan-separator{padding-right:4px}.mwi-upgrade-cost-summary{display:grid;gap:6px;margin:8px 0 10px;padding:9px;border:1px solid #3a7b70;border-radius:4px;background:#203b3a}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:14px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
         @media (max-width:430px){#mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:1fr}}
       </style>
       <h3>公会助手</h3>
@@ -1919,7 +1812,7 @@ window.MwiGuildCreditVersion = "0.4.46";
       </div>
       <div data-role="credit-view">
         <div class="mwi-controls">
-          <label>目标信用点<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
+          <label>目标信用点<input data-role="target" type="number" min="1" step="1" value="1"></label>
           <div class="mwi-price-reference" role="group" aria-label="市场价格参考"><span class="mwi-price-reference-label">价格参考</span><button data-role="price-reference" data-price-reference="a" type="button" title="左一：最低出售价，可立即买入">左一</button><button data-role="price-reference" data-price-reference="b" type="button" title="右一：最高收购价，仅作理论参考">右一</button></div>
           <button data-role="refresh" type="button">刷新市场估算</button>
         </div>
@@ -1934,13 +1827,7 @@ window.MwiGuildCreditVersion = "0.4.46";
       </div>
       <footer class="mwi-plugin-footer">作者：柆雨<br>遇到问题或无法获取最新版，请加群：437320340</footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
-    panel.querySelector('[data-role="target"]').addEventListener("change", (event) => {
-      const target = Number(event.target.value);
-      if (Number.isSafeInteger(target) && target > 0) state.targetCredit = target;
-      else event.target.value = String(state.targetCredit);
-      persistPluginUiState();
-      refreshPanel(panel);
-    });
+    panel.querySelector('[data-role="target"]').addEventListener("change", () => refreshPanel(panel));
     panel.querySelector('.mwi-price-reference').addEventListener("click", (event) => {
       const button = event.target.closest('[data-role="price-reference"]');
       if (!button || button.dataset.priceReference === state.priceReference) return;
@@ -1952,23 +1839,7 @@ window.MwiGuildCreditVersion = "0.4.46";
     });
     updatePriceReferenceButtons(panel);
     panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
-      const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
-      if (!target) return;
-      const tokenToggle = target.closest('[data-role="toggle-token-values"]');
-      if (tokenToggle) {
-        const tokenSection = tokenToggle.closest(".mwi-token-value-section");
-        const tokenBody = tokenSection && tokenSection.querySelector(".mwi-token-value-body");
-        if (!tokenSection || !tokenBody) return;
-        state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
-        tokenSection.dataset.collapsed = String(state.guildTokenValuesCollapsed);
-        tokenToggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
-        const tokenIcon = tokenToggle.querySelector(".mwi-collapse-icon");
-        if (tokenIcon) tokenIcon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
-        tokenBody.hidden = state.guildTokenValuesCollapsed;
-        persistPluginUiState();
-        return;
-      }
-      const toggle = target.closest('[data-role="toggle-credit-section"]');
+      const toggle = event.target.closest('[data-role="toggle-credit-section"]');
       const section = toggle && toggle.closest('[data-credit-item-hrid]');
       if (!section) return;
       const creditItemHrid = section.dataset.creditItemHrid;
@@ -1981,11 +1852,10 @@ window.MwiGuildCreditVersion = "0.4.46";
       if (icon) icon.textContent = collapsed ? "▸" : "▾";
       const body = section.querySelector(".mwi-credit-body");
       if (body) body.hidden = collapsed;
-      persistPluginUiState();
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
-    panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
+    panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("change", (event) => {
       const row = event.target.closest("[data-plan-id]");
       const plan = row && state.upgradePlans.find((candidate) => candidate.id === row.dataset.planId);
@@ -2006,7 +1876,6 @@ window.MwiGuildCreditVersion = "0.4.46";
       } else if (event.target.matches('[data-role="plan-target"]')) {
         plan.targetLevel = Number(event.target.value);
       }
-      persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
     panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
@@ -2014,7 +1883,6 @@ window.MwiGuildCreditVersion = "0.4.46";
       const row = button && button.closest("[data-plan-id]");
       if (!row) return;
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== row.dataset.planId);
-      persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
     checkPluginUpdate(panel);
@@ -2047,6 +1915,21 @@ window.MwiGuildCreditVersion = "0.4.46";
     const collapsed = state.guildTokenValuesCollapsed;
     const heading = `<button class="mwi-credit-heading mwi-token-value-heading" data-role="toggle-token-values" type="button" aria-expanded="${String(!collapsed)}">${iconMarkup("/items/guild_token", "公会代币")}<span>公会代币兑换价值</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
     return `<section class="mwi-token-value-section" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
+  }
+
+  function bindGuildTokenValueToggle(results) {
+    const toggle = results.querySelector('[data-role="toggle-token-values"]');
+    const section = toggle && toggle.closest(".mwi-token-value-section");
+    const body = section && section.querySelector(".mwi-token-value-body");
+    if (!toggle || !section || !body) return;
+    toggle.addEventListener("click", () => {
+      state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
+      section.dataset.collapsed = String(state.guildTokenValuesCollapsed);
+      toggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
+      const icon = toggle.querySelector(".mwi-collapse-icon");
+      if (icon) icon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
+      body.hidden = state.guildTokenValuesCollapsed;
+    });
   }
 
   async function refreshPanel(panel, forceSnapshot) {
@@ -2092,6 +1975,7 @@ window.MwiGuildCreditVersion = "0.4.46";
       status.textContent = "";
       status.hidden = true;
       results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.label, group.color, group.ranked)).join("")}</div>`;
+      bindGuildTokenValueToggle(results);
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {
@@ -2110,12 +1994,9 @@ window.MwiGuildCreditVersion = "0.4.46";
   }
 
   function isVisible(node) {
-    const modal = node && node.closest && node.closest('[class*="Modal_modal"]') || node;
-    if (!modal || !modal.isConnected || modal.hidden || modal.getAttribute("aria-hidden") === "true") return false;
-    const rect = modal.getBoundingClientRect();
-    const style = getComputedStyle(modal);
-    const opacity = Number(style.opacity);
-    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" && style.pointerEvents !== "none" && (!Number.isFinite(opacity) || opacity > 0.01);
+    if (!node || !node.isConnected) return false;
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== "hidden";
   }
 
   function itemHridFromIcon(icon) {
@@ -2137,7 +2018,6 @@ window.MwiGuildCreditVersion = "0.4.46";
     const candidates = Array.from(document.querySelectorAll('[class*="GuildPanel_exchangeModalContent"]'))
       .filter(isVisible);
     for (const element of candidates) {
-      const modal = element.closest('[class*="Modal_modal"]') || element;
       const icons = Array.from(element.querySelectorAll('svg[role="img"][aria-label]'))
         .map((icon) => ({
           itemHrid: itemHridFromIcon(icon),
@@ -2152,7 +2032,6 @@ window.MwiGuildCreditVersion = "0.4.46";
       if (!credit) continue;
       return {
         element,
-        modal,
         creditItemHrid: credit.itemHrid,
         selectedItemHrid: selected && selected.itemHrid || null,
         selectedEnhancementLevel: selected && selected.enhancementLevel || 0,
@@ -2162,143 +2041,124 @@ window.MwiGuildCreditVersion = "0.4.46";
     return null;
   }
 
-  const GUILD_EXCHANGE_ADVISOR_HOST_ID = "mwi-guild-exchange-advisor-host";
-
-  const GUILD_EXCHANGE_ADVISOR_STYLES = `
-    :host{all:initial;color-scheme:dark;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}
-    .advisor{--credit:#4fcdb5;position:fixed;z-index:1065;display:flex;flex-direction:column;width:min(400px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;border:1px solid #414361;border-left:4px solid var(--credit);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.4}
-    .head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}.title{display:grid;gap:2px;font-size:17px;font-weight:700}.credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}.credit::before{width:9px;height:9px;border-radius:2px;background:var(--credit);content:""}.reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}.body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}.options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}.options.single{grid-template-columns:minmax(0,1fr)}.option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}.option.best{border-color:var(--credit);background:#193836}.label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}.item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}.item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cost{margin:8px 0 5px;color:var(--credit);font-size:23px;font-weight:700;line-height:1}.cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}.detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}.detail b{color:#e7e8f6;font-weight:600}.versus{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}.versus span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}.summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}.summary strong{color:var(--credit);font-size:16px}
-    @media (max-width:600px){.advisor{max-height:min(300px,calc(100dvh - 24px))}.options{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}.body{padding:9px}.option{padding:7px}.cost{font-size:20px}}
-  `;
-
-  function createGuildExchangeAdvisorUi() {
-    if (!document.body || state.exchangeAdvisorUi) return state.exchangeAdvisorUi;
-    if (document.getElementById(GUILD_EXCHANGE_ADVISOR_HOST_ID)) return null;
-    const host = document.createElement("div");
-    host.id = GUILD_EXCHANGE_ADVISOR_HOST_ID;
-    const shadow = host.attachShadow({ mode: "open" });
-    shadow.innerHTML = `<style>${GUILD_EXCHANGE_ADVISOR_STYLES}</style><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside>`;
-    document.body.append(host);
-    state.exchangeAdvisorUi = { host, shadow, card: shadow.querySelector('[data-role="advisor"]'), signature: "", modal: null };
-    return state.exchangeAdvisorUi;
+  function ensureGuildExchangeAdvisor() {
+    if (state.exchangeAdvisor && state.exchangeAdvisor.isConnected) return state.exchangeAdvisor;
+    const advisor = document.createElement("aside");
+    advisor.id = "mwi-guild-exchange-advisor";
+    advisor.setAttribute("aria-live", "polite");
+    advisor.innerHTML = `<style>
+      #mwi-guild-exchange-advisor{position:fixed;z-index:1501;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid var(--mwi-credit-color,#4fcdb5);border-left:4px solid var(--mwi-credit-color,#4fcdb5);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px/1.4 system-ui,sans-serif;pointer-events:none;overflow:hidden}
+      #mwi-guild-exchange-advisor[hidden],#mwi-guild-exchange-advisor [hidden]{display:none!important}#mwi-guild-exchange-advisor .mwi-advisor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}#mwi-guild-exchange-advisor .mwi-advisor-title{display:grid;gap:2px;font-size:17px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-credit::before{width:9px;height:9px;border-radius:2px;background:var(--mwi-credit-color,#4fcdb5);content:""}#mwi-guild-exchange-advisor .mwi-advisor-reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}#mwi-guild-exchange-advisor .mwi-advisor-options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"]{grid-template-columns:minmax(0,1fr)}#mwi-guild-exchange-advisor .mwi-advisor-options[data-mode="recommendation"] .mwi-advisor-option{display:flex;flex-direction:column;justify-content:center}#mwi-guild-exchange-advisor .mwi-advisor-option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}#mwi-guild-exchange-advisor .mwi-advisor-option[data-role="best-option"]{border-color:var(--mwi-credit-color,#4fcdb5);background:#193836}#mwi-guild-exchange-advisor .mwi-advisor-option-label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}#mwi-guild-exchange-advisor .mwi-advisor-item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}#mwi-guild-exchange-advisor .mwi-advisor-item-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-cost{margin:8px 0 5px;color:var(--mwi-credit-color,#77f3d0);font-size:23px;font-weight:700;line-height:1}#mwi-guild-exchange-advisor .mwi-advisor-cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}#mwi-guild-exchange-advisor .mwi-advisor-detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}#mwi-guild-exchange-advisor .mwi-advisor-detail b{color:#e7e8f6;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-vs{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}#mwi-guild-exchange-advisor .mwi-advisor-vs span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}#mwi-guild-exchange-advisor .mwi-advisor-summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}#mwi-guild-exchange-advisor .mwi-advisor-summary strong{color:var(--mwi-credit-color,#77f3d0);font-size:16px}
+    </style><div class="mwi-advisor-head"><div class="mwi-advisor-title"><span>兑换最优推荐</span><span class="mwi-advisor-credit" data-role="credit-label"></span></div><span class="mwi-advisor-reference" data-role="reference"></span></div><div class="mwi-advisor-body"><div class="mwi-advisor-options" data-role="options"><div class="mwi-advisor-option" data-role="selected-option"><span class="mwi-advisor-option-label">当前选择</span><div class="mwi-advisor-item" data-role="selected-item"></div><div class="mwi-advisor-cost" data-role="selected-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="selected-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="selected-market-cost"></b></div></div><div class="mwi-advisor-vs" data-role="vs"><span>VS</span></div><div class="mwi-advisor-option" data-role="best-option"><span class="mwi-advisor-option-label">最优物品</span><div class="mwi-advisor-item" data-role="best-item"></div><div class="mwi-advisor-cost" data-role="best-cost"></div><div class="mwi-advisor-detail"><span>单次兑换</span><b data-role="best-conversion"></b></div><div class="mwi-advisor-detail"><span>市场成本</span><b data-role="best-market-cost"></b></div></div></div><div class="mwi-advisor-summary" data-role="summary"></div></div>`;
+    document.body.append(advisor);
+    state.exchangeAdvisor = advisor;
+    return advisor;
   }
 
   function hideGuildExchangeAdvisor() {
-    const ui = state.exchangeAdvisorUi;
-    if (!ui) return;
-    ui.card.hidden = true;
-    ui.signature = "";
-    ui.modal = null;
+    if (state.exchangeAdvisor) state.exchangeAdvisor.hidden = true;
   }
 
-  function calculateGuildExchangeAdvisorPosition(modalRect, cardRect) {
+  function suppressGuildExchangeAdvisor(modal) {
+    state.exchangeAdvisorSuppressedModal = modal;
+    hideGuildExchangeAdvisor();
+  }
+
+  function isGuildExchangeCloseGesture(event, modal) {
+    const target = event.target;
+    // Tampermonkey and the game can expose DOM objects from different realms,
+    // making instanceof Element unreliable for clicks on the game's close icon.
+    if (!target || target.nodeType !== 1 || !modal.contains(target)) return false;
+    const modalRect = modal.getBoundingClientRect();
+    const closeAreaWidth = Math.min(96, modalRect.width * 0.25);
+    const closeAreaHeight = Math.min(96, modalRect.height * 0.2);
+    return event.clientX >= modalRect.right - closeAreaWidth && event.clientY <= modalRect.top + closeAreaHeight;
+  }
+
+  function placeGuildExchangeAdvisor(advisor, modal) {
     const margin = 12;
     const gap = 12;
-    const width = Math.max(1, cardRect.width);
-    const height = Math.max(1, cardRect.height);
-    const clampLeft = (value) => Math.max(margin, Math.min(value, window.innerWidth - width - margin));
-    const clampTop = (value) => Math.max(margin, Math.min(value, window.innerHeight - height - margin));
-    if (modalRect.right + gap + width <= window.innerWidth - margin) return { placement: "right", left: modalRect.right + gap, top: clampTop(modalRect.top) };
-    if (modalRect.left - gap - width >= margin) return { placement: "left", left: modalRect.left - gap - width, top: clampTop(modalRect.top) };
-    if (modalRect.bottom + gap + height <= window.innerHeight - margin) return { placement: "bottom", left: clampLeft(modalRect.left + (modalRect.width - width) / 2), top: modalRect.bottom + gap };
-    if (modalRect.top - gap - height >= margin) return { placement: "top", left: clampLeft(modalRect.left + (modalRect.width - width) / 2), top: modalRect.top - gap - height };
-    return { placement: "overlay", left: clampLeft(modalRect.left + (modalRect.width - width) / 2), top: clampTop(window.innerHeight - height - margin) };
-  }
+    const rect = modal.getBoundingClientRect();
+    const maxWidth = Math.max(0, window.innerWidth - margin * 2);
+    const maxHeight = Math.max(0, window.innerHeight - margin * 2);
+    const rightSpace = Math.max(0, window.innerWidth - rect.right - gap - margin);
+    const leftSpace = Math.max(0, rect.left - gap - margin);
+    const sideSpace = Math.max(rightSpace, leftSpace);
+    const width = Math.min(rect.width, sideSpace || maxWidth);
+    const height = Math.min(rect.height, maxHeight);
+    advisor.style.width = `${Math.round(width)}px`;
+    advisor.style.height = `${Math.round(height)}px`;
 
-  function positionGuildExchangeAdvisor(ui, modal) {
-    const card = ui && ui.card;
-    if (!card) return false;
-    if (!modal || !modal.isConnected || !isVisible(modal)) {
-      card.hidden = true;
-      return false;
+    let left = rightSpace >= leftSpace ? rect.right + gap : rect.left - width - gap;
+    let top = Math.max(margin, Math.min(rect.top, window.innerHeight - height - margin));
+    if (sideSpace === 0) {
+      left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+      top = Math.min(window.innerHeight - height - margin, rect.bottom + gap);
     }
-    const wasHidden = card.hidden;
-    if (wasHidden) {
-      card.style.visibility = "hidden";
-      card.hidden = false;
+    advisor.style.left = `${Math.round(left)}px`;
+    advisor.style.top = `${Math.round(Math.max(margin, top))}px`;
+  }
+
+  function renderGuildExchangeAdvisor(modalData, data) {
+    const advisor = ensureGuildExchangeAdvisor();
+    advisor.querySelector('[data-role="credit-label"]').textContent = `${data.creditLabel}信用点`;
+    advisor.querySelector('[data-role="reference"]').textContent = `参考${PRICE_REFERENCES[state.priceReference].label}`;
+    advisor.style.setProperty("--mwi-credit-color", data.color);
+    const options = advisor.querySelector('[data-role="options"]');
+    const selectedOption = advisor.querySelector('[data-role="selected-option"]');
+    const versus = advisor.querySelector('[data-role="vs"]');
+    options.dataset.mode = data.selected ? "comparison" : "recommendation";
+    selectedOption.hidden = !data.selected;
+    versus.hidden = !data.selected;
+
+    const setOption = (prefix, option) => {
+      const item = advisor.querySelector(`[data-role="${prefix}-item"]`);
+      item.replaceChildren();
+      item.insertAdjacentHTML("beforeend", iconMarkup(option.itemHrid, option.itemName));
+      const name = document.createElement("span");
+      name.className = "mwi-advisor-item-name";
+      name.textContent = option.itemName;
+      item.append(name);
+      advisor.querySelector(`[data-role="${prefix}-cost"]`).replaceChildren(
+        document.createTextNode(core.formatCompactCost(option.costPerCredit)),
+        Object.assign(document.createElement("small"), { textContent: "金币 / 信用" })
+      );
+      advisor.querySelector(`[data-role="${prefix}-conversion"]`).textContent = `${formatNumber(option.itemCount)} 件 -> ${formatNumber(option.creditCount)} 点`;
+      advisor.querySelector(`[data-role="${prefix}-market-cost"]`).textContent = `${core.formatCompactCost(option.cost)} 金币`;
+    };
+
+    setOption("best", data.best);
+    if (data.selected) setOption("selected", data.selected);
+    const summary = advisor.querySelector('[data-role="summary"]');
+    if (!data.selected) {
+      summary.textContent = "请选择兑换物品以查看成本对比。";
+    } else if (data.savingPercent > 0) {
+      summary.replaceChildren("改用最优物品，每信用点预计节省 ", Object.assign(document.createElement("strong"), { textContent: `${data.savingPercent}%` }), "。");
+    } else {
+      summary.textContent = "当前选择已是最优物品。";
     }
-    const modalRect = modal.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    if (modalRect.width <= 0 || modalRect.height <= 0 || cardRect.width <= 0 || cardRect.height <= 0) {
-      card.hidden = true;
-      card.style.removeProperty("visibility");
-      return false;
-    }
-    const position = calculateGuildExchangeAdvisorPosition(modalRect, cardRect);
-    card.dataset.placement = position.placement;
-    card.style.left = `${Math.round(position.left)}px`;
-    card.style.top = `${Math.round(position.top)}px`;
-    card.hidden = false;
-    card.style.removeProperty("visibility");
-    return true;
+    advisor.hidden = false;
+    placeGuildExchangeAdvisor(advisor, modalData.element);
   }
 
-  function advisorOptionMarkup(label, option, details, best) {
-    const primary = details
-      ? `${formatNumber(details.credits)}<small>信用点</small>`
-      : `${core.formatCompactCost(option.costPerCredit)}<small>金币 / 信用</small>`;
-    const first = details
-      ? [details.firstLabel, details.firstValue]
-      : ["单次兑换", `${formatNumber(option.itemCount)} 件 -> ${formatNumber(option.creditCount)} 点`];
-    const second = details
-      ? [details.secondLabel, details.secondValue]
-      : ["市场成本", `${core.formatCompactCost(option.cost)} 金币`];
-    return `<section class="option${best ? " best" : ""}"><span class="label">${escapeHtml(label)}</span><div class="item">${iconMarkup(option.itemHrid, option.itemName)}<span class="name">${escapeHtml(option.itemName)}</span></div><div class="cost">${primary}</div><div class="detail"><span>${escapeHtml(first[0])}</span><b>${escapeHtml(first[1])}</b></div><div class="detail"><span>${escapeHtml(second[0])}</span><b>${escapeHtml(second[1])}</b></div></section>`;
-  }
-
-  function guildExchangeAdvisorMarkup(data) {
-    const comparison = Boolean(data.selected && data.replacement);
-    const header = `<header class="head"><div class="title"><span>兑换最优推荐</span><span class="credit">${escapeHtml(data.creditLabel)}信用点</span></div><span class="reference">${escapeHtml(data.selected ? `卖出右一（税 2%）·买入${PRICE_REFERENCES[state.priceReference].label}` : `买入参考${PRICE_REFERENCES[state.priceReference].label}`)}</span></header>`;
-    let summary = "请选择兑换物品以计算卖出后替代方案。";
-    if (data.selectedOptimal) summary = "当前选择已是最优物品，无需卖出再回购。";
-    else if (!data.selected && data.unavailableReason) summary = data.unavailableReason;
-    else if (comparison && data.replacement.creditDifference > 0) summary = `卖出后改买可多获得 <strong>+${formatNumber(data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditLabel)}信用点。`;
-    else if (comparison && data.replacement.creditDifference < 0) summary = `直接兑换可多获得 <strong>${formatNumber(-data.replacement.creditDifference)}</strong> ${escapeHtml(data.creditLabel)}信用点。`;
-    else if (comparison) summary = "两种方案可获得相同的信用点。";
-    const selected = comparison ? advisorOptionMarkup("当前选择", data.selected, {
-      credits: data.replacement.directCredits,
-      firstLabel: "直接兑换",
-      firstValue: `${formatNumber(data.replacement.sale.quantity)} 件 -> ${formatNumber(data.replacement.directCredits)} 点`,
-      secondLabel: "税后所得",
-      secondValue: `${core.formatCompactCost(data.replacement.sale.net)} 金币`
-    }) : "";
-    const best = advisorOptionMarkup(data.selectedOptimal ? "当前选择（最优）" : "最优物品", data.best, comparison ? {
-      credits: data.replacement.best.actualCredits,
-      firstLabel: "回购兑换",
-      firstValue: `${formatNumber(data.replacement.best.requiredItems)} 件 -> ${formatNumber(data.replacement.best.actualCredits)} 点`,
-      secondLabel: "买入成本",
-      secondValue: `${core.formatCompactCost(data.replacement.best.cost)} 金币`
-    } : null, true);
-    return `${header}<div class="body"><div class="options${comparison ? "" : " single"}">${selected}${comparison ? '<div class="versus"><span>VS</span></div>' : ""}${best}</div><div class="summary">${summary}</div></div>`;
-  }
-
-  function renderGuildExchangeAdvisor(modalData, data, forceRender) {
-    const ui = state.exchangeAdvisorUi;
-    if (!ui) return false;
-    const markup = guildExchangeAdvisorMarkup(data);
-    if (forceRender || ui.signature !== markup) {
-      ui.card.innerHTML = markup;
-      ui.signature = markup;
-    }
-    ui.modal = modalData.modal;
-    ui.card.setAttribute("aria-label", "兑换最优推荐");
-    ui.card.style.setProperty("--credit", data.color);
-    return positionGuildExchangeAdvisor(ui, modalData.modal);
-  }
-
-  function refreshGuildExchangeAdvisor(forceRender) {
-    const ui = state.exchangeAdvisorUi;
-    if (!ui) return false;
+  function refreshGuildExchangeAdvisor() {
     const modalData = findGuildExchangeModal();
     if (!modalData) {
+      state.exchangeAdvisorSuppressedModal = null;
       hideGuildExchangeAdvisor();
-      return false;
+      return;
     }
+
+    if (state.exchangeAdvisorSuppressedModal === modalData.element) {
+      hideGuildExchangeAdvisor();
+      return;
+    }
+    state.exchangeAdvisorSuppressedModal = null;
 
     const conversions = allConversions(modalData.creditItemHrid);
     if (!conversions.length) {
       hideGuildExchangeAdvisor();
-      return false;
+      return;
     }
 
     if (!state.snapshot) {
@@ -2308,120 +2168,60 @@ window.MwiGuildCreditVersion = "0.4.46";
         state.exchangeAdvisorLoadInFlight = true;
         loadSnapshot(false)
           .catch(() => { state.exchangeAdvisorSnapshotFailed = true; return null; })
-          .finally(() => { state.exchangeAdvisorLoadInFlight = false; scheduleGuildExchangeAdvisor(true); });
+          .finally(() => { state.exchangeAdvisorLoadInFlight = false; refreshGuildExchangeAdvisor(); });
       }
-      return false;
+      return;
     }
 
     const books = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
-    let best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
+    const best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
     if (!best) {
       hideGuildExchangeAdvisor();
-      return false;
+      return;
     }
 
     const selectedConversion = conversions.find((conversion) => conversion.itemHrid === modalData.selectedItemHrid);
     let selected = null;
-    let replacement = null;
-    let selectedOptimal = false;
-    let unavailableReason = "";
     if (selectedConversion) {
-      if (selectedConversion.itemHrid === best.itemHrid) {
-        selectedOptimal = true;
-      } else {
-        const sellPrice = snapshotImmediateSellPrice(selectedConversion.itemHrid, modalData.selectedEnhancementLevel);
-        const buyPrices = Object.fromEntries(conversions.map((conversion) => [conversion.itemHrid, snapshotPrice(conversion.itemHrid, state.priceReference)]));
-        replacement = core.estimateSaleReplacement({
-          selectedConversion,
-          batches: modalData.batches,
-          sellPrice,
-          sellerTaxRate: SELLER_TAX_RATE,
-          conversions,
-          buyPrices
-        });
-        if (replacement.status === "already_optimal") {
-          best = replacement.best;
-          selectedOptimal = true;
-          replacement = null;
-        } else if (replacement.status !== "ok") {
-          unavailableReason = "当前物品暂无公开收购价，无法估算卖出后回购。";
-          replacement = null;
-        } else {
-          selected = selectedConversion;
-        }
-      }
+      const price = snapshotPrice(selectedConversion.itemHrid, state.priceReference, modalData.selectedEnhancementLevel);
+      selected = price === null ? null : core.evaluateConversion(selectedConversion, { asks: [{ price, quantity: Number.MAX_SAFE_INTEGER }] }, 1);
+      if (selected && selected.status !== "ok") selected = null;
     }
     const creditLabel = CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[1] || "该颜色";
-    return renderGuildExchangeAdvisor(modalData, {
+    renderGuildExchangeAdvisor(modalData, {
       creditLabel,
       color: CREDIT_TYPES.find(([hrid]) => hrid === modalData.creditItemHrid)?.[2] || "#4fcdb5",
-      best: replacement ? replacement.best : best,
+      best,
       selected,
-      selectedOptimal,
-      replacement,
-      unavailableReason
-    }, forceRender);
-  }
-
-  function scheduleGuildExchangeAdvisor(forceRender) {
-    if (!state.exchangeAdvisorUi) return;
-    state.exchangeAdvisorForceRender = state.exchangeAdvisorForceRender || Boolean(forceRender);
-    if (state.exchangeAdvisorFrame !== null) return;
-    const requestFrame = typeof window.requestAnimationFrame === "function"
-      ? window.requestAnimationFrame.bind(window)
-      : (handler) => window.setTimeout(handler, 0);
-    state.exchangeAdvisorFrame = requestFrame(() => {
-      state.exchangeAdvisorFrame = null;
-      const shouldForceRender = state.exchangeAdvisorForceRender;
-      state.exchangeAdvisorForceRender = false;
-      refreshGuildExchangeAdvisor(shouldForceRender);
+      savingPercent: selected && selected.costPerCredit > 0 ? Math.max(0, Math.round((1 - best.costPerCredit / selected.costPerCredit) * 100)) : 0
     });
   }
 
-  function mutationMayAffectGuildExchangeAdvisor(mutation) {
-    const activeModal = state.exchangeAdvisorUi && state.exchangeAdvisorUi.modal;
-    const target = mutation.target && (mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement);
-    if (activeModal) {
-      if (!activeModal.isConnected || mutation.target === activeModal || activeModal.contains(mutation.target)
-        || (mutation.type === "attributes" && target && target.contains && target.contains(activeModal))) return true;
-      return Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []))
-        .some((node) => node === activeModal || node.contains && node.contains(activeModal));
-    }
-
-    if (target && target.closest && target.closest('[class*="GuildPanel_exchangeModalContent"]')) return true;
-    return Array.from(mutation.addedNodes || []).some((node) => node && node.nodeType === 1 && (
-      node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')
-    ));
+  function scheduleGuildExchangeAdvisor() {
+    window.clearTimeout(state.exchangeAdvisorTimer);
+    state.exchangeAdvisorTimer = window.setTimeout(refreshGuildExchangeAdvisor, 80);
   }
 
   function watchGuildExchangeModals() {
-    if (!document.body || state.exchangeAdvisorObserver) return;
-    const Observer = pageWindow.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
-    if (!Observer) return;
-    state.exchangeAdvisorObserver = new Observer((mutations) => {
-      if (Array.from(mutations || []).some(mutationMayAffectGuildExchangeAdvisor)) scheduleGuildExchangeAdvisor();
-    });
-    state.exchangeAdvisorObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["aria-label", "class", "hidden", "href", "style", "xlink:href"],
-      characterData: true,
-      childList: true,
-      subtree: true
-    });
-    if (!state.exchangeAdvisorListenersInstalled) {
-      const reposition = () => scheduleGuildExchangeAdvisor();
-      window.addEventListener("resize", reposition, { passive: true });
-      window.addEventListener("orientationchange", reposition, { passive: true });
-      window.addEventListener("scroll", reposition, { capture: true, passive: true });
-      state.exchangeAdvisorListenersInstalled = true;
-    }
-    scheduleGuildExchangeAdvisor(true);
-  }
-
-  function startGuildExchangeAdvisor() {
-    if (!createGuildExchangeAdvisorUi()) return;
-    watchGuildExchangeModals();
-    scheduleGuildExchangeAdvisor(true);
+    if (!document.body || typeof MutationObserver === "undefined") return;
+    new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
+            scheduleGuildExchangeAdvisor();
+            return;
+          }
+        }
+        for (const node of mutation.removedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches('[class*="GuildPanel_exchangeModalContent"]') || node.querySelector('[class*="GuildPanel_exchangeModalContent"]')) {
+            scheduleGuildExchangeAdvisor();
+            return;
+          }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   function findSidebarTabBar() {
@@ -2545,17 +2345,25 @@ window.MwiGuildCreditVersion = "0.4.46";
   hydrateLocalInitData();
   hydrateBridgeData();
   document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
+  document.addEventListener("pointerdown", (event) => {
+    const modalData = findGuildExchangeModal();
+    if (modalData && isGuildExchangeCloseGesture(event, modalData.element)) {
+      suppressGuildExchangeAdvisor(modalData.element);
+    }
+  }, true);
   document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", (event) => {
-    const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
-    if (target && target.closest && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
+    if (event.target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
-  document.addEventListener("click", (event) => {
-    const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
-    if (target && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
+  window.addEventListener("resize", scheduleGuildExchangeAdvisor);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const modalData = findGuildExchangeModal();
+    if (modalData) suppressGuildExchangeAdvisor(modalData.element);
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
-  if (document.body) startGuildExchangeAdvisor();
-  else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
+  watchGuildExchangeModals();
+  window.setInterval(refreshGuildExchangeAdvisor, 1200);
   window.setTimeout(ensureSidebarIntegration, 1000);
+  window.setTimeout(refreshGuildExchangeAdvisor, 1000);
 })();

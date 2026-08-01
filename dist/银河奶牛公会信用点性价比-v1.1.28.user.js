@@ -3070,15 +3070,6 @@ window.MwiGuildCreditVersion = "1.1.28";
     return { entry: partial.length === 1 ? partial[0] : null, matches: partial };
   }
 
-  function updateItemQueryOptions(panel, entries) {
-    const list = panel.querySelector('[data-role="item-query-options"]');
-    if (!list) return;
-    const last = entries[entries.length - 1];
-    const signature = `${entries.length}:${entries[0] && entries[0].itemHrid || ""}:${last && last.itemHrid || ""}:${ui().locale}`;
-    if (list.dataset.signature === signature) return;
-    list.dataset.signature = signature;
-    list.innerHTML = entries.map((entry) => `<option value="${escapeHtml(entry.itemName)}" label="${escapeHtml(entry.itemHrid)}"></option>`).join("");
-  }
 
   function renderItemQueryCard(entry, group, result) {
     const creditName = itemNameForMaterial(group.creditItemHrid);
@@ -3108,7 +3099,6 @@ window.MwiGuildCreditVersion = "1.1.28";
     const output = panel.querySelector('[data-role="item-query-result"]');
     if (!input || !output) return;
     const entries = itemQueryEntries();
-    updateItemQueryOptions(panel, entries);
     const query = String(input.value || "").trim();
     if (!query) {
       output.innerHTML = `<div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div>`;
@@ -3885,7 +3875,7 @@ window.MwiGuildCreditVersion = "1.1.28";
         </div>
         <section class="mwi-item-query" aria-label="${escapeHtml(t("itemQueryTitle"))}">
           <div class="mwi-item-query-heading"><strong>${escapeHtml(t("itemQueryTitle"))}</strong><small>${escapeHtml(t("itemQueryHint"))}</small></div>
-          <form class="mwi-item-query-form" data-role="item-query-form"><input data-role="item-query-input" type="search" list="mwi-item-query-options" autocomplete="off" placeholder="${escapeHtml(t("itemQueryPlaceholder"))}"><datalist id="mwi-item-query-options" data-role="item-query-options"></datalist><button type="submit">${escapeHtml(t("itemQueryAction"))}</button></form>
+          <form class="mwi-item-query-form" data-role="item-query-form"><input data-role="item-query-input" type="search" autocomplete="off" placeholder="${escapeHtml(t("itemQueryPlaceholder"))}"><button type="submit">${escapeHtml(t("itemQueryAction"))}</button></form>
           <div class="mwi-item-query-result" data-role="item-query-result" aria-live="polite"><div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div></div>
         </section>
         <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
