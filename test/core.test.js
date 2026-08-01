@@ -1196,6 +1196,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="upgrade-plan-list"/);
   assert.match(source, /mwi-upgrade-actions.*data-role="add-upgrade-plan"/);
   assert.match(source, /data-role="clear-upgrade-plans"/);
+  assert.match(source, /const SHOW_ALL_CREDIT_TOKEN_TOGGLE = false/);
+  assert.match(source, /if \(!SHOW_ALL_CREDIT_TOKEN_TOGGLE\) return ""/);
+  assert.match(source, /\$\{renderGuildTokenCreditPlanToggle\(\)\}/);
   assert.match(source, /data-role="toggle-guild-token-credit-plan"/);
   assert.match(source, /data-role="toggle-credit-token-mode"/);
   assert.match(source, /data-credit-hrid=/);

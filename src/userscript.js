@@ -18,6 +18,9 @@
   const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
   const MARKET_LIVE_STORAGE_KEY = "mwi-guild-credit-live-market-v1";
   const UPDATE_CHECK_TIMEOUT_MS = 8000;
+  // Keep the former select-all shortcut available for a future rollback, but
+  // do not render it while per-credit exchange modes are the primary control.
+  const SHOW_ALL_CREDIT_TOKEN_TOGGLE = false;
   const PRICE_REFERENCES = { a: {}, b: {} };
 
   const CREDIT_TYPES = [
@@ -1045,6 +1048,14 @@
     if (indicator) indicator.textContent = selection.allSelected ? "✓" : selection.partiallySelected ? "−" : "";
   }
 
+  function renderGuildTokenCreditPlanToggle() {
+    if (!SHOW_ALL_CREDIT_TOKEN_TOGGLE) return "";
+    const selection = guildTokenCreditSelectionState();
+    const activeState = selection.allSelected ? "true" : selection.partiallySelected ? "mixed" : "false";
+    const indicator = selection.allSelected ? "✓" : selection.partiallySelected ? "−" : "";
+    return `<button class="mwi-token-credit-plan-toggle" data-role="toggle-guild-token-credit-plan" data-active="${activeState}" type="button" aria-pressed="${activeState}"><span class="mwi-token-credit-plan-indicator" aria-hidden="true">${indicator}</span><span class="mwi-token-credit-plan-copy"><strong>${escapeHtml(t("useGuildTokensForMissingCredits"))}</strong><small>${escapeHtml(t("useGuildTokensForMissingCreditsHint"))}</small></span></button>`;
+  }
+
   function renderUpgradeCostText(gold, guildTokens, showZeroGuildTokens) {
     const parts = [`${core.formatCompactCost(gold)} ${t("gold")}`];
     if (guildTokens > 0 || showZeroGuildTokens) parts.push(`${formatNumber(guildTokens)} ${t("guildTokens")}`);
@@ -1193,9 +1204,6 @@
 
   function createPanel() {
     const panel = document.createElement("section");
-    const tokenSelection = guildTokenCreditSelectionState();
-    const tokenPlanState = tokenSelection.allSelected ? "true" : tokenSelection.partiallySelected ? "mixed" : "false";
-    const tokenPlanIndicator = tokenSelection.allSelected ? "✓" : tokenSelection.partiallySelected ? "−" : "";
     panel.id = "mwi-credit-optimizer";
     panel.innerHTML = `
       <style>
@@ -1247,7 +1255,7 @@
         </section>
         <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
         <div class="mwi-upgrade-actions"><button data-role="add-upgrade-plan" type="button">${escapeHtml(t("addShrine"))}</button><button class="mwi-clear-upgrade-plans" data-role="clear-upgrade-plans" type="button">${escapeHtml(t("clearAll"))}</button></div>
-        <button class="mwi-token-credit-plan-toggle" data-role="toggle-guild-token-credit-plan" data-active="${tokenPlanState}" type="button" aria-pressed="${tokenPlanState}"><span class="mwi-token-credit-plan-indicator" aria-hidden="true">${tokenPlanIndicator}</span><span class="mwi-token-credit-plan-copy"><strong>${escapeHtml(t("useGuildTokensForMissingCredits"))}</strong><small>${escapeHtml(t("useGuildTokensForMissingCreditsHint"))}</small></span></button>
+        ${renderGuildTokenCreditPlanToggle()}
         <div class="mwi-status" data-role="upgrade-status">${escapeHtml(t("waitingUpgradeRules"))}</div>
         <div data-role="upgrade-results"></div>
       </div>
@@ -1324,13 +1332,16 @@
     });
     panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="clear-upgrade-plans"]').addEventListener("click", () => { clearGuildUpgradePlans(); persistPluginUiState(); refreshGuildUpgrade(panel); });
-    panel.querySelector('[data-role="toggle-guild-token-credit-plan"]').addEventListener("click", () => {
-      const selectAll = !guildTokenCreditSelectionState().allSelected;
-      state.guildTokenCreditHrids = new Set(selectAll ? CREDIT_TYPES.map(([hrid]) => hrid) : []);
-      updateGuildTokenCreditPlanButton(panel);
-      persistPluginUiState();
-      refreshGuildUpgrade(panel);
-    });
+    const guildTokenCreditPlanToggle = panel.querySelector('[data-role="toggle-guild-token-credit-plan"]');
+    if (guildTokenCreditPlanToggle) {
+      guildTokenCreditPlanToggle.addEventListener("click", () => {
+        const selectAll = !guildTokenCreditSelectionState().allSelected;
+        state.guildTokenCreditHrids = new Set(selectAll ? CREDIT_TYPES.map(([hrid]) => hrid) : []);
+        updateGuildTokenCreditPlanButton(panel);
+        persistPluginUiState();
+        refreshGuildUpgrade(panel);
+      });
+    }
     panel.querySelector('.mwi-upgrade-preset-buttons').addEventListener("click", (event) => {
       const button = event.target.closest('[data-role="set-guild-shrine-target"]');
       if (!button || button.disabled) return;

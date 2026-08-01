@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.19] - 2026-08-01
+
+### Changed
+
+- Hid the all-credit guild-token shortcut so shrine plans are controlled only by each credit card's persistent exchange-mode button.
+
 ## [1.1.18] - 2026-08-01
 
 ### Added
