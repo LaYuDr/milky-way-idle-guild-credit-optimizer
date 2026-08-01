@@ -1320,6 +1320,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function clearGuildUpgradePlans\(\)/);
   assert.match(source, /state\.suppressUpgradePlanAutofill = true/);
   assert.match(source, /clearGuildUpgradePlans\(\); persistPluginUiState\(\); refreshGuildUpgrade\(panel\);/);
+  assert.match(source, /function removeGuildUpgradePlan\(planId\)/);
+  assert.match(source, /const removedLastPlan = state\.upgradePlans\.length === 0/);
+  assert.match(source, /state\.suppressUpgradePlanAutofill = removedLastPlan/);
+  assert.match(source, /if \(!removeGuildUpgradePlan\(row\.dataset\.planId\)\) return/);
   assert.match(source, /data-role="plan-start"/);
   assert.match(source, /data-role="plan-target"/);
   assert.match(source, /\.mwi-upgrade-plan label\.mwi-upgrade-plan-shrine\{grid-column:2;grid-row:1\}/);

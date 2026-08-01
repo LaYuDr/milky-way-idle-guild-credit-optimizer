@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.26] - 2026-08-01
+
+### Fixed
+
+- The ordinary remove button can now delete the final shrine-upgrade plan without the planner immediately recreating a default row.
+
 ## [1.1.25] - 2026-08-01
 
 ### Added

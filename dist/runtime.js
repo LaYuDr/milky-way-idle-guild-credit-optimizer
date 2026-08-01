@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.25";
+window.MwiGuildCreditVersion = "1.1.26";
 
 (function (root, factory) {
   const api = factory();
@@ -3269,6 +3269,18 @@ window.MwiGuildCreditVersion = "1.1.25";
     state.upgradePresetNotice = t("plansCleared");
   }
 
+  function removeGuildUpgradePlan(planId) {
+    const previousLength = state.upgradePlans.length;
+    state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== planId);
+    if (state.upgradePlans.length === previousLength) return false;
+    const removedLastPlan = state.upgradePlans.length === 0;
+    // Removing plans one by one must be able to reach the same empty state as
+    // the dedicated clear button instead of immediately adding a default row.
+    state.suppressUpgradePlanAutofill = removedLastPlan;
+    state.upgradePresetNotice = removedLastPlan ? t("plansCleared") : "";
+    return true;
+  }
+
   function ensureGuildUpgradePlans(entries) {
     state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
     if (!state.upgradePlans.length && !state.suppressUpgradePlanAutofill) addGuildUpgradePlan(entries);
@@ -3837,9 +3849,7 @@ window.MwiGuildCreditVersion = "1.1.25";
       const button = event.target.closest('[data-role="remove-plan"]');
       const row = button && button.closest("[data-plan-id]");
       if (!row) return;
-      state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== row.dataset.planId);
-      state.suppressUpgradePlanAutofill = false;
-      state.upgradePresetNotice = "";
+      if (!removeGuildUpgradePlan(row.dataset.planId)) return;
       persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
