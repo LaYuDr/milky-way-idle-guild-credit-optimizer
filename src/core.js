@@ -10,6 +10,35 @@
     return Number.isSafeInteger(number) && number > 0 ? number : null;
   }
 
+  const DEFAULT_GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = [20, 40, 50, 60, 80, 100];
+
+  function guildTokenBudgetPercentage(value, maximum) {
+    const max = Math.max(0, Math.floor(Number(maximum) || 0));
+    if (!max) return 0;
+    const clamped = Math.min(max, Math.max(0, Math.floor(Number(value) || 0)));
+    return Math.round(clamped / max * 100);
+  }
+
+  function snapGuildTokenBudget(rawValue, maximum, options = {}) {
+    const max = Math.max(0, Math.floor(Number(maximum) || 0));
+    const value = Math.min(max, Math.max(0, Math.floor(Number(rawValue) || 0)));
+    if (!max) return { value: 0, percentage: 0, snappedTo: null };
+    const snapPercentages = (Array.isArray(options.snapPercentages) ? options.snapPercentages : DEFAULT_GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES)
+      .map(Number)
+      .filter((percentage) => Number.isFinite(percentage) && percentage > 0 && percentage <= 100);
+    const threshold = Math.max(0, Number(options.thresholdPercentage ?? 2.5) || 0);
+    const rawPercentage = value / max * 100;
+    const snappedTo = snapPercentages.reduce((nearest, percentage) => {
+      if (nearest === null) return percentage;
+      return Math.abs(percentage - rawPercentage) < Math.abs(nearest - rawPercentage) ? percentage : nearest;
+    }, null);
+    if (snappedTo === null || Math.abs(snappedTo - rawPercentage) > threshold) {
+      return { value, percentage: guildTokenBudgetPercentage(value, max), snappedTo: null };
+    }
+    const snappedValue = Math.min(max, Math.max(0, Math.round(max * snappedTo / 100)));
+    return { value: snappedValue, percentage: guildTokenBudgetPercentage(snappedValue, max), snappedTo };
+  }
+
   function normalizeAsks(orderBook) {
     if (!orderBook || !Array.isArray(orderBook.asks)) return [];
     return orderBook.asks
@@ -530,5 +559,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
 });

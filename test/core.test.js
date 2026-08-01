@@ -717,6 +717,17 @@ test("自动兑换预算限制代币用量并保留部分信用点的物品缺�
   assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").remainingMissing, 3000);
 });
 
+test("代币预算滑块按百分比显示并在指定比例附近磁吸", () => {
+  assert.equal(core.guildTokenBudgetPercentage(0, 7800), 0);
+  assert.equal(core.guildTokenBudgetPercentage(3900, 7800), 50);
+  assert.equal(core.guildTokenBudgetPercentage(7800, 7800), 100);
+  assert.deepEqual(core.snapGuildTokenBudget(1530, 7800), { value: 1560, percentage: 20, snappedTo: 20 });
+  assert.deepEqual(core.snapGuildTokenBudget(1760, 7800), { value: 1760, percentage: 23, snappedTo: null });
+  assert.deepEqual(core.snapGuildTokenBudget(3901, 7800), { value: 3900, percentage: 50, snappedTo: 50 });
+  assert.deepEqual(core.snapGuildTokenBudget(7700, 7800), { value: 7800, percentage: 100, snappedTo: 100 });
+  assert.deepEqual(core.snapGuildTokenBudget(50, 0), { value: 0, percentage: 0, snappedTo: null });
+});
+
 test("自动兑换只使用扣除神龛和手动兑换后的库存代币", () => {
   const estimate = core.estimateGuildUpgradeCosts([
     { itemHrid: "/items/guild_token", count: 1000 },
@@ -1377,6 +1388,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /row\.remainingMissing \?\? row\.missing/);
   assert.match(source, /data-role="guild-token-budget-range"/);
   assert.match(source, /data-role="guild-token-budget-number"/);
+  assert.match(source, /data-role="guild-token-budget-percent"/);
+  assert.match(source, /GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = \[20, 40, 50, 60, 80, 100\]/);
+  assert.match(source, /guildTokenBudgetRange\.dataset\.dragging === "true"/);
+  assert.match(source, /snapGuildTokenBudget/);
   assert.match(source, /autoGuildTokenBudget: state\.autoGuildTokenBudget/);
   assert.match(source, /autoAllocateSurplusGuildTokens: hasInventory/);
   assert.match(source, /mwi-material-plan-auto/);

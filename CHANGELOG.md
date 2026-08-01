@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.25] - 2026-08-01
+
+### Added
+
+- Added a live percentage indicator and visible 20%, 40%, 50%, 60%, 80%, and 100% reference marks to the automatic guild-token budget slider.
+
+### Changed
+
+- Pointer dragging now magnetically settles near each reference percentage while number and keyboard input remain exact; the responsive budget row also preserves a usable slider width on narrow sidebars.
+
 ## [1.1.24] - 2026-08-01
 
 ### Added

@@ -22,6 +22,8 @@
   // do not render it while per-credit exchange modes are the primary control.
   const SHOW_ALL_CREDIT_TOKEN_TOGGLE = false;
   const PRICE_REFERENCES = { a: {}, b: {} };
+  const GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = [20, 40, 50, 60, 80, 100];
+  const GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE = 2.5;
 
   const CREDIT_TYPES = [
     ["/items/green_guild_credit", "#42c59f"],
@@ -1074,7 +1076,19 @@
   }
 
   function renderGuildTokenBudgetControl() {
-    return `<section class="mwi-token-budget" data-role="guild-token-budget-control"><div class="mwi-token-budget-heading"><strong>${escapeHtml(t("autoGuildTokenBudget"))}</strong><small>${escapeHtml(t("autoGuildTokenBudgetHint"))}</small></div><div class="mwi-token-budget-inputs"><input data-role="guild-token-budget-range" type="range" min="0" max="0" step="1" value="0" disabled aria-label="${escapeHtml(t("autoGuildTokenBudget"))}"><label><input data-role="guild-token-budget-number" type="number" min="0" max="0" step="1" value="0" disabled><span>${escapeHtml(t("guildTokens"))}</span></label></div><span class="mwi-token-budget-available" data-role="guild-token-budget-available">${escapeHtml(t("autoGuildTokenBudgetAvailable", { count: "0" }))}</span></section>`;
+    const snapMarks = GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES.map((percentage) => `<i data-percentage="${percentage}" style="--mwi-snap-position:${percentage}%"></i>`).join("");
+    return `<section class="mwi-token-budget" data-role="guild-token-budget-control"><div class="mwi-token-budget-heading"><strong>${escapeHtml(t("autoGuildTokenBudget"))}</strong><small>${escapeHtml(t("autoGuildTokenBudgetHint"))}</small></div><div class="mwi-token-budget-inputs"><span class="mwi-token-budget-range-wrap"><input data-role="guild-token-budget-range" type="range" min="0" max="0" step="1" value="0" disabled aria-label="${escapeHtml(t("autoGuildTokenBudget"))}"><span class="mwi-token-budget-snap-points" aria-hidden="true">${snapMarks}</span></span><output class="mwi-token-budget-percent" data-role="guild-token-budget-percent" aria-live="polite">0%</output><label><input data-role="guild-token-budget-number" type="number" min="0" max="0" step="1" value="0" disabled><span>${escapeHtml(t("guildTokens"))}</span></label></div><span class="mwi-token-budget-available" data-role="guild-token-budget-available">${escapeHtml(t("autoGuildTokenBudgetAvailable", { count: "0" }))}</span></section>`;
+  }
+
+  function updateGuildTokenBudgetPercentage(panel, value, max, snappedTo = null) {
+    const range = panel.querySelector('[data-role="guild-token-budget-range"]');
+    const output = panel.querySelector('[data-role="guild-token-budget-percent"]');
+    if (!range || !output) return;
+    const percentage = core.guildTokenBudgetPercentage(value, max);
+    output.value = `${percentage}%`;
+    output.textContent = `${percentage}%`;
+    output.dataset.snapped = String(snappedTo !== null);
+    range.setAttribute("aria-valuetext", `${percentage}% · ${formatNumber(value)} ${t("guildTokens")}`);
   }
 
   function updateGuildTokenBudgetControl(panel, estimate, hasInventory) {
@@ -1089,18 +1103,25 @@
       input.value = String(effective);
       input.disabled = !hasInventory;
     }
+    const effectivePercentage = core.guildTokenBudgetPercentage(effective, max);
+    const snappedTo = range.dataset.dragging === "true" && GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES.includes(effectivePercentage) ? effectivePercentage : null;
+    updateGuildTokenBudgetPercentage(panel, effective, max, snappedTo);
     available.textContent = t("autoGuildTokenBudgetAvailable", { count: formatNumber(max) });
   }
 
-  function setGuildTokenBudget(panel, rawValue) {
+  function setGuildTokenBudget(panel, rawValue, options = {}) {
     const range = panel.querySelector('[data-role="guild-token-budget-range"]');
     const number = panel.querySelector('[data-role="guild-token-budget-number"]');
     if (!range || !number || rawValue === "") return;
     const max = Math.max(0, Number(range.max) || 0);
-    const value = Math.min(max, Math.max(0, Math.floor(Number(rawValue) || 0)));
+    const resolved = options.snap
+      ? core.snapGuildTokenBudget(rawValue, max, { snapPercentages: GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES, thresholdPercentage: GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE })
+      : { value: Math.min(max, Math.max(0, Math.floor(Number(rawValue) || 0))), snappedTo: null };
+    const value = resolved.value;
     state.autoGuildTokenBudget = value;
     range.value = String(value);
     number.value = String(value);
+    updateGuildTokenBudgetPercentage(panel, value, max, resolved.snappedTo);
     persistPluginUiState();
     if (guildTokenBudgetRefreshTimer !== null) window.clearTimeout(guildTokenBudgetRefreshTimer);
     guildTokenBudgetRefreshTimer = window.setTimeout(() => {
@@ -1333,7 +1354,13 @@
         #mwi-credit-optimizer .mwi-upgrade-actions button{min-height:29px!important;padding:4px 9px!important;font-size:11px}
         #mwi-credit-optimizer .mwi-token-budget{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(220px,1.5fr) auto;align-items:center;gap:8px;margin:0 0 7px;padding:7px 9px}
         #mwi-credit-optimizer .mwi-token-budget-heading{display:grid;gap:2px;min-width:0}
-        #mwi-credit-optimizer .mwi-token-budget-inputs{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+        #mwi-credit-optimizer .mwi-token-budget-inputs{grid-template-columns:minmax(54px,1fr) auto auto;gap:8px}
+        #mwi-credit-optimizer .mwi-token-budget-range-wrap{position:relative;display:grid;align-items:center;min-width:0}
+        #mwi-credit-optimizer .mwi-token-budget-inputs input[type="range"]{position:relative;z-index:1}
+        #mwi-credit-optimizer .mwi-token-budget-snap-points{position:absolute;z-index:2;left:8px;right:8px;top:50%;height:0;pointer-events:none}
+        #mwi-credit-optimizer .mwi-token-budget-snap-points i{position:absolute;left:var(--mwi-snap-position);width:4px;height:4px;border:1px solid #d6d8eb;border-radius:50%;background:#555873;box-shadow:0 0 0 1px #20213a;transform:translate(-50%,-50%)}
+        #mwi-credit-optimizer .mwi-token-budget-percent{display:inline-grid;place-items:center;min-width:38px;padding:3px 5px;border:1px solid #686b92;border-radius:999px;background:#252640;color:#dfe1f4;font-size:10px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-token-budget-percent[data-snapped="true"]{border-color:#d8a33c;background:#493f2a;color:#ffe09a}
         #mwi-credit-optimizer .mwi-token-budget-available{justify-self:end;color:#77f3d0;font-size:11px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-status[data-role="upgrade-status"]{margin:7px 0 3px;color:#c9cbeb;font-size:11px;text-align:center}
         #mwi-credit-optimizer .mwi-plan-summary{justify-content:flex-start;gap:5px;margin:6px 0}
@@ -1366,6 +1393,8 @@
         @container (max-width:650px){#mwi-credit-optimizer .mwi-plan-summary{display:none}}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) minmax(220px,1.2fr)}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:1/-1;justify-self:start}#mwi-credit-optimizer .mwi-plan-summary{display:none}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(125px,1fr) 52px 58px}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{display:none}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0;padding-inline:4px!important}#mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}#mwi-credit-optimizer .mwi-upgrade-plan{grid-template-columns:28px minmax(0,1fr) 18px minmax(0,1fr) 32px;align-items:end}#mwi-credit-optimizer .mwi-upgrade-field-label{display:block}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:2/5;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:3;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:4;grid-row:2}#mwi-credit-optimizer .mwi-remove-plan{grid-column:5;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-actions{align-items:center;flex-direction:row}#mwi-credit-optimizer .mwi-upgrade-actions>span{display:flex}#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start}#mwi-credit-optimizer .mwi-upgrade-cost-summary{align-items:flex-start;flex-direction:column;gap:4px;padding:6px 7px}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-material-required{grid-column:2;grid-row:1}#mwi-credit-optimizer .mwi-material-exchange-mode,#mwi-credit-optimizer .mwi-material-exchange-mode-spacer{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plan{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto}#mwi-credit-optimizer .mwi-material-plan-item{grid-row:1/-1}#mwi-credit-optimizer .mwi-material-plan-need{grid-column:2;justify-items:end;padding:5px 6px 0 0}#mwi-credit-optimizer .mwi-material-plan-rate{grid-column:2;padding:0 6px 6px 0;text-align:right}}
+        @container (max-width:650px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start;justify-self:end}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:76px}#mwi-credit-optimizer .mwi-token-budget-inputs label>span{display:none}#mwi-credit-optimizer .mwi-token-budget-percent{min-width:34px;padding-inline:4px}}
       </style>
       <h3>${escapeHtml(t("panelTitle"))}</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
@@ -1469,10 +1498,17 @@
     });
     panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="clear-upgrade-plans"]').addEventListener("click", () => { clearGuildUpgradePlans(); persistPluginUiState(); refreshGuildUpgrade(panel); });
-    panel.querySelector('[data-role="guild-token-budget-control"]').addEventListener("input", (event) => {
+    const guildTokenBudgetControl = panel.querySelector('[data-role="guild-token-budget-control"]');
+    const guildTokenBudgetRange = panel.querySelector('[data-role="guild-token-budget-range"]');
+    guildTokenBudgetControl.addEventListener("input", (event) => {
       if (!event.target.matches('[data-role="guild-token-budget-range"], [data-role="guild-token-budget-number"]')) return;
-      setGuildTokenBudget(panel, event.target.value);
+      const snap = event.target === guildTokenBudgetRange && guildTokenBudgetRange.dataset.dragging === "true";
+      setGuildTokenBudget(panel, event.target.value, { snap });
     });
+    guildTokenBudgetRange.addEventListener("pointerdown", () => { guildTokenBudgetRange.dataset.dragging = "true"; });
+    for (const eventName of ["pointerup", "pointercancel", "blur"]) {
+      guildTokenBudgetRange.addEventListener(eventName, () => { guildTokenBudgetRange.dataset.dragging = "false"; });
+    }
     const guildTokenCreditPlanToggle = panel.querySelector('[data-role="toggle-guild-token-credit-plan"]');
     if (guildTokenCreditPlanToggle) {
       guildTokenCreditPlanToggle.addEventListener("click", () => {

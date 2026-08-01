@@ -208,6 +208,7 @@
     window.__mwiLayoutAuditContract = {
       widths: [320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200],
       breakpoints: { compactMax: 400, intermediateMax: 520, summaryMax: 650 },
+      budgetSnapPercentages: [20, 40, 50, 60, 80, 100],
       maximumHorizontalOverflow: 0,
       maximumInlinePlanHeight: 48,
       maximumCompactPlanHeight: 122,
@@ -223,6 +224,8 @@
       const budgetHeading = root.querySelector(".mwi-token-budget-heading");
       const budgetInputs = root.querySelector(".mwi-token-budget-inputs");
       const budgetAvailable = root.querySelector(".mwi-token-budget-available");
+      const budgetRange = root.querySelector('[data-role="guild-token-budget-range"]');
+      const budgetPercentage = root.querySelector('[data-role="guild-token-budget-percent"]');
       const materialRows = Array.from(root.querySelectorAll(".mwi-material-row"));
       const plannedMaterialRow = materialRows.find((row) => row.querySelector(".mwi-material-plan"));
       const plannedMaterialMethods = plannedMaterialRow && plannedMaterialRow.querySelector(".mwi-material-plans");
@@ -262,7 +265,10 @@
           mode: headingRect && inputsRect && Math.abs(headingRect.y - inputsRect.y) < 8 ? "inline" : "wrapped",
           heading: headingRect,
           inputs: inputsRect,
-          available: availableRect
+          available: availableRect,
+          range: elementRect(budgetRange),
+          percentage: budgetPercentage?.textContent || "",
+          snapPercentages: Array.from(root.querySelectorAll(".mwi-token-budget-snap-points i"), (mark) => Number(mark.dataset.percentage))
         },
         materials: {
           rowCount: materialRows.length,
