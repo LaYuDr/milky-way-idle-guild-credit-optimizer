@@ -302,7 +302,13 @@
     const unitCosts = creditUnitCosts && typeof creditUnitCosts === "object" ? creditUnitCosts : {};
     const inventory = inventoryCounts && typeof inventoryCounts === "object" ? inventoryCounts : {};
     const settings = options && typeof options === "object" ? options : {};
-    const useGuildTokensForMissingCredits = settings.useGuildTokensForMissingCredits === true;
+    const useGuildTokensForAllMissingCredits = settings.useGuildTokensForMissingCredits === true;
+    const guildTokenCreditHrids = new Set(
+      Array.isArray(settings.guildTokenCreditHrids)
+        ? settings.guildTokenCreditHrids.filter((itemHrid) => typeof itemHrid === "string" && itemHrid)
+        : []
+    );
+    const useGuildTokensForMissingCredits = useGuildTokensForAllMissingCredits || guildTokenCreditHrids.size > 0;
     const guildTokenCreditRules = new Map();
     for (const rule of Array.isArray(settings.guildTokenCreditConversions) ? settings.guildTokenCreditConversions : []) {
       const creditItemHrid = rule && rule.creditItemHrid;
@@ -332,7 +338,8 @@
         rows.push(guildTokenRow);
         continue;
       }
-      const guildTokenRule = useGuildTokensForMissingCredits && guildTokenCreditRules.get(itemHrid);
+      const guildTokenRule = (useGuildTokensForAllMissingCredits || guildTokenCreditHrids.has(itemHrid))
+        && guildTokenCreditRules.get(itemHrid);
       if (guildTokenRule) {
         const batches = missing > 0 ? Math.ceil(missing / guildTokenRule.creditCount) : 0;
         const requiredGuildTokens = batches * guildTokenRule.guildTokenCount;
@@ -404,6 +411,7 @@
       guildTokensMissing,
       guildTokenCreditExchangeRequired,
       useGuildTokensForMissingCredits,
+      guildTokenCreditHrids: Array.from(guildTokenCreditHrids),
       unpricedItemHrids,
       rows
     };

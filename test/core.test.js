@@ -17,7 +17,8 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.locale, "en");
   assert.equal(localizer.t("panelTitle"), "Guild Assistant");
   assert.equal(localizer.t("setGuildLifeTarget"), "Set guild building levels as targets (Life)");
-  assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Exchange every missing credit with guild tokens");
+  assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Use guild tokens for every credit");
+  assert.equal(localizer.t("creditExchangeModeTitle", { mode: "Best item" }), "Current mode: Best item. Click to switch.");
   assert.equal(localizer.quantity("itemQuantity", 1), "1 item");
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
@@ -31,6 +32,7 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.t("panelTitle"), "公会助手");
   assert.equal(localizer.t("guildTargetComplete", { domain: "生活" }), "当前已达到最大等级（生活）。");
   assert.equal(localizer.t("guildTokenCreditPlanSummary", { count: "1,200" }), "其中 1,200 公会代币用于兑换信用点。");
+  assert.equal(localizer.t("guildTokenCreditPlanPartialActive", { count: "3" }), "已选择 3 种信用点按公会代币兑换计算。");
   assert.equal(localizer.quantity("itemQuantity", 4), "4 个");
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
 });
@@ -712,6 +714,36 @@ test("神龛信用点缺口可全部改用公会代币并合并到代币总需�
   assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit").guildTokenExchange.requiredGuildTokens, 0);
 });
 
+test("神龛信用点可分别选择最优物品或公会代币并合并成本", () => {
+  const estimate = core.estimateGuildUpgradeCosts([
+    { itemHrid: "/items/guild_token", count: 100 },
+    { itemHrid: "/items/green_guild_credit", count: 100 },
+    { itemHrid: "/items/red_guild_credit", count: 10 }
+  ], {
+    "/items/green_guild_credit": 2
+  }, {
+    "/items/guild_token": 3,
+    "/items/green_guild_credit": 40,
+    "/items/red_guild_credit": 4
+  }, {
+    guildTokenCreditHrids: ["/items/red_guild_credit"],
+    guildTokenCreditConversions: [
+      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+      { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
+    ]
+  });
+  assert.equal(estimate.status, "ok");
+  assert.equal(estimate.totalGold, 200);
+  assert.equal(estimate.missingGold, 120);
+  assert.equal(estimate.guildTokenCreditExchangeRequired, 6);
+  assert.equal(estimate.guildTokensRequired, 106);
+  assert.equal(estimate.guildTokensMissing, 103);
+  assert.equal(estimate.useGuildTokensForMissingCredits, true);
+  assert.deepEqual(estimate.guildTokenCreditHrids, ["/items/red_guild_credit"]);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").guildTokenExchange, undefined);
+  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/red_guild_credit").guildTokenExchange.requiredGuildTokens, 6);
+});
+
 test("神龛升级缺少信用点价格时不伪造总价", () => {
   const estimate = core.estimateGuildUpgradeCosts([
     { itemHrid: "/items/red_guild_credit", count: 10 }
@@ -1122,7 +1154,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function persistPluginUiState\(\)/);
   assert.match(source, /collapsedCreditSections: Array\.from\(state\.collapsedCreditSections\)/);
   assert.match(source, /guildTokenValuesCollapsed: state\.guildTokenValuesCollapsed/);
-  assert.match(source, /useGuildTokensForMissingCredits: state\.useGuildTokensForMissingCredits/);
+  assert.match(source, /guildTokenCreditHrids: Array\.from\(state\.guildTokenCreditHrids\)/);
+  assert.match(source, /stored\.useGuildTokensForMissingCredits === true/);
+  assert.match(source, /useGuildTokensForMissingCredits: CREDIT_TYPES\.every/);
   assert.match(source, /targetCredit: state\.targetCredit/);
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
@@ -1163,6 +1197,11 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /mwi-upgrade-actions.*data-role="add-upgrade-plan"/);
   assert.match(source, /data-role="clear-upgrade-plans"/);
   assert.match(source, /data-role="toggle-guild-token-credit-plan"/);
+  assert.match(source, /data-role="toggle-credit-token-mode"/);
+  assert.match(source, /data-credit-hrid=/);
+  assert.match(source, /mwi-material-exchange-mode/);
+  assert.match(source, /data-active="mixed"/);
+  assert.match(source, /guildTokenCreditHrids: Array\.from\(state\.guildTokenCreditHrids\)/);
   assert.match(source, /guildTokenCreditConversions: GUILD_TOKEN_CREDIT_CONVERSIONS/);
   assert.match(source, /guildTokenCreditPlanSummary/);
   assert.match(source, /function clearGuildUpgradePlans\(\)/);

@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.18] - 2026-08-01
+
+### Added
+
+- Added a persistent exchange-mode button to every shrine-plan credit card, allowing each guild credit to independently use either its best market item or the fixed guild-token exchange.
+- The existing all-credit toggle now acts as a select-all shortcut and shows a mixed state when only some credit types use guild tokens.
+
+### Changed
+
+- Mixed shrine plans now combine market-priced items for unselected credits with guild-token requirements for selected credits in one cost summary.
+
 ## [1.1.17] - 2026-08-01
 
 ### Fixed
