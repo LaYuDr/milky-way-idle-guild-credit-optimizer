@@ -1240,7 +1240,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
   assert.match(source, /--mwi-entry-gap:10px/);
-  assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list,#mwi-credit-optimizer \.mwi-upgrade-plan-list,#mwi-credit-optimizer \.mwi-material-list\{grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,var\(--mwi-entry-min-width\)\),1fr\)\)\}/);
+  assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list/);
+  assert.match(source, /\.mwi-upgrade-plan-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:0\}/);
+  assert.match(source, /\.mwi-material-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:7px/);
   assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);
   assert.match(harnessSource, /toggle-responsive-layout/);
   assert.match(harnessSource, /data-sidebar-layout="narrow"/);
@@ -1303,7 +1305,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /clearGuildUpgradePlans\(\); persistPluginUiState\(\); refreshGuildUpgrade\(panel\);/);
   assert.match(source, /data-role="plan-start"/);
   assert.match(source, /data-role="plan-target"/);
-  assert.match(source, /\.mwi-upgrade-plan label:first-child\{grid-column:1\/-1;grid-row:1\}/);
+  assert.match(source, /\.mwi-upgrade-plan label\.mwi-upgrade-plan-shrine\{grid-column:2;grid-row:1\}/);
   assert.match(source, /\.mwi-upgrade-plan select\{width:100%!important/);
   assert.match(source, /characterGuildBuffMap/);
   assert.match(source, /characterGuildBuffDict/);
@@ -1325,7 +1327,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /mwi-upgrade-preset/);
   assert.match(source, /container-type:inline-size/);
   assert.match(source, /@container \(max-width:960px\)/);
-  assert.match(source, /mwi-upgrade-preset-buttons button\{flex:1 1 280px/);
+  assert.match(source, /mwi-upgrade-preset-buttons button\{flex:1 1 220px/);
   assert.match(source, /function marketItemIconMarkup/);
   assert.match(source, /function openMarketplaceForItem/);
   assert.match(source, /bridge\.goToMarketplace\(itemHrid, 0\)/);
@@ -1381,7 +1383,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /@container \(max-width:760px\)/);
   assert.doesNotMatch(source, /@media \(max-width:720px\)/);
   assert.doesNotMatch(source, /\.mwi-material-list\{display:grid;grid-template-columns:repeat\(2/);
-  assert.doesNotMatch(source, /\.mwi-material-list\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(source, /\.mwi-material-plans\{grid-column:4;display:grid;grid-template-columns:repeat\(auto-fit,minmax\(210px,1fr\)\)/);
   assert.match(source, /@container \(max-width:460px\)/);
   assert.match(source, /costSummary/);
   assert.match(source, /plan\.requiredItems/);
