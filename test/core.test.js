@@ -16,7 +16,7 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   const localizer = localizationApi.createLocalizer("en-US");
   assert.equal(localizer.locale, "en");
   assert.equal(localizer.t("panelTitle"), "Guild Assistant");
-  assert.equal(localizer.t("setGuildLifeTarget"), "Fill Life shrine levels");
+  assert.equal(localizer.t("setGuildLifeTarget"), "Fill Life levels");
   assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Use guild tokens for every credit");
   assert.equal(localizer.t("creditExchangeModeTitle", { mode: "Best item" }), "Current mode: Best item. Click to switch.");
   assert.equal(localizer.quantity("itemQuantity", 1), "1 item");
@@ -1248,6 +1248,12 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(harnessSource, /data-sidebar-layout="narrow"/);
   assert.match(harnessSource, /dispatchEvent\(new Event\("resize"\)\)/);
   assert.match(harnessSource, /guildBuffDetails/);
+  assert.match(harnessSource, /__mwiLayoutAuditContract/);
+  assert.match(harnessSource, /__mwiCollectLayoutAudit/);
+  assert.match(harnessSource, /layout-audit-output/);
+  assert.match(harnessSource, /widths: \[320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200\]/);
+  assert.match(harnessSource, /breakpoints: \{ compactMax: 400, intermediateMax: 520, summaryMax: 650 \}/);
+  assert.match(harnessSource, /maximumHorizontalOverflow: 0/);
   assert.match(source, /mwi-token-value-exchange/);
   assert.match(source, /mwi-token-value-row/);
   assert.match(source, /mwi-token-value-list\{[^}]*margin-inline:-1px/);
@@ -1326,8 +1332,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="set-guild-shrine-target"/);
   assert.match(source, /mwi-upgrade-preset/);
   assert.match(source, /container-type:inline-size/);
-  assert.match(source, /@container \(max-width:630px\)/);
+  assert.match(source, /@container \(max-width:650px\)/);
   assert.match(source, /@container \(max-width:520px\)/);
+  assert.match(source, /@container \(max-width:400px\)/);
   assert.match(source, /mwi-upgrade-plan-columns/);
   assert.match(source, /function marketItemIconMarkup/);
   assert.match(source, /function openMarketplaceForItem/);
@@ -1384,8 +1391,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /@container \(max-width:760px\)/);
   assert.doesNotMatch(source, /@media \(max-width:720px\)/);
   assert.doesNotMatch(source, /\.mwi-material-list\{display:grid;grid-template-columns:repeat\(2/);
-  assert.match(source, /\.mwi-material-plans\{grid-column:4;display:grid;grid-template-columns:repeat\(auto-fit,minmax\(165px,1fr\)\)/);
-  assert.match(source, /@container \(max-width:460px\)/);
+  assert.match(source, /\.mwi-material-plans\{grid-column:4;display:grid;grid-template-columns:repeat\(auto-fit,minmax\(140px,1fr\)\)/);
+  assert.doesNotMatch(source, /@container \(max-width:460px\)/);
   assert.match(source, /costSummary/);
   assert.match(source, /plan\.requiredItems/);
   assert.match(source, /core\.estimateSaleReplacement/);

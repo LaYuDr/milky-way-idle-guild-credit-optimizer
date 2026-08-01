@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.24] - 2026-08-01
+
+### Added
+
+- Added a repeatable responsive-layout audit mode to the local test harness, covering 11 sidebar widths from 320px to 1200px and reporting actual overflow, row heights, layout bands, and grid states.
+
+### Changed
+
+- Moved the single-line shrine planner down to the 460px sidebar range and the fully inline material rows down to the 610px range.
+- Tightened narrow-screen shrine controls, token-budget controls, summaries, and material recommendation rows while preserving zero structural horizontal overflow across the audit matrix.
+
 ## [1.1.21] - 2026-08-01
 
 ### Added

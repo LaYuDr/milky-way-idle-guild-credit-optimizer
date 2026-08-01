@@ -5,6 +5,10 @@
   <style>
     body { margin: 0; min-height: 100vh; background: #10111c; color: #eee; font: 16px system-ui, sans-serif; }
     .test-sidebar-wrapper { position: fixed; right: 0; top: 0; display: flex; flex-direction: column; width: 420px; height: 100vh; background: #202139; }
+    body[data-layout-audit="true"] > #test-page-title,
+    body[data-layout-audit="true"] > #toggle-responsive-layout,
+    body[data-layout-audit="true"] > #close-exchange-modal { display: none; }
+    body[data-layout-audit="true"] > .test-sidebar-wrapper { left: 0; right: auto; }
     body[data-sidebar-layout="wide"] [data-sidebar-layout="narrow"], body[data-sidebar-layout="narrow"] [data-sidebar-layout="wide"] { display: none; }
     #test-tabs { display: flex; border-bottom: 1px solid #55567b; }
     #test-tabs button { flex: 1; border: 0; padding: 14px 6px; background: #292a46; color: #fff; font: inherit; cursor: pointer; }
@@ -14,6 +18,7 @@
   <main id="test-page-title">本地右侧栏自动化测试页</main>
   <button id="toggle-responsive-layout" type="button">切换窄屏布局</button>
   <button id="close-exchange-modal" type="button">关闭测试兑换窗口</button>
+  <output id="layout-audit-output" hidden></output>
   <div class="Modal_modal__test" id="test-exchange-modal" role="dialog" aria-label="测试兑换窗口">
     <div class="GuildPanel_exchangeModalContent__test">
       <div class="Item_item__test"><svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg></div>
@@ -40,7 +45,9 @@
   <script>
     const searchParams = new URLSearchParams(location.search);
     const surplusPlan = searchParams.get("surplusPlan") === "1";
-    if (surplusPlan && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
+    const layoutAudit = searchParams.get("layoutAudit") === "1";
+    if (layoutAudit) document.body.dataset.layoutAudit = "true";
+    if ((surplusPlan || layoutAudit) && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -131,14 +138,37 @@
             { guildTokenCost: 900, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 4500 }] },
             { guildTokenCost: 1500, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 1600 }] }
           ]
+        },
+        "/guild_buffs/spirit_life": {
+          guildBuffHrid: "/guild_buffs/spirit_life",
+          shrineHrid: "/guild_shrines/spirit",
+          isCombat: false,
+          levelCosts: [
+            null,
+            { guildTokenCost: 700, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 3000 }] },
+            { guildTokenCost: 1100, creditCosts: [{ itemHrid: "/items/purple_guild_credit", count: 1200 }] }
+          ]
+        },
+        "/guild_buffs/spirit_combat": {
+          guildBuffHrid: "/guild_buffs/spirit_combat",
+          shrineHrid: "/guild_shrines/spirit",
+          isCombat: true,
+          levelCosts: [
+            null,
+            { guildTokenCost: 600, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 2500 }] },
+            { guildTokenCost: 1000, creditCosts: [{ itemHrid: "/items/silver_guild_credit", count: 800 }] }
+          ]
         }
       },
       characterGuildBuffMap: {
         "/guild_buffs/tempo_life": { guildBuffHrid: "/guild_buffs/tempo_life", level: surplusPlan ? 0 : 1 },
-        "/guild_buffs/tempo_combat": { guildBuffHrid: "/guild_buffs/tempo_combat", level: 0 }
+        "/guild_buffs/tempo_combat": { guildBuffHrid: "/guild_buffs/tempo_combat", level: 0 },
+        "/guild_buffs/spirit_life": { guildBuffHrid: "/guild_buffs/spirit_life", level: 0 },
+        "/guild_buffs/spirit_combat": { guildBuffHrid: "/guild_buffs/spirit_combat", level: 0 }
       },
       guildShrineMap: {
-        "/guild_shrines/tempo": { guildShrineHrid: "/guild_shrines/tempo", level: 2 }
+        "/guild_shrines/tempo": { guildShrineHrid: "/guild_shrines/tempo", level: 2 },
+        "/guild_shrines/spirit": { guildShrineHrid: "/guild_shrines/spirit", level: 2 }
       },
       characterItems: surplusPlan ? [
         { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 10000 },
@@ -157,5 +187,118 @@
     document.getElementById("close-exchange-modal").addEventListener("click", () => {
       document.getElementById("test-exchange-modal")?.remove();
     });
+
+    const waitFor = (predicate, timeoutMs = 4000) => new Promise((resolve, reject) => {
+      const startedAt = performance.now();
+      const check = () => {
+        const result = predicate();
+        if (result) return resolve(result);
+        if (performance.now() - startedAt >= timeoutMs) return reject(new Error("Layout audit setup timed out"));
+        setTimeout(check, 25);
+      };
+      check();
+    });
+
+    const elementRect = (element) => {
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom };
+    };
+
+    window.__mwiLayoutAuditContract = {
+      widths: [320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200],
+      breakpoints: { compactMax: 400, intermediateMax: 520, summaryMax: 650 },
+      maximumHorizontalOverflow: 0,
+      maximumInlinePlanHeight: 48,
+      maximumCompactPlanHeight: 122,
+      targetPlans: 4
+    };
+
+    window.__mwiCollectLayoutAudit = () => {
+      const root = document.getElementById("mwi-credit-optimizer");
+      if (!root) throw new Error("Plugin panel is unavailable");
+      const planRows = Array.from(root.querySelectorAll(".mwi-upgrade-plan"));
+      const planColumns = root.querySelector(".mwi-upgrade-plan-columns");
+      const budget = root.querySelector(".mwi-token-budget");
+      const budgetHeading = root.querySelector(".mwi-token-budget-heading");
+      const budgetInputs = root.querySelector(".mwi-token-budget-inputs");
+      const budgetAvailable = root.querySelector(".mwi-token-budget-available");
+      const materialRows = Array.from(root.querySelectorAll(".mwi-material-row"));
+      const plannedMaterialRow = materialRows.find((row) => row.querySelector(".mwi-material-plan"));
+      const plannedMaterialMethods = plannedMaterialRow && plannedMaterialRow.querySelector(".mwi-material-plans");
+      const overflow = Array.from(root.querySelectorAll(".mwi-upgrade-planner,.mwi-upgrade-preset,.mwi-upgrade-plan,.mwi-token-budget,.mwi-upgrade-cost-summary,.mwi-material-row,.mwi-material-plans,button,input,select")).filter((element) => element.scrollWidth > element.clientWidth + 2).map((element) => ({
+        className: String(element.className || ""),
+        role: element.getAttribute("data-role") || "",
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth
+      }));
+      const headingRect = elementRect(budgetHeading);
+      const inputsRect = elementRect(budgetInputs);
+      const availableRect = elementRect(budgetAvailable);
+      const rootStyle = getComputedStyle(root);
+      const contentWidth = root.clientWidth - parseFloat(rootStyle.paddingLeft) - parseFloat(rootStyle.paddingRight);
+      const breakpoints = window.__mwiLayoutAuditContract.breakpoints;
+      return {
+        requestedSidebarWidth: sidebarWidth,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        sidebar: elementRect(document.getElementById("test-sidebar-wrapper")),
+        panel: {
+          band: contentWidth <= breakpoints.compactMax ? "compact" : contentWidth <= breakpoints.intermediateMax ? "intermediate" : "wide",
+          contentWidth,
+          clientWidth: root.clientWidth,
+          scrollWidth: root.scrollWidth,
+          scrollHeight: root.scrollHeight
+        },
+        overflow,
+        shrine: {
+          count: planRows.length,
+          mode: planColumns && getComputedStyle(planColumns).display !== "none" ? "inline" : "condensed",
+          columns: planRows[0] ? getComputedStyle(planRows[0]).gridTemplateColumns : "",
+          rowHeights: planRows.map((row) => elementRect(row).height),
+          plannerHeight: elementRect(root.querySelector(".mwi-upgrade-planner"))?.height || 0
+        },
+        budget: {
+          height: elementRect(budget)?.height || 0,
+          mode: headingRect && inputsRect && Math.abs(headingRect.y - inputsRect.y) < 8 ? "inline" : "wrapped",
+          heading: headingRect,
+          inputs: inputsRect,
+          available: availableRect
+        },
+        materials: {
+          rowCount: materialRows.length,
+          mode: plannedMaterialMethods && getComputedStyle(plannedMaterialMethods).gridColumnStart === "4" ? "inline" : "wrapped",
+          rowColumns: plannedMaterialRow ? getComputedStyle(plannedMaterialRow).gridTemplateColumns : "",
+          methodColumns: plannedMaterialMethods ? getComputedStyle(plannedMaterialMethods).gridTemplateColumns : "",
+          rowHeights: materialRows.map((row) => elementRect(row).height)
+        },
+        summary: {
+          planHeight: elementRect(root.querySelector(".mwi-plan-summary"))?.height || 0,
+          costHeight: elementRect(root.querySelector(".mwi-upgrade-cost-summary"))?.height || 0
+        }
+      };
+    };
+
+    const prepareLayoutAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const upgradeTab = await waitFor(() => document.querySelector('[data-role="view-upgrade"]'));
+      upgradeTab.click();
+      const list = await waitFor(() => document.querySelector('[data-role="upgrade-plan-list"]'));
+      const targetPlans = Math.min(4, Math.max(1, Number(searchParams.get("auditPlans")) || window.__mwiLayoutAuditContract.targetPlans));
+      while (list.querySelectorAll(".mwi-upgrade-plan").length < targetPlans) {
+        const add = document.querySelector('[data-role="add-upgrade-plan"]');
+        if (!add || add.disabled) break;
+        add.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const report = window.__mwiCollectLayoutAudit();
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.layoutAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
   </script>
 </html>

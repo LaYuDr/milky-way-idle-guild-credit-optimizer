@@ -47,6 +47,12 @@ npm run serve
 开发加载器仅用于本地调试：启动开发服务后，在 Tampermonkey 中安装
 `http://127.0.0.1:4173/milky-way-idle-guild-credit-dev-loader.user.js`。
 
+响应式布局可用同一个测试台做宽度矩阵审计：访问
+`http://127.0.0.1:4173/test-harness.html?layoutAudit=1&resetState=1&auditPlans=4&sidebarWidth=420`，
+将 `sidebarWidth` 替换为测试契约列出的各档宽度。页面准备完成后会设置
+`body[data-layout-audit-ready="true"]`，并把横向溢出、神龛行高、预算区、成本摘要和材料卡片的实测结果写入
+`#layout-audit-output`，便于浏览器自动化逐档比较，不再只凭截图猜断点。
+
 每次正式发布会保留对应版本的 `dist/银河奶牛公会信用点性价比-vX.Y.Z.user.js` 历史构建产物；当前安装入口始终是未带版本号的脚本文件。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 支持与许可证
