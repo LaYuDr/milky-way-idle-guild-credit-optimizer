@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.19";
+window.MwiGuildCreditVersion = "1.1.20";
 
 (function (root, factory) {
   const api = factory();
@@ -2196,6 +2196,7 @@ window.MwiGuildCreditVersion = "1.1.19";
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
   const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  let sidebarIntegrationTimer = null;
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], targetCredit: 1, upgradePlans: [] };
@@ -3993,6 +3994,7 @@ window.MwiGuildCreditVersion = "1.1.19";
     const expectedTabs = new Set(sidebarTabAliases.flat());
     const preferredPrototypeLabels = ui().locale === "zh-CN" ? sidebarTabAliases[0] : ["Inventory", "库存"];
     const elements = document.getElementsByTagName("*");
+    let bestIntegration = null;
     for (let index = 0; index < elements.length; index += 1) {
       const candidate = elements[index];
       const children = Array.from(candidate.children);
@@ -4007,10 +4009,19 @@ window.MwiGuildCreditVersion = "1.1.19";
         const tabsRoot = candidate.parentElement && candidate.parentElement.parentElement && candidate.parentElement.parentElement.parentElement;
         const sidebar = tabsRoot && tabsRoot.parentElement;
         const panelHost = sidebar && Array.from(sidebar.children).find((node) => node !== tabsRoot && /tabPanelsContainer/.test(String(node.className)));
-        if (panelHost) return { tabBar: candidate, tabPrototype: prototype.element, panelHost };
+        if (!panelHost) continue;
+        const rect = candidate.getBoundingClientRect();
+        const visible = candidate.isConnected && rect.width > 0 && rect.height > 0;
+        const integration = {
+          tabBar: candidate,
+          tabPrototype: prototype.element,
+          panelHost,
+          score: (visible ? 1000 : 0) + recognized.length
+        };
+        if (!bestIntegration || integration.score > bestIntegration.score) bestIntegration = integration;
       }
     }
-    return null;
+    return bestIntegration;
   }
 
   function hideCreditPanel() {
@@ -4068,16 +4079,23 @@ window.MwiGuildCreditVersion = "1.1.19";
 
   function ensureSidebarIntegration() {
     refreshOfficialItemNameCatalog();
-    if (state.panel && state.panel.isConnected && state.creditTab && state.creditTab.isConnected) return;
     const integration = findSidebarTabBar();
     if (!integration || !integration.panelHost) return;
     const { tabBar, tabPrototype, panelHost } = integration;
+    const currentIntegrationMatches = Boolean(
+      state.panel && state.panel.isConnected && state.panel.parentElement === panelHost
+      && state.creditTab && state.creditTab.isConnected && state.creditTab.parentElement === tabBar
+    );
+    if (currentIntegrationMatches) return;
+
+    const keepPanelOpen = Boolean(state.panel && !state.panel.hidden && state.creditTab && state.creditTab.getAttribute("aria-selected") === "true");
+    hideCreditPanel();
+    if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
     const existingTab = tabBar.querySelector('[data-mwi-credit-tab="true"]');
-    if (existingTab && state.panel && state.panel.isConnected) return;
     if (existingTab) existingTab.remove();
 
     if (state.panel && !state.panel.isConnected) state.panel = null;
-    if (state.creditTab && !state.creditTab.isConnected) state.creditTab = null;
+    state.creditTab = null;
 
     const creditTab = tabPrototype.cloneNode(true);
     creditTab.dataset.mwiCreditTab = "true";
@@ -4098,14 +4116,26 @@ window.MwiGuildCreditVersion = "1.1.19";
     creditTab.addEventListener("click", activateCreditTab, true);
     tabBar.append(creditTab);
 
-    const panel = createPanel();
+    const panel = state.panel || createPanel();
     panel.hidden = true;
     panelHost.append(panel);
-    tabBar.addEventListener("click", (event) => {
-      if (!creditTab.contains(event.target)) hideCreditPanel();
-    });
+    if (tabBar.dataset.mwiCreditNativeTabListener !== "true") {
+      tabBar.dataset.mwiCreditNativeTabListener = "true";
+      tabBar.addEventListener("click", (event) => {
+        if (!state.creditTab || state.creditTab.parentElement !== tabBar || !state.creditTab.contains(event.target)) hideCreditPanel();
+      });
+    }
     state.panel = panel;
     state.creditTab = creditTab;
+    if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
+  }
+
+  function scheduleSidebarIntegration() {
+    if (sidebarIntegrationTimer !== null) window.clearTimeout(sidebarIntegrationTimer);
+    sidebarIntegrationTimer = window.setTimeout(() => {
+      sidebarIntegrationTimer = null;
+      ensureSidebarIntegration();
+    }, 75);
   }
 
   hydrateBridgeData();
@@ -4122,6 +4152,8 @@ window.MwiGuildCreditVersion = "1.1.19";
     if (target && target.closest('[class*="GuildPanel_exchangeModalContent"]')) scheduleGuildExchangeAdvisor();
   }, true);
   state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
+  window.addEventListener("resize", scheduleSidebarIntegration, { passive: true });
+  window.addEventListener("orientationchange", scheduleSidebarIntegration, { passive: true });
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
   window.setTimeout(ensureSidebarIntegration, 1000);

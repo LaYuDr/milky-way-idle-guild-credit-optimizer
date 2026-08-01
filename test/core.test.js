@@ -1163,6 +1163,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /--mwi-entry-gap:10px/);
   assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list,#mwi-credit-optimizer \.mwi-upgrade-plan-list,#mwi-credit-optimizer \.mwi-material-list\{grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,var\(--mwi-entry-min-width\)\),1fr\)\)\}/);
   assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);
+  assert.match(harnessSource, /toggle-responsive-layout/);
+  assert.match(harnessSource, /data-sidebar-layout="narrow"/);
+  assert.match(harnessSource, /dispatchEvent\(new Event\("resize"\)\)/);
   assert.match(harnessSource, /guildBuffDetails/);
   assert.match(source, /mwi-token-value-exchange/);
   assert.match(source, /mwi-token-value-row/);
@@ -1184,6 +1187,15 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /item-name-catalog-status|updateItemNameCoverage/);
   assert.match(source, /items_sprite/);
   assert.match(source, /tabPanelsContainer/);
+  assert.match(source, /score: \(visible \? 1000 : 0\) \+ recognized\.length/);
+  assert.match(source, /const currentIntegrationMatches = Boolean/);
+  assert.match(source, /state\.panel\.parentElement === panelHost/);
+  assert.match(source, /state\.creditTab\.parentElement === tabBar/);
+  assert.match(source, /mwiCreditNativeTabListener/);
+  assert.match(source, /state\.creditTab\.parentElement !== tabBar/);
+  assert.doesNotMatch(source, /state\.panel && state\.panel\.isConnected && state\.creditTab && state\.creditTab\.isConnected\) return;/);
+  assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
+  assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
   assert.match(source, /String\(child\.innerText \|\| child\.textContent \|\| ""\)\.replaceAll/);
   assert.doesNotMatch(source, /child\.innerText\.replaceAll/);
   assert.match(source, /overflow-y:auto/);

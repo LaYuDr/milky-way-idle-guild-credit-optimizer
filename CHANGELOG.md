@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.20] - 2026-08-01
+
+### Fixed
+
+- Kept the plugin entry visible when the game switches between wide and narrow character-management layouts by migrating the tab and panel to the currently visible tab container on resize.
+
 ## [1.1.19] - 2026-08-01
 
 ### Changed
