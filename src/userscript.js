@@ -60,7 +60,6 @@
   const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
   let sidebarIntegrationTimer = null;
   let guildTokenBudgetRefreshTimer = null;
-  let itemQueryRefreshTimer = null;
 
   function loadSavedPluginUiState() {
     const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, targetCredit: 1, upgradePlans: [] };
@@ -680,102 +679,6 @@
 
   function creditConversionGroups() {
     return CREDIT_TYPES.map(([creditItemHrid, color]) => ({ creditItemHrid, color, conversions: allConversions(creditItemHrid) }));
-  }
-
-  function itemQueryEntries() {
-    hydrateBridgeData();
-    extractItemDetailsFromReact();
-    if (!state.itemDetails) hydrateLocalInitData();
-    const details = Array.isArray(state.itemDetails)
-      ? state.itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
-      : Object.entries(state.itemDetails || {});
-    const unique = new Map();
-    for (const [fallbackHrid, detail] of details) {
-      const itemHrid = detail && (detail.itemHrid || detail.hrid) || fallbackHrid;
-      if (!String(itemHrid || "").startsWith("/items/") || unique.has(itemHrid)) continue;
-      const englishName = String(detail && detail.name || itemHrid);
-      unique.set(itemHrid, { itemHrid, englishName, itemName: resolveItemName(itemHrid, englishName) });
-    }
-    return Array.from(unique.values()).sort((left, right) => left.itemName.localeCompare(right.itemName, ui().locale));
-  }
-
-  function resolveItemQuery(entries, rawQuery, selectedHrid) {
-    const query = String(rawQuery || "").trim().toLocaleLowerCase(ui().locale);
-    if (!query) return { entry: null, matches: [] };
-    if (selectedHrid) {
-      const selected = entries.find((entry) => entry.itemHrid === selectedHrid);
-      if (selected) return { entry: selected, matches: [selected] };
-    }
-    const exactHrid = entries.find((entry) => entry.itemHrid.toLowerCase() === query || entry.itemHrid.split("/").pop().toLowerCase() === query);
-    if (exactHrid) return { entry: exactHrid, matches: [exactHrid] };
-    const exactNames = entries.filter((entry) => entry.itemName.toLocaleLowerCase(ui().locale) === query || entry.englishName.toLowerCase() === query);
-    if (exactNames.length === 1) return { entry: exactNames[0], matches: exactNames };
-    if (exactNames.length > 1) return { entry: null, matches: exactNames };
-    const partial = entries.filter((entry) => (
-      entry.itemName.toLocaleLowerCase(ui().locale).includes(query)
-      || entry.englishName.toLowerCase().includes(query)
-      || entry.itemHrid.toLowerCase().includes(query)
-    ));
-    return { entry: partial.length === 1 ? partial[0] : null, matches: partial };
-  }
-
-
-  function renderItemQueryCard(entry, group, result) {
-    const creditName = itemNameForMaterial(group.creditItemHrid);
-    const marketPrice = snapshotPrice(entry.itemHrid, state.priceReference);
-    const ratio = t("exchangeRate", { items: itemQuantity(result.itemCount), credits: creditQuantity(result.creditCount) });
-    const rank = result.rank === null ? "-" : t("itemQueryRankValue", { rank: formatNumber(result.rank), total: formatNumber(result.rankedCount) });
-    const verdict = result.status !== "ok"
-      ? t("itemQueryNoMarketPrice")
-      : result.premiumPercentage !== null && result.premiumPercentage <= 0.05
-        ? t("itemQueryBestValue", { credit: creditName })
-        : t("itemQueryComparedWithBest", { best: result.bestItemName || "-", percent: formatNumber(result.premiumPercentage, 1) });
-    return `<article class="mwi-item-query-card" data-priced="${String(result.status === "ok")}" style="--mwi-query-color:${group.color}">
-      <div class="mwi-item-query-card-heading"><span class="mwi-item">${marketItemIconMarkup(entry.itemHrid, entry.itemName)}<strong class="mwi-item-name">${escapeHtml(entry.itemName)}</strong></span><span class="mwi-item-query-arrow" aria-hidden="true">→</span><span class="mwi-item">${iconMarkup(group.creditItemHrid, creditName)}<strong class="mwi-item-name">${escapeHtml(creditName)}</strong></span></div>
-      <div class="mwi-item-query-metrics">
-        <span><small>${escapeHtml(t("itemQueryExchangeRatio"))}</small><strong>${escapeHtml(ratio)}</strong></span>
-        <span><small>${escapeHtml(t("itemQueryMarketPrice"))}</small><strong>${marketPrice === null ? "-" : escapeHtml(formatNumber(marketPrice, 2))}</strong></span>
-        <span><small>${escapeHtml(t("itemQueryUnitCost"))}</small><strong>${result.costPerCredit === null ? "-" : escapeHtml(formatNumber(result.costPerCredit, 2))}</strong></span>
-        <span><small>${escapeHtml(t("itemQueryTargetCost"))}</small><strong>${result.cost === null ? "-" : escapeHtml(core.formatCompactCost(result.cost))}</strong></span>
-        <span><small>${escapeHtml(t("itemQueryRank"))}</small><strong>${escapeHtml(rank)}</strong></span>
-      </div>
-      <div class="mwi-item-query-verdict">${escapeHtml(verdict)}</div>
-    </article>`;
-  }
-
-  function renderItemQuery(panel, creditGroups = creditConversionGroups()) {
-    const input = panel.querySelector('[data-role="item-query-input"]');
-    const output = panel.querySelector('[data-role="item-query-result"]');
-    if (!input || !output) return;
-    const entries = itemQueryEntries();
-    const query = String(input.value || "").trim();
-    if (!query) {
-      output.innerHTML = `<div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div>`;
-      return;
-    }
-    const resolved = resolveItemQuery(entries, query, input.dataset.itemHrid);
-    if (!resolved.entry) {
-      if (!resolved.matches.length) {
-        output.innerHTML = `<div class="mwi-item-query-message mwi-item-query-warning">${escapeHtml(t("itemQueryNoMatch"))}</div>`;
-        return;
-      }
-      const suggestions = resolved.matches.slice(0, 8).map((entry) => `<button data-role="item-query-suggestion" data-item-hrid="${escapeHtml(entry.itemHrid)}" data-item-name="${escapeHtml(entry.itemName)}" type="button">${escapeHtml(entry.itemName)}</button>`).join("");
-      output.innerHTML = `<div class="mwi-item-query-message">${escapeHtml(t("itemQueryMultiple", { count: formatNumber(resolved.matches.length) }))}<div class="mwi-item-query-suggestions">${suggestions}</div></div>`;
-      return;
-    }
-    input.dataset.itemHrid = resolved.entry.itemHrid;
-    const rawTarget = Number(panel.querySelector('[data-role="target"]').value);
-    const target = Number.isSafeInteger(rawTarget) && rawTarget > 0 ? rawTarget : state.targetCredit;
-    const results = creditGroups.flatMap((group) => {
-      const books = Object.fromEntries(group.conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)]));
-      return core.analyzeItemConversion(group.conversions, books, resolved.entry.itemHrid, target).map((result) => ({ group, result }));
-    });
-    if (!results.length) {
-      const hasRules = creditGroups.some((group) => group.conversions.length);
-      output.innerHTML = `<div class="mwi-item-query-message mwi-item-query-warning">${escapeHtml(hasRules ? t("itemQueryNotExchangeable", { item: resolved.entry.itemName }) : t("noExchangeRules"))}</div>`;
-      return;
-    }
-    output.innerHTML = `<div class="mwi-item-query-cards">${results.map(({ group, result }) => renderItemQueryCard(resolved.entry, group, result)).join("")}</div>`;
   }
 
   function itemSpriteHref(itemHrid) {
@@ -1425,7 +1328,6 @@
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs{display:flex;border-bottom:1px solid #474969;margin:0 0 10px}.mwi-view-tab{min-height:30px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:5px 10px!important}.mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;color:#fff!important}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
-        @keyframes mwiFadeInUp{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}#mwi-credit-optimizer .mwi-item-query{display:flex;flex-direction:column;gap:10px;margin:12px 0;padding:12px;border:1px solid #4e5278;border-radius:10px;background:linear-gradient(135deg,#232541,#1d1e34);box-shadow:inset 0 1px 0 #ffffff08,0 4px 14px #00000044}#mwi-credit-optimizer .mwi-item-query-heading{display:flex;flex-direction:column;gap:3px;min-width:0;text-align:center;margin-bottom:2px}#mwi-credit-optimizer .mwi-item-query-heading strong{font-size:13px;color:#e8e9f6;text-shadow:0 1px 2px #0006}#mwi-credit-optimizer .mwi-item-query-heading small{color:#9b9dbd;font-size:10px;line-height:1.3}#mwi-credit-optimizer .mwi-item-query-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#mwi-credit-optimizer .mwi-item-query-form input{width:100%;min-width:0;background:linear-gradient(180deg,#1b1c31,#22233c);border:1px solid #565983;box-shadow:inset 0 2px 4px #0004,0 0 0 2px transparent;transition:all .2s ease;padding:6px 12px;font-size:12px;border-radius:6px}#mwi-credit-optimizer .mwi-item-query-form input:focus{border-color:#77f3d0;box-shadow:inset 0 1px 2px #0004,0 0 0 3px #77f3d022;outline:none}#mwi-credit-optimizer .mwi-item-query-form button{padding:0 14px;background:linear-gradient(135deg,#43c4ad,#329986);box-shadow:inset 0 1px 0 #ffffff33,0 2px 6px #0d1a18;transition:transform .1s,filter .2s;border-radius:6px}#mwi-credit-optimizer .mwi-item-query-form button:hover{filter:brightness(1.1);transform:translateY(-1px)}#mwi-credit-optimizer .mwi-item-query-form button:active{transform:translateY(1px)}#mwi-credit-optimizer .mwi-item-query-result{width:100%;min-width:0;margin-top:2px}#mwi-credit-optimizer .mwi-item-query-message{padding:8px;text-align:center;color:#9ca0c5;font-size:11px;background:#292a4666;border-radius:6px;border:1px dashed #4e5278}#mwi-credit-optimizer .mwi-item-query-warning{color:#ffd17c;background:#3b332388;border-color:#80663f}#mwi-credit-optimizer .mwi-item-query-suggestions{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px}#mwi-credit-optimizer .mwi-item-query-suggestions button{min-height:26px!important;padding:4px 10px!important;border:1px solid #5a5d85!important;border-radius:999px!important;background:linear-gradient(180deg,#353653,#2c2d47)!important;color:#d7d9ed!important;font-size:10px;box-shadow:0 2px 4px #0003;transition:all .15s ease}#mwi-credit-optimizer .mwi-item-query-suggestions button:hover{border-color:#77f3d0!important;color:#fff!important;transform:translateY(-1px);box-shadow:0 4px 8px #00000055,0 0 8px #77f3d033}#mwi-credit-optimizer .mwi-item-query-cards{display:grid;gap:8px}#mwi-credit-optimizer .mwi-item-query-card{animation:mwiFadeInUp .3s ease-out backwards;display:grid;gap:8px;padding:10px;border:1px solid #4b4f75;border-radius:8px;background:linear-gradient(135deg,#282a46,#22233b);position:relative;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease;box-shadow:0 4px 10px #00000033}#mwi-credit-optimizer .mwi-item-query-card:hover{transform:translateY(-2px);box-shadow:0 6px 15px #00000055}#mwi-credit-optimizer .mwi-item-query-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:60px;background:radial-gradient(ellipse at left,var(--mwi-query-color) 0,transparent 70%);opacity:.15;pointer-events:none}#mwi-credit-optimizer .mwi-item-query-card-heading{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;position:relative;z-index:1}#mwi-credit-optimizer .mwi-item-query-card-heading>.mwi-item:last-child{justify-content:flex-end}#mwi-credit-optimizer .mwi-item-query-card-heading .mwi-item-icon{width:24px;height:24px;flex-basis:24px;filter:drop-shadow(0 2px 2px #0006)}#mwi-credit-optimizer .mwi-item-query-card-heading .mwi-item-name{font-size:12px;color:#e8e9f6}#mwi-credit-optimizer .mwi-item-query-arrow{color:#777a9e;font-size:14px}#mwi-credit-optimizer .mwi-item-query-metrics{display:grid;grid-template-columns:repeat(5,minmax(80px,1fr));gap:6px;position:relative;z-index:1}#mwi-credit-optimizer .mwi-item-query-metrics>span{display:grid;gap:2px;padding:6px;border-radius:6px;background:linear-gradient(180deg,#1c1e34,#171829);border:1px solid #333659;box-shadow:inset 0 2px 4px #0005}#mwi-credit-optimizer .mwi-item-query-metrics small{color:#7e82a8;font-size:9px;text-transform:uppercase;letter-spacing:.05em}#mwi-credit-optimizer .mwi-item-query-metrics strong{overflow:hidden;text-overflow:ellipsis;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;text-shadow:0 1px 2px #000}#mwi-credit-optimizer .mwi-item-query-metrics>span:nth-child(3) strong,#mwi-credit-optimizer .mwi-item-query-metrics>span:nth-child(5) strong{color:#77f3d0}#mwi-credit-optimizer .mwi-item-query-verdict{justify-self:start;margin-top:2px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;background:#2d4a46;color:#77f3d0;border:1px solid #3e6d62;position:relative;z-index:1;box-shadow:0 2px 4px #0004}#mwi-credit-optimizer .mwi-item-query-card[data-priced="false"] .mwi-item-query-verdict{background:#453a25;color:#ffd17c;border-color:#6d5932}@container (max-width:550px){#mwi-credit-optimizer .mwi-item-query-metrics{grid-template-columns:repeat(auto-fit,minmax(80px,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-item-query-form{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-item-query-form button{width:100%;padding:8px}}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
@@ -1522,11 +1424,6 @@
           <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
           <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
         </div>
-        <section class="mwi-item-query" aria-label="${escapeHtml(t("itemQueryTitle"))}">
-          <div class="mwi-item-query-heading"><strong>${escapeHtml(t("itemQueryTitle"))}</strong><small>${escapeHtml(t("itemQueryHint"))}</small></div>
-          <form class="mwi-item-query-form" data-role="item-query-form"><input data-role="item-query-input" type="search" autocomplete="off" placeholder="${escapeHtml(t("itemQueryPlaceholder"))}"><button type="submit">${escapeHtml(t("itemQueryAction"))}</button></form>
-          <div class="mwi-item-query-result" data-role="item-query-result" aria-live="polite"><div class="mwi-item-query-message">${escapeHtml(t("itemQueryIdle"))}</div></div>
-        </section>
         <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
         <div data-role="results"></div>
       </div>
@@ -1597,24 +1494,6 @@
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
-    const itemQueryInput = panel.querySelector('[data-role="item-query-input"]');
-    panel.querySelector('[data-role="item-query-form"]').addEventListener("submit", (event) => {
-      event.preventDefault();
-      window.clearTimeout(itemQueryRefreshTimer);
-      renderItemQuery(panel);
-    });
-    itemQueryInput.addEventListener("input", () => {
-      delete itemQueryInput.dataset.itemHrid;
-      window.clearTimeout(itemQueryRefreshTimer);
-      itemQueryRefreshTimer = window.setTimeout(() => renderItemQuery(panel), 120);
-    });
-    panel.querySelector('[data-role="item-query-result"]').addEventListener("click", (event) => {
-      const suggestion = event.target.closest('[data-role="item-query-suggestion"]');
-      if (!suggestion) return;
-      itemQueryInput.value = suggestion.dataset.itemName;
-      itemQueryInput.dataset.itemHrid = suggestion.dataset.itemHrid;
-      renderItemQuery(panel);
-    });
     panel.addEventListener("click", (event) => {
       const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
       if (modeButton) {
@@ -1745,7 +1624,6 @@
     results.replaceChildren();
 
     const creditGroups = creditConversionGroups();
-    renderItemQuery(panel, creditGroups);
     const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
     if (!conversionCount) {
       status.textContent = t("noExchangeRules");
@@ -1770,7 +1648,6 @@
         };
       });
       const tokenValues = core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked])));
-      renderItemQuery(panel, creditGroups);
       status.textContent = "";
       status.hidden = true;
       results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`;

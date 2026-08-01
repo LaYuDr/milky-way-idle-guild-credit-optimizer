@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.29] - 2026-08-01
+
+### Removed
+
+- Removed the current arbitrary-item exchange lookup UI, dedicated comparison logic, localization strings, and test-harness audit pending a future redesign.
+
 ## [1.1.28] - 2026-08-01
 
 ### Changed

@@ -19,7 +19,6 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.t("setGuildLifeTarget"), "Fill Life levels");
   assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Use guild tokens for every credit");
   assert.equal(localizer.t("creditExchangeModeTitle", { mode: "Best item" }), "Current mode: Best item. Click to switch.");
-  assert.equal(localizer.t("itemQueryComparedWithBest", { best: "Beast Hide", percent: "12.5" }), "Its cost per credit is 12.5% above the best item, “Beast Hide”.");
   assert.equal(localizer.quantity("itemQuantity", 1), "1 item");
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
@@ -34,7 +33,6 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.t("guildTargetComplete", { domain: "生活" }), "当前已达到最大等级（生活）。");
   assert.equal(localizer.t("guildTokenCreditPlanSummary", { count: "1,200" }), "其中 1,200 公会代币用于兑换信用点。");
   assert.equal(localizer.t("guildTokenCreditPlanPartialActive", { count: "3" }), "已选择 3 种信用点按公会代币兑换计算。");
-  assert.equal(localizer.t("itemQueryNotExchangeable", { item: "奶酪" }), "“奶酪”不能用于兑换公会信用点。");
   assert.equal(localizer.quantity("itemQuantity", 4), "4 个");
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
 });
@@ -60,48 +58,6 @@ test("订单簿不足时不虚报总价", () => {
   assert.equal(quote.status, "insufficient_depth");
   assert.equal(quote.cost, null);
   assert.equal(quote.availableQuantity, 3);
-});
-
-test("任意兑换物品查询返回同类排名和相对最优差距", () => {
-  const conversions = [
-    { itemHrid: "/items/best", itemName: "Best", creditItemHrid: "/items/green_guild_credit", itemCount: 2, creditCount: 1 },
-    { itemHrid: "/items/selected", itemName: "Selected", creditItemHrid: "/items/green_guild_credit", itemCount: 4, creditCount: 1 },
-    { itemHrid: "/items/unpriced", itemName: "Unpriced", creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 1 }
-  ];
-  const books = {
-    "/items/best": { asks: [{ price: 10, quantity: 100 }] },
-    "/items/selected": { asks: [{ price: 6, quantity: 100 }] }
-  };
-  const [selected] = core.analyzeItemConversion(conversions, books, "/items/selected", 10);
-  assert.deepEqual(selected, {
-    status: "ok",
-    itemHrid: "/items/selected",
-    itemName: "Selected",
-    creditItemHrid: "/items/green_guild_credit",
-    itemCount: 4,
-    creditCount: 1,
-    targetCredits: 10,
-    batches: 10,
-    requiredItems: 40,
-    actualCredits: 10,
-    availableQuantity: 100,
-    fills: [{ price: 6, quantity: 40 }],
-    buyerFee: 0,
-    cost: 240,
-    costPerCredit: 24,
-    rank: 2,
-    rankedCount: 2,
-    bestItemHrid: "/items/best",
-    bestItemName: "Best",
-    bestCostPerCredit: 20,
-    premiumPercentage: selected.premiumPercentage
-  });
-  assert.ok(Math.abs(selected.premiumPercentage - 20) < 1e-9);
-  const [unpriced] = core.analyzeItemConversion(conversions, books, "/items/unpriced", 10);
-  assert.equal(unpriced.status, "insufficient_depth");
-  assert.equal(unpriced.rank, null);
-  assert.equal(unpriced.rankedCount, 2);
-  assert.equal(unpriced.premiumPercentage, null);
 });
 
 test("实时市场订单簿提取最低卖价、最高买价并保留无报价状态", () => {
@@ -1432,9 +1388,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /\[hidden\]\{display:none!important\}/);
   assert.match(source, /options\.single/);
   assert.match(source, /core\.rankConversions\(conversions, books, targetCredits\)/);
-  assert.match(source, /data-role="item-query-input"/);
-  assert.match(source, /data-role="item-query-result"/);
-  assert.match(source, /core\.analyzeItemConversion\(/);
+  assert.doesNotMatch(source, /data-role="item-query-/);
+  assert.doesNotMatch(source, /core\.analyzeItemConversion\(/);
   assert.match(source, /mwi-view-tabs[\s\S]{0,500}data-role="view-upgrade"[\s\S]{0,500}data-role="view-credit"/);
   assert.match(source, /function bestCreditMaterialPlans\(estimate\)/);
   assert.match(source, /row\.remainingMissing \?\? row\.missing/);

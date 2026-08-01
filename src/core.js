@@ -113,25 +113,6 @@
       });
   }
 
-  function analyzeItemConversion(conversions, orderBooks, itemHrid, targetCredits) {
-    const ranked = rankConversions(Array.isArray(conversions) ? conversions : [], orderBooks || {}, targetCredits);
-    const priced = ranked.filter((result) => result.status === "ok");
-    const best = priced[0] || null;
-    return ranked.filter((result) => result.itemHrid === itemHrid).map((result) => {
-      const rankIndex = result.status === "ok" ? priced.indexOf(result) : -1;
-      const comparable = result.status === "ok" && best && Number.isFinite(best.costPerCredit) && best.costPerCredit > 0;
-      return {
-        ...result,
-        rank: rankIndex >= 0 ? rankIndex + 1 : null,
-        rankedCount: priced.length,
-        bestItemHrid: best && best.itemHrid || null,
-        bestItemName: best && best.itemName || null,
-        bestCostPerCredit: best && best.costPerCredit || null,
-        premiumPercentage: comparable ? Math.max(0, (result.costPerCredit / best.costPerCredit - 1) * 100) : null
-      };
-    });
-  }
-
   function rankGuildTokenCreditValues(exchangeRules, rankedCredits) {
     const rankings = rankedCredits && typeof rankedCredits === "object" ? rankedCredits : {};
     return (Array.isArray(exchangeRules) ? exchangeRules : [])
@@ -578,5 +559,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, analyzeItemConversion, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
 });
