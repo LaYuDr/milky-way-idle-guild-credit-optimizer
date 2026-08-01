@@ -1223,13 +1223,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /PRICE_REFERENCES/);
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
-  assert.match(source, /panel\.dataset\.activeView = "upgrade"/);
-  assert.match(source, /mwi-view-tab mwi-view-tab-active" data-role="view-upgrade" role="tab" aria-selected="true"/);
-  assert.match(source, /data-role="credit-view" hidden/);
-  assert.match(source, /class="mwi-credit-toolbar"/);
-  assert.match(source, /class="mwi-credit-heading-best"/);
-  assert.match(source, /class="mwi-credit-best-row"/);
-  assert.match(source, /updateRenderedMarkup\(results, `\$\{renderGuildTokenValues\(tokenValues\)\}/);
   assert.match(source, /snapshotOrderBook\(conversion\.itemHrid\)/);
   assert.match(source, /conversionCache: new Map\(\)/);
   assert.match(source, /state\.conversionCache\.clear\(\)/);
@@ -1258,7 +1251,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
   assert.match(source, /--mwi-entry-gap:10px/);
-  assert.match(source, /#mwi-credit-optimizer \.mwi-token-value-list,#mwi-credit-optimizer \.mwi-upgrade-plan-list/);
+  assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list/);
   assert.match(source, /\.mwi-upgrade-plan-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:0\}/);
   assert.match(source, /\.mwi-material-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:7px/);
   assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);
@@ -1270,9 +1263,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(harnessSource, /__mwiCollectLayoutAudit/);
   assert.match(harnessSource, /runPlanStabilityAudit/);
   assert.match(harnessSource, /sameFirstPlan: list\.querySelector\("\.mwi-upgrade-plan"\) === firstPlan/);
-  assert.match(harnessSource, /prepareCreditAudit/);
-  assert.match(harnessSource, /defaultView = panel\.dataset\.activeView/);
-  assert.match(harnessSource, /creditAuditDefaultView = defaultView/);
   assert.match(harnessSource, /layout-audit-output/);
   assert.match(harnessSource, /widths: \[320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200\]/);
   assert.match(harnessSource, /breakpoints: \{ compactMax: 400, intermediateMax: 520, summaryMax: 650 \}/);

@@ -1339,8 +1339,7 @@
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
-        #mwi-credit-optimizer .mwi-token-value-list,#mwi-credit-optimizer .mwi-upgrade-plan-list,#mwi-credit-optimizer .mwi-material-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--mwi-entry-min-width)),1fr))}
-        #mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+        #mwi-credit-optimizer .mwi-credit-grid,#mwi-credit-optimizer .mwi-token-value-list,#mwi-credit-optimizer .mwi-upgrade-plan-list,#mwi-credit-optimizer .mwi-material-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--mwi-entry-min-width)),1fr))}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;gap:var(--mwi-entry-gap)}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
@@ -1419,7 +1418,7 @@
         @container (max-width:400px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-copy strong{display:none}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0;padding-inline:4px!important}#mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}#mwi-credit-optimizer .mwi-upgrade-plan{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) 32px;align-items:end}#mwi-credit-optimizer .mwi-upgrade-field-label{display:block}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-shrine{grid-column:1/4;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-start{grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-level-arrow{display:block;grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label.mwi-upgrade-plan-target{grid-column:3;grid-row:2}#mwi-credit-optimizer .mwi-remove-plan{grid-column:4;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-actions{align-items:center;flex-direction:row}#mwi-credit-optimizer .mwi-upgrade-actions>span{display:flex}#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start}#mwi-credit-optimizer .mwi-upgrade-cost-summary{align-items:flex-start;flex-direction:column;gap:4px;padding:6px 7px}#mwi-credit-optimizer .mwi-material-row{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-material-required{grid-column:2;grid-row:1}#mwi-credit-optimizer .mwi-material-exchange-mode,#mwi-credit-optimizer .mwi-material-exchange-mode-spacer{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plans{grid-column:1/-1}#mwi-credit-optimizer .mwi-material-plan{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto}#mwi-credit-optimizer .mwi-material-plan-item{grid-row:1/-1}#mwi-credit-optimizer .mwi-material-plan-need{grid-column:2;justify-items:end;padding:5px 6px 0 0}#mwi-credit-optimizer .mwi-material-plan-rate{grid-column:2;padding:0 6px 6px 0;text-align:right}}
         @container (max-width:650px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start;justify-self:end}}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:76px}#mwi-credit-optimizer .mwi-token-budget-inputs label>span{display:none}#mwi-credit-optimizer .mwi-token-budget-percent{min-width:34px;padding-inline:4px}}
-        /* Shared guild workspace: compact utility controls, meaningful data emphasis, and explicit overflow safety. */
+        /* Shrine route workspace: one visual signature, compact utility controls, and explicit overflow safety. */
         #mwi-credit-optimizer{
           --mwi-void:#171827;
           --mwi-orbit:#242640;
@@ -1595,324 +1594,6 @@
         #mwi-credit-optimizer .mwi-material-row{
           background:linear-gradient(105deg,#292b48,#242640);
         }
-        #mwi-credit-optimizer .mwi-credit-toolbar{
-          display:grid;
-          grid-template-columns:minmax(180px,1fr) auto;
-          align-items:center;
-          gap:7px;
-          min-width:0;
-          margin:0 0 7px;
-          border:1px solid #4a4e77;
-          border-radius:10px;
-          background:linear-gradient(180deg,#262842 0%,#22243b 100%);
-          box-shadow:0 8px 22px #0d0e1840;
-          overflow:hidden;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar-copy{
-          display:flex;
-          align-items:baseline;
-          flex-wrap:wrap;
-          gap:2px 9px;
-          min-width:0;
-          align-self:stretch;
-          padding:8px 9px;
-          border-right:1px solid #3d766e;
-          background:linear-gradient(105deg,#203c3a 0%,#242944 72%,#242640 100%);
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar-copy strong{
-          color:#ebfff9;
-          font-family:ui-rounded,"SF Pro Rounded","PingFang SC",system-ui,sans-serif;
-          font-size:11px;
-          letter-spacing:.02em;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar-copy small{
-          min-width:0;
-          color:#a9d6cc;
-          font-size:10px;
-          line-height:1.35;
-          overflow-wrap:anywhere;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-controls{
-          display:grid;
-          grid-template-columns:auto auto auto;
-          align-items:center;
-          gap:6px;
-          min-width:0;
-          padding:6px 8px 6px 0;
-        }
-        #mwi-credit-optimizer .mwi-credit-target{
-          display:flex;
-          align-items:center;
-          gap:5px;
-          min-width:0;
-          color:#c9cbeb;
-          font-size:10px;
-          white-space:nowrap;
-        }
-        #mwi-credit-optimizer .mwi-credit-target input{
-          width:72px;
-          min-height:29px;
-          padding:3px 6px;
-          font-variant-numeric:tabular-nums;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-price-reference{
-          min-width:0;
-          border-color:#62668e;
-          border-radius:6px;
-          background:#252742;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-price-reference-label{font-size:10px}
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-price-reference button{
-          min-height:28px;
-          padding:4px 7px;
-          font-size:10px;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-price-reference button[data-active="true"]{
-          background:#2c665d;
-          color:#eafff9;
-        }
-        #mwi-credit-optimizer .mwi-credit-refresh{
-          min-width:0;
-          min-height:29px!important;
-          padding:4px 8px!important;
-          border:1px solid #61d5c2!important;
-          background:#2c665d!important;
-          color:#eafff9!important;
-          font-size:10px;
-          line-height:1.2;
-          white-space:normal;
-        }
-        #mwi-credit-optimizer .mwi-credit-toolbar .mwi-status{
-          grid-column:1/-1;
-          min-width:0;
-          margin:0;
-          padding:6px 9px;
-          border-top:1px solid #3c405f;
-          color:#c9cbeb;
-          font-size:10px;
-          overflow-wrap:anywhere;
-        }
-        #mwi-credit-optimizer .mwi-credit-results{min-width:0}
-        #mwi-credit-optimizer .mwi-token-value-section{
-          margin:0 0 7px;
-          border:1px solid #3d766e;
-          border-radius:10px;
-          background:linear-gradient(180deg,#223c3a,#203634);
-          box-shadow:0 6px 18px #0d0e1833;
-        }
-        #mwi-credit-optimizer .mwi-token-value-heading{
-          min-height:36px!important;
-          padding:6px 8px!important;
-          border-bottom:0;
-          background:linear-gradient(105deg,#203c3a 0%,#242944 72%,#242640 100%)!important;
-          font-family:ui-rounded,"SF Pro Rounded","PingFang SC",system-ui,sans-serif;
-          font-size:11px;
-        }
-        #mwi-credit-optimizer .mwi-token-value-list{
-          grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));
-          margin:0;
-          border-top:1px solid #3d766e;
-        }
-        #mwi-credit-optimizer .mwi-token-value-row{
-          grid-template-columns:minmax(0,1fr) auto;
-          grid-template-rows:auto auto;
-          gap:2px 7px;
-          min-width:0;
-          padding:6px 8px;
-          border-top:0;
-          border-right:1px solid #315d58;
-          border-bottom:1px solid #315d58;
-          background:#203a38;
-        }
-        #mwi-credit-optimizer .mwi-token-value-row .mwi-item{grid-column:1/-1}
-        #mwi-credit-optimizer .mwi-token-value-row .mwi-item-name{font-size:11px;font-weight:700}
-        #mwi-credit-optimizer .mwi-token-value-exchange{
-          min-width:0;
-          color:#b9ded7;
-          font-size:9px;
-          white-space:normal;
-          overflow-wrap:anywhere;
-        }
-        #mwi-credit-optimizer .mwi-token-value-row .mwi-cost,
-        #mwi-credit-optimizer .mwi-token-value-unpriced{
-          justify-self:end;
-          align-self:end;
-          min-width:0;
-          font-size:10px;
-          text-align:right;
-          white-space:normal;
-          overflow-wrap:anywhere;
-        }
-        #mwi-credit-optimizer .mwi-credit-grid{
-          grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));
-          gap:7px;
-        }
-        #mwi-credit-optimizer .mwi-credit-section{
-          align-self:start;
-          border:1px solid #474b70;
-          border-left:3px solid var(--mwi-credit-color);
-          border-radius:9px;
-          background:linear-gradient(105deg,#292b48,#242640);
-          box-shadow:0 5px 16px #0d0e182b;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading{
-          display:grid;
-          grid-template-columns:auto minmax(0,1fr) auto auto;
-          gap:7px;
-          min-width:0;
-          min-height:38px!important;
-          padding:5px 7px!important;
-          background:#292b48!important;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading:hover{background:#303250!important}
-        #mwi-credit-optimizer .mwi-credit-heading .mwi-item-icon{
-          width:26px;
-          height:26px;
-          flex-basis:26px;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading-name{
-          grid-column:2;
-          min-width:0;
-          overflow:hidden;
-          color:#f4f5ff;
-          font-family:ui-rounded,"SF Pro Rounded","PingFang SC",system-ui,sans-serif;
-          font-size:12px;
-          text-overflow:ellipsis;
-          white-space:nowrap;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading-best{
-          grid-column:3;
-          display:grid;
-          justify-items:end;
-          gap:0;
-          min-width:0;
-          font-variant-numeric:tabular-nums;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading-best small{
-          color:#aeb1d3;
-          font-size:8px;
-          font-weight:500;
-          line-height:1;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading-best strong{
-          color:var(--mwi-mint-data);
-          font-size:11px;
-          line-height:1.2;
-        }
-        #mwi-credit-optimizer .mwi-credit-heading .mwi-collapse-icon{
-          grid-column:4;
-          align-self:center;
-          margin:0;
-          font-size:12px;
-        }
-        #mwi-credit-optimizer .mwi-credit-body{border-top:1px solid #414568}
-        #mwi-credit-optimizer .mwi-credit-section table{
-          table-layout:fixed;
-          font-size:10px;
-        }
-        #mwi-credit-optimizer .mwi-credit-section th,
-        #mwi-credit-optimizer .mwi-credit-section td{
-          min-width:0;
-          padding:4px 6px;
-          border-top:1px solid #3c405f;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        }
-        #mwi-credit-optimizer .mwi-credit-section thead th{
-          border-top:0;
-          background:#252742;
-          color:#aeb1d3;
-          font-size:9px;
-        }
-        #mwi-credit-optimizer .mwi-credit-section th:nth-child(1){width:36%}
-        #mwi-credit-optimizer .mwi-credit-section th:nth-child(2){width:26%}
-        #mwi-credit-optimizer .mwi-credit-section th:nth-child(3){width:18%}
-        #mwi-credit-optimizer .mwi-credit-section th:nth-child(4){width:20%}
-        #mwi-credit-optimizer .mwi-credit-section tbody tr{background:#292b47}
-        #mwi-credit-optimizer .mwi-credit-section tbody tr:hover{background:#303250}
-        #mwi-credit-optimizer .mwi-credit-section tbody tr.mwi-credit-best-row{
-          background:linear-gradient(90deg,#203b39 0%,#292b47 72%);
-        }
-        #mwi-credit-optimizer .mwi-credit-section .mwi-item{gap:5px}
-        #mwi-credit-optimizer .mwi-credit-section .mwi-market-item-link{
-          width:25px;
-          min-width:25px;
-          height:25px;
-          min-height:25px!important;
-        }
-        #mwi-credit-optimizer .mwi-credit-section .mwi-item-icon{
-          width:23px;
-          height:23px;
-          flex-basis:23px;
-        }
-        #mwi-credit-optimizer .mwi-credit-section .mwi-cost{
-          color:var(--mwi-mint-data);
-          font-variant-numeric:tabular-nums;
-        }
-        @container (max-width:650px){
-          #mwi-credit-optimizer .mwi-credit-toolbar{grid-template-columns:minmax(0,1fr)}
-          #mwi-credit-optimizer .mwi-credit-toolbar-copy{border-right:0;border-bottom:1px solid #3d766e}
-          #mwi-credit-optimizer .mwi-credit-toolbar .mwi-controls{padding:0 8px 7px}
-        }
-        @container (max-width:400px){
-          #mwi-credit-optimizer .mwi-credit-toolbar-copy small{display:none}
-          #mwi-credit-optimizer .mwi-credit-toolbar .mwi-controls{
-            grid-template-columns:minmax(0,1fr) auto;
-            gap:6px;
-          }
-          #mwi-credit-optimizer .mwi-credit-toolbar .mwi-price-reference{grid-column:1/-1;grid-row:1}
-          #mwi-credit-optimizer .mwi-credit-target{grid-column:1;grid-row:2}
-          #mwi-credit-optimizer .mwi-credit-refresh{grid-column:2;grid-row:2}
-          #mwi-credit-optimizer .mwi-credit-target span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-          #mwi-credit-optimizer .mwi-credit-target input{width:68px}
-        }
-        @container (max-width:350px){
-          #mwi-credit-optimizer .mwi-credit-target{
-            display:grid;
-            align-items:end;
-            gap:2px;
-            white-space:normal;
-          }
-          #mwi-credit-optimizer .mwi-credit-target span{
-            overflow:visible;
-            font-size:9px;
-            text-overflow:clip;
-          }
-          #mwi-credit-optimizer .mwi-credit-target input{width:100%}
-          #mwi-credit-optimizer .mwi-credit-refresh{align-self:end}
-          #mwi-credit-optimizer .mwi-credit-section thead{display:none}
-          #mwi-credit-optimizer .mwi-credit-section tbody,
-          #mwi-credit-optimizer .mwi-credit-section tr{display:block}
-          #mwi-credit-optimizer .mwi-credit-section tr{
-            display:grid;
-            grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:4px 6px;
-            padding:6px 7px;
-            border-top:1px solid #3c405f;
-          }
-          #mwi-credit-optimizer .mwi-credit-section tbody tr:first-child{border-top:0}
-          #mwi-credit-optimizer .mwi-credit-section td{
-            display:grid;
-            align-content:start;
-            gap:1px;
-            min-width:0;
-            padding:0;
-            border:0;
-            text-align:left;
-            white-space:normal;
-            overflow-wrap:anywhere;
-          }
-          #mwi-credit-optimizer .mwi-credit-section td:first-child{grid-column:1/-1}
-          #mwi-credit-optimizer .mwi-credit-section td:not(:first-child)::before{
-            content:attr(data-label);
-            color:#9297ba;
-            font-size:8px;
-            font-weight:500;
-            line-height:1.1;
-          }
-          #mwi-credit-optimizer .mwi-credit-section td:nth-child(3){text-align:center}
-          #mwi-credit-optimizer .mwi-credit-section td:nth-child(4){text-align:right}
-        }
         @container (max-width:400px){
           #mwi-credit-optimizer .mwi-upgrade-preset{
             grid-template-columns:minmax(0,1fr);
@@ -1962,22 +1643,19 @@
       <h3>${escapeHtml(t("panelTitle"))}</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
-        <button class="mwi-view-tab mwi-view-tab-active" data-role="view-upgrade" role="tab" aria-selected="true" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
-        <button class="mwi-view-tab" data-role="view-credit" role="tab" aria-selected="false" type="button">${escapeHtml(t("creditValue"))}</button>
+        <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
+        <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">${escapeHtml(t("creditValue"))}</button>
       </div>
-      <div data-role="credit-view" hidden>
-        <section class="mwi-credit-toolbar" aria-label="${escapeHtml(t("creditValue"))}">
-          <div class="mwi-credit-toolbar-copy"><strong>${escapeHtml(t("creditValue"))}</strong><small>${escapeHtml(t("creditValueHint"))}</small></div>
-          <div class="mwi-controls">
-            <label class="mwi-credit-target"><span>${escapeHtml(t("targetCredits"))}</span><input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
-            <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
-            <button class="mwi-credit-refresh" data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
-          </div>
-          <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
-        </section>
-        <div class="mwi-credit-results" data-role="results"></div>
+      <div data-role="credit-view">
+        <div class="mwi-controls">
+          <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
+          <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
+          <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
+        </div>
+        <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
+        <div data-role="results"></div>
       </div>
-      <div data-role="upgrade-view">
+      <div data-role="upgrade-view" hidden>
         <section class="mwi-upgrade-planner" aria-label="${escapeHtml(t("guildShrineBatchPlan"))}">
           <div class="mwi-upgrade-preset">
             <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status">${escapeHtml(t("shrineLevelsReading"))}</small></div>
@@ -1992,7 +1670,6 @@
         <div data-role="upgrade-results"></div>
       </div>
       <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
-    panel.dataset.activeView = "upgrade";
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
     panel.querySelector('[data-role="target"]').addEventListener("change", (event) => {
       const target = Number(event.target.value);
@@ -2135,12 +1812,11 @@
     const creditName = itemNameForMaterial(creditItemHrid);
     const icon = iconMarkup(creditItemHrid, creditName);
     const collapsed = state.collapsedCreditSections.has(creditItemHrid);
-    const bestSummary = available.length ? `<span class="mwi-credit-heading-best"><small>${escapeHtml(t("perCredit"))}</small><strong>${formatNumber(available[0].costPerCredit, 2)}</strong></span>` : "";
-    const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span class="mwi-credit-heading-name">${escapeHtml(creditName)}</span>${bestSummary}<span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
+    const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
     if (!available.length) {
       return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><div class="mwi-empty">${escapeHtml(t("noMarketEstimate"))}</div></div></section>`;
     }
-    return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>${escapeHtml(t("item"))}</th><th>${escapeHtml(t("exchange"))}</th><th>${escapeHtml(t("perCredit"))}</th><th>${escapeHtml(t("targetCost"))}</th></tr></thead><tbody>${available.map((row, index) => `<tr${index === 0 ? ' class="mwi-credit-best-row"' : ""}><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${marketItemIconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td data-label="${escapeHtml(t("exchange"))}">${escapeHtml(t("exchangeRate", { items: itemQuantity(row.itemCount), credits: creditQuantity(row.creditCount) }))}</td><td class="mwi-cost" data-label="${escapeHtml(t("perCredit"))}">${formatNumber(row.costPerCredit, 2)}</td><td data-label="${escapeHtml(t("targetCost"))}">${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
+    return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>${escapeHtml(t("item"))}</th><th>${escapeHtml(t("exchange"))}</th><th>${escapeHtml(t("perCredit"))}</th><th>${escapeHtml(t("targetCost"))}</th></tr></thead><tbody>${available.map((row) => `<tr><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${marketItemIconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td>${escapeHtml(t("exchangeRate", { items: itemQuantity(row.itemCount), credits: creditQuantity(row.creditCount) }))}</td><td class="mwi-cost">${formatNumber(row.costPerCredit, 2)}</td><td>${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
   }
 
   function renderGuildTokenValues(values) {
@@ -2173,11 +1849,12 @@
     const target = Number(panel.querySelector('[data-role="target"]').value);
     button.disabled = true;
     status.hidden = false;
+    results.replaceChildren();
+
     const creditGroups = creditConversionGroups();
     const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
     if (!conversionCount) {
       status.textContent = t("noExchangeRules");
-      updateRenderedMarkup(results, "");
       button.disabled = false;
       finishRefresh(panel);
       return;
@@ -2201,7 +1878,7 @@
       const tokenValues = core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked])));
       status.textContent = "";
       status.hidden = true;
-      updateRenderedMarkup(results, `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`);
+      results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`;
       button.disabled = false;
       finishRefresh(panel);
     } catch (error) {
