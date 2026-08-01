@@ -1339,7 +1339,8 @@
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
-        #mwi-credit-optimizer .mwi-credit-grid,#mwi-credit-optimizer .mwi-token-value-list,#mwi-credit-optimizer .mwi-upgrade-plan-list,#mwi-credit-optimizer .mwi-material-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--mwi-entry-min-width)),1fr))}
+        #mwi-credit-optimizer .mwi-token-value-list,#mwi-credit-optimizer .mwi-upgrade-plan-list,#mwi-credit-optimizer .mwi-material-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--mwi-entry-min-width)),1fr))}
+        #mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
         #mwi-credit-optimizer .mwi-credit-grid{display:grid;gap:var(--mwi-entry-gap)}
         #mwi-credit-optimizer .mwi-credit-section{min-width:0;border:1px solid #474969;border-top:3px solid var(--mwi-credit-color);border-radius:6px;background:#292a46;overflow:hidden}#mwi-credit-optimizer .mwi-credit-body[hidden],#mwi-credit-optimizer .mwi-token-value-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-credit-heading{display:flex;align-items:center;gap:7px;width:100%;min-height:0!important;border:0;border-radius:0;background:transparent!important;color:#fff!important;padding:8px 9px 6px!important;font:inherit;text-align:left;font-size:13px;font-weight:700;cursor:pointer}.mwi-credit-heading:hover{background:#303151!important}.mwi-credit-heading .mwi-collapse-icon{margin-left:auto;color:#c9cbeb;font-size:15px;line-height:1}
@@ -1852,7 +1853,6 @@
           #mwi-credit-optimizer .mwi-credit-toolbar{grid-template-columns:minmax(0,1fr)}
           #mwi-credit-optimizer .mwi-credit-toolbar-copy{border-right:0;border-bottom:1px solid #3d766e}
           #mwi-credit-optimizer .mwi-credit-toolbar .mwi-controls{padding:0 8px 7px}
-          #mwi-credit-optimizer .mwi-credit-grid{grid-template-columns:minmax(0,1fr)}
         }
         @container (max-width:400px){
           #mwi-credit-optimizer .mwi-credit-toolbar-copy small{display:none}

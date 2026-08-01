@@ -1258,7 +1258,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
   assert.match(source, /--mwi-entry-gap:10px/);
-  assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list/);
+  assert.match(source, /#mwi-credit-optimizer \.mwi-token-value-list,#mwi-credit-optimizer \.mwi-upgrade-plan-list/);
   assert.match(source, /\.mwi-upgrade-plan-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:0\}/);
   assert.match(source, /\.mwi-material-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:7px/);
   assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);
