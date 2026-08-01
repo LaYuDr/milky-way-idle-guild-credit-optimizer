@@ -47,8 +47,9 @@
     const surplusPlan = searchParams.get("surplusPlan") === "1";
     const layoutAudit = searchParams.get("layoutAudit") === "1";
     const stabilityAudit = searchParams.get("stabilityAudit") === "1";
+    const creditAudit = searchParams.get("creditAudit") === "1";
     if (layoutAudit) document.body.dataset.layoutAudit = "true";
-    if ((surplusPlan || layoutAudit) && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
+    if ((surplusPlan || layoutAudit || creditAudit) && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -352,6 +353,22 @@
     };
 
     window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
+
+    const prepareCreditAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      const defaultView = panel.dataset.activeView;
+      const creditViewTab = await waitFor(() => panel.querySelector('[data-role="view-credit"]'));
+      creditViewTab.click();
+      await waitFor(() => panel.querySelectorAll(".mwi-credit-section").length === 8);
+      document.body.dataset.creditAuditDefaultView = defaultView;
+      document.body.dataset.creditAuditReady = "true";
+      return { defaultView };
+    };
+
+    window.__mwiCreditLayoutAuditReady = creditAudit ? prepareCreditAudit() : Promise.resolve(null);
 
     const runPlanStabilityAudit = async () => {
       await window.__mwiLayoutAuditReady;

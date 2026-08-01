@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.33] - 2026-08-01
+
+### Changed
+
+- Made Shrine Upgrades the default view when the guild assistant is first opened.
+- Redesigned Credit Value with the shrine planner's compact visual system: a unified control toolbar, denser guild-token overview, color-coded exchange cards, at-a-glance best costs, and a narrow-layout metric grid.
+- Preserved unchanged credit-result markup during refreshes to avoid unnecessary visual rebuilding.
+
+### Verified
+
+- Browser-tested the default view and the complete Credit Value control cycle in Chinese and English at 320px, 420px, 610px, and 900px without text overflow, boundary escapes, or control overlap.
+
 ## [1.1.32] - 2026-08-01
 
 ### Fixed
