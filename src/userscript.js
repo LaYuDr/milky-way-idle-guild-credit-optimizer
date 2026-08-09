@@ -1715,6 +1715,7 @@
   }
 
   const SHRINE_GUIDE_STYLE_ID = "mwi-shrine-guide-native-style";
+  const SHRINE_GUIDE_QUANTITY_HINT_ID = "mwi-shrine-guide-quantity-hint";
 
   function ensureShrineGuideStyle() {
     if (document.getElementById(SHRINE_GUIDE_STYLE_ID)) return;
@@ -1725,6 +1726,12 @@
       [data-mwi-shrine-guide="goal"]{outline-style:dashed!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent)!important}
       [data-mwi-shrine-guide="pending"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 16%,transparent)!important}
       [data-mwi-shrine-guide="active"]{animation:mwi-shrine-guide-pulse 1.45s ease-in-out infinite}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}{--mwi-guide-color:#63e6c8;position:fixed;z-index:1090;display:grid;gap:2px;width:max-content;max-width:min(270px,calc(100vw - 20px));padding:8px 11px;border:1px solid var(--mwi-guide-color);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 22px #0009,0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 18%,transparent);font:12px/1.35 system-ui,-apple-system,"Microsoft YaHei",sans-serif;pointer-events:none;transform:translate(-50%,-100%)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}::after{position:absolute;left:50%;bottom:-5px;width:9px;height:9px;border-right:1px solid var(--mwi-guide-color);border-bottom:1px solid var(--mwi-guide-color);background:#171927;content:"";transform:translateX(-50%) rotate(45deg)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}[data-placement="below"]{transform:translate(-50%,0)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}[data-placement="below"]::after{top:-5px;bottom:auto;border:0;border-left:1px solid var(--mwi-guide-color);border-top:1px solid var(--mwi-guide-color)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} strong{color:var(--mwi-guide-color);font-size:14px;font-variant-numeric:tabular-nums}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} small{max-width:245px;color:#c7cae4;font-size:11px}
       @keyframes mwi-shrine-guide-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 12px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)}50%{filter:brightness(1.08);box-shadow:0 0 0 6px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent),0 0 23px color-mix(in srgb,var(--mwi-guide-color) 38%,transparent)}}
       @media (prefers-reduced-motion:reduce){[data-mwi-shrine-guide="active"]{animation:none}}
     `;
@@ -1738,6 +1745,61 @@
       if (node.style) node.style.removeProperty("--mwi-guide-color");
     }
     state.shrineGuideObservedNodes.clear();
+  }
+
+  function removeShrineGuideQuantityHint() {
+    const hint = document.getElementById(SHRINE_GUIDE_QUANTITY_HINT_ID);
+    const input = hint && hint.__mwiGuideQuantityInput;
+    if (input && input.getAttribute) {
+      const ids = String(input.getAttribute("aria-describedby") || "").split(/\s+/).filter((id) => id && id !== SHRINE_GUIDE_QUANTITY_HINT_ID);
+      if (ids.length) input.setAttribute("aria-describedby", ids.join(" "));
+      else input.removeAttribute("aria-describedby");
+    }
+    if (hint) hint.remove();
+  }
+
+  function updateShrineGuideQuantityHint(modal, step, color) {
+    const input = modal && modal.quantityInput;
+    if (!input || !input.isConnected || !step || !step.suggestedBatches) {
+      removeShrineGuideQuantityHint();
+      return;
+    }
+    ensureShrineGuideStyle();
+    let hint = document.getElementById(SHRINE_GUIDE_QUANTITY_HINT_ID);
+    if (!hint) {
+      hint = document.createElement("aside");
+      hint.id = SHRINE_GUIDE_QUANTITY_HINT_ID;
+      hint.setAttribute("role", "status");
+      hint.setAttribute("aria-live", "polite");
+      hint.innerHTML = '<strong data-role="quantity-hint-title"></strong><small data-role="quantity-hint-detail"></small>';
+      document.body.append(hint);
+    }
+    if (hint.__mwiGuideQuantityInput && hint.__mwiGuideQuantityInput !== input) {
+      const previous = hint.__mwiGuideQuantityInput;
+      const previousIds = String(previous.getAttribute("aria-describedby") || "").split(/\s+/).filter((id) => id && id !== SHRINE_GUIDE_QUANTITY_HINT_ID);
+      if (previousIds.length) previous.setAttribute("aria-describedby", previousIds.join(" "));
+      else previous.removeAttribute("aria-describedby");
+    }
+    hint.__mwiGuideQuantityInput = input;
+    const describedBy = new Set(String(input.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+    describedBy.add(SHRINE_GUIDE_QUANTITY_HINT_ID);
+    input.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
+    hint.style.setProperty("--mwi-guide-color", color || "#63e6c8");
+    setGuideText(hint.querySelector('[data-role="quantity-hint-title"]'), t("guideQuantityInput", { count: formatNumber(step.suggestedBatches) }));
+    const limited = step.suggestedBatches < step.batches;
+    const detail = limited
+      ? t("guideSetQuantityLimitHint", { remaining: formatNumber(step.batches), max: formatNumber(step.maxBatches) })
+      : t("guideSetQuantityHint", { items: formatNumber(step.suggestedItems), item: itemNameForMaterial(step.recommendedItemHrid), credits: formatNumber(step.suggestedCredits) });
+    setGuideText(hint.querySelector('[data-role="quantity-hint-detail"]'), detail);
+
+    const inputRect = input.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const halfWidth = Math.min(hint.offsetWidth / 2, Math.max(0, viewportWidth / 2 - 10));
+    const center = inputRect.left + inputRect.width / 2;
+    hint.style.left = `${Math.max(10 + halfWidth, Math.min(viewportWidth - 10 - halfWidth, center))}px`;
+    const placeBelow = inputRect.top < hint.offsetHeight + 18;
+    hint.dataset.placement = placeBelow ? "below" : "above";
+    hint.style.top = `${placeBelow ? inputRect.bottom + 9 : inputRect.top - 9}px`;
   }
 
   function markShrineGuideNode(node, role, color) {
@@ -1818,9 +1880,12 @@
     }
     if (model.status === "set_quantity") {
       const step = model.activeCredit;
+      const limited = step.suggestedBatches < step.batches;
       return {
-        title: t("guideSetQuantity", { count: formatNumber(step.batches) }),
-        detail: t("guideSetQuantityHint", { items: formatNumber(step.requiredItems), item: itemNameForMaterial(step.recommendedItemHrid), credits: formatNumber(step.actualCredits) })
+        title: t("guideSetQuantity", { count: formatNumber(step.suggestedBatches) }),
+        detail: limited
+          ? t("guideSetQuantityLimitHint", { remaining: formatNumber(step.batches), max: formatNumber(step.maxBatches) })
+          : t("guideSetQuantityHint", { items: formatNumber(step.suggestedItems), item: itemNameForMaterial(step.recommendedItemHrid), credits: formatNumber(step.suggestedCredits) })
       };
     }
     if (model.status === "use_guild_token") {
@@ -1858,6 +1923,7 @@
   function applyShrineGuide(model, modal) {
     clearShrineGuideHighlights();
     updateShrineGuideUi(model);
+    if (!state.shrineGuideEnabled || !model || model.status !== "set_quantity") removeShrineGuideQuantityHint();
     if (!state.shrineGuideEnabled || !model || ["inactive", "no_plans", "complete"].includes(model.status)) return;
     ensureShrineGuideStyle();
 
@@ -1891,7 +1957,10 @@
       if (step.method === "market_item") {
         for (const item of nativeRecommendedItems(step.recommendedItemHrid)) markShrineGuideNode(item, "active", color);
       }
-      if (model.status === "set_quantity" && modal && modal.quantityInput) markShrineGuideNode(modal.quantityInput, "active", color);
+      if (model.status === "set_quantity" && modal && modal.quantityInput) {
+        markShrineGuideNode(modal.quantityInput, "active", color);
+        updateShrineGuideQuantityHint(modal, step, color);
+      }
     }
     if (model.status === "upgrade_shrine" && !model.targetPlans.some((plan) => nativeShrineCards(plan).length)) {
       markShrineGuideNode(nativeGuildTab([t("nativeGuildShopTab"), "Shop"]), "active", "#9b8cff");
@@ -1943,16 +2012,19 @@
       const Observer = guildExchangeMutationObserver();
       if (Observer) {
         state.shrineGuideObserver = new Observer((mutations) => {
-          if (mutations.some((mutation) => Array.from(mutation.addedNodes || []).some(guideMutationMayMatter))) scheduleShrineGuide();
+          if (mutations.some((mutation) => [...Array.from(mutation.addedNodes || []), ...Array.from(mutation.removedNodes || [])].some(guideMutationMayMatter))) scheduleShrineGuide();
         });
         state.shrineGuideObserver.observe(document.body, { childList: true, subtree: true });
       }
     }
     if (!state.shrineGuideDocumentListenersInstalled) {
       const schedule = (event) => { if (state.shrineGuideEnabled && guideInteractionMayMatter(event.target)) scheduleShrineGuide(); };
+      const schedulePosition = () => { if (state.shrineGuideEnabled) scheduleShrineGuide(); };
       document.addEventListener("click", schedule, true);
       document.addEventListener("input", schedule, true);
       document.addEventListener("change", schedule, true);
+      document.addEventListener("scroll", schedulePosition, true);
+      window.addEventListener("resize", schedulePosition, true);
       state.shrineGuideDocumentListenersInstalled = true;
     }
   }
@@ -1961,6 +2033,7 @@
     if (state.shrineGuideObserver) state.shrineGuideObserver.disconnect();
     state.shrineGuideObserver = null;
     clearShrineGuideHighlights();
+    removeShrineGuideQuantityHint();
   }
 
   function setShrineGuideEnabled(panel, enabled) {
@@ -2791,6 +2864,7 @@
       const selected = icons.find((item) => !CREDIT_TYPES.some(([hrid]) => hrid === item.itemHrid));
       const quantityInput = element.querySelector('input[type="number"]');
       const batches = Number(quantityInput && quantityInput.value);
+      const maxBatches = Number(quantityInput && quantityInput.max);
       if (!credit) continue;
       return {
         element,
@@ -2799,6 +2873,7 @@
         selectedItemHrid: selected && selected.itemHrid || null,
         selectedEnhancementLevel: selected && selected.enhancementLevel || 0,
         quantityInput,
+        maxBatches: Number.isSafeInteger(maxBatches) && maxBatches > 0 ? maxBatches : null,
         batches: Number.isSafeInteger(batches) && batches > 0 ? batches : 1
       };
     }

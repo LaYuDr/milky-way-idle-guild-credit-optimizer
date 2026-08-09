@@ -1386,6 +1386,11 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="shrine-guide-route"/);
   assert.match(source, /shrineGuideApi\.deriveShrineGuide/);
   assert.match(source, /data-mwi-shrine-guide/);
+  assert.match(source, /SHRINE_GUIDE_QUANTITY_HINT_ID/);
+  assert.match(source, /function updateShrineGuideQuantityHint/);
+  assert.match(source, /guideQuantityInput/);
+  assert.match(source, /maxBatches: Number\.isSafeInteger\(maxBatches\)/);
+  assert.match(source, /mutation\.removedNodes/);
   assert.match(source, /prefers-reduced-motion:\s*reduce/);
   assert.match(source, /bridge\.onGuildBuffLevelsUpdated = hydrateBridgeData/);
   assert.match(source, /scheduleGuildDataRefresh\(\)/);

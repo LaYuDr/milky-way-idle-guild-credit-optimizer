@@ -68,7 +68,27 @@ test("打开缺少的信用点后先指向推荐物品，再指向批次数量",
   const quantity = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/beast_hide" } });
   assert.equal(quantity.status, "set_quantity");
   assert.equal(quantity.activeCredit.batches, 20000);
+  assert.equal(quantity.activeCredit.suggestedBatches, 20000);
   assert.equal(quantity.activeCredit.requiredItems, 80000);
+});
+
+test("剩余批数超过原生单次上限时只提示本次可填写数量", () => {
+  const result = derive({
+    estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 20000 }] },
+    creditMaterialPlans: {
+      "/items/green_guild_credit": { itemHrid: "/items/beast_hide", itemCount: 4, creditCount: 1, batches: 20000, requiredItems: 80000, actualCredits: 20000 }
+    },
+    modal: {
+      creditItemHrid: "/items/green_guild_credit",
+      selectedItemHrid: "/items/beast_hide",
+      maxBatches: 9504
+    }
+  });
+  assert.equal(result.status, "set_quantity");
+  assert.equal(result.activeCredit.batches, 20000);
+  assert.equal(result.activeCredit.suggestedBatches, 9504);
+  assert.equal(result.activeCredit.suggestedItems, 38016);
+  assert.equal(result.activeCredit.suggestedCredits, 9504);
 });
 
 test("一种信用点补齐后只保留另一种待处理", () => {

@@ -109,7 +109,18 @@
       .filter((row) => row && !creditSet.has(row.itemHrid) && nonNegativeNumber(row.remainingMissing ?? row.missing) > 0)
       .map((row) => ({ itemHrid: row.itemHrid, missing: Math.ceil(nonNegativeNumber(row.remainingMissing ?? row.missing)) }));
     const modal = settings.modal && typeof settings.modal === "object" ? settings.modal : null;
-    const activeCredit = modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid) || null;
+    const matchedCredit = modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid) || null;
+    const modalMaxBatches = positiveInteger(modal && modal.maxBatches);
+    const suggestedBatches = matchedCredit
+      ? Math.min(matchedCredit.batches, modalMaxBatches || matchedCredit.batches)
+      : 0;
+    const activeCredit = matchedCredit ? {
+      ...matchedCredit,
+      maxBatches: modalMaxBatches,
+      suggestedBatches,
+      suggestedItems: suggestedBatches * matchedCredit.itemCount,
+      suggestedCredits: suggestedBatches * matchedCredit.creditCount
+    } : null;
     const result = { ...base, missingCredits, blockers, activeCredit };
 
     if (activeCredit) {

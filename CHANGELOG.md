@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.40] - 2026-08-10
+
+### Added
+
+- Added a live quantity ticket beside the native guild exchange input while shrine guidance is active, showing the exact batch count to enter without modifying the game input.
+- When the remaining requirement exceeds the native per-exchange maximum, the ticket shows both the suggested amount for this exchange and the total batches still required.
+
+### Changed
+
+- Quantity guidance now follows the native input while scrolling or resizing and is removed immediately when the exchange modal closes or guidance moves to another step.
+
+### Verified
+
+- Added state coverage for native exchange limits and source integration checks for tooltip anchoring, cleanup, accessibility, and modal removal.
+
 ## [1.1.39] - 2026-08-10
 
 ### Changed
