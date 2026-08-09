@@ -1389,6 +1389,11 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /SHRINE_GUIDE_QUANTITY_HINT_ID/);
   assert.match(source, /function updateShrineGuideQuantityHint/);
   assert.match(source, /guideQuantityInput/);
+  assert.match(source, /guideQuantityLabel/);
+  assert.match(source, /data-role="quantity-hint-number"/);
+  assert.match(source, /detailNode\.hidden = !limited/);
+  assert.match(source, /guideQuantityLimitCompact/);
+  assert.doesNotMatch(source, /quantity-hint-title/);
   assert.match(source, /maxBatches: Number\.isSafeInteger\(maxBatches\)/);
   assert.match(source, /mutation\.removedNodes/);
   assert.match(source, /prefers-reduced-motion:\s*reduce/);

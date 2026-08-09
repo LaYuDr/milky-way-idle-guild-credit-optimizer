@@ -1726,12 +1726,16 @@
       [data-mwi-shrine-guide="goal"]{outline-style:dashed!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent)!important}
       [data-mwi-shrine-guide="pending"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 16%,transparent)!important}
       [data-mwi-shrine-guide="active"]{animation:mwi-shrine-guide-pulse 1.45s ease-in-out infinite}
-      #${SHRINE_GUIDE_QUANTITY_HINT_ID}{--mwi-guide-color:#63e6c8;position:fixed;z-index:1090;display:grid;gap:2px;width:max-content;max-width:min(270px,calc(100vw - 20px));padding:8px 11px;border:1px solid var(--mwi-guide-color);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 22px #0009,0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 18%,transparent);font:12px/1.35 system-ui,-apple-system,"Microsoft YaHei",sans-serif;pointer-events:none;transform:translate(-50%,-100%)}
-      #${SHRINE_GUIDE_QUANTITY_HINT_ID}::after{position:absolute;left:50%;bottom:-5px;width:9px;height:9px;border-right:1px solid var(--mwi-guide-color);border-bottom:1px solid var(--mwi-guide-color);background:#171927;content:"";transform:translateX(-50%) rotate(45deg)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}{--mwi-guide-color:#63e6c8;position:fixed;z-index:1090;display:grid;grid-template-columns:auto auto;align-items:center;gap:3px 7px;width:max-content;max-width:min(220px,calc(100vw - 20px));padding:5px 7px 5px 8px;border:1px solid color-mix(in srgb,var(--mwi-guide-color) 55%,#596078);border-left:3px solid var(--mwi-guide-color);border-radius:6px;background:linear-gradient(135deg,#23263a 0%,#191b2a 100%);color:#f4f5ff;box-shadow:0 5px 14px #0008,0 0 0 1px color-mix(in srgb,var(--mwi-guide-color) 10%,transparent);font:11px/1.3 system-ui,-apple-system,"Microsoft YaHei",sans-serif;pointer-events:none;transform:translate(-50%,-100%);backdrop-filter:blur(8px)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}::after{position:absolute;left:50%;bottom:-4px;width:7px;height:7px;border-right:1px solid color-mix(in srgb,var(--mwi-guide-color) 55%,#596078);border-bottom:1px solid color-mix(in srgb,var(--mwi-guide-color) 55%,#596078);background:#1b1d2c;content:"";transform:translateX(-50%) rotate(45deg)}
       #${SHRINE_GUIDE_QUANTITY_HINT_ID}[data-placement="below"]{transform:translate(-50%,0)}
-      #${SHRINE_GUIDE_QUANTITY_HINT_ID}[data-placement="below"]::after{top:-5px;bottom:auto;border:0;border-left:1px solid var(--mwi-guide-color);border-top:1px solid var(--mwi-guide-color)}
-      #${SHRINE_GUIDE_QUANTITY_HINT_ID} strong{color:var(--mwi-guide-color);font-size:14px;font-variant-numeric:tabular-nums}
-      #${SHRINE_GUIDE_QUANTITY_HINT_ID} small{max-width:245px;color:#c7cae4;font-size:11px}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID}[data-placement="below"]::after{top:-4px;bottom:auto;border:0;border-left:1px solid color-mix(in srgb,var(--mwi-guide-color) 55%,#596078);border-top:1px solid color-mix(in srgb,var(--mwi-guide-color) 55%,#596078)}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-label{color:#c7cae4;white-space:nowrap}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-value{display:inline-flex;align-items:baseline;gap:3px;padding:2px 6px;border:1px solid color-mix(in srgb,var(--mwi-guide-color) 32%,transparent);border-radius:4px;background:color-mix(in srgb,var(--mwi-guide-color) 11%,#171927);color:var(--mwi-guide-color);white-space:nowrap}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-value strong{font-size:13px;line-height:1.1;font-variant-numeric:tabular-nums}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-value span{font-size:10px;font-weight:600}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-detail{grid-column:1/-1;padding-top:2px;border-top:1px solid color-mix(in srgb,var(--mwi-guide-color) 16%,transparent);color:#aeb3cf;font-size:10px;white-space:nowrap}
+      #${SHRINE_GUIDE_QUANTITY_HINT_ID} .mwi-guide-quantity-detail[hidden]{display:none}
       @keyframes mwi-shrine-guide-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 12px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)}50%{filter:brightness(1.08);box-shadow:0 0 0 6px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent),0 0 23px color-mix(in srgb,var(--mwi-guide-color) 38%,transparent)}}
       @media (prefers-reduced-motion:reduce){[data-mwi-shrine-guide="active"]{animation:none}}
     `;
@@ -1771,7 +1775,7 @@
       hint.id = SHRINE_GUIDE_QUANTITY_HINT_ID;
       hint.setAttribute("role", "status");
       hint.setAttribute("aria-live", "polite");
-      hint.innerHTML = '<strong data-role="quantity-hint-title"></strong><small data-role="quantity-hint-detail"></small>';
+      hint.innerHTML = '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><span class="mwi-guide-quantity-value"><strong data-role="quantity-hint-number"></strong><span data-role="quantity-hint-unit"></span></span><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
       document.body.append(hint);
     }
     if (hint.__mwiGuideQuantityInput && hint.__mwiGuideQuantityInput !== input) {
@@ -1785,12 +1789,15 @@
     describedBy.add(SHRINE_GUIDE_QUANTITY_HINT_ID);
     input.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
     hint.style.setProperty("--mwi-guide-color", color || "#63e6c8");
-    setGuideText(hint.querySelector('[data-role="quantity-hint-title"]'), t("guideQuantityInput", { count: formatNumber(step.suggestedBatches) }));
+    const suggestedBatches = formatNumber(step.suggestedBatches);
+    setGuideText(hint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
+    setGuideText(hint.querySelector('[data-role="quantity-hint-number"]'), suggestedBatches);
+    setGuideText(hint.querySelector('[data-role="quantity-hint-unit"]'), t("guideQuantityUnit"));
     const limited = step.suggestedBatches < step.batches;
-    const detail = limited
-      ? t("guideSetQuantityLimitHint", { remaining: formatNumber(step.batches), max: formatNumber(step.maxBatches) })
-      : t("guideSetQuantityHint", { items: formatNumber(step.suggestedItems), item: itemNameForMaterial(step.recommendedItemHrid), credits: formatNumber(step.suggestedCredits) });
-    setGuideText(hint.querySelector('[data-role="quantity-hint-detail"]'), detail);
+    const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
+    detailNode.hidden = !limited;
+    setGuideText(detailNode, limited ? t("guideQuantityLimitCompact", { remaining: formatNumber(step.batches), max: formatNumber(step.maxBatches) }) : "");
+    hint.setAttribute("aria-label", t("guideQuantityInput", { count: suggestedBatches }));
 
     const inputRect = input.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth || window.innerWidth;

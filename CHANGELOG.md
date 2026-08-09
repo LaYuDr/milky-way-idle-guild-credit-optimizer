@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.41] - 2026-08-10
+
+### Changed
+
+- Redesigned the shrine guide quantity prompt as a compact input popover that emphasizes the suggested batch count, removes duplicate normal-state totals, and only shows total versus per-exchange limits when necessary.
+
 ## [1.1.40] - 2026-08-10
 
 ### Added
