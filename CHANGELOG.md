@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.42] - 2026-08-10
+
+### Changed
+
+- Rebuilt Guild Construction as a compact administrator workspace with a budget command deck, dense searchable building catalog, planned-building emphasis, and a responsive catalog/queue split view.
+- Budget and search input now update their relevant preview in place, preserving input focus instead of rebuilding the whole construction view.
+- Refined shrine exchange quantity guidance into an inline row that distinguishes the remaining plan total from the amount to enter in the current exchange and avoids covering unrelated controls.
+
+### Verified
+
+- Added construction source contracts and browser audits for Chinese and English layouts at 320px, 420px, 666px, and 900px, covering overflow, overlap, search focus, queue steps, and the budget cutoff.
+- Added shrine guidance coverage for selected-item mismatches, inline placement, topmost-input checks, and the revised quantity labels.
+
 ## [1.1.41] - 2026-08-10
 
 ### Changed

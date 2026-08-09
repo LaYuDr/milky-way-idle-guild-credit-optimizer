@@ -65,6 +65,9 @@ test("打开缺少的信用点后先指向推荐物品，再指向批次数量",
   assert.equal(chooseItem.status, "choose_item");
   assert.equal(chooseItem.activeCredit.recommendedItemHrid, "/items/beast_hide");
 
+  const differentItem = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/rainbow_cheese" } });
+  assert.equal(differentItem.status, "choose_item");
+
   const quantity = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/beast_hide" } });
   assert.equal(quantity.status, "set_quantity");
   assert.equal(quantity.activeCredit.batches, 20000);

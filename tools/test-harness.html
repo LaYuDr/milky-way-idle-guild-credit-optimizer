@@ -383,7 +383,7 @@
       const root = document.getElementById("mwi-credit-optimizer");
       if (!root) throw new Error("Plugin panel is unavailable");
       const layout = root.querySelector(".mwi-construction-layout");
-      const cards = Array.from(root.querySelectorAll(".mwi-building-card"));
+      const buildingRows = Array.from(root.querySelectorAll(".mwi-building-row"));
       const queueSteps = Array.from(root.querySelectorAll(".mwi-construction-step"));
       const auditElements = Array.from(root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *"));
       const visibleAuditElements = auditElements.filter((element) => {
@@ -432,9 +432,15 @@
           width: elementRect(layout)?.width || 0
         },
         cards: {
-          count: cards.length,
-          widths: cards.map((card) => elementRect(card).width),
-          minimumWidth: cards.length ? Math.min(...cards.map((card) => elementRect(card).width)) : 0
+          count: buildingRows.length,
+          widths: buildingRows.map((row) => elementRect(row).width),
+          minimumWidth: buildingRows.length ? Math.min(...buildingRows.map((row) => elementRect(row).width)) : 0
+        },
+        catalog: {
+          rowCount: buildingRows.length,
+          visibleRowCount: buildingRows.filter((row) => getComputedStyle(row).display !== "none").length,
+          plannedRowCount: buildingRows.filter((row) => row.dataset.planned === "true").length,
+          filterAudit: window.__mwiConstructionFilterAudit || null
         },
         queue: {
           stepCount: queueSteps.length,
@@ -443,7 +449,7 @@
         },
         budget: {
           value: root.querySelector('[data-role="guild-point-budget"]')?.value || "",
-          plannedSpend: root.querySelector(".mwi-construction-stats strong")?.textContent || "",
+          plannedSpend: root.querySelector('[data-role="construction-planned-spend"]')?.textContent || "",
           overBudget: root.querySelector(".mwi-construction-budget")?.dataset.overBudget || "false"
         },
         horizontalOverflow,
@@ -458,7 +464,7 @@
       const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
       const constructionViewTab = await waitFor(() => panel.querySelector('[data-role="view-construction"]'));
       constructionViewTab.click();
-      await waitFor(() => panel.querySelectorAll(".mwi-building-card").length === 28);
+      await waitFor(() => panel.querySelectorAll(".mwi-building-row").length === 28);
       const budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
       budgetInput.value = "5000";
       budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -474,6 +480,19 @@
         await new Promise((resolve) => setTimeout(resolve, 60));
       }
       await waitFor(() => panel.querySelectorAll(".mwi-construction-step").length === 9);
+      const searchInput = panel.querySelector('[data-role="building-search"]');
+      searchInput.focus();
+      searchInput.value = "gym";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(() => Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length === 1);
+      window.__mwiConstructionFilterAudit = {
+        visibleCount: Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length,
+        matchedBuilding: panel.querySelector('.mwi-building-row:not([hidden]) .mwi-building-name strong')?.textContent || "",
+        searchRetainedFocus: document.activeElement === searchInput
+      };
+      searchInput.value = "";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(() => Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length === 28);
       await new Promise((resolve) => setTimeout(resolve, 250));
       const report = window.__mwiCollectConstructionAudit();
       document.getElementById("layout-audit-output").textContent = JSON.stringify(report);

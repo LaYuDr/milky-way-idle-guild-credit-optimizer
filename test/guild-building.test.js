@@ -74,13 +74,18 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /buildGuildConstructionPlan/);
   assert.match(userscript, /mwi-guild-building-planner-v1/);
   assert.match(userscript, /exportGuildConstructionCsv/);
+  assert.match(userscript, /mwi-building-row/);
+  assert.match(userscript, /mwi-building-list-head/);
+  assert.match(userscript, /data-role="construction-plan-scale"/);
+  assert.match(userscript, /function applyGuildBuildingFilters/);
+  assert.doesNotMatch(userscript, /mwi-building-card-heading/);
   assert.match(harness, /constructionAudit/);
   assert.match(harness, /constructionAuditReady/);
 });
 
 test("公会建设关键文案同时覆盖中文与英文", () => {
   const localization = projectFile("src/localization.js");
-  for (const key of ["guildConstruction", "guildPointBudget", "constructionQueue", "copyBuildingPlan", "exportBuildingCsv"]) {
+  for (const key of ["guildConstruction", "guildPointBudget", "manualBudget", "buildingCatalog", "constructionQueue", "constructionQueueHint", "copyBuildingPlan", "exportBuildingCsv"]) {
     assert.equal((localization.match(new RegExp(`${key}:`, "g")) || []).length, 2, `${key} should exist in both locales`);
   }
 });
