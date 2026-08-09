@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.39] - 2026-08-10
+
+### Changed
+
+- Remembered the last open Guild Assistant view across page refreshes and browser restarts, covering Shrine Upgrade, Credit Value, and Guild Construction.
+- Restored the saved tab selection, matching content visibility, and view-specific data refresh while safely falling back to Credit Value for missing or invalid legacy state.
+
+### Verified
+
+- Added source integration coverage for saving, validating, restoring, and refreshing all three internal views.
+
 ## [1.1.38] - 2026-08-10
 
 ### Added

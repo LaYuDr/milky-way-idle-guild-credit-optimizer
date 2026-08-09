@@ -1227,6 +1227,20 @@ test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
   assert.equal(page.__mwiGuildCreditBridge.guildShrineDetails["/guild_shrines/force"].guildBuildingHrid, "/guild_buildings/alpha");
 });
 
+test("三个内部页签会持久化并恢复最后打开的视图", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  assert.match(source, /const PANEL_VIEWS = \["credit", "upgrade", "construction"\]/);
+  assert.match(source, /activeView: "credit"/);
+  assert.match(source, /activeView: normalizePanelView\(stored\.activeView\)/);
+  assert.match(source, /activeView: state\.activeView/);
+  assert.match(source, /state\.activeView = selectedView;\s*persistPluginUiState\(\);/);
+  assert.match(source, /panel\.dataset\.activeView = state\.activeView/);
+  assert.match(source, /data-role="credit-view"\$\{state\.activeView === "credit"/);
+  assert.match(source, /data-role="upgrade-view"\$\{state\.activeView === "upgrade"/);
+  assert.match(source, /data-role="construction-view"\$\{state\.activeView === "construction"/);
+  assert.match(source, /activeView === "construction"\) refreshGuildConstruction/);
+});
+
 test("总览界面固定展示八种信用点、前五项、官方名称与物品图标", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");

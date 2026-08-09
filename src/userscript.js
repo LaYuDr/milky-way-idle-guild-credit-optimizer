@@ -28,6 +28,7 @@
   const GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = [20, 40, 50, 60, 80, 100];
   const GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE = 2.5;
   const RENDERED_MARKUP_PROPERTY = "__mwiGuildCreditRenderedMarkup";
+  const PANEL_VIEWS = ["credit", "upgrade", "construction"];
 
   const CREDIT_TYPES = [
     ["/items/green_guild_credit", "#42c59f"],
@@ -62,7 +63,7 @@
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, guildBuffLevelsBridgeRevision: 0, inventoryDataRefreshTimer: null, guildDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, shrineGuideEnabled: savedUiState.shrineGuideEnabled, shrineGuideContext: null, shrineGuideModel: null, shrineGuideFrame: null, shrineGuideObserver: null, shrineGuideObservedNodes: new Set(), shrineGuideDocumentListenersInstalled: false, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, guildBuffLevelsBridgeRevision: 0, inventoryDataRefreshTimer: null, guildDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, shrineGuideEnabled: savedUiState.shrineGuideEnabled, shrineGuideContext: null, shrineGuideModel: null, shrineGuideFrame: null, shrineGuideObserver: null, shrineGuideObservedNodes: new Set(), shrineGuideDocumentListenersInstalled: false, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, activeView: savedUiState.activeView, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
   state.guildBuildingLevels = null;
   state.guildBuildingDetails = null;
   state.buildingPlans = savedBuildingPlannerState.plans.map((plan, index) => ({ id: `building-plan-${index + 1}`, ...plan }));
@@ -81,8 +82,12 @@
     return true;
   }
 
+  function normalizePanelView(view) {
+    return PANEL_VIEWS.includes(view) ? view : "credit";
+  }
+
   function loadSavedPluginUiState() {
-    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, shrineGuideEnabled: false, targetCredit: 1, upgradePlans: [] };
+    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, shrineGuideEnabled: false, activeView: "credit", targetCredit: 1, upgradePlans: [] };
     try {
       const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(UI_STATE_STORAGE_KEY);
       if (!raw) return fallback;
@@ -115,6 +120,7 @@
         guildTokenCreditHrids,
         autoGuildTokenBudget,
         shrineGuideEnabled: stored.shrineGuideEnabled === true,
+        activeView: normalizePanelView(stored.activeView),
         targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
         upgradePlans
       };
@@ -191,6 +197,7 @@
         guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
         autoGuildTokenBudget: state.autoGuildTokenBudget,
         shrineGuideEnabled: state.shrineGuideEnabled,
+        activeView: state.activeView,
         useGuildTokensForMissingCredits: CREDIT_TYPES.every(([hrid]) => state.guildTokenCreditHrids.has(hrid)),
         targetCredit: state.targetCredit,
         upgradePlans
@@ -1970,8 +1977,8 @@
   }
 
   function setPanelView(panel, view) {
-    const selectedView = ["credit", "upgrade", "construction"].includes(view) ? view : "credit";
-    for (const candidate of ["credit", "upgrade", "construction"]) {
+    const selectedView = normalizePanelView(view);
+    for (const candidate of PANEL_VIEWS) {
       const content = panel.querySelector(`[data-role="${candidate}-view"]`);
       const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
       const active = candidate === selectedView;
@@ -1982,6 +1989,8 @@
       }
     }
     panel.dataset.activeView = selectedView;
+    state.activeView = selectedView;
+    persistPluginUiState();
     if (selectedView === "upgrade") refreshGuildUpgrade(panel);
     else if (selectedView === "construction") refreshGuildConstruction(panel);
     else refreshPanel(panel);
@@ -1998,6 +2007,7 @@
   function createPanel() {
     const panel = document.createElement("section");
     panel.id = "mwi-credit-optimizer";
+    panel.dataset.activeView = state.activeView;
     panel.innerHTML = `
       <style>
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:20;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
@@ -2376,11 +2386,11 @@
       <h3>${escapeHtml(t("panelTitle"))}</h3>
       <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
       <div class="mwi-view-tabs" role="tablist">
-        <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
-        <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">${escapeHtml(t("creditValue"))}</button>
-        <button class="mwi-view-tab" data-role="view-construction" role="tab" aria-selected="false" type="button">${escapeHtml(t("guildConstruction"))}</button>
+        <button class="mwi-view-tab${state.activeView === "upgrade" ? " mwi-view-tab-active" : ""}" data-role="view-upgrade" role="tab" aria-selected="${String(state.activeView === "upgrade")}" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
+        <button class="mwi-view-tab${state.activeView === "credit" ? " mwi-view-tab-active" : ""}" data-role="view-credit" role="tab" aria-selected="${String(state.activeView === "credit")}" type="button">${escapeHtml(t("creditValue"))}</button>
+        <button class="mwi-view-tab${state.activeView === "construction" ? " mwi-view-tab-active" : ""}" data-role="view-construction" role="tab" aria-selected="${String(state.activeView === "construction")}" type="button">${escapeHtml(t("guildConstruction"))}</button>
       </div>
-      <div data-role="credit-view">
+      <div data-role="credit-view"${state.activeView === "credit" ? "" : " hidden"}>
         <div class="mwi-controls">
           <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
           <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
@@ -2389,7 +2399,7 @@
         <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
         <div data-role="results"></div>
       </div>
-      <div data-role="upgrade-view" hidden>
+      <div data-role="upgrade-view"${state.activeView === "upgrade" ? "" : " hidden"}>
         <section class="mwi-upgrade-planner" aria-label="${escapeHtml(t("guildShrineBatchPlan"))}">
           <div class="mwi-upgrade-preset">
             <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status">${escapeHtml(t("shrineLevelsReading"))}</small></div>
@@ -2407,7 +2417,7 @@
         <div class="mwi-status" data-role="upgrade-status">${escapeHtml(t("waitingUpgradeRules"))}</div>
         <div data-role="upgrade-results"></div>
       </div>
-      <div data-role="construction-view" hidden>
+      <div data-role="construction-view"${state.activeView === "construction" ? "" : " hidden"}>
         <div class="mwi-status" data-role="construction-status">${escapeHtml(t("constructionReadOnly"))}</div>
         <div data-role="construction-results"></div>
       </div>
@@ -2615,7 +2625,6 @@
       persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
-    panel.dataset.activeView = "credit";
     checkPluginUpdate(panel);
     return panel;
   }
@@ -3176,6 +3185,7 @@
     extractItemDetailsFromReact();
     hydrateLocalInitData();
     if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
+    else if (state.panel.dataset.activeView === "construction") refreshGuildConstruction(state.panel);
     else refreshPanel(state.panel);
   }
 
