@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.43] - 2026-08-10
+
+### Added
+
+- Added the game's native SVG icons to all 23 guild buildings and 5 shrines in the construction catalog without bundling duplicate image files.
+- Added a category-colored fallback marker when the game sprite source is temporarily unavailable.
+
+### Verified
+
+- Confirmed the live game maps all 28 building HRIDs to the official `misc_sprite` symbols.
+- Added symbol-mapping coverage and responsive browser audits at 320px and 666px with all 28 icon references present and no overflow or control overlap.
+
 ## [1.1.42] - 2026-08-10
 
 ### Changed

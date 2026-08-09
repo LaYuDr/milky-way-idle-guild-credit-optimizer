@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.42";
+window.MwiGuildCreditVersion = "1.1.43";
 
 (function (root, factory) {
   const api = factory();
@@ -1508,6 +1508,15 @@ window.MwiGuildCreditVersion = "1.1.42";
     { hrid: "/guild_shrines/scholar", nameKey: "shrineScholar", category: "shrine", costMultiplier: 1 }
   ]);
 
+  function iconSymbolId(buildingHrid) {
+    const building = BUILDINGS.find((entry) => entry.hrid === buildingHrid);
+    if (!building) return "";
+    const [group, name] = building.hrid.split("/").filter(Boolean);
+    if (group === "guild_buildings") return `guild_${name}`;
+    if (group === "guild_shrines") return `guild_shrine_${name}`;
+    return "";
+  }
+
   function levelCostsForMultiplier(multiplier) {
     const factor = Number(multiplier);
     return BASE_LEVEL_COSTS.map((cost) => cost === null ? null : { guildPointCost: Math.round(cost * factor) });
@@ -1516,13 +1525,14 @@ window.MwiGuildCreditVersion = "1.1.42";
   function definitions() {
     return BUILDINGS.map((building) => ({
       ...building,
+      iconSymbolId: iconSymbolId(building.hrid),
       maxLevel: MAX_LEVEL,
       levelCosts: levelCostsForMultiplier(building.costMultiplier),
       rulesVersion: RULES_VERSION
     }));
   }
 
-  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, levelCostsForMultiplier, definitions };
+  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, iconSymbolId, levelCostsForMultiplier, definitions };
 });
 
 
@@ -3639,6 +3649,20 @@ window.MwiGuildCreditVersion = "1.1.42";
     return `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`;
   }
 
+  function guildBuildingSpriteBaseHref() {
+    const use = document.querySelector('use[href*="misc_sprite"],use[xlink\\:href*="misc_sprite"]');
+    const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
+    if (!href) return "";
+    return href.includes("#") ? href.slice(0, href.indexOf("#")) : href;
+  }
+
+  function guildBuildingIconMarkup(definition, spriteBaseHref) {
+    const symbolId = definition && (definition.iconSymbolId || buildingDataApi.iconSymbolId(definition.hrid));
+    if (!spriteBaseHref || !symbolId) return '<span class="mwi-building-icon mwi-building-icon-fallback" aria-hidden="true"><i class="mwi-building-type-mark"></i></span>';
+    const href = `${spriteBaseHref}#${symbolId}`;
+    return `<span class="mwi-building-icon" data-icon-source="game"><svg aria-hidden="true" focusable="false"><use href="${escapeHtml(href)}"></use></svg></span>`;
+  }
+
   function marketItemIconMarkup(itemHrid, label, className = "") {
     const marketLabel = t("marketItem", { item: label });
     return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
@@ -4417,7 +4441,7 @@ window.MwiGuildCreditVersion = "1.1.42";
     </section>`;
   }
 
-  function renderGuildBuildingRow(definition, plan) {
+  function renderGuildBuildingRow(definition, plan, spriteBaseHref) {
     const liveLevel = currentGuildBuildingLevel(definition);
     const startLevel = liveLevel === null ? plan && plan.startLevel || 0 : liveLevel;
     const targetLevel = plan ? plan.targetLevel : startLevel;
@@ -4427,7 +4451,7 @@ window.MwiGuildCreditVersion = "1.1.42";
     const planIndex = state.buildingPlans.findIndex((candidate) => candidate.buildingHrid === definition.hrid);
     const searchText = `${guildBuildingLabel(definition)} ${constructionCategoryLabel(definition.category)} ${definition.hrid}`.toLocaleLowerCase(ui().locale);
     return `<article class="mwi-building-row" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-building-search="${escapeHtml(searchText)}">
-      <div class="mwi-building-name"><i class="mwi-building-type-mark" aria-hidden="true"></i><strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${escapeHtml(constructionCategoryLabel(definition.category))}</small></div>
+      <div class="mwi-building-name">${guildBuildingIconMarkup(definition, spriteBaseHref)}<strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${escapeHtml(constructionCategoryLabel(definition.category))}</small></div>
       <span class="mwi-building-current"><small>${escapeHtml(t("currentLevel"))}</small><b>${formatNumber(startLevel)}</b></span>
       <label class="mwi-building-target"><small>${escapeHtml(t("targetLevel"))}</small><select data-role="building-target" data-building-hrid="${escapeHtml(definition.hrid)}"${startLevel >= definition.maxLevel ? " disabled" : ""}>${options}</select></label>
       <span class="mwi-building-cost"><small>${escapeHtml(t("buildingPlanCost"))}</small><strong>${cost && cost.status === "ok" ? formatNumber(cost.totalCost) : "-"}</strong></span>
@@ -4459,7 +4483,8 @@ window.MwiGuildCreditVersion = "1.1.42";
   function renderGuildConstruction(plan, definitions) {
     const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
     const categories = ["all", "core", "life", "combat", "shrine"].map((category) => `<button data-role="building-category" data-category="${category}" data-active="${String(category === state.buildingCategory)}" aria-pressed="${String(category === state.buildingCategory)}" type="button">${escapeHtml(constructionCategoryLabel(category))}</button>`).join("");
-    const rows = definitions.map((definition) => renderGuildBuildingRow(definition, plansByHrid.get(definition.hrid))).join("");
+    const spriteBaseHref = guildBuildingSpriteBaseHref();
+    const rows = definitions.map((definition) => renderGuildBuildingRow(definition, plansByHrid.get(definition.hrid), spriteBaseHref)).join("");
     return `${renderGuildBuildingBudget(plan)}<div class="mwi-construction-layout"><section class="mwi-building-pane" aria-label="${escapeHtml(t("buildingCatalog"))}"><div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories">${categories}</div><div class="mwi-building-list-head" aria-hidden="true"><span>${escapeHtml(t("buildingCatalog"))}</span><span>${escapeHtml(t("currentLevel"))}</span><span>${escapeHtml(t("targetLevel"))}</span><span>${escapeHtml(t("buildingPlanCost"))}</span></div><div class="mwi-building-list">${rows}</div><div class="mwi-empty" data-role="building-filter-empty" hidden>${escapeHtml(t("noBuildingMatches"))}</div></section><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions)}${renderGuildConstructionActions(plan)}</div></div>`;
   }
 
@@ -4999,7 +5024,7 @@ window.MwiGuildCreditVersion = "1.1.42";
         #mwi-credit-optimizer .mwi-building-categories{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-bottom:1px solid #3f4160}#mwi-credit-optimizer .mwi-building-categories button{min-height:27px;padding:3px 8px;border:1px solid #555875;background:#30314c;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-building-categories button[data-active="true"]{border-color:#43c4ad;background:#245149;color:#dffff7}
         #mwi-credit-optimizer .mwi-building-list-head{display:none;grid-template-columns:minmax(130px,1fr) 58px 92px 78px;gap:8px;padding:7px 10px;border-bottom:1px solid #3f4160;color:#9296b7;font-size:9px;text-align:right}#mwi-credit-optimizer .mwi-building-list-head span:first-child{text-align:left}
         #mwi-credit-optimizer .mwi-building-list{display:grid}#mwi-credit-optimizer .mwi-building-row[hidden]{display:none!important}#mwi-credit-optimizer .mwi-building-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 10px;align-items:center;min-width:0;padding:9px 10px;border-bottom:1px solid #393b56;background:#292a43}#mwi-credit-optimizer .mwi-building-row:last-child{border-bottom:0}#mwi-credit-optimizer .mwi-building-row[data-planned="true"]{background:linear-gradient(90deg,#1f3b39,#292a43 44%)}#mwi-credit-optimizer .mwi-building-row[data-planned="true"]:before{position:absolute;top:7px;bottom:7px;left:0;width:3px;border-radius:0 3px 3px 0;background:#43c4ad;content:""}
-        #mwi-credit-optimizer .mwi-building-name{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:2px 7px}#mwi-credit-optimizer .mwi-building-type-mark{grid-row:1/3;width:8px;height:8px;border-radius:2px;background:#9567da}#mwi-credit-optimizer .mwi-building-row[data-category="core"] .mwi-building-type-mark{background:#d8a33c}#mwi-credit-optimizer .mwi-building-row[data-category="life"] .mwi-building-type-mark{background:#43c4ad}#mwi-credit-optimizer .mwi-building-row[data-category="combat"] .mwi-building-type-mark{background:#e65d68}#mwi-credit-optimizer .mwi-building-name strong{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-building-name small{overflow:hidden;color:#9da1c1;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-building-name{min-width:0;display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:2px 7px}#mwi-credit-optimizer .mwi-building-icon{grid-row:1/3;display:grid;place-items:center;width:30px;height:30px;padding:1px;border:1px solid var(--mwi-building-accent);border-radius:6px;background:#22233a;box-shadow:inset 0 1px #ffffff0b}#mwi-credit-optimizer .mwi-building-icon svg{display:block;width:100%;height:100%}#mwi-credit-optimizer .mwi-building-type-mark{width:9px;height:9px;border-radius:2px;background:var(--mwi-building-accent)}#mwi-credit-optimizer .mwi-building-row{--mwi-building-accent:#9567da}#mwi-credit-optimizer .mwi-building-row[data-category="core"]{--mwi-building-accent:#d8a33c}#mwi-credit-optimizer .mwi-building-row[data-category="life"]{--mwi-building-accent:#43c4ad}#mwi-credit-optimizer .mwi-building-row[data-category="combat"]{--mwi-building-accent:#e65d68}#mwi-credit-optimizer .mwi-building-name strong{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-building-name small{overflow:hidden;color:#9da1c1;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
         #mwi-credit-optimizer .mwi-building-current,#mwi-credit-optimizer .mwi-building-cost{display:grid;justify-items:end;gap:2px;white-space:nowrap}#mwi-credit-optimizer .mwi-building-current small,#mwi-credit-optimizer .mwi-building-target small,#mwi-credit-optimizer .mwi-building-cost small{color:#9da1c1;font-size:9px}#mwi-credit-optimizer .mwi-building-current b{font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-building-target{min-width:0;display:grid;justify-items:start;gap:3px}#mwi-credit-optimizer .mwi-building-target select{width:100%;min-width:0}#mwi-credit-optimizer .mwi-building-cost strong{color:#ffe09a;font:700 14px ui-monospace,SFMono-Regular,Menlo,monospace}
         #mwi-credit-optimizer .mwi-building-row-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;min-width:0}#mwi-credit-optimizer .mwi-building-row-actions button{min-height:27px;padding:3px 8px;font-size:10px}#mwi-credit-optimizer .mwi-building-row-actions .mwi-building-order{width:27px;padding:0;background:#41435f;color:#fff}#mwi-credit-optimizer .mwi-building-row-actions .mwi-building-remove{margin-left:auto;background:#5a3340;color:#ffd5d9}
         #mwi-credit-optimizer .mwi-construction-queue{padding:10px;border:1px solid #605338;border-radius:7px;background:linear-gradient(180deg,#302d36,#26263b)}#mwi-credit-optimizer .mwi-construction-queue h4{margin:0;color:#ffe09a;font-size:14px}#mwi-credit-optimizer .mwi-construction-queue-heading{display:flex;align-items:start;justify-content:space-between;gap:8px;margin-bottom:8px}#mwi-credit-optimizer .mwi-construction-queue-heading>span{display:grid;gap:2px}#mwi-credit-optimizer .mwi-construction-queue-heading small{color:#bdb6a5;font-size:10px}

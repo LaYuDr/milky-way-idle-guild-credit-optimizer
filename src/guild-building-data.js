@@ -46,6 +46,15 @@
     { hrid: "/guild_shrines/scholar", nameKey: "shrineScholar", category: "shrine", costMultiplier: 1 }
   ]);
 
+  function iconSymbolId(buildingHrid) {
+    const building = BUILDINGS.find((entry) => entry.hrid === buildingHrid);
+    if (!building) return "";
+    const [group, name] = building.hrid.split("/").filter(Boolean);
+    if (group === "guild_buildings") return `guild_${name}`;
+    if (group === "guild_shrines") return `guild_shrine_${name}`;
+    return "";
+  }
+
   function levelCostsForMultiplier(multiplier) {
     const factor = Number(multiplier);
     return BASE_LEVEL_COSTS.map((cost) => cost === null ? null : { guildPointCost: Math.round(cost * factor) });
@@ -54,11 +63,12 @@
   function definitions() {
     return BUILDINGS.map((building) => ({
       ...building,
+      iconSymbolId: iconSymbolId(building.hrid),
       maxLevel: MAX_LEVEL,
       levelCosts: levelCostsForMultiplier(building.costMultiplier),
       rulesVersion: RULES_VERSION
     }));
   }
 
-  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, levelCostsForMultiplier, definitions };
+  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, iconSymbolId, levelCostsForMultiplier, definitions };
 });

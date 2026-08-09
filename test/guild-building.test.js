@@ -19,6 +19,15 @@ test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
   assert.equal(definitions.find((entry) => entry.hrid === "/guild_buildings/gym").levelCosts[20].guildPointCost, 149725);
 });
 
+test("公会建筑 HRID 映射到游戏原生 SVG 精灵图符号", () => {
+  const definitions = data.definitions();
+  assert.ok(definitions.every((entry) => entry.iconSymbolId));
+  assert.equal(data.iconSymbolId("/guild_buildings/guild_hall"), "guild_guild_hall");
+  assert.equal(data.iconSymbolId("/guild_buildings/builders_hall"), "guild_builders_hall");
+  assert.equal(data.iconSymbolId("/guild_shrines/force"), "guild_shrine_force");
+  assert.equal(data.iconSymbolId("/items/guild_token"), "");
+});
+
 test("公会建筑从当前等级到目标等级逐级累计公会点数", () => {
   const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
   const result = core.aggregateGuildBuildingLevelCosts(hall.levelCosts, 0, 2);
@@ -78,6 +87,9 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /mwi-building-list-head/);
   assert.match(userscript, /data-role="construction-plan-scale"/);
   assert.match(userscript, /function applyGuildBuildingFilters/);
+  assert.match(userscript, /function guildBuildingIconMarkup/);
+  assert.match(userscript, /misc_sprite/);
+  assert.match(userscript, /mwi-building-icon/);
   assert.doesNotMatch(userscript, /mwi-building-card-heading/);
   assert.match(harness, /constructionAudit/);
   assert.match(harness, /constructionAuditReady/);

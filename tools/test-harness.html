@@ -16,6 +16,7 @@
     [data-native-content] { flex: 1; min-height: 0; padding: 16px; }
   </style>
   <main id="test-page-title">本地右侧栏自动化测试页</main>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden"><use href="/assets/misc_sprite.svg#guild_guild_hall"></use></svg>
   <button id="toggle-responsive-layout" type="button">切换窄屏布局</button>
   <button id="close-exchange-modal" type="button">关闭测试兑换窗口</button>
   <output id="layout-audit-output" hidden></output>
@@ -440,6 +441,7 @@
           rowCount: buildingRows.length,
           visibleRowCount: buildingRows.filter((row) => getComputedStyle(row).display !== "none").length,
           plannedRowCount: buildingRows.filter((row) => row.dataset.planned === "true").length,
+          gameIconCount: root.querySelectorAll('.mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]').length,
           filterAudit: window.__mwiConstructionFilterAudit || null
         },
         queue: {
