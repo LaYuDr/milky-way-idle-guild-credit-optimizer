@@ -937,6 +937,22 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.guildShrineLevels["/guild_buildings/tempo_shrine"].level, 4);
   assert.equal(page.__mwiGuildCreditBridge.characterItems[0].count, 123);
   assert.equal(page.__mwiGuildCreditBridge.messages.length, 1);
+  assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 1);
+
+  let callbackCount = 0;
+  page.__mwiGuildCreditBridge.onGuildBuffLevelsUpdated = () => { callbackCount += 1; };
+  socket.receive(JSON.stringify({ payload: {
+    characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } }
+  } }));
+  assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 1);
+  assert.equal(callbackCount, 0);
+
+  socket.receive(JSON.stringify({ payload: {
+    characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 8 } }
+  } }));
+  assert.equal(page.__mwiGuildCreditBridge.guildBuffLevels["/guild_buffs/tempo_combat"].level, 8);
+  assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 2);
+  assert.equal(callbackCount, 1);
 });
 
 test("正式版桥接按游戏原生 endCharacterItems 增量实时更新库存", () => {
@@ -1275,6 +1291,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(buildSource, /银河奶牛公会信用点性价比-v\$\{version\}\.user\.js/);
   assert.match(buildSource, /src\/item-name-catalog\.js/);
   assert.match(buildSource, /src\/localization\.js/);
+  assert.match(buildSource, /src\/shrine-guide\.js/);
   assert.doesNotMatch(buildSource, /src\/zh-cn-items\.js/);
   assert.doesNotMatch(source, /mwi-token-value-best/);
   assert.match(source, /MwiGuildCreditLocalization/);
@@ -1351,6 +1368,13 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /setGuildCombatTarget/);
   assert.match(source, /data-role="set-guild-shrine-target"/);
   assert.match(source, /mwi-upgrade-preset/);
+  assert.match(source, /data-role="toggle-shrine-guide"/);
+  assert.match(source, /data-role="shrine-guide-route"/);
+  assert.match(source, /shrineGuideApi\.deriveShrineGuide/);
+  assert.match(source, /data-mwi-shrine-guide/);
+  assert.match(source, /prefers-reduced-motion:\s*reduce/);
+  assert.match(source, /bridge\.onGuildBuffLevelsUpdated = hydrateBridgeData/);
+  assert.match(source, /scheduleGuildDataRefresh\(\)/);
   assert.match(source, /container-type:inline-size/);
   assert.match(source, /@container \(max-width:650px\)/);
   assert.match(source, /@container \(max-width:520px\)/);

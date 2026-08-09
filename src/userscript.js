@@ -7,7 +7,8 @@
   const releaseInfoApi = window.MwiGuildCreditReleaseInfo;
   const localizationApi = window.MwiGuildCreditLocalization;
   const buildingDataApi = window.MwiGuildBuildingData;
-  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi || !buildingDataApi) return;
+  const shrineGuideApi = window.MwiGuildCreditShrineGuide;
+  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi || !buildingDataApi || !shrineGuideApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
@@ -61,7 +62,7 @@
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
-  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, guildBuffLevelsBridgeRevision: 0, inventoryDataRefreshTimer: null, guildDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, shrineGuideEnabled: savedUiState.shrineGuideEnabled, shrineGuideContext: null, shrineGuideModel: null, shrineGuideFrame: null, shrineGuideObserver: null, shrineGuideObservedNodes: new Set(), shrineGuideDocumentListenersInstalled: false, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
   state.guildBuildingLevels = null;
   state.guildBuildingDetails = null;
   state.buildingPlans = savedBuildingPlannerState.plans.map((plan, index) => ({ id: `building-plan-${index + 1}`, ...plan }));
@@ -81,7 +82,7 @@
   }
 
   function loadSavedPluginUiState() {
-    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, targetCredit: 1, upgradePlans: [] };
+    const fallback = { collapsedCreditSections: [], guildTokenValuesCollapsed: false, guildTokenCreditHrids: [], autoGuildTokenBudget: null, shrineGuideEnabled: false, targetCredit: 1, upgradePlans: [] };
     try {
       const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(UI_STATE_STORAGE_KEY);
       if (!raw) return fallback;
@@ -113,6 +114,7 @@
         guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
         guildTokenCreditHrids,
         autoGuildTokenBudget,
+        shrineGuideEnabled: stored.shrineGuideEnabled === true,
         targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
         upgradePlans
       };
@@ -188,6 +190,7 @@
         guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
         guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
         autoGuildTokenBudget: state.autoGuildTokenBudget,
+        shrineGuideEnabled: state.shrineGuideEnabled,
         useGuildTokensForMissingCredits: CREDIT_TYPES.every(([hrid]) => state.guildTokenCreditHrids.has(hrid)),
         targetCredit: state.targetCredit,
         upgradePlans
@@ -639,6 +642,7 @@
     let marketChanged = false;
     bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
     bridge.onCharacterItemsUpdated = hydrateBridgeData;
+    bridge.onGuildBuffLevelsUpdated = hydrateBridgeData;
     setItemDetails(bridge.itemDetails);
     setGuildBuffDetails(bridge.guildBuffDetails);
     setGuildBuffLevelsFrom(bridge);
@@ -656,6 +660,11 @@
       }
     } else {
       setCharacterItems(bridge.characterItems);
+    }
+    const guildBuffLevelsRevision = Number(bridge.guildBuffLevelsRevision);
+    if (Number.isSafeInteger(guildBuffLevelsRevision) && guildBuffLevelsRevision > state.guildBuffLevelsBridgeRevision) {
+      state.guildBuffLevelsBridgeRevision = guildBuffLevelsRevision;
+      scheduleGuildDataRefresh();
     }
     const bridgeRevision = Number(bridge.marketOrderBookRevision);
     if (Number.isSafeInteger(bridgeRevision) && bridgeRevision > state.marketBridgeRevision) {
@@ -1164,7 +1173,9 @@
       const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
       if (!entry) return "";
       const buffOptions = entries.map((candidate) => `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(guildBuffLabel(candidate.detail, candidate.hrid))}</option>`).join("");
-      return `<div class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}">
+      const shrineHrid = entry.detail && entry.detail.shrineHrid || "";
+      const domain = isCombatGuildBuff(entry) ? "combat" : "life";
+      return `<div class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${domain}">
         <label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label>
         <label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label>
         <span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span>
@@ -1291,12 +1302,12 @@
       ? t("autoGuildTokenCoverage", { count: formatNumber(exchange.coveredCredits) })
       : t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory["/items/guild_token"]) || 0) : t("notRead") });
     const needLabel = automatic ? t("autoGuildTokenExchangeNeeds") : t("guildTokenExchangeNeeds");
-    return `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${iconMarkup("/items/guild_token", itemNameForMaterial("/items/guild_token"))}</span><span><b>${escapeHtml(itemNameForMaterial("/items/guild_token"))}</b><small>${escapeHtml(detail)}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(needLabel)}</small><strong>${formatNumber(requiredGuildTokens)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: `${formatNumber(exchange.guildTokenCount)} ${t("guildTokens")}`, credits: creditQuantity(exchange.creditCount) }))}</span>`;
+    return `<div class="mwi-material-plan-item" data-guide-item-hrid="/items/guild_token"><span class="mwi-material-plan-icon">${iconMarkup("/items/guild_token", itemNameForMaterial("/items/guild_token"))}</span><span><b>${escapeHtml(itemNameForMaterial("/items/guild_token"))}</b><small>${escapeHtml(detail)}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(needLabel)}</small><strong>${formatNumber(requiredGuildTokens)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: `${formatNumber(exchange.guildTokenCount)} ${t("guildTokens")}`, credits: creditQuantity(exchange.creditCount) }))}</span>`;
   }
 
   function renderOptimalMaterialPlan(plan, hasInventory, materialInventory) {
     if (!plan) return `<div class="mwi-material-plan-unavailable">${escapeHtml(t("optimalExchangeUnavailable"))}</div>`;
-    return `<div class="mwi-material-plan-item"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
+    return `<div class="mwi-material-plan-item" data-guide-item-hrid="${escapeHtml(plan.itemHrid)}"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
   }
 
   function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans, materialInventory) {
@@ -1335,9 +1346,31 @@
       if (row && row.missing <= 0 && isGuildCredit) conversionPlans.push(`<div class="mwi-material-plan-covered">✓ ${escapeHtml(t("inventoryCoveredNoExchange"))}</div>`);
       const rowClass = item.itemHrid === "/items/guild_token" ? " mwi-material-row-token" : "";
       const materialIcon = isGuildCredit || item.itemHrid === "/items/guild_token" || item.itemHrid === "/items/coin" ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid)) : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
-      return `<article class="mwi-material-row${rowClass}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
+      const guideMissing = row ? Math.max(0, Number(row.remainingMissing ?? row.missing) || 0) : 0;
+      return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
     }).join("");
     return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
+  }
+
+  function shrineGuidePlans(entries) {
+    const byHrid = new Map(entries.map((entry) => [entry.hrid, entry]));
+    return state.upgradePlans.flatMap((plan) => {
+      const entry = byHrid.get(plan.guildBuffHrid);
+      if (!entry || !entry.detail || !entry.detail.shrineHrid) return [];
+      return [{
+        guildBuffHrid: entry.hrid,
+        shrineHrid: entry.detail.shrineHrid,
+        domain: isCombatGuildBuff(entry) ? "combat" : "life",
+        label: guildBuffLabel(entry.detail, entry.hrid),
+        currentLevel: currentGuildBuffLevel(entry),
+        targetLevel: plan.targetLevel
+      }];
+    });
+  }
+
+  function setShrineGuideContext(context) {
+    state.shrineGuideContext = context;
+    scheduleShrineGuide();
   }
 
   async function refreshGuildUpgrade(panel) {
@@ -1348,6 +1381,7 @@
     const results = panel.querySelector('[data-role="upgrade-results"]');
     const entries = guildBuffEntries();
     if (!entries.length) {
+      setShrineGuideContext(null);
       updateGuildTokenBudgetControl(panel, null, false);
       status.textContent = t("noGuildRules");
       updateRenderedMarkup(results, "");
@@ -1356,6 +1390,7 @@
     ensureGuildUpgradePlans(entries);
     renderGuildUpgradePlans(panel, entries);
     if (!state.upgradePlans.length) {
+      setShrineGuideContext({ plans: [], estimate: { rows: [] }, creditMaterialPlans: {} });
       updateGuildTokenBudgetControl(panel, null, Array.isArray(state.characterItems));
       status.textContent = state.upgradePresetNotice || t("allBuffsMaxed");
       updateRenderedMarkup(results, `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || t("noUpgradeMaterials"))}</div>`);
@@ -1367,6 +1402,7 @@
       return { ...plan, levelCosts: entry && entry.detail.levelCosts };
     }));
     if (result.status !== "ok") {
+      setShrineGuideContext({ plans: shrineGuidePlans(entries), estimate: null, creditMaterialPlans: {} });
       const failed = result.result || {};
       status.textContent = failed.status === "missing_cost" ? t("missingLevelCost", { level: formatNumber(failed.missingLevel) }) : t("invalidLevels");
       updateRenderedMarkup(results, "");
@@ -1400,6 +1436,38 @@
     });
     updateGuildTokenBudgetControl(panel, estimate, hasInventory);
     if (!snapshotFailed && needsMarketSnapshot) creditMaterialPlans = bestCreditMaterialPlans(estimate);
+    let guideEstimate = estimate;
+    let guideCreditMaterialPlans = creditMaterialPlans;
+    const activeGuidePlanInputs = state.upgradePlans.flatMap((plan) => {
+      const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
+      if (!entry) return [];
+      const currentLevel = currentGuildBuffLevel(entry);
+      if (currentLevel >= plan.targetLevel) return [];
+      return [{ ...plan, startLevel: Math.max(currentLevel, plan.startLevel), levelCosts: entry.detail.levelCosts }];
+    });
+    if (activeGuidePlanInputs.length !== state.upgradePlans.length || activeGuidePlanInputs.some((plan) => {
+      const original = state.upgradePlans.find((candidate) => candidate.id === plan.id);
+      return original && original.startLevel !== plan.startLevel;
+    })) {
+      const guideResult = core.aggregateGuildBuffPlans(activeGuidePlanInputs);
+      if (guideResult.status === "ok") {
+        guideEstimate = core.estimateGuildUpgradeCosts(guideResult.totals, creditUnitCosts, materialInventory, {
+          guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
+          guildTokenCreditConversions: GUILD_TOKEN_CREDIT_CONVERSIONS,
+          autoAllocateSurplusGuildTokens: hasInventory,
+          autoGuildTokenBudget: state.autoGuildTokenBudget
+        });
+        guideCreditMaterialPlans = !snapshotFailed && needsMarketSnapshot ? bestCreditMaterialPlans(guideEstimate) : null;
+      } else {
+        guideEstimate = null;
+        guideCreditMaterialPlans = null;
+      }
+    }
+    setShrineGuideContext({
+      plans: shrineGuidePlans(entries),
+      estimate: guideEstimate,
+      creditMaterialPlans: guideCreditMaterialPlans || {}
+    });
     const notices = [state.upgradePresetNotice || (state.guildBuffLevels ? t("mergedUpgradePlans", { count: formatNumber(result.plans.length) }) : t("unknownCurrentLevels"))];
     const tokenSelection = guildTokenCreditSelectionState();
     if (tokenSelection.allSelected) notices.push(t("guildTokenCreditPlanActive"));
@@ -1637,6 +1705,268 @@
     anchor.click();
     anchor.remove();
     pageWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  const SHRINE_GUIDE_STYLE_ID = "mwi-shrine-guide-native-style";
+
+  function ensureShrineGuideStyle() {
+    if (document.getElementById(SHRINE_GUIDE_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = SHRINE_GUIDE_STYLE_ID;
+    style.textContent = `
+      [data-mwi-shrine-guide]{--mwi-guide-color:#63e6c8;position:relative!important;z-index:5!important;outline:2px solid color-mix(in srgb,var(--mwi-guide-color) 78%,white 12%)!important;outline-offset:2px!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 18px color-mix(in srgb,var(--mwi-guide-color) 25%,transparent)!important;scroll-margin:16px}
+      [data-mwi-shrine-guide="goal"]{outline-style:dashed!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent)!important}
+      [data-mwi-shrine-guide="pending"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 16%,transparent)!important}
+      [data-mwi-shrine-guide="active"]{animation:mwi-shrine-guide-pulse 1.45s ease-in-out infinite}
+      @keyframes mwi-shrine-guide-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 12px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)}50%{filter:brightness(1.08);box-shadow:0 0 0 6px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent),0 0 23px color-mix(in srgb,var(--mwi-guide-color) 38%,transparent)}}
+      @media (prefers-reduced-motion:reduce){[data-mwi-shrine-guide="active"]{animation:none}}
+    `;
+    (document.head || document.documentElement).append(style);
+  }
+
+  function clearShrineGuideHighlights() {
+    for (const node of state.shrineGuideObservedNodes) {
+      if (!node || !node.removeAttribute) continue;
+      node.removeAttribute("data-mwi-shrine-guide");
+      if (node.style) node.style.removeProperty("--mwi-guide-color");
+    }
+    state.shrineGuideObservedNodes.clear();
+  }
+
+  function markShrineGuideNode(node, role, color) {
+    if (!node || !node.setAttribute) return false;
+    node.setAttribute("data-mwi-shrine-guide", role);
+    if (node.style) node.style.setProperty("--mwi-guide-color", color || "#63e6c8");
+    state.shrineGuideObservedNodes.add(node);
+    return true;
+  }
+
+  function guideCreditColor(itemHrid) {
+    return CREDIT_TYPES.find(([candidate]) => candidate === itemHrid)?.[1] || "#63e6c8";
+  }
+
+  function visibleGuideNode(node) {
+    if (!node || !node.isConnected || node.closest("#mwi-credit-optimizer")) return false;
+    const rect = node.getBoundingClientRect();
+    const style = getComputedStyle(node);
+    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function nativeUseNodes(fragment) {
+    return Array.from(document.querySelectorAll("use")).filter((use) => {
+      const href = use.getAttribute("href") || use.getAttribute("xlink:href") || "";
+      return href.endsWith(`#${fragment}`);
+    });
+  }
+
+  function nativeCreditCards(itemHrid) {
+    const fragment = String(itemHrid || "").split("/").pop();
+    return nativeUseNodes(fragment).flatMap((use) => {
+      const tile = use.closest('[class*="GuildPanel_guildTile"]');
+      return tile && visibleGuideNode(tile) ? [tile] : [];
+    });
+  }
+
+  function nativeRecommendedItems(itemHrid) {
+    const fragment = String(itemHrid || "").split("/").pop();
+    return nativeUseNodes(fragment).flatMap((use) => {
+      const item = use.closest('[class*="Item_item"]');
+      const exchangeSurface = item && item.closest('[class*="GuildPanel_exchangeModalContent"],[class*="Modal_modal"],[class*="ItemSelector"]');
+      return item && exchangeSurface && visibleGuideNode(item) ? [item] : [];
+    });
+  }
+
+  function nativeShrineCards(plan) {
+    const fragment = `guild_shrine_${String(plan.shrineHrid || "").split("/").pop()}`;
+    const domainAliases = plan.domain === "combat" ? [t("domainCombat"), "Combat"] : [t("domainLife"), "Life", "Skilling"];
+    const cards = nativeUseNodes(fragment).flatMap((use) => {
+      const tile = use.closest('[class*="GuildPanel_guildTile"]');
+      return tile && visibleGuideNode(tile) ? [tile] : [];
+    });
+    const exact = cards.filter((card) => domainAliases.some((alias) => String(card.textContent || "").includes(alias)));
+    return exact.length ? exact : cards;
+  }
+
+  function nativeGuildTab(aliases) {
+    return Array.from(document.querySelectorAll('[role="tab"]')).find((tab) => aliases.includes(String(tab.textContent || "").trim()) && visibleGuideNode(tab)) || null;
+  }
+
+  function guideAttributeSelectorValue(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(String(value || ""));
+    return String(value || "").replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  }
+
+  function shrineGuideStatusCopy(model) {
+    if (!model || model.status === "inactive") return { title: t("guideReady"), detail: t("guideReadyHint") };
+    if (model.status === "no_plans") return { title: t("guideNoPlans"), detail: t("guideNoPlansHint") };
+    if (model.status === "loading") return { title: t("guideLoading"), detail: t("guideLoadingHint") };
+    if (model.status === "complete") return { title: t("guideComplete"), detail: t("guideCompleteHint") };
+    if (model.status === "choose_credit") {
+      const names = model.missingCredits.map((step) => itemNameForMaterial(step.creditItemHrid)).join(ui().locale === "zh-CN" ? "、" : ", ");
+      return { title: t("guideMissingCredits", { count: formatNumber(model.missingCredits.length) }), detail: t("guideMissingCreditsHint", { items: names }) };
+    }
+    if (model.status === "choose_item") {
+      const step = model.activeCredit;
+      return { title: t("guideChooseItem", { item: itemNameForMaterial(step.recommendedItemHrid) }), detail: t("guideChooseItemHint", { credit: itemNameForMaterial(step.creditItemHrid) }) };
+    }
+    if (model.status === "set_quantity") {
+      const step = model.activeCredit;
+      return {
+        title: t("guideSetQuantity", { count: formatNumber(step.batches) }),
+        detail: t("guideSetQuantityHint", { items: formatNumber(step.requiredItems), item: itemNameForMaterial(step.recommendedItemHrid), credits: formatNumber(step.actualCredits) })
+      };
+    }
+    if (model.status === "use_guild_token") {
+      const step = model.activeCredit;
+      return { title: t("guideUseGuildTokens", { count: formatNumber(step.requiredItems) }), detail: t("guideUseGuildTokensHint", { credit: itemNameForMaterial(step.creditItemHrid) }) };
+    }
+    if (model.status === "unavailable") return { title: t("guideUnavailable"), detail: t("guideUnavailableHint") };
+    if (model.status === "blocked") {
+      const items = model.blockers.map((item) => `${itemNameForMaterial(item.itemHrid)} × ${formatNumber(item.missing)}`).join(ui().locale === "zh-CN" ? "、" : ", ");
+      return { title: t("guideBlocked"), detail: t("guideBlockedHint", { items }) };
+    }
+    const names = model.targetPlans.map((plan) => plan.label).join(ui().locale === "zh-CN" ? "、" : ", ");
+    return { title: t("guideUpgradeShrine"), detail: t("guideUpgradeShrineHint", { shrines: names }) };
+  }
+
+  function setGuideText(node, value) {
+    if (node && node.textContent !== value) node.textContent = value;
+  }
+
+  function updateShrineGuideUi(model) {
+    const panel = state.panel;
+    if (!panel) return;
+    const route = panel.querySelector('[data-role="shrine-guide-route"]');
+    const button = panel.querySelector('[data-role="toggle-shrine-guide"]');
+    if (!route || !button) return;
+    const copy = shrineGuideStatusCopy(model);
+    route.dataset.active = String(state.shrineGuideEnabled);
+    route.dataset.status = model && model.status || "inactive";
+    button.setAttribute("aria-pressed", String(state.shrineGuideEnabled));
+    setGuideText(button.querySelector("span:last-child"), state.shrineGuideEnabled ? t("guideDisable") : t("guideEnable"));
+    setGuideText(route.querySelector('[data-role="shrine-guide-title"]'), copy.title);
+    setGuideText(route.querySelector('[data-role="shrine-guide-detail"]'), copy.detail);
+  }
+
+  function applyShrineGuide(model, modal) {
+    clearShrineGuideHighlights();
+    updateShrineGuideUi(model);
+    if (!state.shrineGuideEnabled || !model || ["inactive", "no_plans", "complete"].includes(model.status)) return;
+    ensureShrineGuideStyle();
+
+    for (const plan of model.targetPlans) {
+      const selector = `.mwi-upgrade-plan[data-guild-buff-hrid="${guideAttributeSelectorValue(plan.guildBuffHrid)}"]`;
+      markShrineGuideNode(state.panel && state.panel.querySelector(selector), model.status === "upgrade_shrine" ? "active" : "goal", "#9b8cff");
+      for (const card of nativeShrineCards(plan)) markShrineGuideNode(card, model.status === "upgrade_shrine" ? "active" : "goal", "#9b8cff");
+    }
+
+    let foundNativeCredit = false;
+    for (const step of model.missingCredits) {
+      const active = model.activeCredit && model.activeCredit.creditItemHrid === step.creditItemHrid;
+      const role = active ? "active" : "pending";
+      const color = guideCreditColor(step.creditItemHrid);
+      const selector = `.mwi-material-row[data-item-hrid="${guideAttributeSelectorValue(step.creditItemHrid)}"]`;
+      markShrineGuideNode(state.panel && state.panel.querySelector(selector), role, color);
+      for (const card of nativeCreditCards(step.creditItemHrid)) {
+        foundNativeCredit = true;
+        markShrineGuideNode(card, role, color);
+      }
+    }
+
+    if (model.missingCredits.length && !foundNativeCredit && !modal) {
+      markShrineGuideNode(nativeGuildTab([t("nativeGuildShopTab"), "Shop"]), "active", "#63e6c8");
+    }
+    if (model.activeCredit) {
+      const step = model.activeCredit;
+      const color = guideCreditColor(step.creditItemHrid);
+      const pluginItem = state.panel && state.panel.querySelector(`[data-guide-item-hrid="${guideAttributeSelectorValue(step.recommendedItemHrid)}"]`);
+      markShrineGuideNode(pluginItem, "active", color);
+      if (step.method === "market_item") {
+        for (const item of nativeRecommendedItems(step.recommendedItemHrid)) markShrineGuideNode(item, "active", color);
+      }
+      if (model.status === "set_quantity" && modal && modal.quantityInput) markShrineGuideNode(modal.quantityInput, "active", color);
+    }
+    if (model.status === "upgrade_shrine" && !model.targetPlans.some((plan) => nativeShrineCards(plan).length)) {
+      markShrineGuideNode(nativeGuildTab([t("nativeGuildShopTab"), "Shop"]), "active", "#9b8cff");
+    }
+  }
+
+  function refreshShrineGuide() {
+    const modal = findGuildExchangeModal();
+    const context = state.shrineGuideContext || {};
+    const model = shrineGuideApi.deriveShrineGuide({
+      enabled: state.shrineGuideEnabled,
+      plans: context.plans || [],
+      estimate: context.estimate || null,
+      creditMaterialPlans: context.creditMaterialPlans || {},
+      creditOrder: CREDIT_TYPES.map(([itemHrid]) => itemHrid),
+      modal
+    });
+    state.shrineGuideModel = model;
+    applyShrineGuide(model, modal);
+  }
+
+  function scheduleShrineGuide() {
+    if (state.shrineGuideFrame !== null) return;
+    const requestFrame = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (handler) => window.setTimeout(handler, 0);
+    state.shrineGuideFrame = requestFrame(() => {
+      state.shrineGuideFrame = null;
+      refreshShrineGuide();
+    });
+  }
+
+  function guideMutationMayMatter(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.id === "mwi-credit-optimizer" || node.closest && node.closest("#mwi-credit-optimizer")) return true;
+    const selector = '[class*="GuildPanel_guildTile"],[class*="GuildPanel_exchangeModalContent"],[class*="Modal_modal"],[class*="ItemSelector"],[class*="Item_item"],[role="tab"]';
+    if (node.matches && node.matches(selector)) return true;
+    return Boolean(node.querySelector && node.querySelector(selector));
+  }
+
+  function guideInteractionMayMatter(target) {
+    if (!target || typeof target.closest !== "function") return false;
+    return Boolean(target.closest('#mwi-credit-optimizer,[class*="GuildPanel"],[class*="Modal_modal"],[class*="ItemSelector"],[role="tab"]'));
+  }
+
+  function startShrineGuideObserver() {
+    ensureShrineGuideStyle();
+    if (document.body && !state.shrineGuideObserver) {
+      const Observer = guildExchangeMutationObserver();
+      if (Observer) {
+        state.shrineGuideObserver = new Observer((mutations) => {
+          if (mutations.some((mutation) => Array.from(mutation.addedNodes || []).some(guideMutationMayMatter))) scheduleShrineGuide();
+        });
+        state.shrineGuideObserver.observe(document.body, { childList: true, subtree: true });
+      }
+    }
+    if (!state.shrineGuideDocumentListenersInstalled) {
+      const schedule = (event) => { if (state.shrineGuideEnabled && guideInteractionMayMatter(event.target)) scheduleShrineGuide(); };
+      document.addEventListener("click", schedule, true);
+      document.addEventListener("input", schedule, true);
+      document.addEventListener("change", schedule, true);
+      state.shrineGuideDocumentListenersInstalled = true;
+    }
+  }
+
+  function stopShrineGuideObserver() {
+    if (state.shrineGuideObserver) state.shrineGuideObserver.disconnect();
+    state.shrineGuideObserver = null;
+    clearShrineGuideHighlights();
+  }
+
+  function setShrineGuideEnabled(panel, enabled) {
+    state.shrineGuideEnabled = enabled === true;
+    persistPluginUiState();
+    if (state.shrineGuideEnabled) {
+      startShrineGuideObserver();
+      scheduleShrineGuide();
+      refreshGuildUpgrade(panel);
+    } else {
+      stopShrineGuideObserver();
+      scheduleShrineGuide();
+    }
   }
 
   function setPanelView(panel, view) {
@@ -1950,6 +2280,51 @@
         #mwi-credit-optimizer .mwi-material-row{
           background:linear-gradient(105deg,#292b48,#242640);
         }
+        #mwi-credit-optimizer .mwi-shrine-guide-route{
+          display:grid;
+          grid-template-columns:auto minmax(0,1fr);
+          align-items:center;
+          gap:9px;
+          margin:0 0 7px;
+          padding:7px 9px;
+          border:1px solid #4b4f75;
+          border-radius:8px;
+          background:linear-gradient(105deg,#282a46,#22243b);
+        }
+        #mwi-credit-optimizer .mwi-shrine-guide-toggle{
+          display:flex;
+          align-items:center;
+          gap:6px;
+          min-height:29px!important;
+          padding:4px 9px!important;
+          border:1px solid #65698f!important;
+          background:#353752!important;
+          color:#e3e5f7!important;
+          white-space:nowrap;
+        }
+        #mwi-credit-optimizer .mwi-shrine-guide-route[data-active="true"] .mwi-shrine-guide-toggle{
+          border-color:#63e6c8!important;
+          background:#245149!important;
+          color:#eafff9!important;
+        }
+        #mwi-credit-optimizer .mwi-shrine-guide-beacon{
+          width:8px;
+          height:8px;
+          border:1px solid #a9acc9;
+          border-radius:50%;
+          background:#5c5f7e;
+          box-shadow:0 0 0 3px #5c5f7e24;
+        }
+        #mwi-credit-optimizer .mwi-shrine-guide-route[data-active="true"] .mwi-shrine-guide-beacon{
+          border-color:#c9fff2;
+          background:#63e6c8;
+          box-shadow:0 0 0 3px #63e6c82e,0 0 12px #63e6c866;
+        }
+        #mwi-credit-optimizer .mwi-shrine-guide-copy{display:grid;gap:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-shrine-guide-copy strong{overflow:hidden;color:#f2f4ff;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-shrine-guide-copy small{min-width:0;color:#b9bdd9;font-size:10px;line-height:1.35;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-guide-route[data-status="set_quantity"]{border-color:#d7a64d;background:linear-gradient(105deg,#3d3425,#292a46)}
+        #mwi-credit-optimizer .mwi-shrine-guide-route[data-status="complete"]{border-color:#4da496;background:linear-gradient(105deg,#203e3a,#252742)}
         @container (max-width:400px){
           #mwi-credit-optimizer .mwi-upgrade-preset{
             grid-template-columns:minmax(0,1fr);
@@ -1961,6 +2336,8 @@
             grid-template-columns:repeat(2,minmax(0,1fr));
           }
           #mwi-credit-optimizer .mwi-upgrade-plan-columns{display:none}
+          #mwi-credit-optimizer .mwi-shrine-guide-route{grid-template-columns:minmax(0,1fr)}
+          #mwi-credit-optimizer .mwi-shrine-guide-toggle{justify-content:center;width:100%}
         }
         @container (max-width:350px){
           #mwi-credit-optimizer .mwi-upgrade-plan{
@@ -2020,6 +2397,10 @@
           </div>
           <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
           <div class="mwi-upgrade-actions"><small data-role="upgrade-plan-count">${escapeHtml(t("selectedUpgradePlanCount", { count: "0" }))}</small><span><button data-role="add-upgrade-plan" type="button">＋ ${escapeHtml(t("addShrine"))}</button><button class="mwi-clear-upgrade-plans" data-role="clear-upgrade-plans" type="button">${escapeHtml(t("clearAll"))}</button></span></div>
+        </section>
+        <section class="mwi-shrine-guide-route" data-role="shrine-guide-route" data-active="${String(state.shrineGuideEnabled)}" data-status="inactive" aria-live="polite">
+          <button class="mwi-shrine-guide-toggle" data-role="toggle-shrine-guide" type="button" aria-pressed="${String(state.shrineGuideEnabled)}"><span class="mwi-shrine-guide-beacon" aria-hidden="true"></span><span>${escapeHtml(state.shrineGuideEnabled ? t("guideDisable") : t("guideEnable"))}</span></button>
+          <span class="mwi-shrine-guide-copy"><strong data-role="shrine-guide-title">${escapeHtml(t("guideReady"))}</strong><small data-role="shrine-guide-detail">${escapeHtml(t("guideReadyHint"))}</small></span>
         </section>
         ${renderGuildTokenBudgetControl()}
         ${renderGuildTokenCreditPlanToggle()}
@@ -2172,6 +2553,7 @@
     });
     panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => { addGuildUpgradePlan(guildBuffEntries()); persistPluginUiState(); refreshGuildUpgrade(panel); });
     panel.querySelector('[data-role="clear-upgrade-plans"]').addEventListener("click", () => { clearGuildUpgradePlans(); persistPluginUiState(); refreshGuildUpgrade(panel); });
+    panel.querySelector('[data-role="toggle-shrine-guide"]').addEventListener("click", () => setShrineGuideEnabled(panel, !state.shrineGuideEnabled));
     const guildTokenBudgetControl = panel.querySelector('[data-role="guild-token-budget-control"]');
     const guildTokenBudgetRange = panel.querySelector('[data-role="guild-token-budget-range"]');
     guildTokenBudgetControl.addEventListener("input", (event) => {
@@ -2233,6 +2615,7 @@
       persistPluginUiState();
       refreshGuildUpgrade(panel);
     });
+    panel.dataset.activeView = "credit";
     checkPluginUpdate(panel);
     return panel;
   }
@@ -2346,6 +2729,16 @@
         refreshGuildUpgrade(state.panel);
       }
       scheduleGuildExchangeAdvisor(true);
+      scheduleShrineGuide();
+    }, 120);
+  }
+
+  function scheduleGuildDataRefresh() {
+    window.clearTimeout(state.guildDataRefreshTimer);
+    state.guildDataRefreshTimer = window.setTimeout(() => {
+      state.guildDataRefreshTimer = null;
+      if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
+      else scheduleShrineGuide();
     }, 120);
   }
 
@@ -2396,6 +2789,7 @@
         creditItemHrid: credit.itemHrid,
         selectedItemHrid: selected && selected.itemHrid || null,
         selectedEnhancementLevel: selected && selected.enhancementLevel || 0,
+        quantityInput,
         batches: Number.isSafeInteger(batches) && batches > 0 ? batches : 1
       };
     }
@@ -2835,6 +3229,12 @@
     }
     state.panel = panel;
     state.creditTab = creditTab;
+    if (state.shrineGuideEnabled) {
+      startShrineGuideObserver();
+      refreshGuildUpgrade(panel);
+    } else {
+      scheduleShrineGuide();
+    }
     if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
   }
 

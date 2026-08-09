@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.38] - 2026-08-10
+
+### Added
+
+- Added an optional read-only shrine planning guide that highlights every outstanding guild credit, the recommended exchange item, the required exchange batch input, and the matching life or combat shrine.
+- Added a deterministic guide state module with explicit loading, unavailable, blocked, completion, market-item, and guild-token routes.
+
+### Changed
+
+- Shrine guidance now advances from live inventory and personal shrine-level revisions while ignoring duplicate level snapshots.
+- Native-game highlighting uses item and shrine HRIDs as stable identifiers, limits observation to relevant guild and modal surfaces, and respects reduced-motion preferences.
+
+### Verified
+
+- Added focused state-transition, bridge-revision, bundle-integration, persistence, and accessibility wiring tests.
+
 ## [1.1.37] - 2026-08-10
 
 ### Added

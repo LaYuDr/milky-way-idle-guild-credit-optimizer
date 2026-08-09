@@ -15,6 +15,7 @@
     guildBuildingDetails: null,
     characterItems: null,
     characterItemsRevision: 0,
+    guildBuffLevelsRevision: 0,
     marketOrderBooks: Object.create(null),
     marketOrderBookRevision: 0
   });
@@ -23,6 +24,7 @@
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
+  if (!Number.isSafeInteger(bridge.guildBuffLevelsRevision)) bridge.guildBuffLevelsRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
@@ -40,6 +42,7 @@
       lastMessageType: "",
       lastCharacterItemsUpdatedAt: 0,
       lastCharacterItemsSource: "",
+      lastGuildBuffLevelsUpdatedAt: 0,
       lastMarketItemHrid: "",
       lastMarketLevels: null,
       lastMarketReceivedAt: 0,
@@ -56,6 +59,7 @@
       root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
         ...diagnostics,
         characterItemsRevision: bridge.characterItemsRevision,
+        guildBuffLevelsRevision: bridge.guildBuffLevelsRevision,
         marketOrderBookRevision: bridge.marketOrderBookRevision
       }));
       return true;
@@ -269,6 +273,27 @@
     }
   }
 
+  function recordSignature(value) {
+    try {
+      return JSON.stringify(value || null);
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function publishGuildBuffLevelsUpdate() {
+    bridge.guildBuffLevelsRevision = Math.min(Number.MAX_SAFE_INTEGER, bridge.guildBuffLevelsRevision + 1);
+    diagnostics.lastGuildBuffLevelsUpdatedAt = Date.now();
+    publishBridgeDiagnostics();
+    if (typeof bridge.onGuildBuffLevelsUpdated === "function") {
+      try {
+        bridge.onGuildBuffLevelsUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
+
   function keepGuildData(message) {
     if (!message || typeof message !== "object") return;
     const visited = new Set();
@@ -276,6 +301,7 @@
     let scanned = 0;
     let characterItemsChanged = false;
     let characterItemsSource = "";
+    const previousGuildBuffLevelsSignature = recordSignature(bridge.guildBuffLevels);
     while (pending.length && scanned < 400) {
       const value = pending.pop();
       if (!value || typeof value !== "object" || visited.has(value)) continue;
@@ -337,6 +363,7 @@
       for (const child of Object.values(value)) pending.push(child);
     }
     if (characterItemsChanged) publishCharacterItemsUpdate(characterItemsSource);
+    if (recordSignature(bridge.guildBuffLevels) !== previousGuildBuffLevelsSignature) publishGuildBuffLevelsUpdate();
   }
 
   function keepSocketMessage(rawMessage) {
