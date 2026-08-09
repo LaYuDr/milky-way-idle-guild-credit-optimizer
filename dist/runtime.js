@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.36";
+window.MwiGuildCreditVersion = "1.1.37";
 
 (function (root, factory) {
   const api = factory();
@@ -618,11 +618,15 @@ window.MwiGuildCreditVersion = "1.1.36";
     guildBuffLevels: null,
     guildShrineLevels: null,
     guildShrineDetails: null,
+    guildBuildingLevels: null,
+    guildBuildingDetails: null,
     characterItems: null,
     characterItemsRevision: 0,
     marketOrderBooks: Object.create(null),
     marketOrderBookRevision: 0
   });
+  if (!("guildBuildingLevels" in bridge)) bridge.guildBuildingLevels = null;
+  if (!("guildBuildingDetails" in bridge)) bridge.guildBuildingDetails = null;
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
@@ -893,8 +897,15 @@ window.MwiGuildCreditVersion = "1.1.36";
         value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
         value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
       ];
+      const guildBuildingLevelCandidates = [
+        value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
+        value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
+      ];
       const guildShrineDetailCandidates = [
         value.guildShrineDetailMap, value.guildShrineDetailDict, value.guildShrineDetails,
+        value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
+      ];
+      const guildBuildingDetailCandidates = [
         value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
       ];
       const characterItems = value.characterItems;
@@ -907,9 +918,19 @@ window.MwiGuildCreditVersion = "1.1.36";
           bridge.guildShrineLevels = mergeGuildShrineLevels(bridge.guildShrineLevels, guildShrineLevels);
         }
       }
+      for (const guildBuildingLevels of guildBuildingLevelCandidates) {
+        if (guildBuildingLevels && typeof guildBuildingLevels === "object") {
+          bridge.guildBuildingLevels = mergeGuildShrineLevels(bridge.guildBuildingLevels, guildBuildingLevels);
+        }
+      }
       for (const guildShrineDetails of guildShrineDetailCandidates) {
         if (guildShrineDetails && typeof guildShrineDetails === "object") {
           bridge.guildShrineDetails = mergeGuildShrineLevels(bridge.guildShrineDetails, guildShrineDetails);
+        }
+      }
+      for (const guildBuildingDetails of guildBuildingDetailCandidates) {
+        if (guildBuildingDetails && typeof guildBuildingDetails === "object") {
+          bridge.guildBuildingDetails = mergeGuildShrineLevels(bridge.guildBuildingDetails, guildBuildingDetails);
         }
       }
       if (Array.isArray(characterItems) && replaceCharacterItems(characterItems)) {
@@ -1415,6 +1436,72 @@ window.MwiGuildCreditVersion = "1.1.36";
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildBuildingData = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const RULES_VERSION = "2026-08-04-v1";
+  const MAX_LEVEL = 20;
+  const BASE_LEVEL_COSTS = Object.freeze([
+    null,
+    1000, 1350, 1800, 2450, 3300,
+    4500, 6050, 8150, 11050, 14900,
+    20100, 27150, 36650, 49450, 66800,
+    90150, 121700, 164300, 221800, 299450
+  ]);
+
+  const BUILDINGS = Object.freeze([
+    { hrid: "/guild_buildings/guild_hall", nameKey: "buildingGuildHall", category: "core", costMultiplier: 1 },
+    { hrid: "/guild_buildings/builders_hall", nameKey: "buildingBuildersHall", category: "core", costMultiplier: 1 },
+    { hrid: "/guild_buildings/archives", nameKey: "buildingArchives", category: "core", costMultiplier: 1 },
+    { hrid: "/guild_buildings/treasury", nameKey: "buildingTreasury", category: "core", costMultiplier: 1 },
+    { hrid: "/guild_buildings/skilling_encampment", nameKey: "buildingSkillingEncampment", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/workshop", nameKey: "buildingWorkshop", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/forge", nameKey: "buildingForge", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/log_shed", nameKey: "buildingLogShed", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/garden", nameKey: "buildingGarden", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/dairy_barn", nameKey: "buildingDairyBarn", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/kitchen", nameKey: "buildingKitchen", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/sewing_parlor", nameKey: "buildingSewingParlor", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/brewery", nameKey: "buildingBrewery", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/library", nameKey: "buildingLibrary", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/laboratory", nameKey: "buildingLaboratory", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/mystical_study", nameKey: "buildingMysticalStudy", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/combat_encampment", nameKey: "buildingCombatEncampment", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/gym", nameKey: "buildingGym", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/dojo", nameKey: "buildingDojo", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/archery_range", nameKey: "buildingArcheryRange", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/armory", nameKey: "buildingArmory", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/dining_room", nameKey: "buildingDiningRoom", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/observatory", nameKey: "buildingObservatory", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_shrines/tempo", nameKey: "shrineTempo", category: "shrine", costMultiplier: 1 },
+    { hrid: "/guild_shrines/spirit", nameKey: "shrineSpirit", category: "shrine", costMultiplier: 1 },
+    { hrid: "/guild_shrines/force", nameKey: "shrineForce", category: "shrine", costMultiplier: 1 },
+    { hrid: "/guild_shrines/rarity", nameKey: "shrineRarity", category: "shrine", costMultiplier: 1 },
+    { hrid: "/guild_shrines/scholar", nameKey: "shrineScholar", category: "shrine", costMultiplier: 1 }
+  ]);
+
+  function levelCostsForMultiplier(multiplier) {
+    const factor = Number(multiplier);
+    return BASE_LEVEL_COSTS.map((cost) => cost === null ? null : { guildPointCost: Math.round(cost * factor) });
+  }
+
+  function definitions() {
+    return BUILDINGS.map((building) => ({
+      ...building,
+      maxLevel: MAX_LEVEL,
+      levelCosts: levelCostsForMultiplier(building.costMultiplier),
+      rulesVersion: RULES_VERSION
+    }));
+  }
+
+  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, levelCostsForMultiplier, definitions };
+});
+
+
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditLocalization = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
@@ -1503,6 +1590,72 @@ window.MwiGuildCreditVersion = "1.1.36";
       creditValue: "信用点性价比",
       creditValueHint: "按目标数量比较公开市场成本，首项为当前最优兑换。",
       shrineUpgrade: "神龛升级",
+      guildConstruction: "公会建设",
+      constructionReadOnly: "管理员规划工具 · 只计算，不会执行建筑升级",
+      guildPointBudget: "可用公会点数",
+      budgetOptional: "留空则只计算总成本",
+      plannedSpend: "计划消耗",
+      remainingPoints: "预算剩余",
+      overBudgetBy: "超出预算",
+      buildingCategoryAll: "全部",
+      buildingCategoryCore: "基础",
+      buildingCategoryLife: "生活",
+      buildingCategoryCombat: "战斗",
+      buildingCategoryShrine: "神龛",
+      searchBuildings: "搜索建筑",
+      currentLevel: "当前等级",
+      buildingPlanCost: "计划成本",
+      addOneLevel: "加 1 级",
+      addFiveLevels: "加 5 级",
+      removeBuildingPlan: "移出计划",
+      movePlanUp: "提前",
+      movePlanDown: "延后",
+      constructionQueue: "施工队列",
+      constructionQueueEmpty: "设置任意建筑的目标等级后，这里会展开逐级施工顺序。",
+      constructionBudgetCutoff: "预算截止线 · 剩余 {count}",
+      constructionWithinBudget: "预算内",
+      constructionOverBudget: "超预算",
+      constructionSummary: "{buildings} 座建筑 · {steps} 次升级",
+      buildingLevelsRead: "已读取当前公会建筑等级。",
+      buildingLevelsUnknown: "未读取到当前公会建筑等级；请核对各建筑的起始等级。",
+      buildingRulesSnapshot: "建筑费用使用内置规则快照 {version}。",
+      missingBuildingCost: "{building} 缺少 {level} 级费用，未计入总成本。",
+      clearBuildingPlans: "清空计划",
+      copyBuildingPlan: "复制规划",
+      exportBuildingCsv: "导出 CSV",
+      buildingPlanCopied: "施工规划已复制。",
+      buildingPlanCopyFailed: "无法写入剪贴板，请使用 CSV 导出。",
+      noBuildingMatches: "没有符合筛选条件的建筑。",
+      buildingPlanCleared: "已清空公会建筑规划。",
+      constructionOrder: "顺序",
+      fromLevel: "起始等级",
+      toLevel: "目标等级",
+      stepCost: "本级成本",
+      cumulativeCost: "累计成本",
+      buildingCsvFileName: "银河奶牛_公会建筑规划.csv",
+      buildingGuildHall: "公会大厅",
+      buildingBuildersHall: "建造者殿堂",
+      buildingArchives: "档案馆",
+      buildingTreasury: "金库",
+      buildingSkillingEncampment: "生活营地",
+      buildingWorkshop: "公会工作间",
+      buildingForge: "公会锻造台",
+      buildingLogShed: "公会木棚",
+      buildingGarden: "公会花园",
+      buildingDairyBarn: "公会奶牛棚",
+      buildingKitchen: "公会厨房",
+      buildingSewingParlor: "公会缝纫室",
+      buildingBrewery: "公会冲泡坊",
+      buildingLibrary: "公会图书馆",
+      buildingLaboratory: "公会实验室",
+      buildingMysticalStudy: "公会神秘研究室",
+      buildingCombatEncampment: "战斗营地",
+      buildingGym: "公会健身房",
+      buildingDojo: "公会道场",
+      buildingArcheryRange: "公会射箭场",
+      buildingArmory: "公会军械库",
+      buildingDiningRoom: "公会餐厅",
+      buildingObservatory: "公会天文台",
       targetCredits: "目标信用点",
       marketReference: "市场价格参考",
       priceReference: "价格参考",
@@ -1634,6 +1787,72 @@ window.MwiGuildCreditVersion = "1.1.36";
       creditValue: "Credit value",
       creditValueHint: "Compare public market costs for the target amount; the first item is the current best exchange.",
       shrineUpgrade: "Shrine upgrades",
+      guildConstruction: "Guild construction",
+      constructionReadOnly: "Admin planning tool · calculates only and never upgrades buildings",
+      guildPointBudget: "Available guild points",
+      budgetOptional: "Leave blank to calculate cost without a budget",
+      plannedSpend: "Planned spend",
+      remainingPoints: "Budget remaining",
+      overBudgetBy: "Over budget",
+      buildingCategoryAll: "All",
+      buildingCategoryCore: "Core",
+      buildingCategoryLife: "Life",
+      buildingCategoryCombat: "Combat",
+      buildingCategoryShrine: "Shrines",
+      searchBuildings: "Search buildings",
+      currentLevel: "Current level",
+      buildingPlanCost: "Plan cost",
+      addOneLevel: "Add 1 level",
+      addFiveLevels: "Add 5 levels",
+      removeBuildingPlan: "Remove from plan",
+      movePlanUp: "Move earlier",
+      movePlanDown: "Move later",
+      constructionQueue: "Construction queue",
+      constructionQueueEmpty: "Set a target level for any building to expand its level-by-level construction order here.",
+      constructionBudgetCutoff: "Budget cutoff · {count} remaining",
+      constructionWithinBudget: "Within budget",
+      constructionOverBudget: "Over budget",
+      constructionSummary: "{buildings} building(s) · {steps} upgrade(s)",
+      buildingLevelsRead: "Current guild building levels loaded.",
+      buildingLevelsUnknown: "Current guild building levels are unavailable. Verify each building's starting level.",
+      buildingRulesSnapshot: "Building costs use bundled rules snapshot {version}.",
+      missingBuildingCost: "{building} is missing its level {level} cost and is excluded from the total.",
+      clearBuildingPlans: "Clear plan",
+      copyBuildingPlan: "Copy plan",
+      exportBuildingCsv: "Export CSV",
+      buildingPlanCopied: "Construction plan copied.",
+      buildingPlanCopyFailed: "Clipboard access failed. Use CSV export instead.",
+      noBuildingMatches: "No buildings match these filters.",
+      buildingPlanCleared: "Guild construction plan cleared.",
+      constructionOrder: "Order",
+      fromLevel: "From level",
+      toLevel: "To level",
+      stepCost: "Step cost",
+      cumulativeCost: "Cumulative cost",
+      buildingCsvFileName: "milky-way-idle-guild-construction-plan.csv",
+      buildingGuildHall: "Guild Hall",
+      buildingBuildersHall: "Builders' Hall",
+      buildingArchives: "Archives",
+      buildingTreasury: "Treasury",
+      buildingSkillingEncampment: "Skilling Encampment",
+      buildingWorkshop: "Guild Workshop",
+      buildingForge: "Guild Forge",
+      buildingLogShed: "Guild Log Shed",
+      buildingGarden: "Guild Garden",
+      buildingDairyBarn: "Guild Dairy Barn",
+      buildingKitchen: "Guild Kitchen",
+      buildingSewingParlor: "Guild Sewing Parlor",
+      buildingBrewery: "Guild Brewery",
+      buildingLibrary: "Guild Library",
+      buildingLaboratory: "Guild Laboratory",
+      buildingMysticalStudy: "Guild Mystical Study",
+      buildingCombatEncampment: "Combat Encampment",
+      buildingGym: "Guild Gym",
+      buildingDojo: "Guild Dojo",
+      buildingArcheryRange: "Guild Archery Range",
+      buildingArmory: "Guild Armory",
+      buildingDiningRoom: "Guild Dining Room",
+      buildingObservatory: "Guild Observatory",
       targetCredits: "Target credits",
       marketReference: "Market price reference",
       priceReference: "Price reference",
@@ -2046,6 +2265,78 @@ window.MwiGuildCreditVersion = "1.1.36";
     };
   }
 
+  function aggregateGuildBuildingLevelCosts(levelCosts, startLevel, targetLevel) {
+    const start = Number(startLevel);
+    const target = Number(targetLevel);
+    const costs = Array.isArray(levelCosts) ? levelCosts : levelCosts && typeof levelCosts === "object" ? levelCosts : null;
+    if (!costs || !Number.isSafeInteger(start) || !Number.isSafeInteger(target) || start < 0 || target <= start) {
+      return { status: "invalid_range", startLevel, targetLevel, totalCost: 0, steps: [] };
+    }
+    const maxLevel = Array.isArray(costs)
+      ? costs.length - 1
+      : Math.max(...Object.keys(costs).map(Number).filter(Number.isSafeInteger));
+    if (!Number.isSafeInteger(maxLevel) || target > maxLevel) {
+      return { status: "invalid_range", startLevel: start, targetLevel: target, maxLevel, totalCost: 0, steps: [] };
+    }
+    const steps = [];
+    let totalCost = 0;
+    for (let level = start + 1; level <= target; level += 1) {
+      const record = costs[level];
+      const rawCost = record && (record.guildPointCost ?? record.guildPoints ?? record.cost);
+      const cost = Number(rawCost);
+      if (rawCost === null || rawCost === undefined || !Number.isFinite(cost) || cost < 0) {
+        return { status: "missing_cost", startLevel: start, targetLevel: target, maxLevel, missingLevel: level, totalCost: 0, steps: [] };
+      }
+      totalCost += cost;
+      steps.push({ fromLevel: level - 1, toLevel: level, cost });
+    }
+    return { status: "ok", startLevel: start, targetLevel: target, maxLevel, totalCost, steps };
+  }
+
+  function buildGuildConstructionPlan(plans, availableGuildPoints) {
+    const inputPlans = Array.isArray(plans) ? plans : [];
+    const hasBudget = availableGuildPoints !== null && availableGuildPoints !== undefined && availableGuildPoints !== "";
+    const budgetNumber = Number(availableGuildPoints);
+    if (hasBudget && (!Number.isFinite(budgetNumber) || budgetNumber < 0)) {
+      return { status: "invalid_budget", plans: [], steps: [], totalCost: 0, availableGuildPoints };
+    }
+    const budget = hasBudget ? Math.floor(budgetNumber) : null;
+    const results = [];
+    const steps = [];
+    let cumulativeCost = 0;
+    for (let planIndex = 0; planIndex < inputPlans.length; planIndex += 1) {
+      const plan = inputPlans[planIndex] || {};
+      const result = aggregateGuildBuildingLevelCosts(plan.levelCosts, plan.startLevel, plan.targetLevel);
+      if (result.status !== "ok") {
+        return { status: "invalid_plan", planIndex, result, plans: results, steps: [], totalCost: 0, availableGuildPoints: budget };
+      }
+      results.push({ ...result, id: plan.id, buildingHrid: plan.buildingHrid });
+      for (const step of result.steps) {
+        cumulativeCost += step.cost;
+        steps.push({
+          ...step,
+          id: plan.id,
+          buildingHrid: plan.buildingHrid,
+          cumulativeCost,
+          fitsBudget: budget === null ? null : cumulativeCost <= budget,
+          remainingGuildPoints: budget === null ? null : budget - cumulativeCost
+        });
+      }
+    }
+    const firstOverBudgetIndex = budget === null ? -1 : steps.findIndex((step) => !step.fitsBudget);
+    return {
+      status: "ok",
+      plans: results,
+      steps,
+      totalCost: cumulativeCost,
+      availableGuildPoints: budget,
+      remainingGuildPoints: budget === null ? null : budget - cumulativeCost,
+      overBudget: budget === null ? false : cumulativeCost > budget,
+      affordableStepCount: budget === null ? steps.length : firstOverBudgetIndex < 0 ? steps.length : firstOverBudgetIndex,
+      firstOverBudgetIndex
+    };
+  }
+
   function allocateSurplusGuildTokens(creditRows, exchangeRules, availableGuildTokens) {
     const budget = Math.max(0, Math.floor(Number(availableGuildTokens) || 0));
     const rules = new Map();
@@ -2278,7 +2569,7 @@ window.MwiGuildCreditVersion = "1.1.36";
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, aggregateGuildBuildingLevelCosts, buildGuildConstructionPlan, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
 });
 
 
@@ -2290,7 +2581,8 @@ window.MwiGuildCreditVersion = "1.1.36";
   const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
   const releaseInfoApi = window.MwiGuildCreditReleaseInfo;
   const localizationApi = window.MwiGuildCreditLocalization;
-  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi) return;
+  const buildingDataApi = window.MwiGuildBuildingData;
+  if (!core || !marketDataApi || !itemNameCatalogApi || !releaseInfoApi || !localizationApi || !buildingDataApi) return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const UPDATE_SCRIPT_URL = "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
@@ -2300,6 +2592,7 @@ window.MwiGuildCreditVersion = "1.1.36";
   const FALLBACK_INSTALL_URL = "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
   const PRICE_REFERENCE_STORAGE_KEY = "mwi-credit-price-reference";
   const UI_STATE_STORAGE_KEY = "mwi-guild-credit-ui-state-v1";
+  const GUILD_BUILDING_PLAN_STORAGE_PREFIX = "mwi-guild-building-planner-v1";
   const MARKET_LIVE_STORAGE_KEY = "mwi-guild-credit-live-market-v1";
   const UPDATE_CHECK_TIMEOUT_MS = 8000;
   // Keep the former select-all shortcut available for a future rollback, but
@@ -2339,10 +2632,19 @@ window.MwiGuildCreditVersion = "1.1.36";
     "/guild_shrines/scholar": "shrineScholar"
   };
   const savedUiState = loadSavedPluginUiState();
+  const savedBuildingPlannerState = loadSavedGuildBuildingPlannerState();
   const savedMarketState = loadSavedLiveMarketData();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow, document, storage: pageWindow.localStorage, version: PLUGIN_VERSION });
   const updateChecker = releaseInfoApi.createVersionChecker({ fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow), url: UPDATE_SCRIPT_URL, timeoutMs: UPDATE_CHECK_TIMEOUT_MS, setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow), clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow), AbortController: pageWindow.AbortController });
   const state = { itemDetails: null, conversionCache: new Map(), guildBuffDetails: null, guildBuffLevels: null, guildShrineLevels: null, guildShrineDetails: null, characterItems: null, characterItemsBridgeRevision: 0, inventoryDataRefreshTimer: null, itemNameCatalogLastRefresh: 0, itemNameCatalogReady: false, itemNameCatalogRetryCount: 0, upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })), nextUpgradePlanId: savedUiState.upgradePlans.length + 1, suppressUpgradePlanAutofill: false, upgradePresetNotice: "", guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids), autoGuildTokenBudget: savedUiState.autoGuildTokenBudget, snapshot: null, snapshotTimestamp: 0, marketSnapshotCandidateSignature: "", marketSnapshotCandidateTimestamp: 0, marketSnapshotCandidateConfirmations: 0, marketLiveData: savedMarketState.liveData, marketLiveRevision: savedMarketState.revision, marketBridgeRevision: 0, marketUpdateSignatures: Object.create(null), marketDataRefreshTimer: null, priceReference: savedPriceReference(), targetCredit: savedUiState.targetCredit, panel: null, creditTab: null, hiddenSidebarNodes: [], refreshTimer: null, refreshInFlight: false, refreshQueued: false, panelSearchTimer: null, collapsedCreditSections: new Set(savedUiState.collapsedCreditSections), guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed, upgradeRefreshId: 0, exchangeAdvisorUi: null, exchangeAdvisorFrame: null, exchangeAdvisorForceRender: false, exchangeAdvisorRootObserver: null, exchangeAdvisorModalObserver: null, exchangeAdvisorObservedModal: null, exchangeAdvisorListenersInstalled: false, exchangeAdvisorLoadInFlight: false, exchangeAdvisorSnapshotFailed: false };
+  state.guildBuildingLevels = null;
+  state.guildBuildingDetails = null;
+  state.buildingPlans = savedBuildingPlannerState.plans.map((plan, index) => ({ id: `building-plan-${index + 1}`, ...plan }));
+  state.nextBuildingPlanId = state.buildingPlans.length + 1;
+  state.manualGuildPoints = savedBuildingPlannerState.manualGuildPoints;
+  state.buildingCategory = savedBuildingPlannerState.category;
+  state.buildingSearch = "";
+  state.buildingPlanNotice = "";
   let sidebarIntegrationTimer = null;
   let guildTokenBudgetRefreshTimer = null;
 
@@ -2391,6 +2693,61 @@ window.MwiGuildCreditVersion = "1.1.36";
       };
     } catch (_) {
       return fallback;
+    }
+  }
+
+  function guildBuildingPlannerStorageKey() {
+    let characterId = "default";
+    try {
+      characterId = new URL(pageWindow.location.href).searchParams.get("characterId") || characterId;
+    } catch (_) {
+      // A per-host fallback still prevents plans from crossing game regions.
+    }
+    const hostname = pageWindow.location && pageWindow.location.hostname || "game";
+    return `${GUILD_BUILDING_PLAN_STORAGE_PREFIX}:${hostname}:${characterId}`;
+  }
+
+  function loadSavedGuildBuildingPlannerState() {
+    const fallback = { plans: [], manualGuildPoints: null, category: "all" };
+    try {
+      const raw = pageWindow.localStorage && pageWindow.localStorage.getItem(guildBuildingPlannerStorageKey());
+      if (!raw) return fallback;
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") return fallback;
+      const definitions = new Map(buildingDataApi.definitions().map((entry) => [entry.hrid, entry]));
+      const plans = Array.isArray(stored.plans) ? stored.plans.flatMap((plan) => {
+        const definition = plan && definitions.get(plan.buildingHrid);
+        const startLevel = Number(plan && plan.startLevel);
+        const targetLevel = Number(plan && plan.targetLevel);
+        if (!definition || !Number.isSafeInteger(startLevel) || !Number.isSafeInteger(targetLevel) || startLevel < 0 || targetLevel <= startLevel || targetLevel > definition.maxLevel) return [];
+        return [{ buildingHrid: definition.hrid, startLevel, targetLevel }];
+      }) : [];
+      const manualGuildPointsValue = Number(stored.manualGuildPoints);
+      const manualGuildPoints = stored.manualGuildPoints === null || stored.manualGuildPoints === undefined || stored.manualGuildPoints === ""
+        ? null
+        : Number.isSafeInteger(manualGuildPointsValue) && manualGuildPointsValue >= 0 ? manualGuildPointsValue : null;
+      const category = ["all", "core", "life", "combat", "shrine"].includes(stored.category) ? stored.category : "all";
+      return { plans, manualGuildPoints, category };
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function persistGuildBuildingPlannerState() {
+    try {
+      pageWindow.localStorage && pageWindow.localStorage.setItem(guildBuildingPlannerStorageKey(), JSON.stringify({
+        schemaVersion: 1,
+        rulesVersion: buildingDataApi.RULES_VERSION,
+        manualGuildPoints: state.manualGuildPoints,
+        category: state.buildingCategory,
+        plans: state.buildingPlans.map((plan) => ({
+          buildingHrid: plan.buildingHrid,
+          startLevel: plan.startLevel,
+          targetLevel: plan.targetLevel
+        }))
+      }));
+    } catch (_) {
+      // Keep the current page state when browser storage is unavailable.
     }
   }
 
@@ -2585,6 +2942,22 @@ window.MwiGuildCreditVersion = "1.1.36";
     return false;
   }
 
+  function setGuildBuildingLevels(candidate) {
+    if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
+      state.guildBuildingLevels = mergeGuildShrineLevels(state.guildBuildingLevels, candidate);
+      return true;
+    }
+    return false;
+  }
+
+  function setGuildBuildingDetails(candidate) {
+    if (candidate && (Array.isArray(candidate) || typeof candidate === "object")) {
+      state.guildBuildingDetails = mergeGuildShrineLevels(state.guildBuildingDetails, candidate);
+      return true;
+    }
+    return false;
+  }
+
   function setCharacterItems(candidate) {
     if (Array.isArray(candidate)) {
       state.characterItems = candidate;
@@ -2622,6 +2995,25 @@ window.MwiGuildCreditVersion = "1.1.36";
     ];
     let updated = false;
     for (const candidate of candidates) updated = setGuildShrineDetails(candidate) || updated;
+    return updated;
+  }
+
+  function setGuildBuildingLevelsFrom(source) {
+    if (!source || typeof source !== "object") return false;
+    const candidates = [
+      source.guildBuildingMap, source.guildBuildingDict, source.guildBuildings,
+      source.guildBuildingLevelMap, source.guildBuildingLevelDict, source.guildBuildingLevels
+    ];
+    let updated = false;
+    for (const candidate of candidates) updated = setGuildBuildingLevels(candidate) || updated;
+    return updated;
+  }
+
+  function setGuildBuildingDetailsFrom(source) {
+    if (!source || typeof source !== "object") return false;
+    const candidates = [source.guildBuildingDetailMap, source.guildBuildingDetailDict, source.guildBuildingDetails];
+    let updated = false;
+    for (const candidate of candidates) updated = setGuildBuildingDetails(candidate) || updated;
     return updated;
   }
 
@@ -2708,7 +3100,7 @@ window.MwiGuildCreditVersion = "1.1.36";
   }
 
   function hydrateLocalInitData() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.guildBuildingLevels && state.characterItems) return true;
     let raw;
     try {
       raw = pageWindow.localStorage && pageWindow.localStorage.getItem("initClientData");
@@ -2726,15 +3118,17 @@ window.MwiGuildCreditVersion = "1.1.36";
       const hasGuildBuffLevels = !state.guildBuffLevels && (setGuildBuffLevelsFrom(data) || setGuildBuffLevelsFrom(data.character));
       const hasGuildShrineLevels = !state.guildShrineLevels && (setGuildShrineLevelsFrom(data) || setGuildShrineLevelsFrom(data.guild));
       const hasGuildShrineDetails = !state.guildShrineDetails && (setGuildShrineDetailsFrom(data) || setGuildShrineDetailsFrom(data.guild));
+      const hasGuildBuildingLevels = !state.guildBuildingLevels && (setGuildBuildingLevelsFrom(data) || setGuildBuildingLevelsFrom(data.guild));
+      const hasGuildBuildingDetails = !state.guildBuildingDetails && (setGuildBuildingDetailsFrom(data) || setGuildBuildingDetailsFrom(data.guild));
       const hasCharacterItems = !state.characterItems && setCharacterItems(data.characterItems || data.character && data.character.items);
-      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasGuildShrineLevels || hasGuildShrineDetails || hasCharacterItems;
+      return hasItems || hasGuildBuffs || hasGuildBuffLevels || hasGuildShrineLevels || hasGuildShrineDetails || hasGuildBuildingLevels || hasGuildBuildingDetails || hasCharacterItems;
     } catch (_) {
       return false;
     }
   }
 
   function extractItemDetailsFromReact() {
-    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
+    if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.guildBuildingLevels && state.characterItems) return true;
     const roots = [document.getElementById("root"), document.body].filter(Boolean);
     const visited = new Set();
     const stack = [];
@@ -2759,8 +3153,10 @@ window.MwiGuildCreditVersion = "1.1.36";
         found = setGuildBuffLevelsFrom(candidate) || found;
         found = setGuildShrineLevelsFrom(candidate) || found;
         found = setGuildShrineDetailsFrom(candidate) || found;
+        found = setGuildBuildingLevelsFrom(candidate) || found;
+        found = setGuildBuildingDetailsFrom(candidate) || found;
         found = setCharacterItems(candidate.characterItems) || found;
-        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.characterItems) return true;
+        if (state.itemDetails && state.guildBuffDetails && state.guildBuffLevels && state.guildShrineLevels && state.guildBuildingLevels && state.characterItems) return true;
       }
       // React 18 containers point at a FiberRoot whose active tree is .current.
       if (fiber.current) stack.push(fiber.current);
@@ -2778,6 +3174,8 @@ window.MwiGuildCreditVersion = "1.1.36";
     setGuildBuffLevelsFrom(value);
     setGuildShrineLevelsFrom(value);
     setGuildShrineDetailsFrom(value);
+    setGuildBuildingLevelsFrom(value);
+    setGuildBuildingDetailsFrom(value);
     setCharacterItems(value.characterItems);
     for (const child of Object.values(value)) scanMessage(child, depth + 1);
   }
@@ -2821,6 +3219,8 @@ window.MwiGuildCreditVersion = "1.1.36";
     setGuildBuffLevelsFrom(bridge);
     setGuildShrineLevelsFrom(bridge);
     setGuildShrineDetailsFrom(bridge);
+    setGuildBuildingLevelsFrom(bridge);
+    setGuildBuildingDetailsFrom(bridge);
     const characterItemsRevision = Number(bridge.characterItemsRevision);
     if (Number.isSafeInteger(characterItemsRevision)) {
       if (characterItemsRevision > state.characterItemsBridgeRevision) {
@@ -3585,20 +3985,250 @@ window.MwiGuildCreditVersion = "1.1.36";
     updateRenderedMarkup(results, renderMaterialTotals(result.plans, result.totals, estimate, hasInventory, creditMaterialPlans, materialInventory));
   }
 
+  function guildBuildingDefinitions() {
+    return buildingDataApi.definitions();
+  }
+
+  function guildBuildingLabel(definition) {
+    return definition && definition.nameKey ? t(definition.nameKey) : titleCase(simpleItemName(definition && definition.hrid));
+  }
+
+  function guildBuildingLevelRecordMatches(record, fallbackHrid, buildingHrid) {
+    const segment = String(buildingHrid || "").split("/").pop().toLowerCase();
+    if (!segment) return false;
+    const candidates = shrineIdentityValues(record, fallbackHrid).filter((value) => typeof value === "string");
+    return candidates.some((value) => {
+      const normalized = value.toLowerCase();
+      return normalized === buildingHrid || new RegExp(`(^|[/_-])${segment}([/_-]|$)`).test(normalized);
+    });
+  }
+
+  function currentGuildBuildingLevel(definition) {
+    const source = state.guildBuildingLevels;
+    if (!source) return null;
+    const entries = Array.isArray(source)
+      ? source.map((record) => [record && (record.guildBuildingHrid || record.guildShrineHrid || record.hrid), record])
+      : Object.entries(source);
+    for (const [fallbackHrid, record] of entries) {
+      if (!guildBuildingLevelRecordMatches(record, fallbackHrid, definition.hrid)) continue;
+      const level = shrineLevelValue(record);
+      if (level !== null) return Math.min(level, definition.maxLevel);
+    }
+    return 0;
+  }
+
+  function reconcileGuildBuildingPlans(definitions) {
+    const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+    let changed = false;
+    const reconciled = [];
+    for (const plan of state.buildingPlans) {
+      const definition = byHrid.get(plan.buildingHrid);
+      if (!definition) {
+        changed = true;
+        continue;
+      }
+      const liveLevel = currentGuildBuildingLevel(definition);
+      const startLevel = liveLevel === null ? Math.max(0, Math.min(definition.maxLevel, Number(plan.startLevel) || 0)) : liveLevel;
+      const targetLevel = Math.max(0, Math.min(definition.maxLevel, Number(plan.targetLevel) || 0));
+      if (targetLevel <= startLevel) {
+        changed = true;
+        continue;
+      }
+      if (startLevel !== plan.startLevel || targetLevel !== plan.targetLevel) changed = true;
+      reconciled.push({ ...plan, startLevel, targetLevel });
+    }
+    if (changed) {
+      state.buildingPlans = reconciled;
+      persistGuildBuildingPlannerState();
+    }
+  }
+
+  function guildBuildingPlan(definitions) {
+    reconcileGuildBuildingPlans(definitions);
+    const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+    return core.buildGuildConstructionPlan(state.buildingPlans.map((plan) => ({
+      ...plan,
+      levelCosts: byHrid.get(plan.buildingHrid) && byHrid.get(plan.buildingHrid).levelCosts
+    })), state.manualGuildPoints);
+  }
+
+  function setGuildBuildingTarget(definitions, buildingHrid, targetLevel) {
+    const definition = definitions.find((entry) => entry.hrid === buildingHrid);
+    if (!definition) return false;
+    const existingIndex = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
+    const existing = existingIndex >= 0 ? state.buildingPlans[existingIndex] : null;
+    const liveLevel = currentGuildBuildingLevel(definition);
+    const startLevel = liveLevel === null ? existing && existing.startLevel || 0 : liveLevel;
+    const target = Math.max(startLevel, Math.min(definition.maxLevel, Number(targetLevel) || startLevel));
+    if (target <= startLevel) {
+      if (existingIndex >= 0) state.buildingPlans.splice(existingIndex, 1);
+    } else if (existing) {
+      state.buildingPlans[existingIndex] = { ...existing, startLevel, targetLevel: target };
+    } else {
+      state.buildingPlans.push({ id: `building-plan-${state.nextBuildingPlanId++}`, buildingHrid, startLevel, targetLevel: target });
+    }
+    state.buildingPlanNotice = "";
+    persistGuildBuildingPlannerState();
+    return true;
+  }
+
+  function moveGuildBuildingPlan(buildingHrid, direction) {
+    const index = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= state.buildingPlans.length) return false;
+    const [plan] = state.buildingPlans.splice(index, 1);
+    state.buildingPlans.splice(nextIndex, 0, plan);
+    persistGuildBuildingPlannerState();
+    return true;
+  }
+
+  function constructionCategoryLabel(category) {
+    return t({ all: "buildingCategoryAll", core: "buildingCategoryCore", life: "buildingCategoryLife", combat: "buildingCategoryCombat", shrine: "buildingCategoryShrine" }[category] || "buildingCategoryAll");
+  }
+
+  function renderGuildBuildingBudget(plan) {
+    const hasBudget = plan.availableGuildPoints !== null;
+    const remaining = plan.remainingGuildPoints;
+    const percentage = !hasBudget || plan.availableGuildPoints <= 0
+      ? plan.totalCost > 0 && hasBudget ? 100 : 0
+      : Math.min(100, Math.round(plan.totalCost / plan.availableGuildPoints * 100));
+    const remainingLabel = !hasBudget
+      ? "-"
+      : formatNumber(Math.abs(remaining));
+    const remainingTitle = hasBudget && remaining < 0 ? t("overBudgetBy") : t("remainingPoints");
+    return `<section class="mwi-construction-budget" data-over-budget="${String(Boolean(plan.overBudget))}">
+      <div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointBudget"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" placeholder="${escapeHtml(t("budgetOptional"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small>${escapeHtml(t("budgetOptional"))}</small></div>
+      <div class="mwi-construction-stats"><span><small>${escapeHtml(t("plannedSpend"))}</small><strong>${formatNumber(plan.totalCost)}</strong></span><span><small>${escapeHtml(remainingTitle)}</small><strong>${remainingLabel}</strong></span><span><small>${escapeHtml(t("constructionQueue"))}</small><strong>${formatNumber(plan.steps.length)}</strong></span></div>
+      <div class="mwi-construction-meter" aria-hidden="true"><span style="width:${percentage}%"></span></div>
+    </section>`;
+  }
+
+  function renderGuildBuildingCard(definition, plan) {
+    const liveLevel = currentGuildBuildingLevel(definition);
+    const startLevel = liveLevel === null ? plan && plan.startLevel || 0 : liveLevel;
+    const targetLevel = plan ? plan.targetLevel : startLevel;
+    const cost = plan ? core.aggregateGuildBuildingLevelCosts(definition.levelCosts, startLevel, targetLevel) : null;
+    const options = Array.from({ length: definition.maxLevel - startLevel + 1 }, (_, index) => startLevel + index)
+      .map((level) => `<option value="${level}"${level === targetLevel ? " selected" : ""}>${escapeHtml(t("level", { level: formatNumber(level) }))}</option>`).join("");
+    const planIndex = state.buildingPlans.findIndex((candidate) => candidate.buildingHrid === definition.hrid);
+    return `<article class="mwi-building-card" data-category="${definition.category}" data-planned="${String(Boolean(plan))}">
+      <div class="mwi-building-card-heading"><span class="mwi-building-category">${escapeHtml(constructionCategoryLabel(definition.category))}</span><strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${escapeHtml(definition.hrid)}</small></div>
+      <div class="mwi-building-levels"><span><small>${escapeHtml(t("currentLevel"))}</small><b>${formatNumber(startLevel)}</b></span><i aria-hidden="true">→</i><label><small>${escapeHtml(t("targetLevel"))}</small><select data-role="building-target" data-building-hrid="${escapeHtml(definition.hrid)}"${startLevel >= definition.maxLevel ? " disabled" : ""}>${options}</select></label></div>
+      <div class="mwi-building-card-cost"><small>${escapeHtml(t("buildingPlanCost"))}</small><strong>${cost && cost.status === "ok" ? formatNumber(cost.totalCost) : "-"}</strong></div>
+      <div class="mwi-building-card-actions"><button data-role="adjust-building-target" data-building-hrid="${escapeHtml(definition.hrid)}" data-delta="1" type="button"${targetLevel >= definition.maxLevel ? " disabled" : ""}>＋1</button><button data-role="adjust-building-target" data-building-hrid="${escapeHtml(definition.hrid)}" data-delta="5" type="button"${targetLevel >= definition.maxLevel ? " disabled" : ""}>＋5</button>${plan ? `<button class="mwi-building-order" data-role="move-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" data-direction="-1" type="button" aria-label="${escapeHtml(t("movePlanUp"))}" title="${escapeHtml(t("movePlanUp"))}"${planIndex <= 0 ? " disabled" : ""}>↑</button><button class="mwi-building-order" data-role="move-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" data-direction="1" type="button" aria-label="${escapeHtml(t("movePlanDown"))}" title="${escapeHtml(t("movePlanDown"))}"${planIndex >= state.buildingPlans.length - 1 ? " disabled" : ""}>↓</button><button class="mwi-building-remove" data-role="remove-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" type="button">${escapeHtml(t("removeBuildingPlan"))}</button>` : ""}</div>
+    </article>`;
+  }
+
+  function renderGuildConstructionQueue(plan, definitions) {
+    if (!plan.steps.length) return `<section class="mwi-construction-queue"><h4>${escapeHtml(t("constructionQueue"))}</h4><div class="mwi-empty">${escapeHtml(t("constructionQueueEmpty"))}</div></section>`;
+    const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+    const rows = [];
+    for (let index = 0; index < plan.steps.length; index += 1) {
+      const step = plan.steps[index];
+      if (index === plan.firstOverBudgetIndex) {
+        const remainingBefore = plan.availableGuildPoints - (step.cumulativeCost - step.cost);
+        rows.push(`<div class="mwi-budget-cutoff"><span>${escapeHtml(t("constructionBudgetCutoff", { count: formatNumber(Math.max(0, remainingBefore)) }))}</span></div>`);
+      }
+      const definition = byHrid.get(step.buildingHrid);
+      const status = step.fitsBudget === false ? t("constructionOverBudget") : t("constructionWithinBudget");
+      rows.push(`<article class="mwi-construction-step" data-over-budget="${String(step.fitsBudget === false)}"><span class="mwi-construction-step-index">${formatNumber(index + 1)}</span><span class="mwi-construction-step-copy"><strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${formatNumber(step.fromLevel)} → ${formatNumber(step.toLevel)} · ${escapeHtml(status)}</small></span><span class="mwi-construction-step-cost">${formatNumber(step.cost)}</span></article>`);
+    }
+    return `<section class="mwi-construction-queue"><div class="mwi-construction-queue-heading"><h4>${escapeHtml(t("constructionQueue"))}</h4><small>${escapeHtml(t("constructionSummary", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</small></div><div class="mwi-construction-rail">${rows.join("")}</div></section>`;
+  }
+
+  function renderGuildConstruction(plan, definitions) {
+    const normalizedSearch = state.buildingSearch.trim().toLocaleLowerCase(ui().locale);
+    const visible = definitions.filter((definition) => {
+      if (state.buildingCategory !== "all" && definition.category !== state.buildingCategory) return false;
+      if (!normalizedSearch) return true;
+      return `${guildBuildingLabel(definition)} ${definition.hrid}`.toLocaleLowerCase(ui().locale).includes(normalizedSearch);
+    });
+    const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
+    const categories = ["all", "core", "life", "combat", "shrine"].map((category) => `<button data-role="building-category" data-category="${category}" data-active="${String(category === state.buildingCategory)}" type="button">${escapeHtml(constructionCategoryLabel(category))}</button>`).join("");
+    const cards = visible.length
+      ? visible.map((definition) => renderGuildBuildingCard(definition, plansByHrid.get(definition.hrid))).join("")
+      : `<div class="mwi-empty">${escapeHtml(t("noBuildingMatches"))}</div>`;
+    return `${renderGuildBuildingBudget(plan)}<div class="mwi-construction-toolbar"><div class="mwi-building-categories">${categories}</div><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-construction-layout"><div class="mwi-building-pane"><div class="mwi-building-grid">${cards}</div></div><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions)}<div class="mwi-construction-actions"><button data-role="copy-building-plan" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("copyBuildingPlan"))}</button><button data-role="export-building-plan" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("exportBuildingCsv"))}</button><button class="mwi-clear-building-plans" data-role="clear-building-plans" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("clearBuildingPlans"))}</button></div></div></div>`;
+  }
+
+  function refreshGuildConstruction(panel) {
+    hydrateBridgeData();
+    extractItemDetailsFromReact();
+    hydrateLocalInitData();
+    const definitions = guildBuildingDefinitions();
+    const plan = guildBuildingPlan(definitions);
+    const status = panel.querySelector('[data-role="construction-status"]');
+    const results = panel.querySelector('[data-role="construction-results"]');
+    const notices = [state.guildBuildingLevels ? t("buildingLevelsRead") : t("buildingLevelsUnknown"), t("buildingRulesSnapshot", { version: buildingDataApi.RULES_VERSION })];
+    if (state.buildingPlanNotice) notices.push(state.buildingPlanNotice);
+    status.textContent = notices.join(" ");
+    updateRenderedMarkup(results, renderGuildConstruction(plan, definitions));
+  }
+
+  function guildConstructionText(plan, definitions) {
+    const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+    const budget = plan.availableGuildPoints === null ? "-" : formatNumber(plan.availableGuildPoints);
+    const remaining = plan.remainingGuildPoints === null ? "-" : formatNumber(plan.remainingGuildPoints);
+    return [
+      t("guildConstruction"),
+      `${t("guildPointBudget")}: ${budget}`,
+      `${t("plannedSpend")}: ${formatNumber(plan.totalCost)}`,
+      `${t("remainingPoints")}: ${remaining}`,
+      "",
+      ...plan.steps.map((step, index) => `${formatNumber(index + 1)}. ${guildBuildingLabel(byHrid.get(step.buildingHrid))} ${formatNumber(step.fromLevel)} → ${formatNumber(step.toLevel)} · ${formatNumber(step.cost)}`)
+    ].join("\n");
+  }
+
+  async function copyGuildConstructionPlan(panel) {
+    const definitions = guildBuildingDefinitions();
+    const plan = guildBuildingPlan(definitions);
+    const text = guildConstructionText(plan, definitions);
+    try {
+      if (!pageWindow.navigator || !pageWindow.navigator.clipboard || typeof pageWindow.navigator.clipboard.writeText !== "function") throw new Error("clipboard unavailable");
+      await pageWindow.navigator.clipboard.writeText(text);
+      state.buildingPlanNotice = t("buildingPlanCopied");
+    } catch (_) {
+      state.buildingPlanNotice = t("buildingPlanCopyFailed");
+    }
+    refreshGuildConstruction(panel);
+  }
+
+  function exportGuildConstructionCsv() {
+    const definitions = guildBuildingDefinitions();
+    const plan = guildBuildingPlan(definitions);
+    const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+    const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
+    const rows = [[t("constructionOrder"), t("guildConstruction"), "HRID", t("fromLevel"), t("toLevel"), t("stepCost"), t("cumulativeCost"), t("constructionWithinBudget")]];
+    for (let index = 0; index < plan.steps.length; index += 1) {
+      const step = plan.steps[index];
+      rows.push([index + 1, guildBuildingLabel(byHrid.get(step.buildingHrid)), step.buildingHrid, step.fromLevel, step.toLevel, step.cost, step.cumulativeCost, step.fitsBudget === false ? t("constructionOverBudget") : t("constructionWithinBudget")]);
+    }
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = t("buildingCsvFileName");
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    pageWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   function setPanelView(panel, view) {
-    const creditView = panel.querySelector('[data-role="credit-view"]');
-    const upgradeView = panel.querySelector('[data-role="upgrade-view"]');
-    const creditTab = panel.querySelector('[data-role="view-credit"]');
-    const upgradeTab = panel.querySelector('[data-role="view-upgrade"]');
-    const showUpgrade = view === "upgrade";
-    creditView.hidden = showUpgrade;
-    upgradeView.hidden = !showUpgrade;
-    creditTab.setAttribute("aria-selected", String(!showUpgrade));
-    upgradeTab.setAttribute("aria-selected", String(showUpgrade));
-    creditTab.classList.toggle("mwi-view-tab-active", !showUpgrade);
-    upgradeTab.classList.toggle("mwi-view-tab-active", showUpgrade);
-    panel.dataset.activeView = showUpgrade ? "upgrade" : "credit";
-    if (showUpgrade) refreshGuildUpgrade(panel);
+    const selectedView = ["credit", "upgrade", "construction"].includes(view) ? view : "credit";
+    for (const candidate of ["credit", "upgrade", "construction"]) {
+      const content = panel.querySelector(`[data-role="${candidate}-view"]`);
+      const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
+      const active = candidate === selectedView;
+      if (content) content.hidden = !active;
+      if (tab) {
+        tab.setAttribute("aria-selected", String(active));
+        tab.classList.toggle("mwi-view-tab-active", active);
+      }
+    }
+    panel.dataset.activeView = selectedView;
+    if (selectedView === "upgrade") refreshGuildUpgrade(panel);
+    else if (selectedView === "construction") refreshGuildConstruction(panel);
     else refreshPanel(panel);
   }
 
@@ -3637,6 +4267,23 @@ window.MwiGuildCreditVersion = "1.1.36";
         @container (max-width:520px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0}}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;gap:var(--mwi-entry-gap)}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:9px;align-items:end;padding:11px;border:1px solid #45486d;border-radius:8px;background:linear-gradient(135deg,#2c2e4d,#252640);box-shadow:0 4px 13px #13142555}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:36px;min-width:36px;padding:0!important;font-size:21px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:center;gap:9px;margin:12px 0 4px}#mwi-credit-optimizer .mwi-clear-upgrade-plans{background:#a04455!important;color:#fff!important}#mwi-credit-optimizer .mwi-clear-upgrade-plans:hover{background:#bd4d61!important}#mwi-credit-optimizer .mwi-token-budget{display:grid;gap:8px;margin:10px 0 4px;padding:10px 11px;border:1px solid #56597f;border-radius:8px;background:linear-gradient(135deg,#30314f,#292a46)}#mwi-credit-optimizer .mwi-token-budget-heading{display:flex;justify-content:space-between;align-items:start;gap:10px;color:#e8e9f6}#mwi-credit-optimizer .mwi-token-budget-heading>span:first-child{display:grid;gap:2px}#mwi-credit-optimizer .mwi-token-budget-heading strong{font-size:12px}#mwi-credit-optimizer .mwi-token-budget-heading small{color:#bfc2de;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-token-budget-heading>span:last-child{color:#77f3d0;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-budget-inputs{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}#mwi-credit-optimizer .mwi-token-budget-inputs input[type="range"]{width:100%;min-height:24px;padding:0;border:0;background:transparent;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-token-budget-inputs label{display:flex;align-items:center;gap:5px;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:100px;min-height:30px}#mwi-credit-optimizer .mwi-token-credit-plan-toggle{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;column-gap:9px;width:100%;margin:9px 0 4px;padding:9px 11px!important;border:1px solid #56597f!important;border-radius:8px!important;background:linear-gradient(135deg,#30314f,#292a46)!important;color:#e8e9f6!important;text-align:left}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"]{border-color:#43c4ad!important;background:linear-gradient(135deg,#20453f,#243e3c)!important;color:#e4fff8!important;box-shadow:0 0 0 1px #43c4ad33}#mwi-credit-optimizer .mwi-token-credit-plan-indicator{display:grid;place-items:center;width:24px;height:24px;border:2px solid #777aa4;border-radius:6px;background:#20213a;color:#10201f;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] .mwi-token-credit-plan-indicator{border-color:#77f3d0;background:#77f3d0}#mwi-credit-optimizer .mwi-token-credit-plan-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-token-credit-plan-copy strong{font-size:12px}#mwi-credit-optimizer .mwi-token-credit-plan-copy small{color:#bfc2de;font-size:10px;font-weight:500;line-height:1.35}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] small{color:#bce8de}
         #mwi-credit-optimizer .mwi-material-list{display:grid;gap:var(--mwi-entry-gap);margin-top:12px}.mwi-material-row{position:relative;align-self:start;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px;border:1px solid #45486d;border-left:3px solid var(--mwi-material-accent);border-radius:8px;background:linear-gradient(135deg,#292b48,#23243d);box-shadow:0 4px 13px #13142544}.mwi-material-row-token{min-height:0;padding:9px 11px;background:linear-gradient(135deg,#2b2c49,#24253f)}.mwi-material-credit{display:flex;align-items:center;gap:8px;min-width:0}.mwi-material-copy{min-width:0;display:grid;gap:2px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f4f5ff;font-weight:700}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-required{display:grid;justify-items:end;align-content:center;gap:1px;text-align:right}.mwi-material-required small{color:#aeb1d3;font-size:10px}.mwi-material-required strong{color:#77f3d0;font-size:18px;line-height:1.1}.mwi-material-plan{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:10px;border:1px solid #356c63;border-radius:7px;background:linear-gradient(135deg,#1f3e3c,#1d3736);overflow:hidden}.mwi-material-plan-auto{border-color:#b17c32;background:linear-gradient(135deg,#493a22,#3d3325)}.mwi-material-plan-auto .mwi-material-plan-icon{border-color:#d7a64d;background:linear-gradient(135deg,#725425,#5c4525)}.mwi-material-plan-auto .mwi-material-plan-need strong{color:#ffd17c}.mwi-material-plan-item{grid-row:1/-1;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 0 8px 8px}.mwi-material-plan-icon{display:grid!important;place-items:center;flex:0 0 52px!important;width:52px!important;height:52px!important;min-width:52px!important;padding:0!important;border:1px solid #4da496;border-radius:7px;background:linear-gradient(135deg,#306b62,#275a53);box-shadow:inset 0 1px #7bd8c822,0 2px 5px #10232166}.mwi-material-plan-icon .mwi-market-item-link{width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;border:0!important;border-radius:7px!important}.mwi-material-plan-icon .mwi-item-icon{width:50px!important;height:50px!important;flex:0 0 50px!important;max-width:50px;max-height:50px;object-fit:contain}.mwi-material-plan-item>span:last-child{min-width:0;display:grid;gap:3px}.mwi-material-plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3fbf5;font-size:14px;line-height:1.15}.mwi-material-plan-item small{color:#afd4cd;font-size:12px;line-height:1.15}.mwi-material-plan-need{display:grid;justify-items:end;gap:1px;padding:8px 9px 0 0}.mwi-material-plan-need small{color:#afd4cd;font-size:10px}.mwi-material-plan-need strong{color:#77f3d0;font-size:17px;line-height:1}.mwi-material-plan-rate{grid-column:2;align-self:end;padding:0 9px 9px 0;color:#c5e3dd;font-size:10px;text-align:right;white-space:nowrap}.mwi-material-plan-unavailable{padding:9px;color:#ffd17c;font-size:11px}.mwi-plan-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:12px 0 8px;color:#d7d9ed;font-size:12px}.mwi-plan-summary span:not(.mwi-plan-separator){padding:4px 7px;border:1px solid #45486d;border-radius:999px;background:#292a46}.mwi-plan-separator{display:none}.mwi-upgrade-cost-summary{display:grid;gap:7px;margin:8px 0 10px;padding:11px 12px;border:1px solid #3d8d80;border-radius:8px;background:linear-gradient(135deg,#1d3d3b,#203b3a);box-shadow:0 5px 14px #101d1c55}.mwi-upgrade-cost-title{color:#b7e6dc;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note):not(.mwi-upgrade-cost-title){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:15px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-auto-token-note{color:#9bead8}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link,#mwi-credit-optimizer .mwi-plugin-footer a{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover,#mwi-credit-optimizer .mwi-plugin-footer a:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}
+        #mwi-credit-optimizer .mwi-view-tabs{overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab{flex:0 0 auto}
+        #mwi-credit-optimizer .mwi-construction-budget{display:grid;gap:9px;margin-bottom:10px;padding:11px;border:1px solid #9a7333;border-radius:8px;background:linear-gradient(135deg,#3b3224,#2c2b3f);box-shadow:0 5px 14px #15120c55}
+        #mwi-credit-optimizer .mwi-construction-budget-input{display:flex;align-items:end;justify-content:space-between;gap:10px}#mwi-credit-optimizer .mwi-construction-budget-input label{color:#ffe1a3;font-weight:700}#mwi-credit-optimizer .mwi-construction-budget-input input{width:180px;border-color:#d2a34a;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-construction-budget-input>small{max-width:210px;color:#c8b78f;font-size:10px;text-align:right}
+        #mwi-credit-optimizer .mwi-construction-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}#mwi-credit-optimizer .mwi-construction-stats>span{display:grid;gap:2px;padding:7px 8px;border:1px solid #5b513f;border-radius:5px;background:#26273d}#mwi-credit-optimizer .mwi-construction-stats small{color:#bdb6a5;font-size:10px}#mwi-credit-optimizer .mwi-construction-stats strong{overflow:hidden;color:#ffe09a;font:700 16px ui-monospace,SFMono-Regular,Menlo,monospace;text-overflow:ellipsis}
+        #mwi-credit-optimizer .mwi-construction-meter{height:5px;overflow:hidden;border-radius:999px;background:#171827}#mwi-credit-optimizer .mwi-construction-meter span{display:block;height:100%;border-radius:inherit;background:#43c4ad;transition:width .18s ease}#mwi-credit-optimizer .mwi-construction-budget[data-over-budget="true"] .mwi-construction-meter span{background:#e65d68}#mwi-credit-optimizer .mwi-construction-budget[data-over-budget="true"] .mwi-construction-stats>span:nth-child(2) strong{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-construction-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}#mwi-credit-optimizer .mwi-building-categories{display:flex;flex-wrap:wrap;gap:4px}#mwi-credit-optimizer .mwi-building-categories button{min-height:27px;padding:3px 8px;border:1px solid #555875;background:#30314c;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-building-categories button[data-active="true"]{border-color:#d8a33c;background:#594523;color:#ffe09a}#mwi-credit-optimizer .mwi-construction-toolbar input{width:180px;min-width:120px}
+        #mwi-credit-optimizer .mwi-construction-layout{display:grid;gap:var(--mwi-entry-gap)}#mwi-credit-optimizer .mwi-building-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--mwi-entry-min-width)),1fr));gap:var(--mwi-entry-gap)}
+        #mwi-credit-optimizer .mwi-building-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px;border:1px solid #474969;border-left:3px solid #737697;border-radius:7px;background:linear-gradient(135deg,#292a46,#24253e)}#mwi-credit-optimizer .mwi-building-card[data-category="core"]{border-left-color:#d8a33c}#mwi-credit-optimizer .mwi-building-card[data-category="life"]{border-left-color:#42c59f}#mwi-credit-optimizer .mwi-building-card[data-category="combat"]{border-left-color:#df4c5a}#mwi-credit-optimizer .mwi-building-card[data-category="shrine"]{border-left-color:#9567da}#mwi-credit-optimizer .mwi-building-card[data-planned="true"]{box-shadow:inset 0 0 0 1px #d8a33c55,0 4px 12px #11122344}
+        #mwi-credit-optimizer .mwi-building-card-heading{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:3px 7px}#mwi-credit-optimizer .mwi-building-category{padding:2px 5px;border-radius:999px;background:#3a3b58;color:#cfd1e9;font-size:9px}#mwi-credit-optimizer .mwi-building-card-heading strong{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-building-card-heading small{grid-column:1/-1;overflow:hidden;color:#8588aa;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-building-levels{grid-column:1/-1;display:grid;grid-template-columns:minmax(70px,.7fr) 16px minmax(110px,1fr);align-items:end;gap:6px}#mwi-credit-optimizer .mwi-building-levels>span{display:grid;gap:3px}#mwi-credit-optimizer .mwi-building-levels small{color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-building-levels b{min-height:32px;padding:7px 8px;border:1px solid #4d4f6d;border-radius:4px;background:#22233a;color:#f4f5ff;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-building-levels i{align-self:center;color:#d8a33c;font-style:normal;text-align:center}#mwi-credit-optimizer .mwi-building-levels select{width:100%}
+        #mwi-credit-optimizer .mwi-building-card-cost{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;padding-top:6px;border-top:1px dashed #474969}#mwi-credit-optimizer .mwi-building-card-cost small{color:#aeb1d3}#mwi-credit-optimizer .mwi-building-card-cost strong{color:#ffe09a;font:700 16px ui-monospace,SFMono-Regular,Menlo,monospace}
+        #mwi-credit-optimizer .mwi-building-card-actions{grid-column:1/-1;display:flex;gap:5px;min-width:0}#mwi-credit-optimizer .mwi-building-card-actions button{min-height:27px;padding:3px 8px;font-size:10px}#mwi-credit-optimizer .mwi-building-card-actions .mwi-building-order{width:27px;padding:0;background:#41435f;color:#fff}#mwi-credit-optimizer .mwi-building-card-actions .mwi-building-remove{margin-left:auto;background:#5a3340;color:#ffd5d9}
+        #mwi-credit-optimizer .mwi-construction-queue{padding:10px;border:1px solid #605338;border-radius:7px;background:linear-gradient(180deg,#302d36,#26263b)}#mwi-credit-optimizer .mwi-construction-queue h4{margin:0;color:#ffe09a;font-size:14px}#mwi-credit-optimizer .mwi-construction-queue-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}#mwi-credit-optimizer .mwi-construction-queue-heading small{color:#bdb6a5;font-size:10px}
+        #mwi-credit-optimizer .mwi-construction-rail{position:relative;display:grid;gap:5px;padding-left:8px}#mwi-credit-optimizer .mwi-construction-rail:before{content:"";position:absolute;top:4px;bottom:4px;left:19px;width:2px;background:#6f644c}#mwi-credit-optimizer .mwi-construction-step{position:relative;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 7px;border:1px solid #4b4d68;border-radius:5px;background:#292a43}#mwi-credit-optimizer .mwi-construction-step[data-over-budget="true"]{border-color:#77434d;background:#3b2932;opacity:.82}#mwi-credit-optimizer .mwi-construction-step-index{position:relative;z-index:1;display:grid;place-items:center;width:22px;height:22px;border:2px solid #6b5d40;border-radius:50%;background:#d8a33c;color:#241c0d;font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-construction-step[data-over-budget="true"] .mwi-construction-step-index{border-color:#8b4b56;background:#e65d68;color:#fff}#mwi-credit-optimizer .mwi-construction-step-copy{min-width:0;display:grid;gap:1px}#mwi-credit-optimizer .mwi-construction-step-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-construction-step-copy small{color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-construction-step-cost{color:#ffe09a;font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace}
+        #mwi-credit-optimizer .mwi-budget-cutoff{position:relative;z-index:2;display:flex;align-items:center;gap:6px;margin:3px 0;color:#ff9ca3;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-budget-cutoff:before,#mwi-credit-optimizer .mwi-budget-cutoff:after{content:"";height:1px;background:#e65d68}#mwi-credit-optimizer .mwi-budget-cutoff:before{width:12px}#mwi-credit-optimizer .mwi-budget-cutoff:after{flex:1}#mwi-credit-optimizer .mwi-construction-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mwi-credit-optimizer .mwi-construction-actions button{flex:1 1 auto}#mwi-credit-optimizer .mwi-construction-actions .mwi-clear-building-plans{background:#5a3340;color:#ffd5d9}
+        @container (min-width:610px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(300px,1fr) minmax(280px,1fr);align-items:start}#mwi-credit-optimizer .mwi-construction-queue-pane{position:sticky;top:0}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-budget-input{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-budget-input input{width:100%}#mwi-credit-optimizer .mwi-construction-budget-input>small{text-align:left}#mwi-credit-optimizer .mwi-construction-stats strong{font-size:13px}#mwi-credit-optimizer .mwi-construction-toolbar{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-toolbar input{width:100%}#mwi-credit-optimizer .mwi-building-levels{grid-template-columns:minmax(60px,.7fr) 12px minmax(100px,1fr)}}
         #mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"]{border-color:#d8a33c!important;background:linear-gradient(135deg,#493f2a,#353147)!important;color:#fff4d4!important;box-shadow:0 0 0 1px #d8a33c33}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"] .mwi-token-credit-plan-indicator{border-color:#ffd17c;background:#ffd17c;color:#332814}#mwi-credit-optimizer .mwi-material-copy{flex:1 1 auto}#mwi-credit-optimizer .mwi-material-exchange-mode{flex:0 0 auto;min-height:26px!important;padding:4px 7px!important;border:1px solid #66698f!important;border-radius:999px!important;background:#353653!important;color:#dfe1f4!important;font-size:10px;line-height:1.1;white-space:nowrap}#mwi-credit-optimizer .mwi-material-exchange-mode:hover{border-color:#77f3d0!important}#mwi-credit-optimizer .mwi-material-exchange-mode[data-active="true"]{border-color:#43c4ad!important;background:#245149!important;color:#dffff7!important;box-shadow:0 0 0 1px #43c4ad22}
         /* Compact shrine planner and aligned result rows. */
         #mwi-credit-optimizer .mwi-upgrade-planner{margin:0 0 9px;border:1px solid #4b4f75;border-radius:9px;background:#242641;overflow:hidden}
@@ -3929,6 +4576,7 @@ window.MwiGuildCreditVersion = "1.1.36";
       <div class="mwi-view-tabs" role="tablist">
         <button class="mwi-view-tab" data-role="view-upgrade" role="tab" aria-selected="false" type="button">${escapeHtml(t("shrineUpgrade"))}</button>
         <button class="mwi-view-tab mwi-view-tab-active" data-role="view-credit" role="tab" aria-selected="true" type="button">${escapeHtml(t("creditValue"))}</button>
+        <button class="mwi-view-tab" data-role="view-construction" role="tab" aria-selected="false" type="button">${escapeHtml(t("guildConstruction"))}</button>
       </div>
       <div data-role="credit-view">
         <div class="mwi-controls">
@@ -3952,6 +4600,10 @@ window.MwiGuildCreditVersion = "1.1.36";
         ${renderGuildTokenCreditPlanToggle()}
         <div class="mwi-status" data-role="upgrade-status">${escapeHtml(t("waitingUpgradeRules"))}</div>
         <div data-role="upgrade-results"></div>
+      </div>
+      <div data-role="construction-view" hidden>
+        <div class="mwi-status" data-role="construction-status">${escapeHtml(t("constructionReadOnly"))}</div>
+        <div data-role="construction-results"></div>
       </div>
       <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
     panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
@@ -4006,6 +4658,75 @@ window.MwiGuildCreditVersion = "1.1.36";
     });
     panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
     panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
+    panel.querySelector('[data-role="view-construction"]').addEventListener("click", () => setPanelView(panel, "construction"));
+    const constructionResults = panel.querySelector('[data-role="construction-results"]');
+    constructionResults.addEventListener("change", (event) => {
+      if (event.target.matches('[data-role="guild-point-budget"]')) {
+        const raw = event.target.value.trim();
+        const value = Number(raw);
+        if (raw === "") state.manualGuildPoints = null;
+        else if (Number.isSafeInteger(value) && value >= 0) state.manualGuildPoints = value;
+        else return refreshGuildConstruction(panel);
+        state.buildingPlanNotice = "";
+        persistGuildBuildingPlannerState();
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (event.target.matches('[data-role="building-search"]')) {
+        state.buildingSearch = event.target.value;
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (event.target.matches('[data-role="building-target"]')) {
+        setGuildBuildingTarget(guildBuildingDefinitions(), event.target.dataset.buildingHrid, Number(event.target.value));
+        refreshGuildConstruction(panel);
+      }
+    });
+    constructionResults.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      const definitions = guildBuildingDefinitions();
+      if (button.matches('[data-role="building-category"]')) {
+        state.buildingCategory = button.dataset.category;
+        persistGuildBuildingPlannerState();
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (button.matches('[data-role="adjust-building-target"]')) {
+        const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
+        if (!definition) return;
+        const existing = state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid);
+        const startLevel = currentGuildBuildingLevel(definition) ?? (existing ? existing.startLevel : 0);
+        const currentTarget = existing ? existing.targetLevel : startLevel;
+        setGuildBuildingTarget(definitions, definition.hrid, currentTarget + Number(button.dataset.delta || 0));
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (button.matches('[data-role="remove-building-plan"]')) {
+        const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
+        if (!definition) return;
+        const startLevel = currentGuildBuildingLevel(definition) ?? (state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid)?.startLevel ?? 0);
+        setGuildBuildingTarget(definitions, definition.hrid, startLevel);
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (button.matches('[data-role="move-building-plan"]')) {
+        if (moveGuildBuildingPlan(button.dataset.buildingHrid, Number(button.dataset.direction))) refreshGuildConstruction(panel);
+        return;
+      }
+      if (button.matches('[data-role="clear-building-plans"]')) {
+        state.buildingPlans = [];
+        state.buildingPlanNotice = t("buildingPlanCleared");
+        persistGuildBuildingPlannerState();
+        refreshGuildConstruction(panel);
+        return;
+      }
+      if (button.matches('[data-role="copy-building-plan"]')) {
+        copyGuildConstructionPlan(panel);
+        return;
+      }
+      if (button.matches('[data-role="export-building-plan"]')) exportGuildConstructionCsv();
+    });
     panel.addEventListener("click", (event) => {
       const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
       if (modeButton) {

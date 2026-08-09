@@ -46,6 +46,7 @@ export function bumpPatchVersion(value) {
 }
 
 export function isAllowedReleasePath(file, version, tracked = false) {
+  if (!tracked && /\.(?:orig|rej)$/.test(file)) return false;
   if (FIXED_RELEASE_PATHS.has(file)) return true;
   if (file.startsWith("src/") || file.startsWith("test/")) return true;
   if (file === "tools/release-current-version.mjs") return true;
@@ -95,10 +96,11 @@ function printHelp() {
   --help             显示帮助`);
 }
 
-function run(command, args, { capture = false, allowFailure = false } = {}) {
+function run(command, args, { capture = false, allowFailure = false, env = {} } = {}) {
   const result = spawnSync(command, args, {
     cwd: ROOT,
     encoding: "utf8",
+    env: { ...process.env, ...env },
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit"
   });
   if (result.error) throw result.error;
@@ -336,7 +338,7 @@ async function main() {
   ensureChangelogEntry(releaseVersion, options.notes);
 
   console.log("\n[1/6] 运行测试并构建");
-  run("npm", ["run", "check"]);
+  run("npm", ["run", "check"], { env: { MWI_OVERWRITE_VERSIONED_ARCHIVE: "1" } });
   assertHistoricalBundlesUnchanged(historicalBundles);
   verifyBuild(releaseVersion);
 

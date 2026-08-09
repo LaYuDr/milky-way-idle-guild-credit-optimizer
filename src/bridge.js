@@ -11,11 +11,15 @@
     guildBuffLevels: null,
     guildShrineLevels: null,
     guildShrineDetails: null,
+    guildBuildingLevels: null,
+    guildBuildingDetails: null,
     characterItems: null,
     characterItemsRevision: 0,
     marketOrderBooks: Object.create(null),
     marketOrderBookRevision: 0
   });
+  if (!("guildBuildingLevels" in bridge)) bridge.guildBuildingLevels = null;
+  if (!("guildBuildingDetails" in bridge)) bridge.guildBuildingDetails = null;
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
@@ -286,8 +290,15 @@
         value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
         value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
       ];
+      const guildBuildingLevelCandidates = [
+        value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
+        value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
+      ];
       const guildShrineDetailCandidates = [
         value.guildShrineDetailMap, value.guildShrineDetailDict, value.guildShrineDetails,
+        value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
+      ];
+      const guildBuildingDetailCandidates = [
         value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
       ];
       const characterItems = value.characterItems;
@@ -300,9 +311,19 @@
           bridge.guildShrineLevels = mergeGuildShrineLevels(bridge.guildShrineLevels, guildShrineLevels);
         }
       }
+      for (const guildBuildingLevels of guildBuildingLevelCandidates) {
+        if (guildBuildingLevels && typeof guildBuildingLevels === "object") {
+          bridge.guildBuildingLevels = mergeGuildShrineLevels(bridge.guildBuildingLevels, guildBuildingLevels);
+        }
+      }
       for (const guildShrineDetails of guildShrineDetailCandidates) {
         if (guildShrineDetails && typeof guildShrineDetails === "object") {
           bridge.guildShrineDetails = mergeGuildShrineLevels(bridge.guildShrineDetails, guildShrineDetails);
+        }
+      }
+      for (const guildBuildingDetails of guildBuildingDetailCandidates) {
+        if (guildBuildingDetails && typeof guildBuildingDetails === "object") {
+          bridge.guildBuildingDetails = mergeGuildShrineLevels(bridge.guildBuildingDetails, guildBuildingDetails);
         }
       }
       if (Array.isArray(characterItems) && replaceCharacterItems(characterItems)) {

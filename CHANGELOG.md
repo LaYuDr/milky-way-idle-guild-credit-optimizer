@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.37] - 2026-08-10
+
+### Added
+
+- Added a read-only Guild Construction workspace for presidents and administrators, covering all 23 ordinary guild buildings and 5 shrines through level 20.
+- Added per-character saved targets, manual guild-point budgets, reorderable step-by-step construction queues, a visible over-budget cutoff, clipboard copy, and CSV export.
+- Added a deterministic guild-building rule module and a responsive construction audit fixture with live building-level samples.
+- Ordinary development builds now preserve an existing versioned historical bundle; the release workflow explicitly opts in when creating the new release archive.
+
+### Safety
+
+- Construction planning never performs upgrades or guesses the guild's available points; administrators provide the budget manually when no reliable live balance is exposed.
+
 ## [1.1.33] - 2026-08-01
 
 ### Changed

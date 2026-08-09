@@ -48,8 +48,12 @@
     const layoutAudit = searchParams.get("layoutAudit") === "1";
     const stabilityAudit = searchParams.get("stabilityAudit") === "1";
     const creditAudit = searchParams.get("creditAudit") === "1";
-    if (layoutAudit) document.body.dataset.layoutAudit = "true";
-    if ((surplusPlan || layoutAudit || creditAudit) && searchParams.get("resetState") === "1") localStorage.removeItem("mwi-guild-credit-ui-state-v1");
+    const constructionAudit = searchParams.get("constructionAudit") === "1";
+    if (layoutAudit || constructionAudit) document.body.dataset.layoutAudit = "true";
+    if ((surplusPlan || layoutAudit || creditAudit || constructionAudit) && searchParams.get("resetState") === "1") {
+      localStorage.removeItem("mwi-guild-credit-ui-state-v1");
+      localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
+    }
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -172,6 +176,11 @@
       guildShrineMap: {
         "/guild_shrines/tempo": { guildShrineHrid: "/guild_shrines/tempo", level: 2 },
         "/guild_shrines/spirit": { guildShrineHrid: "/guild_shrines/spirit", level: 2 }
+      },
+      guildBuildingMap: {
+        "/guild_buildings/guild_hall": { guildBuildingHrid: "/guild_buildings/guild_hall", level: 3 },
+        "/guild_buildings/skilling_encampment": { guildBuildingHrid: "/guild_buildings/skilling_encampment", level: 2 },
+        "/guild_buildings/gym": { guildBuildingHrid: "/guild_buildings/gym", level: 1 }
       },
       characterItems: surplusPlan ? [
         { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 10000 },
@@ -369,6 +378,110 @@
     };
 
     window.__mwiCreditLayoutAuditReady = creditAudit ? prepareCreditAudit() : Promise.resolve(null);
+
+    window.__mwiCollectConstructionAudit = () => {
+      const root = document.getElementById("mwi-credit-optimizer");
+      if (!root) throw new Error("Plugin panel is unavailable");
+      const layout = root.querySelector(".mwi-construction-layout");
+      const cards = Array.from(root.querySelectorAll(".mwi-building-card"));
+      const queueSteps = Array.from(root.querySelectorAll(".mwi-construction-step"));
+      const auditElements = Array.from(root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *"));
+      const visibleAuditElements = auditElements.filter((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      });
+      const horizontalOverflow = visibleAuditElements.filter((element) => {
+        const style = getComputedStyle(element);
+        const intentionallyEllipsized = style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+        return !intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2;
+      }).map((element) => ({
+        className: String(element.className || ""),
+        role: element.getAttribute("data-role") || "",
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth
+      }));
+      const interactiveElements = visibleAuditElements.filter((element) => ["BUTTON", "INPUT", "SELECT"].includes(element.tagName));
+      const controlOverlaps = [];
+      for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
+          const left = interactiveElements[leftIndex];
+          const right = interactiveElements[rightIndex];
+          if (left.contains(right) || right.contains(left)) continue;
+          const leftRect = left.getBoundingClientRect();
+          const rightRect = right.getBoundingClientRect();
+          const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
+          const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
+          if (overlapWidth > 1 && overlapHeight > 1) controlOverlaps.push({
+            leftRole: left.getAttribute("data-role") || left.tagName,
+            rightRole: right.getAttribute("data-role") || right.tagName,
+            overlapWidth,
+            overlapHeight
+          });
+        }
+      }
+      return {
+        requestedSidebarWidth: sidebarWidth,
+        panel: {
+          clientWidth: root.clientWidth,
+          scrollWidth: root.scrollWidth,
+          horizontalOverflow: root.scrollWidth - root.clientWidth
+        },
+        layout: {
+          columns: layout ? getComputedStyle(layout).gridTemplateColumns : "",
+          width: elementRect(layout)?.width || 0
+        },
+        cards: {
+          count: cards.length,
+          widths: cards.map((card) => elementRect(card).width),
+          minimumWidth: cards.length ? Math.min(...cards.map((card) => elementRect(card).width)) : 0
+        },
+        queue: {
+          stepCount: queueSteps.length,
+          cutoffCount: root.querySelectorAll(".mwi-budget-cutoff").length,
+          overBudgetCount: queueSteps.filter((step) => step.dataset.overBudget === "true").length
+        },
+        budget: {
+          value: root.querySelector('[data-role="guild-point-budget"]')?.value || "",
+          plannedSpend: root.querySelector(".mwi-construction-stats strong")?.textContent || "",
+          overBudget: root.querySelector(".mwi-construction-budget")?.dataset.overBudget || "false"
+        },
+        horizontalOverflow,
+        controlOverlaps
+      };
+    };
+
+    const prepareConstructionAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      const constructionViewTab = await waitFor(() => panel.querySelector('[data-role="view-construction"]'));
+      constructionViewTab.click();
+      await waitFor(() => panel.querySelectorAll(".mwi-building-card").length === 28);
+      const budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
+      budgetInput.value = "5000";
+      budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
+      const targets = [
+        ["/guild_buildings/guild_hall", 5],
+        ["/guild_buildings/skilling_encampment", 5],
+        ["/guild_buildings/gym", 5]
+      ];
+      for (const [buildingHrid, targetLevel] of targets) {
+        const select = await waitFor(() => panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`));
+        select.value = String(targetLevel);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+      await waitFor(() => panel.querySelectorAll(".mwi-construction-step").length === 9);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const report = window.__mwiCollectConstructionAudit();
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.constructionAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiConstructionAuditReady = constructionAudit ? prepareConstructionAudit() : Promise.resolve(null);
 
     const runPlanStabilityAudit = async () => {
       await window.__mwiLayoutAuditReady;

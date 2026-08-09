@@ -327,6 +327,78 @@
     };
   }
 
+  function aggregateGuildBuildingLevelCosts(levelCosts, startLevel, targetLevel) {
+    const start = Number(startLevel);
+    const target = Number(targetLevel);
+    const costs = Array.isArray(levelCosts) ? levelCosts : levelCosts && typeof levelCosts === "object" ? levelCosts : null;
+    if (!costs || !Number.isSafeInteger(start) || !Number.isSafeInteger(target) || start < 0 || target <= start) {
+      return { status: "invalid_range", startLevel, targetLevel, totalCost: 0, steps: [] };
+    }
+    const maxLevel = Array.isArray(costs)
+      ? costs.length - 1
+      : Math.max(...Object.keys(costs).map(Number).filter(Number.isSafeInteger));
+    if (!Number.isSafeInteger(maxLevel) || target > maxLevel) {
+      return { status: "invalid_range", startLevel: start, targetLevel: target, maxLevel, totalCost: 0, steps: [] };
+    }
+    const steps = [];
+    let totalCost = 0;
+    for (let level = start + 1; level <= target; level += 1) {
+      const record = costs[level];
+      const rawCost = record && (record.guildPointCost ?? record.guildPoints ?? record.cost);
+      const cost = Number(rawCost);
+      if (rawCost === null || rawCost === undefined || !Number.isFinite(cost) || cost < 0) {
+        return { status: "missing_cost", startLevel: start, targetLevel: target, maxLevel, missingLevel: level, totalCost: 0, steps: [] };
+      }
+      totalCost += cost;
+      steps.push({ fromLevel: level - 1, toLevel: level, cost });
+    }
+    return { status: "ok", startLevel: start, targetLevel: target, maxLevel, totalCost, steps };
+  }
+
+  function buildGuildConstructionPlan(plans, availableGuildPoints) {
+    const inputPlans = Array.isArray(plans) ? plans : [];
+    const hasBudget = availableGuildPoints !== null && availableGuildPoints !== undefined && availableGuildPoints !== "";
+    const budgetNumber = Number(availableGuildPoints);
+    if (hasBudget && (!Number.isFinite(budgetNumber) || budgetNumber < 0)) {
+      return { status: "invalid_budget", plans: [], steps: [], totalCost: 0, availableGuildPoints };
+    }
+    const budget = hasBudget ? Math.floor(budgetNumber) : null;
+    const results = [];
+    const steps = [];
+    let cumulativeCost = 0;
+    for (let planIndex = 0; planIndex < inputPlans.length; planIndex += 1) {
+      const plan = inputPlans[planIndex] || {};
+      const result = aggregateGuildBuildingLevelCosts(plan.levelCosts, plan.startLevel, plan.targetLevel);
+      if (result.status !== "ok") {
+        return { status: "invalid_plan", planIndex, result, plans: results, steps: [], totalCost: 0, availableGuildPoints: budget };
+      }
+      results.push({ ...result, id: plan.id, buildingHrid: plan.buildingHrid });
+      for (const step of result.steps) {
+        cumulativeCost += step.cost;
+        steps.push({
+          ...step,
+          id: plan.id,
+          buildingHrid: plan.buildingHrid,
+          cumulativeCost,
+          fitsBudget: budget === null ? null : cumulativeCost <= budget,
+          remainingGuildPoints: budget === null ? null : budget - cumulativeCost
+        });
+      }
+    }
+    const firstOverBudgetIndex = budget === null ? -1 : steps.findIndex((step) => !step.fitsBudget);
+    return {
+      status: "ok",
+      plans: results,
+      steps,
+      totalCost: cumulativeCost,
+      availableGuildPoints: budget,
+      remainingGuildPoints: budget === null ? null : budget - cumulativeCost,
+      overBudget: budget === null ? false : cumulativeCost > budget,
+      affordableStepCount: budget === null ? steps.length : firstOverBudgetIndex < 0 ? steps.length : firstOverBudgetIndex,
+      firstOverBudgetIndex
+    };
+  }
+
   function allocateSurplusGuildTokens(creditRows, exchangeRules, availableGuildTokens) {
     const budget = Math.max(0, Math.floor(Number(availableGuildTokens) || 0));
     const rules = new Map();
@@ -559,5 +631,5 @@
       .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
+  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, aggregateGuildBuildingLevelCosts, buildGuildConstructionPlan, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
 });

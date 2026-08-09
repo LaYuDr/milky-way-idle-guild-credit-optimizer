@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 
 test("发布脚本按补丁版本递增并拒绝非法版本", async () => {
   const release = await import("../tools/release-current-version.mjs");
@@ -16,5 +17,15 @@ test("发布脚本只允许当前版本归档并排除未跟踪工具草稿", as
   assert.equal(release.isAllowedReleasePath("dist/银河奶牛公会信用点性价比-v1.1.29.user.js", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath("dist/银河奶牛公会信用点性价比-v1.1.28.user.js", "1.1.29"), false);
   assert.equal(release.isAllowedReleasePath("tools/plan-width-preview.html", "1.1.29", false), false);
+  assert.equal(release.isAllowedReleasePath("src/userscript.js.rej", "1.1.29", false), false);
+  assert.equal(release.isAllowedReleasePath("src/userscript.js.orig", "1.1.29", false), false);
   assert.equal(release.isAllowedReleasePath("tools/dev-server.js", "1.1.29", true), true);
+});
+
+test("普通构建保留历史归档且正式发布显式允许写入新版本归档", () => {
+  const buildSource = fs.readFileSync(require.resolve("../tools/build.js"), "utf8");
+  const releaseSource = fs.readFileSync(require.resolve("../tools/release-current-version.mjs"), "utf8");
+  assert.match(buildSource, /MWI_OVERWRITE_VERSIONED_ARCHIVE === "1"/);
+  assert.match(buildSource, /Preserved existing historical bundle/);
+  assert.match(releaseSource, /MWI_OVERWRITE_VERSIONED_ARCHIVE: "1"/);
 });

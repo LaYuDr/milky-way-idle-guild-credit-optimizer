@@ -27,11 +27,16 @@ const header = `// ==UserScript==
 
 `;
 
-const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/market-data.js")}\n\n${source("src/market-dom.js")}\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
+const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/market-data.js")}\n\n${source("src/market-dom.js")}\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/guild-building-data.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/userscript.js")}`;
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
+const versionedOutput = path.join(outputDirectory, `银河奶牛公会信用点性价比-v${version}.user.js`);
 fs.writeFileSync(output, bundle);
-fs.writeFileSync(path.join(outputDirectory, `银河奶牛公会信用点性价比-v${version}.user.js`), bundle);
+if (!fs.existsSync(versionedOutput) || process.env.MWI_OVERWRITE_VERSIONED_ARCHIVE === "1") {
+  fs.writeFileSync(versionedOutput, bundle);
+} else if (fs.readFileSync(versionedOutput, "utf8") !== bundle) {
+  console.warn(`Preserved existing historical bundle: ${versionedOutput}`);
+}
 
 const loader = `// ==UserScript==
 // @name         银河奶牛公会信用点性价比 开发加载器
