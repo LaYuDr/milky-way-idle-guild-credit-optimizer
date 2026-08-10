@@ -90,6 +90,9 @@
       creditValueHint: "按目标数量比较公开市场成本，首项为当前最优兑换。",
       shrineUpgrade: "神龛升级",
       guildConstruction: "公会建设",
+      panelViewOrder: "页签顺序",
+      moveViewLeft: "将当前页签左移",
+      moveViewRight: "将当前页签右移",
       constructionReadOnly: "管理员规划工具 · 只计算，不会执行建筑升级",
       guildPointBudget: "可用公会点数",
       manualBudget: "手工预算",
@@ -99,7 +102,7 @@
       overBudgetBy: "超出预算",
       constructionPlanScale: "{buildings} 座 · {steps} 级",
       buildingCatalog: "建筑目录",
-      buildingCatalogHint: "选择目标等级，计划中的建筑会突出显示。",
+      buildingCatalogHint: "选择建筑后，在下方统一调整目标等级。",
       buildingCategoryAll: "全部",
       buildingCategoryCore: "基础",
       buildingCategoryLife: "生活",
@@ -108,6 +111,11 @@
       searchBuildings: "搜索建筑",
       currentLevel: "当前等级",
       buildingPlanCost: "计划成本",
+      buildingEditor: "建筑计划编辑器",
+      selectBuildingPrompt: "请选择一座建筑。",
+      buildingMaxLevel: "已满级",
+      notPlanned: "未计划",
+      buildingTileLabel: "{building}，当前 {current} 级，目标 {target}",
       addOneLevel: "加 1 级",
       addFiveLevels: "加 5 级",
       removeBuildingPlan: "移出计划",
@@ -115,6 +123,8 @@
       movePlanDown: "延后",
       constructionQueue: "施工队列",
       constructionQueueHint: "先调整优先级，再看预算线",
+      constructionQueueDragHint: "拖动建筑组调整顺序，也可使用提前、延后按钮",
+      dragConstructionPlan: "拖动调整 {building} 的施工顺序",
       constructionQueueEmpty: "设置任意建筑的目标等级后，这里会展开逐级施工顺序。",
       constructionBudgetCutoff: "预算截止线 · 剩余 {count}",
       constructionWithinBudget: "预算内",
@@ -122,7 +132,8 @@
       constructionSummary: "{buildings} 座建筑 · {steps} 次升级",
       buildingLevelsRead: "已读取当前公会建筑等级。",
       buildingLevelsUnknown: "未读取到当前公会建筑等级；请核对各建筑的起始等级。",
-      buildingRulesSnapshot: "建筑费用使用内置规则快照 {version}。",
+      buildingLevelsReadCompact: "等级已读取",
+      buildingLevelsUnknownCompact: "等级暂不可用",
       missingBuildingCost: "{building} 缺少 {level} 级费用，未计入总成本。",
       clearBuildingPlans: "清空计划",
       copyBuildingPlan: "复制规划",
@@ -131,6 +142,7 @@
       buildingPlanCopyFailed: "无法写入剪贴板，请使用 CSV 导出。",
       noBuildingMatches: "没有符合筛选条件的建筑。",
       buildingPlanCleared: "已清空公会建筑规划。",
+      buildingPlanReordered: "施工顺序已保存。",
       constructionOrder: "顺序",
       fromLevel: "起始等级",
       toLevel: "目标等级",
@@ -259,7 +271,8 @@
       domainCombat: "Combat",
       shrineWithDomain: "{shrine} ({domain})",
       guildTargetApplied: "Set {domain} plans to the current guild shrine levels; {count} upgrade(s) are needed.",
-      guildTargetComplete: "All {domain} shrines already meet their guild building levels; no extra materials are needed.",
+      guildTargetComplete:
+        "All {domain} shrines already meet their guild building levels; no extra materials are needed.",
       plansCleared: "Cleared all shrine upgrade plans.",
       level: "Lv. {level}",
       targetButtonReady: "Set every matching shrine target to its current guild level",
@@ -315,13 +328,18 @@
       missingLevelCost: "Missing upgrade cost data for level {level}.",
       invalidLevels: "The starting or target level is invalid.",
       mergedUpgradePlans: "Combined material costs for {count} shrine upgrade plan(s).",
-      unknownCurrentLevels: "Current shrine levels are unavailable, so plans start at level 0. Please verify or adjust the starting level.",
+      unknownCurrentLevels:
+        "Current shrine levels are unavailable, so plans start at level 0. Please verify or adjust the starting level.",
       snapshotFailed: "The public market snapshot failed to load, so the gold cost is not estimated yet.",
       panelTitle: "Guild Assistant",
       creditValue: "Credit value",
-      creditValueHint: "Compare public market costs for the target amount; the first item is the current best exchange.",
+      creditValueHint:
+        "Compare public market costs for the target amount; the first item is the current best exchange.",
       shrineUpgrade: "Shrine upgrades",
       guildConstruction: "Guild construction",
+      panelViewOrder: "Tab order",
+      moveViewLeft: "Move current tab left",
+      moveViewRight: "Move current tab right",
       constructionReadOnly: "Admin planning tool · calculates only and never upgrades buildings",
       guildPointBudget: "Available guild points",
       manualBudget: "Manual budget",
@@ -331,7 +349,7 @@
       overBudgetBy: "Over budget",
       constructionPlanScale: "{buildings} buildings · {steps} levels",
       buildingCatalog: "Building catalog",
-      buildingCatalogHint: "Choose target levels; planned buildings stay highlighted.",
+      buildingCatalogHint: "Select a building, then adjust its target below.",
       buildingCategoryAll: "All",
       buildingCategoryCore: "Core",
       buildingCategoryLife: "Life",
@@ -340,6 +358,11 @@
       searchBuildings: "Search buildings",
       currentLevel: "Current level",
       buildingPlanCost: "Plan cost",
+      buildingEditor: "Building plan editor",
+      selectBuildingPrompt: "Select a building.",
+      buildingMaxLevel: "Maximum level",
+      notPlanned: "Not planned",
+      buildingTileLabel: "{building}, current level {current}, target {target}",
       addOneLevel: "Add 1 level",
       addFiveLevels: "Add 5 levels",
       removeBuildingPlan: "Remove from plan",
@@ -347,14 +370,18 @@
       movePlanDown: "Move later",
       constructionQueue: "Construction queue",
       constructionQueueHint: "Set priority first, then check the budget line",
-      constructionQueueEmpty: "Set a target level for any building to expand its level-by-level construction order here.",
+      constructionQueueDragHint: "Drag building groups to reorder, or use the earlier and later buttons",
+      dragConstructionPlan: "Drag to reorder {building}",
+      constructionQueueEmpty:
+        "Set a target level for any building to expand its level-by-level construction order here.",
       constructionBudgetCutoff: "Budget cutoff · {count} remaining",
       constructionWithinBudget: "Within budget",
       constructionOverBudget: "Over budget",
       constructionSummary: "{buildings} building(s) · {steps} upgrade(s)",
       buildingLevelsRead: "Current guild building levels loaded.",
       buildingLevelsUnknown: "Current guild building levels are unavailable. Verify each building's starting level.",
-      buildingRulesSnapshot: "Building costs use bundled rules snapshot {version}.",
+      buildingLevelsReadCompact: "Levels loaded",
+      buildingLevelsUnknownCompact: "Levels unavailable",
       missingBuildingCost: "{building} is missing its level {level} cost and is excluded from the total.",
       clearBuildingPlans: "Clear plan",
       copyBuildingPlan: "Copy plan",
@@ -363,6 +390,7 @@
       buildingPlanCopyFailed: "Clipboard access failed. Use CSV export instead.",
       noBuildingMatches: "No buildings match these filters.",
       buildingPlanCleared: "Guild construction plan cleared.",
+      buildingPlanReordered: "Construction order saved.",
       constructionOrder: "Order",
       fromLevel: "From level",
       toLevel: "To level",
@@ -427,7 +455,8 @@
       guideUseGuildTokens: "Next: use {count} guild tokens",
       guideUseGuildTokensHint: "Guild-token exchange is selected for {credit}.",
       guideUnavailable: "An exchange step is unavailable",
-      guideUnavailableHint: "No market option is available for this credit. Refresh prices or change its exchange mode.",
+      guideUnavailableHint:
+        "No market option is available for this credit. Refresh prices or change its exchange mode.",
       guideBlocked: "Other materials are still missing",
       guideBlockedHint: "Fill these first: {items}",
       guideUpgradeShrine: "Materials are ready; upgrade the shrine",
@@ -467,17 +496,24 @@
       buybackExchange: "Buy-back exchange",
       purchaseCost: "Purchase cost",
       noSellPrice: "This item has no public buy price, so sell-and-buy-back cannot be estimated.",
-      noAffordableReplacement: "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
+      noAffordableReplacement:
+        "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       sidebarCredit: "Credits"
     }
   };
 
   function normalizeLocale(locale) {
-    return String(locale || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+    return String(locale || "")
+      .toLowerCase()
+      .startsWith("zh")
+      ? "zh-CN"
+      : "en";
   }
 
   function interpolate(template, values) {
-    return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values && values[key] !== undefined ? String(values[key]) : `{${key}}`);
+    return String(template).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) =>
+      values && values[key] !== undefined ? String(values[key]) : `{${key}}`
+    );
   }
 
   function createLocalizer(locale) {
@@ -488,14 +524,21 @@
     }
     function number(value, digits) {
       if (value === null || value === undefined || !Number.isFinite(value)) return "-";
-      return new Intl.NumberFormat(normalizedLocale, { maximumFractionDigits: digits === undefined ? 0 : digits }).format(value);
+      return new Intl.NumberFormat(normalizedLocale, {
+        maximumFractionDigits: digits === undefined ? 0 : digits
+      }).format(value);
     }
     function quantity(key, count) {
       const formatted = number(count);
       if (normalizedLocale === "zh-CN") return t(key, { count: formatted });
-      const unit = key === "creditQuantity"
-        ? Number(count) === 1 ? "credit" : "credits"
-        : Number(count) === 1 ? "item" : "items";
+      const unit =
+        key === "creditQuantity"
+          ? Number(count) === 1
+            ? "credit"
+            : "credits"
+          : Number(count) === 1
+            ? "item"
+            : "items";
       return t(key, { count: formatted, unit });
     }
     return { locale: normalizedLocale, t, number, quantity };

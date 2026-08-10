@@ -4,10 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const guide = require("../src/shrine-guide.js");
 
-const creditOrder = [
-  "/items/green_guild_credit",
-  "/items/blue_guild_credit"
-];
+const creditOrder = ["/items/green_guild_credit", "/items/blue_guild_credit"];
 
 const spiritPlan = {
   guildBuffHrid: "/guild_buffs/spirit_skilling",
@@ -44,12 +41,29 @@ test("同时缺少多种信用点时按稳定色序全部列为待处理", () =>
       ]
     },
     creditMaterialPlans: {
-      "/items/green_guild_credit": { itemHrid: "/items/beast_hide", itemCount: 4, creditCount: 1, batches: 20000, requiredItems: 80000, actualCredits: 20000 },
-      "/items/blue_guild_credit": { itemHrid: "/items/eye_essence", itemCount: 10, creditCount: 1, batches: 22000, requiredItems: 220000, actualCredits: 22000 }
+      "/items/green_guild_credit": {
+        itemHrid: "/items/beast_hide",
+        itemCount: 4,
+        creditCount: 1,
+        batches: 20000,
+        requiredItems: 80000,
+        actualCredits: 20000
+      },
+      "/items/blue_guild_credit": {
+        itemHrid: "/items/eye_essence",
+        itemCount: 10,
+        creditCount: 1,
+        batches: 22000,
+        requiredItems: 220000,
+        actualCredits: 22000
+      }
     }
   });
   assert.equal(result.status, "choose_credit");
-  assert.deepEqual(result.missingCredits.map((step) => step.creditItemHrid), creditOrder);
+  assert.deepEqual(
+    result.missingCredits.map((step) => step.creditItemHrid),
+    creditOrder
+  );
   assert.equal(result.missingCredits[0].batches, 20000);
   assert.equal(result.missingCredits[0].requiredItems, 80000);
 });
@@ -58,17 +72,33 @@ test("打开缺少的信用点后先指向推荐物品，再指向批次数量",
   const base = {
     estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 20000 }] },
     creditMaterialPlans: {
-      "/items/green_guild_credit": { itemHrid: "/items/beast_hide", itemCount: 4, creditCount: 1, batches: 20000, requiredItems: 80000, actualCredits: 20000 }
+      "/items/green_guild_credit": {
+        itemHrid: "/items/beast_hide",
+        itemCount: 4,
+        creditCount: 1,
+        batches: 20000,
+        requiredItems: 80000,
+        actualCredits: 20000
+      }
     }
   };
-  const chooseItem = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null } });
+  const chooseItem = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
+  });
   assert.equal(chooseItem.status, "choose_item");
   assert.equal(chooseItem.activeCredit.recommendedItemHrid, "/items/beast_hide");
 
-  const differentItem = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/rainbow_cheese" } });
+  const differentItem = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/rainbow_cheese" }
+  });
   assert.equal(differentItem.status, "choose_item");
 
-  const quantity = derive({ ...base, modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/beast_hide" } });
+  const quantity = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/beast_hide" }
+  });
   assert.equal(quantity.status, "set_quantity");
   assert.equal(quantity.activeCredit.batches, 20000);
   assert.equal(quantity.activeCredit.suggestedBatches, 20000);
@@ -79,7 +109,14 @@ test("剩余批数超过原生单次上限时只提示本次可填写数量", ()
   const result = derive({
     estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 20000 }] },
     creditMaterialPlans: {
-      "/items/green_guild_credit": { itemHrid: "/items/beast_hide", itemCount: 4, creditCount: 1, batches: 20000, requiredItems: 80000, actualCredits: 20000 }
+      "/items/green_guild_credit": {
+        itemHrid: "/items/beast_hide",
+        itemCount: 4,
+        creditCount: 1,
+        batches: 20000,
+        requiredItems: 80000,
+        actualCredits: 20000
+      }
     },
     modal: {
       creditItemHrid: "/items/green_guild_credit",
@@ -103,20 +140,38 @@ test("一种信用点补齐后只保留另一种待处理", () => {
       ]
     },
     creditMaterialPlans: {
-      "/items/blue_guild_credit": { itemHrid: "/items/eye_essence", itemCount: 10, creditCount: 1, batches: 22000, requiredItems: 220000, actualCredits: 22000 }
+      "/items/blue_guild_credit": {
+        itemHrid: "/items/eye_essence",
+        itemCount: 10,
+        creditCount: 1,
+        batches: 22000,
+        requiredItems: 220000,
+        actualCredits: 22000
+      }
     }
   });
-  assert.deepEqual(result.missingCredits.map((step) => step.creditItemHrid), ["/items/blue_guild_credit"]);
+  assert.deepEqual(
+    result.missingCredits.map((step) => step.creditItemHrid),
+    ["/items/blue_guild_credit"]
+  );
 });
 
 test("公会代币模式不会错误指向市场物品", () => {
   const result = derive({
     estimate: {
-      rows: [{
-        itemHrid: "/items/green_guild_credit",
-        missing: 20,
-        guildTokenExchange: { batches: 2, guildTokenCount: 1, creditCount: 10, requiredGuildTokens: 2, actualCredits: 20 }
-      }]
+      rows: [
+        {
+          itemHrid: "/items/green_guild_credit",
+          missing: 20,
+          guildTokenExchange: {
+            batches: 2,
+            guildTokenCount: 1,
+            creditCount: 10,
+            requiredGuildTokens: 2,
+            actualCredits: 20
+          }
+        }
+      ]
     },
     modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
   });

@@ -1,47 +1,114 @@
 <!doctype html>
 <html lang="zh-CN">
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>MWI Credit Sidebar Harness</title>
   <style>
-    body { margin: 0; min-height: 100vh; background: #10111c; color: #eee; font: 16px system-ui, sans-serif; }
-    .test-sidebar-wrapper { position: fixed; right: 0; top: 0; display: flex; flex-direction: column; width: 420px; height: 100vh; background: #202139; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #10111c;
+      color: #eee;
+      font:
+        16px system-ui,
+        sans-serif;
+    }
+    .test-sidebar-wrapper {
+      position: fixed;
+      right: 0;
+      top: 0;
+      display: flex;
+      flex-direction: column;
+      width: 420px;
+      height: 100vh;
+      background: #202139;
+    }
     body[data-layout-audit="true"] > #test-page-title,
     body[data-layout-audit="true"] > #toggle-responsive-layout,
-    body[data-layout-audit="true"] > #close-exchange-modal { display: none; }
-    body[data-layout-audit="true"] > .test-sidebar-wrapper { left: 0; right: auto; }
-    body[data-sidebar-layout="wide"] [data-sidebar-layout="narrow"], body[data-sidebar-layout="narrow"] [data-sidebar-layout="wide"] { display: none; }
-    #test-tabs { display: flex; border-bottom: 1px solid #55567b; }
-    #test-tabs button { flex: 1; border: 0; padding: 14px 6px; background: #292a46; color: #fff; font: inherit; cursor: pointer; }
-    #test-tabs button:first-child { background: #5053ad; }
-    [data-native-content] { flex: 1; min-height: 0; padding: 16px; }
+    body[data-layout-audit="true"] > #close-exchange-modal {
+      display: none;
+    }
+    body[data-layout-audit="true"] > .test-sidebar-wrapper {
+      left: 0;
+      right: auto;
+    }
+    body[data-sidebar-layout="wide"] [data-sidebar-layout="narrow"],
+    body[data-sidebar-layout="narrow"] [data-sidebar-layout="wide"] {
+      display: none;
+    }
+    #test-tabs {
+      display: flex;
+      border-bottom: 1px solid #55567b;
+    }
+    #test-tabs button {
+      flex: 1;
+      border: 0;
+      padding: 14px 6px;
+      background: #292a46;
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+    #test-tabs button:first-child {
+      background: #5053ad;
+    }
+    [data-native-content] {
+      flex: 1;
+      min-height: 0;
+      padding: 16px;
+    }
   </style>
   <main id="test-page-title">本地右侧栏自动化测试页</main>
-  <svg width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden"><use href="/assets/misc_sprite.svg#guild_guild_hall"></use></svg>
+  <svg width="0" height="0" aria-hidden="true" style="position: absolute; overflow: hidden">
+    <use href="/assets/misc_sprite.svg#guild_guild_hall"></use>
+  </svg>
   <button id="toggle-responsive-layout" type="button">切换窄屏布局</button>
   <button id="close-exchange-modal" type="button">关闭测试兑换窗口</button>
   <output id="layout-audit-output" hidden></output>
   <div class="Modal_modal__test" id="test-exchange-modal" role="dialog" aria-label="测试兑换窗口">
     <div class="GuildPanel_exchangeModalContent__test">
-      <div class="Item_item__test"><svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg></div>
-      <div class="Item_item__test"><svg role="img" aria-label="Green Guild Credit"><use href="/assets/items_sprite.svg#green_guild_credit"></use></svg></div>
-      <input id="test-exchange-count" type="number" value="1" aria-label="兑换数量">
+      <div class="Item_item__test">
+        <svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg>
+      </div>
+      <div class="Item_item__test">
+        <svg role="img" aria-label="Green Guild Credit">
+          <use href="/assets/items_sprite.svg#green_guild_credit"></use>
+        </svg>
+      </div>
+      <input id="test-exchange-count" type="number" value="1" aria-label="兑换数量" />
     </div>
   </div>
   <div class="test-sidebar-wrapper" id="test-sidebar-wrapper" data-sidebar-layout="wide">
-  <aside id="test-sidebar">
-    <div class="sidebar-shell"><div class="tabs-shell"><nav id="test-tabs">
-      <button data-tab-key="inventory" type="button">库存</button><button data-tab-key="equipment" type="button">装备</button><button data-tab-key="skills" type="button">技能</button><button data-tab-key="house" type="button">房屋</button><button data-tab-key="loadout" type="button">配装</button><button data-tab-key="harvest" type="button">收获</button>
-    </nav></div></div>
-  </aside>
-  <section class="tabPanelsContainer" data-native-content>原生右侧内容</section>
+    <aside id="test-sidebar">
+      <div class="sidebar-shell">
+        <div class="tabs-shell">
+          <nav id="test-tabs">
+            <button data-tab-key="inventory" type="button">库存</button
+            ><button data-tab-key="equipment" type="button">装备</button
+            ><button data-tab-key="skills" type="button">技能</button
+            ><button data-tab-key="house" type="button">房屋</button
+            ><button data-tab-key="loadout" type="button">配装</button
+            ><button data-tab-key="harvest" type="button">收获</button>
+          </nav>
+        </div>
+      </div>
+    </aside>
+    <section class="tabPanelsContainer" data-native-content>原生右侧内容</section>
   </div>
   <div class="test-sidebar-wrapper" id="test-narrow-sidebar-wrapper" data-sidebar-layout="narrow">
-  <aside>
-    <div class="sidebar-shell"><div class="tabs-shell"><nav>
-      <button data-tab-key="inventory" type="button">库存</button><button data-tab-key="equipment" type="button">装备</button><button data-tab-key="skills" type="button">技能</button><button data-tab-key="house" type="button">房屋</button><button data-tab-key="loadout" type="button">配装</button>
-    </nav></div></div>
-  </aside>
-  <section class="tabPanelsContainer" data-native-content>原生窄屏内容</section>
+    <aside>
+      <div class="sidebar-shell">
+        <div class="tabs-shell">
+          <nav>
+            <button data-tab-key="inventory" type="button">库存</button
+            ><button data-tab-key="equipment" type="button">装备</button
+            ><button data-tab-key="skills" type="button">技能</button
+            ><button data-tab-key="house" type="button">房屋</button
+            ><button data-tab-key="loadout" type="button">配装</button>
+          </nav>
+        </div>
+      </div>
+    </aside>
+    <section class="tabPanelsContainer" data-native-content>原生窄屏内容</section>
   </div>
   <script>
     const searchParams = new URLSearchParams(location.search);
@@ -59,23 +126,41 @@
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
     if (Number.isFinite(sidebarWidth) && sidebarWidth >= 320 && sidebarWidth <= 1200) {
-      document.querySelectorAll(".test-sidebar-wrapper").forEach((wrapper) => { wrapper.style.width = `${sidebarWidth}px`; });
+      document.querySelectorAll(".test-sidebar-wrapper").forEach((wrapper) => {
+        wrapper.style.width = `${sidebarWidth}px`;
+      });
     }
-    const copy = english ? {
-      pageTitle: "Local sidebar automation harness",
-      close: "Close test exchange modal",
-      dialog: "Test exchange modal",
-      exchangeCount: "Exchange quantity",
-      nativeContent: "Native sidebar content",
-      tabs: { inventory: "Inventory", equipment: "Equipment", skills: "Skills", house: "House", loadout: "Loadout", harvest: "Harvest" }
-    } : {
-      pageTitle: "本地右侧栏自动化测试页",
-      close: "关闭测试兑换窗口",
-      dialog: "测试兑换窗口",
-      exchangeCount: "兑换数量",
-      nativeContent: "原生右侧内容",
-      tabs: { inventory: "库存", equipment: "装备", skills: "技能", house: "房屋", loadout: "配装", harvest: "收获" }
-    };
+    const copy = english
+      ? {
+          pageTitle: "Local sidebar automation harness",
+          close: "Close test exchange modal",
+          dialog: "Test exchange modal",
+          exchangeCount: "Exchange quantity",
+          nativeContent: "Native sidebar content",
+          tabs: {
+            inventory: "Inventory",
+            equipment: "Equipment",
+            skills: "Skills",
+            house: "House",
+            loadout: "Loadout",
+            harvest: "Harvest"
+          }
+        }
+      : {
+          pageTitle: "本地右侧栏自动化测试页",
+          close: "关闭测试兑换窗口",
+          dialog: "测试兑换窗口",
+          exchangeCount: "兑换数量",
+          nativeContent: "原生右侧内容",
+          tabs: {
+            inventory: "库存",
+            equipment: "装备",
+            skills: "技能",
+            house: "房屋",
+            loadout: "配装",
+            harvest: "收获"
+          }
+        };
     document.documentElement.lang = english ? "en" : "zh-CN";
     window.i18next = { language: document.documentElement.lang };
     document.title = copy.pageTitle;
@@ -83,8 +168,12 @@
     document.getElementById("close-exchange-modal").textContent = copy.close;
     document.getElementById("test-exchange-modal").setAttribute("aria-label", copy.dialog);
     document.getElementById("test-exchange-count").setAttribute("aria-label", copy.exchangeCount);
-    document.querySelectorAll("[data-native-content]").forEach((content) => { content.textContent = copy.nativeContent; });
-    document.querySelectorAll("[data-tab-key]").forEach((tab) => { tab.textContent = copy.tabs[tab.dataset.tabKey]; });
+    document.querySelectorAll("[data-native-content]").forEach((content) => {
+      content.textContent = copy.nativeContent;
+    });
+    document.querySelectorAll("[data-tab-key]").forEach((tab) => {
+      tab.textContent = copy.tabs[tab.dataset.tabKey];
+    });
     document.getElementById("toggle-responsive-layout").addEventListener("click", () => {
       const narrow = document.body.dataset.sidebarLayout !== "narrow";
       document.body.dataset.sidebarLayout = narrow ? "narrow" : "wide";
@@ -124,18 +213,23 @@
           guildBuffHrid: "/guild_buffs/tempo_life",
           shrineHrid: "/guild_shrines/tempo",
           isCombat: false,
-          levelCosts: surplusPlan ? [
-            null,
-            { guildTokenCost: 0, creditCosts: [
-              { itemHrid: "/items/purple_guild_credit", count: 3000 },
-              { itemHrid: "/items/silver_guild_credit", count: 3000 },
-              { itemHrid: "/items/green_guild_credit", count: 3000 }
-            ] }
-          ] : [
-            null,
-            { guildTokenCost: 1200, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 6000 }] },
-            { guildTokenCost: 1800, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] }
-          ]
+          levelCosts: surplusPlan
+            ? [
+                null,
+                {
+                  guildTokenCost: 0,
+                  creditCosts: [
+                    { itemHrid: "/items/purple_guild_credit", count: 3000 },
+                    { itemHrid: "/items/silver_guild_credit", count: 3000 },
+                    { itemHrid: "/items/green_guild_credit", count: 3000 }
+                  ]
+                }
+              ]
+            : [
+                null,
+                { guildTokenCost: 1200, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 6000 }] },
+                { guildTokenCost: 1800, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] }
+              ]
         },
         "/guild_buffs/tempo_combat": {
           guildBuffHrid: "/guild_buffs/tempo_combat",
@@ -183,16 +277,18 @@
         "/guild_buildings/skilling_encampment": { guildBuildingHrid: "/guild_buildings/skilling_encampment", level: 2 },
         "/guild_buildings/gym": { guildBuildingHrid: "/guild_buildings/gym", level: 1 }
       },
-      characterItems: surplusPlan ? [
-        { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 10000 },
-        { itemHrid: "/items/purple_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
-        { itemHrid: "/items/silver_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
-        { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
-      ] : [
-        { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 4750 },
-        { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 6000 },
-        { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
-      ]
+      characterItems: surplusPlan
+        ? [
+            { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 10000 },
+            { itemHrid: "/items/purple_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
+            { itemHrid: "/items/silver_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 },
+            { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
+          ]
+        : [
+            { itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", count: 4750 },
+            { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 6000 },
+            { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
+          ]
     };
   </script>
   <script src="/runtime.js"></script>
@@ -201,16 +297,17 @@
       document.getElementById("test-exchange-modal")?.remove();
     });
 
-    const waitFor = (predicate, timeoutMs = 4000) => new Promise((resolve, reject) => {
-      const startedAt = performance.now();
-      const check = () => {
-        const result = predicate();
-        if (result) return resolve(result);
-        if (performance.now() - startedAt >= timeoutMs) return reject(new Error("Layout audit setup timed out"));
-        setTimeout(check, 25);
-      };
-      check();
-    });
+    const waitFor = (predicate, timeoutMs = 4000) =>
+      new Promise((resolve, reject) => {
+        const startedAt = performance.now();
+        const check = () => {
+          const result = predicate();
+          if (result) return resolve(result);
+          if (performance.now() - startedAt >= timeoutMs) return reject(new Error("Layout audit setup timed out"));
+          setTimeout(check, 25);
+        };
+        check();
+      });
 
     const elementRect = (element) => {
       if (!element) return null;
@@ -242,36 +339,55 @@
       const materialRows = Array.from(root.querySelectorAll(".mwi-material-row"));
       const plannedMaterialRow = materialRows.find((row) => row.querySelector(".mwi-material-plan"));
       const plannedMaterialMethods = plannedMaterialRow && plannedMaterialRow.querySelector(".mwi-material-plans");
-      const auditElements = Array.from(root.querySelectorAll(".mwi-upgrade-planner,.mwi-upgrade-planner *,.mwi-token-budget,.mwi-token-budget *,.mwi-upgrade-cost-summary,.mwi-upgrade-cost-summary *,.mwi-material-row,.mwi-material-row *"));
+      const auditElements = Array.from(
+        root.querySelectorAll(
+          ".mwi-upgrade-planner,.mwi-upgrade-planner *,.mwi-token-budget,.mwi-token-budget *,.mwi-upgrade-cost-summary,.mwi-upgrade-cost-summary *,.mwi-material-row,.mwi-material-row *"
+        )
+      );
       const visibleAuditElements = auditElements.filter((element) => {
         const style = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
       });
-      const overflow = visibleAuditElements.filter((element) => {
-        const style = getComputedStyle(element);
-        const intentionallyEllipsized = style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
-        return (!intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2) || element.scrollHeight > element.clientHeight + 2;
-      }).map((element) => ({
-        className: String(element.className || ""),
-        role: element.getAttribute("data-role") || "",
-        clientWidth: element.clientWidth,
-        clientHeight: element.clientHeight,
-        scrollWidth: element.scrollWidth,
-        scrollHeight: element.scrollHeight
-      }));
-      const boundaryOverflow = visibleAuditElements.filter((element) => {
-        const parent = element.parentElement;
-        if (!parent || parent === root || getComputedStyle(parent).overflow === "visible") return false;
-        const rect = element.getBoundingClientRect();
-        const parentRect = parent.getBoundingClientRect();
-        return rect.left < parentRect.left - 1 || rect.right > parentRect.right + 1 || rect.top < parentRect.top - 1 || rect.bottom > parentRect.bottom + 1;
-      }).map((element) => ({
-        className: String(element.className || ""),
-        role: element.getAttribute("data-role") || "",
-        parentClassName: String(element.parentElement?.className || "")
-      }));
-      const interactiveElements = visibleAuditElements.filter((element) => ["BUTTON", "INPUT", "SELECT"].includes(element.tagName));
+      const overflow = visibleAuditElements
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const intentionallyEllipsized =
+            style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+          return (
+            (!intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2) ||
+            element.scrollHeight > element.clientHeight + 2
+          );
+        })
+        .map((element) => ({
+          className: String(element.className || ""),
+          role: element.getAttribute("data-role") || "",
+          clientWidth: element.clientWidth,
+          clientHeight: element.clientHeight,
+          scrollWidth: element.scrollWidth,
+          scrollHeight: element.scrollHeight
+        }));
+      const boundaryOverflow = visibleAuditElements
+        .filter((element) => {
+          const parent = element.parentElement;
+          if (!parent || parent === root || getComputedStyle(parent).overflow === "visible") return false;
+          const rect = element.getBoundingClientRect();
+          const parentRect = parent.getBoundingClientRect();
+          return (
+            rect.left < parentRect.left - 1 ||
+            rect.right > parentRect.right + 1 ||
+            rect.top < parentRect.top - 1 ||
+            rect.bottom > parentRect.bottom + 1
+          );
+        })
+        .map((element) => ({
+          className: String(element.className || ""),
+          role: element.getAttribute("data-role") || "",
+          parentClassName: String(element.parentElement?.className || "")
+        }));
+      const interactiveElements = visibleAuditElements.filter((element) =>
+        ["BUTTON", "INPUT", "SELECT"].includes(element.tagName)
+      );
       const controlOverlaps = [];
       for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
@@ -282,12 +398,13 @@
           const rightRect = right.getBoundingClientRect();
           const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
           const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
-          if (overlapWidth > 1 && overlapHeight > 1) controlOverlaps.push({
-            leftRole: left.getAttribute("data-role") || left.tagName,
-            rightRole: right.getAttribute("data-role") || right.tagName,
-            overlapWidth,
-            overlapHeight
-          });
+          if (overlapWidth > 1 && overlapHeight > 1)
+            controlOverlaps.push({
+              leftRole: left.getAttribute("data-role") || left.tagName,
+              rightRole: right.getAttribute("data-role") || right.tagName,
+              overlapWidth,
+              overlapHeight
+            });
         }
       }
       const headingRect = elementRect(budgetHeading);
@@ -301,7 +418,12 @@
         viewport: { width: window.innerWidth, height: window.innerHeight },
         sidebar: elementRect(document.getElementById("test-sidebar-wrapper")),
         panel: {
-          band: contentWidth <= breakpoints.compactMax ? "compact" : contentWidth <= breakpoints.intermediateMax ? "intermediate" : "wide",
+          band:
+            contentWidth <= breakpoints.compactMax
+              ? "compact"
+              : contentWidth <= breakpoints.intermediateMax
+                ? "intermediate"
+                : "wide",
           contentWidth,
           clientWidth: root.clientWidth,
           scrollWidth: root.scrollWidth,
@@ -325,11 +447,16 @@
           available: availableRect,
           range: elementRect(budgetRange),
           percentage: budgetPercentage?.textContent || "",
-          snapPercentages: Array.from(root.querySelectorAll(".mwi-token-budget-snap-points i"), (mark) => Number(mark.dataset.percentage))
+          snapPercentages: Array.from(root.querySelectorAll(".mwi-token-budget-snap-points i"), (mark) =>
+            Number(mark.dataset.percentage)
+          )
         },
         materials: {
           rowCount: materialRows.length,
-          mode: plannedMaterialMethods && getComputedStyle(plannedMaterialMethods).gridColumnStart === "4" ? "inline" : "wrapped",
+          mode:
+            plannedMaterialMethods && getComputedStyle(plannedMaterialMethods).gridColumnStart === "4"
+              ? "inline"
+              : "wrapped",
           rowColumns: plannedMaterialRow ? getComputedStyle(plannedMaterialRow).gridTemplateColumns : "",
           methodColumns: plannedMaterialMethods ? getComputedStyle(plannedMaterialMethods).gridTemplateColumns : "",
           rowHeights: materialRows.map((row) => elementRect(row).height)
@@ -348,7 +475,10 @@
       const upgradeTab = await waitFor(() => document.querySelector('[data-role="view-upgrade"]'));
       upgradeTab.click();
       const list = await waitFor(() => document.querySelector('[data-role="upgrade-plan-list"]'));
-      const targetPlans = Math.min(4, Math.max(1, Number(searchParams.get("auditPlans")) || window.__mwiLayoutAuditContract.targetPlans));
+      const targetPlans = Math.min(
+        4,
+        Math.max(1, Number(searchParams.get("auditPlans")) || window.__mwiLayoutAuditContract.targetPlans)
+      );
       while (list.querySelectorAll(".mwi-upgrade-plan").length < targetPlans) {
         const add = document.querySelector('[data-role="add-upgrade-plan"]');
         if (!add || add.disabled) break;
@@ -384,25 +514,35 @@
       const root = document.getElementById("mwi-credit-optimizer");
       if (!root) throw new Error("Plugin panel is unavailable");
       const layout = root.querySelector(".mwi-construction-layout");
-      const buildingRows = Array.from(root.querySelectorAll(".mwi-building-row"));
+      const buildingGrid = root.querySelector(".mwi-building-grid");
+      const buildingTiles = Array.from(root.querySelectorAll(".mwi-building-tile"));
+      const queueGroups = Array.from(root.querySelectorAll(".mwi-construction-group"));
       const queueSteps = Array.from(root.querySelectorAll(".mwi-construction-step"));
-      const auditElements = Array.from(root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *"));
+      const auditElements = Array.from(
+        root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *")
+      );
       const visibleAuditElements = auditElements.filter((element) => {
         const style = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
       });
-      const horizontalOverflow = visibleAuditElements.filter((element) => {
-        const style = getComputedStyle(element);
-        const intentionallyEllipsized = style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
-        return !intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2;
-      }).map((element) => ({
-        className: String(element.className || ""),
-        role: element.getAttribute("data-role") || "",
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth
-      }));
-      const interactiveElements = visibleAuditElements.filter((element) => ["BUTTON", "INPUT", "SELECT"].includes(element.tagName));
+      const horizontalOverflow = visibleAuditElements
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const intentionallyEllipsized =
+            style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+          const visuallyHidden = style.clipPath !== "none" && element.clientWidth <= 1 && element.clientHeight <= 1;
+          return !intentionallyEllipsized && !visuallyHidden && element.scrollWidth > element.clientWidth + 2;
+        })
+        .map((element) => ({
+          className: String(element.className || ""),
+          role: element.getAttribute("data-role") || "",
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth
+        }));
+      const interactiveElements = visibleAuditElements.filter((element) =>
+        ["BUTTON", "INPUT", "SELECT"].includes(element.tagName)
+      );
       const controlOverlaps = [];
       for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
@@ -413,12 +553,13 @@
           const rightRect = right.getBoundingClientRect();
           const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
           const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
-          if (overlapWidth > 1 && overlapHeight > 1) controlOverlaps.push({
-            leftRole: left.getAttribute("data-role") || left.tagName,
-            rightRole: right.getAttribute("data-role") || right.tagName,
-            overlapWidth,
-            overlapHeight
-          });
+          if (overlapWidth > 1 && overlapHeight > 1)
+            controlOverlaps.push({
+              leftRole: left.getAttribute("data-role") || left.tagName,
+              rightRole: right.getAttribute("data-role") || right.tagName,
+              overlapWidth,
+              overlapHeight
+            });
         }
       }
       return {
@@ -433,18 +574,29 @@
           width: elementRect(layout)?.width || 0
         },
         cards: {
-          count: buildingRows.length,
-          widths: buildingRows.map((row) => elementRect(row).width),
-          minimumWidth: buildingRows.length ? Math.min(...buildingRows.map((row) => elementRect(row).width)) : 0
+          count: buildingTiles.length,
+          widths: buildingTiles.map((tile) => elementRect(tile).width),
+          heights: buildingTiles.map((tile) => elementRect(tile).height),
+          minimumWidth: buildingTiles.length ? Math.min(...buildingTiles.map((tile) => elementRect(tile).width)) : 0,
+          maximumAspectRatioError: buildingTiles.length
+            ? Math.max(...buildingTiles.map((tile) => Math.abs(elementRect(tile).width / elementRect(tile).height - 1)))
+            : 0
         },
         catalog: {
-          rowCount: buildingRows.length,
-          visibleRowCount: buildingRows.filter((row) => getComputedStyle(row).display !== "none").length,
-          plannedRowCount: buildingRows.filter((row) => row.dataset.planned === "true").length,
-          gameIconCount: root.querySelectorAll('.mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]').length,
+          tileCount: buildingTiles.length,
+          visibleTileCount: buildingTiles.filter((tile) => getComputedStyle(tile).display !== "none").length,
+          plannedTileCount: buildingTiles.filter((tile) => tile.dataset.planned === "true").length,
+          columns: buildingGrid ? getComputedStyle(buildingGrid).gridTemplateColumns.split(" ").length : 0,
+          selectedBuilding: root.querySelector('.mwi-building-tile[data-selected="true"]')?.dataset.buildingHrid || "",
+          currentLevelBadgeCount: root.querySelectorAll(".mwi-building-level-badge").length,
+          gameIconCount: root.querySelectorAll(
+            '.mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]'
+          ).length,
           filterAudit: window.__mwiConstructionFilterAudit || null
         },
         queue: {
+          groupCount: queueGroups.length,
+          groupOrder: queueGroups.map((group) => group.dataset.buildingHrid),
           stepCount: queueSteps.length,
           cutoffCount: root.querySelectorAll(".mwi-budget-cutoff").length,
           overBudgetCount: queueSteps.filter((step) => step.dataset.overBudget === "true").length
@@ -466,7 +618,7 @@
       const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
       const constructionViewTab = await waitFor(() => panel.querySelector('[data-role="view-construction"]'));
       constructionViewTab.click();
-      await waitFor(() => panel.querySelectorAll(".mwi-building-row").length === 28);
+      await waitFor(() => panel.querySelectorAll(".mwi-building-tile").length === 28);
       const budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
       budgetInput.value = "5000";
       budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -476,7 +628,13 @@
         ["/guild_buildings/gym", 5]
       ];
       for (const [buildingHrid, targetLevel] of targets) {
-        const select = await waitFor(() => panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`));
+        const tile = await waitFor(() =>
+          panel.querySelector(`.mwi-building-tile[data-building-hrid="${buildingHrid}"]`)
+        );
+        tile.click();
+        const select = await waitFor(() =>
+          panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`)
+        );
         select.value = String(targetLevel);
         select.dispatchEvent(new Event("change", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 60));
@@ -486,15 +644,27 @@
       searchInput.focus();
       searchInput.value = "gym";
       searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-      await waitFor(() => Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length === 1);
+      await waitFor(
+        () =>
+          Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
+            (tile) => getComputedStyle(tile).display !== "none"
+          ).length === 1
+      );
       window.__mwiConstructionFilterAudit = {
-        visibleCount: Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length,
-        matchedBuilding: panel.querySelector('.mwi-building-row:not([hidden]) .mwi-building-name strong')?.textContent || "",
+        visibleCount: Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
+          (tile) => getComputedStyle(tile).display !== "none"
+        ).length,
+        matchedBuilding: panel.querySelector(".mwi-building-tile:not([hidden])")?.getAttribute("aria-label") || "",
         searchRetainedFocus: document.activeElement === searchInput
       };
       searchInput.value = "";
       searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-      await waitFor(() => Array.from(panel.querySelectorAll(".mwi-building-row")).filter((row) => getComputedStyle(row).display !== "none").length === 28);
+      await waitFor(
+        () =>
+          Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
+            (tile) => getComputedStyle(tile).display !== "none"
+          ).length === 28
+      );
       await new Promise((resolve) => setTimeout(resolve, 250));
       const report = window.__mwiCollectConstructionAudit();
       document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
@@ -509,11 +679,15 @@
       const list = await waitFor(() => document.querySelector('[data-role="upgrade-plan-list"]'));
       const firstPlan = await waitFor(() => list.querySelector(".mwi-upgrade-plan"));
       let mutationCount = 0;
-      const observer = new MutationObserver((records) => { mutationCount += records.length; });
+      const observer = new MutationObserver((records) => {
+        mutationCount += records.length;
+      });
       observer.observe(list, { attributes: true, childList: true, subtree: true });
       const bridge = window.__mwiGuildCreditBridge;
       for (let index = 0; index < 3; index += 1) {
-        bridge.characterItems = bridge.characterItems.map((item) => item.itemHrid === "/items/guild_token" ? { ...item, count: item.count + 1 } : item);
+        bridge.characterItems = bridge.characterItems.map((item) =>
+          item.itemHrid === "/items/guild_token" ? { ...item, count: item.count + 1 } : item
+        );
         bridge.characterItemsRevision = Number(bridge.characterItemsRevision || 0) + 1;
         bridge.onCharacterItemsUpdated?.();
         await new Promise((resolve) => setTimeout(resolve, 220));
@@ -524,7 +698,9 @@
         sameFirstPlan: list.querySelector(".mwi-upgrade-plan") === firstPlan,
         indexCount: list.querySelectorAll(".mwi-upgrade-plan-index").length,
         animationName: getComputedStyle(firstPlan).animationName,
-        rootOverflow: document.getElementById("mwi-credit-optimizer").scrollWidth - document.getElementById("mwi-credit-optimizer").clientWidth
+        rootOverflow:
+          document.getElementById("mwi-credit-optimizer").scrollWidth -
+          document.getElementById("mwi-credit-optimizer").clientWidth
       };
     };
 

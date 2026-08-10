@@ -10,7 +10,11 @@
   const ITEM_HRID = /^\/items\/[a-z0-9_]+$/i;
 
   function normalizeLocale(locale) {
-    return String(locale || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+    return String(locale || "")
+      .toLowerCase()
+      .startsWith("zh")
+      ? "zh-CN"
+      : "en";
   }
 
   function normalizeItemHrid(value) {
@@ -85,7 +89,9 @@
         }
       }
     }
-    return best && best.entryCount >= minimumEntries ? { ...best, valid: true } : { names: Object.create(null), entryCount: best ? best.entryCount : 0, valid: false };
+    return best && best.entryCount >= minimumEntries
+      ? { ...best, valid: true }
+      : { names: Object.create(null), entryCount: best ? best.entryCount : 0, valid: false };
   }
 
   function reactI18nRoots(documentRef) {
@@ -93,7 +99,9 @@
     const found = [];
     const gamePageRoots = [];
     try {
-      gamePageRoots.push(...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12));
+      gamePageRoots.push(
+        ...Array.from(documentRef.querySelectorAll('[class^="GamePage"], [class*="GamePage"]')).slice(0, 12)
+      );
     } catch (_) {
       // A restricted document should still allow the direct window candidates.
     }
@@ -103,7 +111,12 @@
       const fibers = [];
       for (const key of Reflect.ownKeys(root)) {
         const keyName = String(key);
-        if (keyName.startsWith("__reactFiber$") || keyName.startsWith("__reactContainer$") || keyName.startsWith("__reactInternalInstance$")) fibers.push(root[key]);
+        if (
+          keyName.startsWith("__reactFiber$") ||
+          keyName.startsWith("__reactContainer$") ||
+          keyName.startsWith("__reactInternalInstance$")
+        )
+          fibers.push(root[key]);
       }
       return fibers;
     }
@@ -152,11 +165,14 @@
 
   function readCachedCatalog(storage) {
     try {
-      const stored = JSON.parse(storage && storage.getItem(STORAGE_KEY) || "");
-      if (!stored || stored.schemaVersion !== SCHEMA_VERSION || !stored.names || typeof stored.names !== "object") return null;
+      const stored = JSON.parse((storage && storage.getItem(STORAGE_KEY)) || "");
+      if (!stored || stored.schemaVersion !== SCHEMA_VERSION || !stored.names || typeof stored.names !== "object")
+        return null;
       const names = catalogFromItemNames(stored.names);
       const entryCount = Object.keys(names).length;
-      return entryCount ? { names, entryCount, source: "cache", updatedAt: stored.updatedAt || null, version: stored.version || null } : null;
+      return entryCount
+        ? { names, entryCount, source: "cache", updatedAt: stored.updatedAt || null, version: stored.version || null }
+        : null;
     } catch (_) {
       return null;
     }
@@ -164,14 +180,18 @@
 
   function persistCatalog(storage, catalog) {
     try {
-      storage && storage.setItem(STORAGE_KEY, JSON.stringify({
-        schemaVersion: SCHEMA_VERSION,
-        source: catalog.source,
-        updatedAt: catalog.updatedAt,
-        entryCount: catalog.entryCount,
-        version: catalog.version,
-        names: catalog.names
-      }));
+      storage &&
+        storage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            schemaVersion: SCHEMA_VERSION,
+            source: catalog.source,
+            updatedAt: catalog.updatedAt,
+            entryCount: catalog.entryCount,
+            version: catalog.version,
+            names: catalog.names
+          })
+        );
     } catch (_) {
       // A read-only storage environment should not prevent live name resolution.
     }
@@ -179,22 +199,38 @@
 
   function pageI18nRoots(pageWindow) {
     if (!pageWindow || typeof pageWindow !== "object") return [];
-    return [pageWindow.i18next, pageWindow.i18n, pageWindow.mwi && pageWindow.mwi.lang].filter((value) => value && typeof value === "object");
+    return [pageWindow.i18next, pageWindow.i18n, pageWindow.mwi && pageWindow.mwi.lang].filter(
+      (value) => value && typeof value === "object"
+    );
   }
 
   function createItemNameCatalog(options) {
     const pageWindow = options && options.pageWindow;
     const documentRef = options && options.document;
     const storage = options && options.storage;
-    const version = options && options.version || null;
+    const version = (options && options.version) || null;
     const minimumEntries = Number.isSafeInteger(options && options.minimumEntries) ? options.minimumEntries : 100;
-    let current = readCachedCatalog(storage) || { names: Object.create(null), entryCount: 0, source: "unavailable", updatedAt: null, version };
+    let current = readCachedCatalog(storage) || {
+      names: Object.create(null),
+      entryCount: 0,
+      source: "unavailable",
+      updatedAt: null,
+      version
+    };
 
     function refresh() {
       const direct = extractOfficialItemNameCatalog(pageI18nRoots(pageWindow), { minimumEntries });
-      const extracted = direct.valid ? direct : extractOfficialItemNameCatalog(reactI18nRoots(documentRef), { minimumEntries });
+      const extracted = direct.valid
+        ? direct
+        : extractOfficialItemNameCatalog(reactI18nRoots(documentRef), { minimumEntries });
       if (!extracted.valid) return current;
-      current = { names: extracted.names, entryCount: extracted.entryCount, source: direct.valid ? "window-i18n" : "react-provider", updatedAt: new Date().toISOString(), version };
+      current = {
+        names: extracted.names,
+        entryCount: extracted.entryCount,
+        source: direct.valid ? "window-i18n" : "react-provider",
+        updatedAt: new Date().toISOString(),
+        version
+      };
       persistCatalog(storage, current);
       return current;
     }
@@ -207,13 +243,28 @@
     }
 
     function coverage(itemHrids) {
-      const requested = Array.from(new Set((Array.isArray(itemHrids) ? itemHrids : []).map(normalizeItemHrid).filter(Boolean)));
+      const requested = Array.from(
+        new Set((Array.isArray(itemHrids) ? itemHrids : []).map(normalizeItemHrid).filter(Boolean))
+      );
       const missing = requested.filter((itemHrid) => !current.names[itemHrid]);
-      return { requestedCount: requested.length, officialHitCount: requested.length - missing.length, missingItemHrids: missing, source: current.source, catalogEntryCount: current.entryCount };
+      return {
+        requestedCount: requested.length,
+        officialHitCount: requested.length - missing.length,
+        missingItemHrids: missing,
+        source: current.source,
+        catalogEntryCount: current.entryCount
+      };
     }
 
     return { refresh, resolveItemName, coverage, metadata: () => ({ ...current, names: undefined }) };
   }
 
-  return { STORAGE_KEY, normalizeLocale, normalizeItemHrid, catalogFromItemNames, extractOfficialItemNameCatalog, createItemNameCatalog };
+  return {
+    STORAGE_KEY,
+    normalizeLocale,
+    normalizeItemHrid,
+    catalogFromItemNames,
+    extractOfficialItemNameCatalog,
+    createItemNameCatalog
+  };
 });

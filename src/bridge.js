@@ -4,24 +4,27 @@
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
   const marketDomApi = page.MwiGuildCreditMarketDom || window.MwiGuildCreditMarketDom;
-  const bridge = window.__mwiGuildCreditBridge || (window.__mwiGuildCreditBridge = {
-    messages: [],
-    itemDetails: null,
-    guildBuffDetails: null,
-    guildBuffLevels: null,
-    guildShrineLevels: null,
-    guildShrineDetails: null,
-    guildBuildingLevels: null,
-    guildBuildingDetails: null,
-    characterItems: null,
-    characterItemsRevision: 0,
-    guildBuffLevelsRevision: 0,
-    marketOrderBooks: Object.create(null),
-    marketOrderBookRevision: 0
-  });
+  const bridge =
+    window.__mwiGuildCreditBridge ||
+    (window.__mwiGuildCreditBridge = {
+      messages: [],
+      itemDetails: null,
+      guildBuffDetails: null,
+      guildBuffLevels: null,
+      guildShrineLevels: null,
+      guildShrineDetails: null,
+      guildBuildingLevels: null,
+      guildBuildingDetails: null,
+      characterItems: null,
+      characterItemsRevision: 0,
+      guildBuffLevelsRevision: 0,
+      marketOrderBooks: Object.create(null),
+      marketOrderBookRevision: 0
+    });
   if (!("guildBuildingLevels" in bridge)) bridge.guildBuildingLevels = null;
   if (!("guildBuildingDetails" in bridge)) bridge.guildBuildingDetails = null;
-  if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object") bridge.marketOrderBooks = Object.create(null);
+  if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object")
+    bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
   if (!Number.isSafeInteger(bridge.guildBuffLevelsRevision)) bridge.guildBuffLevelsRevision = 0;
@@ -29,39 +32,43 @@
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
   const DIAGNOSTICS_ATTRIBUTE = "data-mwi-credit-bridge-diagnostics";
-  const diagnostics = bridge.diagnostics && typeof bridge.diagnostics === "object"
-    ? bridge.diagnostics
-    : (bridge.diagnostics = {
-      scriptStartedAt: Date.now(),
-      injectionAttempted: false,
-      injectionReady: false,
-      installMode: "initializing",
-      observerActive: false,
-      messageCount: 0,
-      lastMessageAt: 0,
-      lastMessageType: "",
-      lastCharacterItemsUpdatedAt: 0,
-      lastCharacterItemsSource: "",
-      lastGuildBuffLevelsUpdatedAt: 0,
-      lastMarketItemHrid: "",
-      lastMarketLevels: null,
-      lastMarketReceivedAt: 0,
-      lastMarketSource: "",
-      domObserverActive: false,
-      domSnapshotCount: 0
-    });
+  const diagnostics =
+    bridge.diagnostics && typeof bridge.diagnostics === "object"
+      ? bridge.diagnostics
+      : (bridge.diagnostics = {
+          scriptStartedAt: Date.now(),
+          injectionAttempted: false,
+          injectionReady: false,
+          installMode: "initializing",
+          observerActive: false,
+          messageCount: 0,
+          lastMessageAt: 0,
+          lastMessageType: "",
+          lastCharacterItemsUpdatedAt: 0,
+          lastCharacterItemsSource: "",
+          lastGuildBuffLevelsUpdatedAt: 0,
+          lastMarketItemHrid: "",
+          lastMarketLevels: null,
+          lastMarketReceivedAt: 0,
+          lastMarketSource: "",
+          domObserverActive: false,
+          domSnapshotCount: 0
+        });
 
   function publishBridgeDiagnostics() {
     const documentRef = window.document;
     const root = documentRef && documentRef.documentElement;
     if (!root || typeof root.setAttribute !== "function") return false;
     try {
-      root.setAttribute(DIAGNOSTICS_ATTRIBUTE, JSON.stringify({
-        ...diagnostics,
-        characterItemsRevision: bridge.characterItemsRevision,
-        guildBuffLevelsRevision: bridge.guildBuffLevelsRevision,
-        marketOrderBookRevision: bridge.marketOrderBookRevision
-      }));
+      root.setAttribute(
+        DIAGNOSTICS_ATTRIBUTE,
+        JSON.stringify({
+          ...diagnostics,
+          characterItemsRevision: bridge.characterItemsRevision,
+          guildBuffLevelsRevision: bridge.guildBuffLevelsRevision,
+          marketOrderBookRevision: bridge.marketOrderBookRevision
+        })
+      );
       return true;
     } catch (_) {
       return false;
@@ -103,8 +110,7 @@
   function isGameWebSocketUrl(value) {
     try {
       const url = new URL(String(value || ""));
-      return url.protocol === "wss:"
-        && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+      return url.protocol === "wss:" && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
     } catch (_) {
       return false;
     }
@@ -156,9 +162,8 @@
     // The native item UI always supplies a numeric level (0 for ordinary
     // materials). An undefined level builds an invalid market order-book key
     // and can make the game's market renderer fail before it can recover.
-    const normalizedEnhancementLevel = Number.isInteger(enhancementLevel) && enhancementLevel >= 0
-      ? enhancementLevel
-      : 0;
+    const normalizedEnhancementLevel =
+      Number.isInteger(enhancementLevel) && enhancementLevel >= 0 ? enhancementLevel : 0;
     try {
       controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
       return true;
@@ -199,7 +204,8 @@
     if (!record || typeof record !== "object") return "";
     if (typeof record.hash === "string" && record.hash) return `hash:${record.hash}`;
     if (typeof record.itemHrid !== "string" || !record.itemHrid.startsWith("/items/")) return "";
-    if (typeof record.itemLocationHrid !== "string" || !record.itemLocationHrid.startsWith("/item_locations/")) return "";
+    if (typeof record.itemLocationHrid !== "string" || !record.itemLocationHrid.startsWith("/item_locations/"))
+      return "";
     const enhancementLevel = Number(record.enhancementLevel) || 0;
     return `stack:${record.itemLocationHrid}::${record.itemHrid}::${enhancementLevel}`;
   }
@@ -309,23 +315,46 @@
       scanned += 1;
       const itemDetails = value.itemDetailMap || value.itemDetailDict;
       const guildBuffDetails = value.guildBuffDetailMap || value.guildBuffDetailDict;
-      const guildBuffLevels = value.characterGuildBuffMap || value.characterGuildBuffDict || value.characterGuildBuffs || value.characterGuildBuffLevelMap || value.characterGuildBuffLevelDict;
+      const guildBuffLevels =
+        value.characterGuildBuffMap ||
+        value.characterGuildBuffDict ||
+        value.characterGuildBuffs ||
+        value.characterGuildBuffLevelMap ||
+        value.characterGuildBuffLevelDict;
       const guildShrineLevelCandidates = [
-        value.guildShrineMap, value.guildShrineDict, value.guildShrines,
-        value.guildShrineLevelMap, value.guildShrineLevelDict, value.guildShrineLevels,
-        value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
-        value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
+        value.guildShrineMap,
+        value.guildShrineDict,
+        value.guildShrines,
+        value.guildShrineLevelMap,
+        value.guildShrineLevelDict,
+        value.guildShrineLevels,
+        value.guildBuildingMap,
+        value.guildBuildingDict,
+        value.guildBuildings,
+        value.guildBuildingLevelMap,
+        value.guildBuildingLevelDict,
+        value.guildBuildingLevels
       ];
       const guildBuildingLevelCandidates = [
-        value.guildBuildingMap, value.guildBuildingDict, value.guildBuildings,
-        value.guildBuildingLevelMap, value.guildBuildingLevelDict, value.guildBuildingLevels
+        value.guildBuildingMap,
+        value.guildBuildingDict,
+        value.guildBuildings,
+        value.guildBuildingLevelMap,
+        value.guildBuildingLevelDict,
+        value.guildBuildingLevels
       ];
       const guildShrineDetailCandidates = [
-        value.guildShrineDetailMap, value.guildShrineDetailDict, value.guildShrineDetails,
-        value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
+        value.guildShrineDetailMap,
+        value.guildShrineDetailDict,
+        value.guildShrineDetails,
+        value.guildBuildingDetailMap,
+        value.guildBuildingDetailDict,
+        value.guildBuildingDetails
       ];
       const guildBuildingDetailCandidates = [
-        value.guildBuildingDetailMap, value.guildBuildingDetailDict, value.guildBuildingDetails
+        value.guildBuildingDetailMap,
+        value.guildBuildingDetailDict,
+        value.guildBuildingDetails
       ];
       const characterItems = value.characterItems;
       const endCharacterItems = value.endCharacterItems;
@@ -374,7 +403,7 @@
     diagnostics.lastMessageAt = Date.now();
     try {
       const message = JSON.parse(rawMessage);
-      diagnostics.lastMessageType = String(message && message.type || "");
+      diagnostics.lastMessageType = String((message && message.type) || "");
       keepMarketData(message, "websocket");
       keepGuildData(message);
     } catch (_) {
@@ -404,9 +433,7 @@
   function scheduleMarketDomScan() {
     if (marketDomScanScheduled) return;
     marketDomScanScheduled = true;
-    const schedule = typeof window.setTimeout === "function"
-      ? window.setTimeout.bind(window)
-      : setTimeout;
+    const schedule = typeof window.setTimeout === "function" ? window.setTimeout.bind(window) : setTimeout;
     schedule(scanMarketDom, 40);
   }
 
@@ -449,15 +476,18 @@
     const isOfficialSocket = (value) => {
       try {
         const url = new URL(String(value || ""));
-        return url.protocol === "wss:"
-          && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
+        return url.protocol === "wss:" && /^api(?:-test)?\.milkywayidle(?:cn)?\.com$/i.test(url.hostname);
       } catch (_) {
         return false;
       }
     };
     const instrumentSocket = (socket) => {
-      if (!socket || !isOfficialSocket(socket.url)
-        || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+      if (
+        !socket ||
+        !isOfficialSocket(socket.url) ||
+        typeof socket.addEventListener !== "function" ||
+        instrumentedSockets.has(socket)
+      ) {
         return socket;
       }
       instrumentedSockets.add(socket);
@@ -502,13 +532,17 @@
     window.addEventListener(SOCKET_MESSAGE_EVENT, (event) => {
       keepSocketMessage(event && event.detail);
     });
-    window.addEventListener(SOCKET_READY_EVENT, (event) => {
-      pageSocketTapInstalled = Boolean(event && event.detail === "1");
-      diagnostics.injectionReady = pageSocketTapInstalled;
-      diagnostics.installMode = pageSocketTapInstalled ? "gm_add_element_main_world" : "gm_add_element_rejected";
-      diagnostics.observerActive = pageSocketTapInstalled;
-      publishBridgeDiagnostics();
-    }, { once: true });
+    window.addEventListener(
+      SOCKET_READY_EVENT,
+      (event) => {
+        pageSocketTapInstalled = Boolean(event && event.detail === "1");
+        diagnostics.injectionReady = pageSocketTapInstalled;
+        diagnostics.installMode = pageSocketTapInstalled ? "gm_add_element_main_world" : "gm_add_element_rejected";
+        diagnostics.observerActive = pageSocketTapInstalled;
+        publishBridgeDiagnostics();
+      },
+      { once: true }
+    );
   }
   if (typeof GM_addElement === "function") {
     diagnostics.injectionAttempted = true;
@@ -520,7 +554,7 @@
       if (injected && typeof injected.remove === "function") injected.remove();
     } catch (error) {
       diagnostics.installMode = "gm_add_element_error";
-      diagnostics.injectionError = String(error && error.message || error || "unknown");
+      diagnostics.injectionError = String((error && error.message) || error || "unknown");
       publishBridgeDiagnostics();
       // Fall back to unsafeWindow for userscript managers without GM_addElement.
     }
@@ -542,8 +576,12 @@
   const instrumentedSockets = new WeakSet();
 
   function instrumentSocket(socket) {
-    if (!socket || !isGameWebSocketUrl(socket.url)
-      || typeof socket.addEventListener !== "function" || instrumentedSockets.has(socket)) {
+    if (
+      !socket ||
+      !isGameWebSocketUrl(socket.url) ||
+      typeof socket.addEventListener !== "function" ||
+      instrumentedSockets.has(socket)
+    ) {
       return socket;
     }
     instrumentedSockets.add(socket);

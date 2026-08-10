@@ -44,7 +44,7 @@
       .filter(Boolean);
     if (actions.some((value) => ["购买", "Buy"].includes(value))) return "asks";
     if (actions.some((value) => ["出售", "Sell"].includes(value))) return "bids";
-    const heading = String(table.querySelector("thead") && table.querySelector("thead").textContent || "");
+    const heading = String((table.querySelector("thead") && table.querySelector("thead").textContent) || "");
     if (/出售价|Sell Price/i.test(heading)) return "asks";
     if (/收购价|Buy Price/i.test(heading)) return "bids";
     return "";
@@ -54,20 +54,20 @@
     const currentItem = documentRef.querySelector('[class*="MarketplacePanel_currentItem"]');
     if (!currentItem) return null;
     const use = currentItem.querySelector(
-      '[class*="Item_itemContainer"] svg[role="img"] use[href*="items_sprite"],'
-      + '[class*="Item_itemContainer"] svg[role="img"] use[xlink\\:href*="items_sprite"]'
+      '[class*="Item_itemContainer"] svg[role="img"] use[href*="items_sprite"],' +
+        '[class*="Item_itemContainer"] svg[role="img"] use[xlink\\:href*="items_sprite"]'
     );
     const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
-    const fragment = String(href || "").split("#").pop();
+    const fragment = String(href || "")
+      .split("#")
+      .pop();
     if (!ITEM_HRID_PATTERN.test(fragment)) return null;
     const enhancementNode = currentItem.querySelector('[class*="Item_enhancementLevel"]');
-    const enhancementMatch = String(enhancementNode && enhancementNode.textContent || "").match(/\+?(\d+)/);
+    const enhancementMatch = String((enhancementNode && enhancementNode.textContent) || "").match(/\+?(\d+)/);
     const enhancementLevel = enhancementMatch ? Number(enhancementMatch[1]) : 0;
     return {
       itemHrid: `/items/${fragment}`,
-      enhancementLevel: Number.isSafeInteger(enhancementLevel) && enhancementLevel >= 0
-        ? enhancementLevel
-        : 0
+      enhancementLevel: Number.isSafeInteger(enhancementLevel) && enhancementLevel >= 0 ? enhancementLevel : 0
     };
   }
 
@@ -88,12 +88,7 @@
       if (side) snapshot[side] = orderBookEntries(table);
     }
     if (!Array.isArray(snapshot.asks) && !Array.isArray(snapshot.bids)) return null;
-    snapshot.signature = JSON.stringify([
-      snapshot.itemHrid,
-      snapshot.enhancementLevel,
-      snapshot.asks,
-      snapshot.bids
-    ]);
+    snapshot.signature = JSON.stringify([snapshot.itemHrid, snapshot.enhancementLevel, snapshot.asks, snapshot.bids]);
     return snapshot;
   }
 

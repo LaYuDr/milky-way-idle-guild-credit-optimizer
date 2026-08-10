@@ -1,0 +1,433 @@
+{
+  "schemaVersion": 1,
+  "artifactType": "tampermonkey-userscript",
+  "policy": "append-only",
+  "releases": [
+    {
+      "version": "0.4.35",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.35.user.js",
+      "sizeBytes": 118053,
+      "sha256": "940141632473220d6a3081115a7af9395721aa9f70ce7827cdf553b7f59ddb70"
+    },
+    {
+      "version": "0.4.36",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.36.user.js",
+      "sizeBytes": 118352,
+      "sha256": "384c2d173a1c1e0cb49fd55b61e6ab94f3751b64d7cae9715abab538b77bf0ab"
+    },
+    {
+      "version": "0.4.37",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.37.user.js",
+      "sizeBytes": 119285,
+      "sha256": "540902242ff3c2e19ac9cc23d61ffddcc0c651b99d5317ed9827bf5206d5e513"
+    },
+    {
+      "version": "0.4.38",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.38.user.js",
+      "sizeBytes": 119675,
+      "sha256": "c9e1e087528ffcf6e4e3cd33138de81dd1ab51f48e7c7827afdca169dcf77b02"
+    },
+    {
+      "version": "0.4.39",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.39.user.js",
+      "sizeBytes": 123093,
+      "sha256": "2f55b81f8129f3341f720a62d032a470ba79f724b8a5107c85665ce55ce95dcb"
+    },
+    {
+      "version": "0.4.40",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.40.user.js",
+      "sizeBytes": 126690,
+      "sha256": "1a220e54c143dee41a8b2117a76753755075ad5284e5e7b0a36071cd93adf268"
+    },
+    {
+      "version": "0.4.41",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.41.user.js",
+      "sizeBytes": 126690,
+      "sha256": "e084189cf930a55bbceb8ea68663f4ab9eaee52964c23646d121c3a8aaed8209"
+    },
+    {
+      "version": "0.4.42",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.42.user.js",
+      "sizeBytes": 127619,
+      "sha256": "1ecd003e8b89628f6855900b84bba30388dca580914b8aec87e4265c46f24847"
+    },
+    {
+      "version": "0.4.43",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.43.user.js",
+      "sizeBytes": 128559,
+      "sha256": "8cd17ef46eb63b1366f25067fef953971f06611c96caeb8cd68ff7d2b61933bc"
+    },
+    {
+      "version": "0.4.44",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.44.user.js",
+      "sizeBytes": 123233,
+      "sha256": "5354b6fc13e474d25872777471169c8a4b174e945ced2844e7a4b32b1ef7541c"
+    },
+    {
+      "version": "0.4.45",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.45.user.js",
+      "sizeBytes": 123414,
+      "sha256": "4c2c95b4616b7ede1d3325fd8507817376cead1e62533be372e8cc12841f8b58"
+    },
+    {
+      "version": "0.4.46",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.46.user.js",
+      "sizeBytes": 127716,
+      "sha256": "6c88e679829bf064dac9e48c9ba25a199cd3eda31caa7fa45fcef2ac5c1af728"
+    },
+    {
+      "version": "0.4.47",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.47.user.js",
+      "sizeBytes": 127716,
+      "sha256": "22f135576a28628d08425eaf8e3fe967be658978aeec4f1086cc0e694f993a89"
+    },
+    {
+      "version": "0.4.48",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.48.user.js",
+      "sizeBytes": 128131,
+      "sha256": "f23db1bdfd86c8d283620a8f9ba0d5849a8bc24de5ac981ec979dd6c9e651434"
+    },
+    {
+      "version": "0.4.49",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.49.user.js",
+      "sizeBytes": 130665,
+      "sha256": "cd4d29acadbd16d2f34eb88112c2e242cf60d76b3a0573bf45e1b661e8322d72"
+    },
+    {
+      "version": "0.4.50",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.50.user.js",
+      "sizeBytes": 131746,
+      "sha256": "e81615b421ce50ea63b9cca164b849b923df09791d524e571351b16763e78e88"
+    },
+    {
+      "version": "0.4.51",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.51.user.js",
+      "sizeBytes": 131781,
+      "sha256": "0365bcdafbeff85cbda03ee75088ba9fd3fd2bd73cbb31a334eb1d0d97f75eba"
+    },
+    {
+      "version": "0.4.52",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.52.user.js",
+      "sizeBytes": 132227,
+      "sha256": "7c84ee52f7778e1998f0fba7e3deb51e139fad0261fb5b620f67d5db5041bcee"
+    },
+    {
+      "version": "0.4.53",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.53.user.js",
+      "sizeBytes": 144431,
+      "sha256": "76b4cde4a07ff724fe6c2e6afea99fb0306c95c78c0c4b872d28783585c8c55e"
+    },
+    {
+      "version": "0.4.54",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.54.user.js",
+      "sizeBytes": 144694,
+      "sha256": "e9bfba5a99358dd44fc85d9e8351bc2355588e2ce38ba9e698eb65579c204ef4"
+    },
+    {
+      "version": "0.4.55",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.55.user.js",
+      "sizeBytes": 149990,
+      "sha256": "fce1caa1f9e86278f142d1686f3faa8ee6d6a75313bd477ed119b7c07dc3e22b"
+    },
+    {
+      "version": "0.4.56",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.56.user.js",
+      "sizeBytes": 130516,
+      "sha256": "37e26146e7bce621a72e59011e991d39c722c64f2501f30d697547d16bf0f208"
+    },
+    {
+      "version": "0.4.57",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.57.user.js",
+      "sizeBytes": 132053,
+      "sha256": "5417cb2ffa33159e8d6149a7b4ec4cbf8fa51c0e2a3b1fd5a0f9b028577955a4"
+    },
+    {
+      "version": "0.4.58",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.58.user.js",
+      "sizeBytes": 133077,
+      "sha256": "537b67f18836e38f340faaf4752a8facfacb5cc5baec58031790f4596fcd262d"
+    },
+    {
+      "version": "0.4.59",
+      "path": "releases/v0.4/银河奶牛公会信用点性价比-v0.4.59.user.js",
+      "sizeBytes": 133858,
+      "sha256": "65d2444b5201728671c0323a7789a875fbe2e25402594ef4c161a5b3be345030"
+    },
+    {
+      "version": "1.0.0",
+      "path": "releases/v1.0/银河奶牛公会信用点性价比-v1.0.0.user.js",
+      "sizeBytes": 135773,
+      "sha256": "41d3814b2e04750f621a90b64f1bbff64c689e5f4c1d546312eca382f87207ba"
+    },
+    {
+      "version": "1.1.0",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.0.user.js",
+      "sizeBytes": 151091,
+      "sha256": "c6a2c9ffe98bf59f8b1793aaceae6827378811305b4ed6a1ade477901ff1637d"
+    },
+    {
+      "version": "1.1.1",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.1.user.js",
+      "sizeBytes": 151527,
+      "sha256": "3eeec2ae726b547dcd75a04dbada62d012c4d9bee6da13077df8e2608741f833"
+    },
+    {
+      "version": "1.1.2",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.2.user.js",
+      "sizeBytes": 152025,
+      "sha256": "c11426348e28262c20ecdec8b574519f307f86c72b4216eaf73042dabd60513c"
+    },
+    {
+      "version": "1.1.3",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.3.user.js",
+      "sizeBytes": 152744,
+      "sha256": "c4eb380817288c8ae20adab23cccf0062432f8afe8fb2131ba01e7580336917d"
+    },
+    {
+      "version": "1.1.4",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.4.user.js",
+      "sizeBytes": 155190,
+      "sha256": "d573654afa1527ff73c15e9d566b491bc496ec183696bcae24e0717df51f833e"
+    },
+    {
+      "version": "1.1.5",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.5.user.js",
+      "sizeBytes": 155767,
+      "sha256": "523afae8b74b76361844dc81349d427cfd54ff87a294ac3ed1cea987bb3ece88"
+    },
+    {
+      "version": "1.1.6",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.6.user.js",
+      "sizeBytes": 156640,
+      "sha256": "f78e079ffb52ae53687302e58a999ca448ded60c0e9c57796b7dd0b96506bb70"
+    },
+    {
+      "version": "1.1.7",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.7.user.js",
+      "sizeBytes": 156644,
+      "sha256": "fc431f19df2ae71c3733ba83843a9d6017f9433c720a2721b09011ed79fd90a6"
+    },
+    {
+      "version": "1.1.8",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.8.user.js",
+      "sizeBytes": 169234,
+      "sha256": "979f505bbe4e3663740616f144b498b44ba9ec7fd43ea17a29ec6bff6b461e96"
+    },
+    {
+      "version": "1.1.9",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.9.user.js",
+      "sizeBytes": 169019,
+      "sha256": "e147e1468ba57d1d56c312a9dcd702d22a1db1329723d89fb2b278fc3895b1da"
+    },
+    {
+      "version": "1.1.10",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.10.user.js",
+      "sizeBytes": 176166,
+      "sha256": "137918945d1edcb84a3fa0db4793c0b5f79b28a12717327924d4cc83801e4a84"
+    },
+    {
+      "version": "1.1.11",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.11.user.js",
+      "sizeBytes": 187017,
+      "sha256": "2f76fe80f9cfcff88bb5d1ada58caa2891660a589d6678c3acf734d10f44a294"
+    },
+    {
+      "version": "1.1.12",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.12.user.js",
+      "sizeBytes": 187017,
+      "sha256": "de1ede6fede3e55cd46357598b11c3ba00a574df1ee9fce4a200b6cecd3aaa04"
+    },
+    {
+      "version": "1.1.13",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.13.user.js",
+      "sizeBytes": 190769,
+      "sha256": "d5c21dca3e37e44f1ce96e99691e11f86b6a1f748c795a4910213c7bfa4f6821"
+    },
+    {
+      "version": "1.1.14",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.14.user.js",
+      "sizeBytes": 193662,
+      "sha256": "0d556dd030ea4ca70a11e208062cac4abb1532a814e620dff9bf20f05abf0177"
+    },
+    {
+      "version": "1.1.15",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.15.user.js",
+      "sizeBytes": 208653,
+      "sha256": "45b4ff2ad92490856430fcb82a6f9162eef1f2f64aeca9ce60119c46ed39a8d7"
+    },
+    {
+      "version": "1.1.16",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.16.user.js",
+      "sizeBytes": 208653,
+      "sha256": "536fbba80afc3a9e88c6bfbcba26f9eca9335e76b1f2a17f36b86a0affd8a38e"
+    },
+    {
+      "version": "1.1.17",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.17.user.js",
+      "sizeBytes": 213899,
+      "sha256": "420257f14685581e4f7defa2087eadf8f5285826dd562aa642e25b8aeb6b1482"
+    },
+    {
+      "version": "1.1.18",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.18.user.js",
+      "sizeBytes": 218631,
+      "sha256": "faa7e9884bd3ae545573ccc2aed090ddadba0131a9b860ed0342106a1b7b1b16"
+    },
+    {
+      "version": "1.1.19",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.19.user.js",
+      "sizeBytes": 219062,
+      "sha256": "93c97fcbe8730940930c03acc045c963ecdfe601853650a9980331f2873e8290"
+    },
+    {
+      "version": "1.1.20",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.20.user.js",
+      "sizeBytes": 220561,
+      "sha256": "4132ecaf87790c307de0ebb85460aed512eb8d1b389616eb99c1d9aff3067d8a"
+    },
+    {
+      "version": "1.1.21",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.21.user.js",
+      "sizeBytes": 233244,
+      "sha256": "5febaf2a82aa604dde1cda4914a2c594afe87a58562b91e7099c766889973bea"
+    },
+    {
+      "version": "1.1.22",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.22.user.js",
+      "sizeBytes": 242861,
+      "sha256": "2057a658d502b8f8db570eda3fc563adebf1f06b694a097bdbce7d5680cc5f5a"
+    },
+    {
+      "version": "1.1.23",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.23.user.js",
+      "sizeBytes": 243386,
+      "sha256": "0f75d9307a04e4fcf97a91fd249790e26e5fd3dec7eec1c514764ef52ad7396a"
+    },
+    {
+      "version": "1.1.24",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.24.user.js",
+      "sizeBytes": 243572,
+      "sha256": "a4f2c7a1fdaab2dd053cde2cc313a91137e056883595d641e3a8f505582b4881"
+    },
+    {
+      "version": "1.1.25",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.25.user.js",
+      "sizeBytes": 249361,
+      "sha256": "1e235ff6f8f32793c7ac4c84cf5d1cf5c88f734f1d600e4d9506b8f22a11f2dd"
+    },
+    {
+      "version": "1.1.26",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.26.user.js",
+      "sizeBytes": 249861,
+      "sha256": "fd9c011a6bcd2be58ac03a663b9b6ecdad58384040fce2e4677750a8284d06d2"
+    },
+    {
+      "version": "1.1.27",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.27.user.js",
+      "sizeBytes": 265622,
+      "sha256": "76daaf5f0a4c0ed1b95b513efad4d01d734f0a487f5d643e4cbf79f6eda9f631"
+    },
+    {
+      "version": "1.1.28",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.28.user.js",
+      "sizeBytes": 267321,
+      "sha256": "ed49a36d06658111dba4596a0988f098c3bc3b84d2a3b8e8e73cbc4f6552e2fa"
+    },
+    {
+      "version": "1.1.29",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.29.user.js",
+      "sizeBytes": 249941,
+      "sha256": "024bfaaa4828fc5522cdf9f2f5bbe78fc243c4fc059e977fca84225c69f02a5e"
+    },
+    {
+      "version": "1.1.30",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.30.user.js",
+      "sizeBytes": 260620,
+      "sha256": "ec0fa3da79de93f3bcf7d6b3f26efe288bdde1eeb91942bbde1009318bb7ca63"
+    },
+    {
+      "version": "1.1.31",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.31.user.js",
+      "sizeBytes": 260666,
+      "sha256": "32fa2b506503c9e2742f98ca8da171ab818aad07116baa13ed5707fb2072f8cb"
+    },
+    {
+      "version": "1.1.32",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.32.user.js",
+      "sizeBytes": 258680,
+      "sha256": "9ff2c742da2424982adde26e38ceaf5a52940340b95061945e859b12b75c233a"
+    },
+    {
+      "version": "1.1.33",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.33.user.js",
+      "sizeBytes": 271893,
+      "sha256": "3989e7b36998c254aaef67c354cd124f9a99c5386dc671a5f27b31decf5e60ae"
+    },
+    {
+      "version": "1.1.34",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.34.user.js",
+      "sizeBytes": 272071,
+      "sha256": "2ffd4974e08302ba6d5faa15802f23bedac9590d3ce9bd2efefcb8e0e381ce0e"
+    },
+    {
+      "version": "1.1.35",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.35.user.js",
+      "sizeBytes": 272061,
+      "sha256": "1609cc97f5643f526623337d3887f472f69c7c169a76de1836cfd2a930ff155b"
+    },
+    {
+      "version": "1.1.36",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.36.user.js",
+      "sizeBytes": 259079,
+      "sha256": "6299001d235a618e8c99938136819d0ffa94c582c00c399104f624e4e6377aa0"
+    },
+    {
+      "version": "1.1.37",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.37.user.js",
+      "sizeBytes": 309572,
+      "sha256": "2687a1b914a6d7d28bdee188bb193e46cdc75aea0d36dd669de63acee85e7a66"
+    },
+    {
+      "version": "1.1.38",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.38.user.js",
+      "sizeBytes": 341151,
+      "sha256": "8418e69ec78dca01a163b2a85b0eb2cd54804caf28967cebb808bd28baf16325"
+    },
+    {
+      "version": "1.1.39",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.39.user.js",
+      "sizeBytes": 341998,
+      "sha256": "5a89f7dd276c3902d787d2b53fdc5e1b6ab993e94fff931b6ad84631f52447c0"
+    },
+    {
+      "version": "1.1.40",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.40.user.js",
+      "sizeBytes": 348291,
+      "sha256": "6fc8960c2a6a67a64f36a40d95a38bc71e5470ccb5347d442635d10ff6a62cd0"
+    },
+    {
+      "version": "1.1.41",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.41.user.js",
+      "sizeBytes": 350072,
+      "sha256": "ba12dce70807a41873ba62c725e4b558878869985048e67843ff873f2d53763f"
+    },
+    {
+      "version": "1.1.42",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.42.user.js",
+      "sizeBytes": 357141,
+      "sha256": "44ac80996ca859fd43540ad4733a95af92cc3f127e3621532eac15ec0ac7961c"
+    },
+    {
+      "version": "1.1.43",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.43.user.js",
+      "sizeBytes": 358908,
+      "sha256": "f8ecc978d94ab0bdefb682e7c9374f2c1ed29b0500066e3d19301f39c2ff5661"
+    },
+    {
+      "version": "1.1.44",
+      "path": "releases/v1.1/银河奶牛公会信用点性价比-v1.1.44.user.js",
+      "sizeBytes": 421026,
+      "sha256": "e80b690a31af5490a1bb453a428d1f05f6eb2911f48bf36baf4424da59a0100a"
+    }
+  ]
+}

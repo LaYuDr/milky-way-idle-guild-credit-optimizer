@@ -9,15 +9,32 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const EXPECTED_BRANCH = "main";
-const EXPECTED_ORIGIN = /^(?:git@github\.com:|https:\/\/github\.com\/)LaYuDr\/milky-way-idle-guild-credit-optimizer(?:\.git)?$/;
-const GREASY_FORK_URL = "https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
-const VERSIONED_BUNDLE_PATTERN = /^dist\/银河奶牛公会信用点性价比-v\d+\.\d+\.\d+\.user\.js$/;
+const EXPECTED_ORIGIN =
+  /^(?:git@github\.com:|https:\/\/github\.com\/)LaYuDr\/milky-way-idle-guild-credit-optimizer(?:\.git)?$/;
+const GREASY_FORK_URL =
+  "https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
 const FIXED_RELEASE_PATHS = new Set([
+  ".editorconfig",
+  ".gitattributes",
+  ".github/workflows/ci.yml",
+  ".gitignore",
+  ".prettierignore",
+  ".prettierrc.json",
+  "AGENTS.md",
   "CHANGELOG.md",
   "LICENSE",
   "README.md",
+  "docs/ARCHITECTURE.md",
+  "docs/DEVELOPMENT.md",
+  "docs/RELEASING.md",
+  "eslint.config.mjs",
   "package.json",
   "package-lock.json",
+  "references/README.md",
+  "references/mwi-guild-donation-value-v0.7.6.user.js",
+  "releases/README.md",
+  "releases/manifest.json",
+  "tools/verify-repository.mjs",
   "发布当前版本.command",
   "dist/milky-way-idle-guild-credit-dev-loader.user.js",
   "dist/milky-way-idle-guild-credit-optimizer.user.js",
@@ -45,13 +62,18 @@ export function bumpPatchVersion(value) {
   return `${major}.${minor}.${patch + 1}`;
 }
 
+export function releaseArchivePath(version) {
+  const [major, minor] = parseSemver(version);
+  return `releases/v${major}.${minor}/银河奶牛公会信用点性价比-v${version}.user.js`;
+}
+
 export function isAllowedReleasePath(file, version, tracked = false) {
   if (!tracked && /\.(?:orig|rej)$/.test(file)) return false;
   if (FIXED_RELEASE_PATHS.has(file)) return true;
   if (file.startsWith("src/") || file.startsWith("test/")) return true;
   if (file === "tools/release-current-version.mjs") return true;
   if (file.startsWith("tools/") && tracked) return true;
-  return file === `dist/银河奶牛公会信用点性价比-v${version}.user.js`;
+  return file === releaseArchivePath(version);
 }
 
 function parseArguments(argv) {
@@ -121,7 +143,9 @@ function splitZeroTerminated(value) {
 
 function changedPaths() {
   const trackedChanges = splitZeroTerminated(git(["diff", "--name-only", "-z", "HEAD"], { capture: true }));
-  const untrackedChanges = splitZeroTerminated(git(["ls-files", "--others", "--exclude-standard", "-z"], { capture: true }));
+  const untrackedChanges = splitZeroTerminated(
+    git(["ls-files", "--others", "--exclude-standard", "-z"], { capture: true })
+  );
   return [...new Set([...trackedChanges, ...untrackedChanges])].sort();
 }
 
@@ -169,16 +193,33 @@ function ensureChangelogEntry(version, notes) {
 }
 
 function hashFile(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, file))).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(fs.readFileSync(path.join(ROOT, file)))
+    .digest("hex");
+}
+
+function historicalBundleFiles() {
+  const releasesDirectory = path.join(ROOT, "releases");
+  if (!fs.existsSync(releasesDirectory)) return [];
+  const files = [];
+  for (const directoryEntry of fs.readdirSync(releasesDirectory, { withFileTypes: true })) {
+    if (!directoryEntry.isDirectory() || !/^v\d+\.\d+$/.test(directoryEntry.name)) continue;
+    const directory = path.join(releasesDirectory, directoryEntry.name);
+    for (const fileEntry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (fileEntry.isFile() && /^银河奶牛公会信用点性价比-v\d+\.\d+\.\d+\.user\.js$/.test(fileEntry.name)) {
+        files.push(path.posix.join("releases", directoryEntry.name, fileEntry.name));
+      }
+    }
+  }
+  return files.sort();
 }
 
 function snapshotHistoricalBundles(targetVersion) {
-  const directory = path.join(ROOT, "dist");
-  const target = `dist/银河奶牛公会信用点性价比-v${targetVersion}.user.js`;
+  const target = releaseArchivePath(targetVersion);
   const snapshots = new Map();
-  for (const name of fs.readdirSync(directory)) {
-    const file = `dist/${name}`;
-    if (file !== target && VERSIONED_BUNDLE_PATTERN.test(file)) snapshots.set(file, hashFile(file));
+  for (const file of historicalBundleFiles()) {
+    if (file !== target) snapshots.set(file, hashFile(file));
   }
   return snapshots;
 }
@@ -199,7 +240,7 @@ function extractUserscriptVersion(contents) {
 
 function verifyBuild(version) {
   const currentFile = "dist/milky-way-idle-guild-credit-optimizer.user.js";
-  const archiveFile = `dist/银河奶牛公会信用点性价比-v${version}.user.js`;
+  const archiveFile = releaseArchivePath(version);
   const loaderFile = "dist/milky-way-idle-guild-credit-dev-loader.user.js";
   const runtimeFile = "dist/runtime.js";
   for (const file of [currentFile, archiveFile, loaderFile, runtimeFile]) {
@@ -223,7 +264,10 @@ function upstreamState() {
   const upstreamResult = spawnSync("git", ["rev-parse", "@{u}"], { cwd: ROOT, encoding: "utf8" });
   if (upstreamResult.status !== 0) throw new Error("当前分支没有上游分支，无法安全自动发布");
   const upstream = upstreamResult.stdout.trim();
-  const counts = git(["rev-list", "--left-right", "--count", "@{u}...HEAD"], { capture: true }).trim().split(/\s+/).map(Number);
+  const counts = git(["rev-list", "--left-right", "--count", "@{u}...HEAD"], { capture: true })
+    .trim()
+    .split(/\s+/)
+    .map(Number);
   return { head, upstream, behind: counts[0], ahead: counts[1] };
 }
 
@@ -256,9 +300,15 @@ async function verifyGreasyFork(version, attempts = 12) {
       lastError = error;
       console.log(`Greasy Fork 检查 ${attempt}/${attempts}：${error.message}`);
     }
-    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 2500));
+    if (attempt < attempts) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 2500);
+      });
+    }
   }
-  throw new Error(`GitHub 已推送，但 Greasy Fork 尚未显示 ${version}；最后读取到 ${lastVersion || lastError?.message || "未知状态"}`);
+  throw new Error(
+    `GitHub 已推送，但 Greasy Fork 尚未显示 ${version}；最后读取到 ${lastVersion || lastError?.message || "未知状态"}`
+  );
 }
 
 function verifyRemoteHead(expectedHead) {
@@ -338,7 +388,7 @@ async function main() {
   ensureChangelogEntry(releaseVersion, options.notes);
 
   console.log("\n[1/6] 运行测试并构建");
-  run("npm", ["run", "check"], { env: { MWI_OVERWRITE_VERSIONED_ARCHIVE: "1" } });
+  run("npm", ["run", "check"], { env: { MWI_ARCHIVE_RELEASE: "1" } });
   assertHistoricalBundlesUnchanged(historicalBundles);
   verifyBuild(releaseVersion);
 
@@ -350,8 +400,11 @@ async function main() {
   printList("继续保留的文件", after.ignored);
   git(["add", "--", ...after.publishable]);
   const stagedAfter = stagedPaths();
-  const unexpected = stagedAfter.filter((file) => !isAllowedReleasePath(file, releaseVersion, trackedPaths().has(file)));
-  if (unexpected.length) throw new Error(`暂存区出现白名单外文件：\n${unexpected.map((file) => `  - ${file}`).join("\n")}`);
+  const unexpected = stagedAfter.filter(
+    (file) => !isAllowedReleasePath(file, releaseVersion, trackedPaths().has(file))
+  );
+  if (unexpected.length)
+    throw new Error(`暂存区出现白名单外文件：\n${unexpected.map((file) => `  - ${file}`).join("\n")}`);
 
   console.log("\n[3/6] 创建提交");
   git(["commit", "-m", options.message || `Release v${releaseVersion}`]);

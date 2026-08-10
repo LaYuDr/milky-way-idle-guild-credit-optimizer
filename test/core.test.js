@@ -12,18 +12,43 @@ const itemNameCatalogApi = require("../src/item-name-catalog.js");
 const releaseInfoApi = require("../src/release-info.js");
 const localizationApi = require("../src/localization.js");
 
+function projectRuntimeSource() {
+  const sourceRoot = path.join(__dirname, "..", "src");
+  const files = [path.join(sourceRoot, "userscript.js")];
+  const visit = (directory) => {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(file);
+      else if (entry.isFile() && entry.name.endsWith(".js")) files.push(file);
+    }
+  };
+  visit(path.join(sourceRoot, "runtime"));
+  visit(path.join(sourceRoot, "ui"));
+  return files
+    .sort()
+    .map((file) => fs.readFileSync(file, "utf8"))
+    .join("\n");
+}
+
 test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () => {
   const localizer = localizationApi.createLocalizer("en-US");
   assert.equal(localizer.locale, "en");
   assert.equal(localizer.t("panelTitle"), "Guild Assistant");
   assert.equal(localizer.t("setGuildLifeTarget"), "Fill Life levels");
   assert.equal(localizer.t("useGuildTokensForMissingCredits"), "Use guild tokens for every credit");
-  assert.equal(localizer.t("creditExchangeModeTitle", { mode: "Best item" }), "Current mode: Best item. Click to switch.");
+  assert.equal(
+    localizer.t("creditExchangeModeTitle", { mode: "Best item" }),
+    "Current mode: Best item. Click to switch."
+  );
   assert.equal(localizer.quantity("itemQuantity", 1), "1 item");
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
   assert.equal(localizer.number(1234567), "1,234,567");
-  assert.equal(localizer.t("noAffordableReplacement", { gold: "4,312 gold" }), "Selling this quantity yields 4,312 gold after tax, which is not enough to buy an alternative exchange item.");
+  assert.equal(
+    localizer.t("noAffordableReplacement", { gold: "4,312 gold" }),
+    "Selling this quantity yields 4,312 gold after tax, which is not enough to buy an alternative exchange item."
+  );
 });
 
 test("中文游戏环境保留中文 UI 文案与数量格式", () => {
@@ -32,7 +57,10 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.t("panelTitle"), "公会助手");
   assert.equal(localizer.t("guildTargetComplete", { domain: "生活" }), "当前已达到最大等级（生活）。");
   assert.equal(localizer.t("guildTokenCreditPlanSummary", { count: "1,200" }), "其中 1,200 公会代币用于兑换信用点。");
-  assert.equal(localizer.t("guildTokenCreditPlanPartialActive", { count: "3" }), "已选择 3 种信用点按公会代币兑换计算。");
+  assert.equal(
+    localizer.t("guildTokenCreditPlanPartialActive", { count: "3" }),
+    "已选择 3 种信用点按公会代币兑换计算。"
+  );
   assert.equal(localizer.quantity("itemQuantity", 4), "4 个");
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
 });
@@ -46,10 +74,24 @@ test("运行时 UI 不保留写死中文，原生页面识别仅保留中英文�
 });
 
 test("按价格逐档累计订单簿成本", () => {
-  const quote = core.quoteAsks({ asks: [{ price: 10, quantity: 3 }, { price: 12, quantity: 8 }] }, 7);
+  const quote = core.quoteAsks(
+    {
+      asks: [
+        { price: 10, quantity: 3 },
+        { price: 12, quantity: 8 }
+      ]
+    },
+    7
+  );
   assert.deepEqual(quote, {
-    status: "ok", requestedQuantity: 7, availableQuantity: 11, cost: 78,
-    fills: [{ price: 10, quantity: 3 }, { price: 12, quantity: 4 }]
+    status: "ok",
+    requestedQuantity: 7,
+    availableQuantity: 11,
+    cost: 78,
+    fills: [
+      { price: 10, quantity: 3 },
+      { price: 12, quantity: 4 }
+    ]
   });
 });
 
@@ -67,8 +109,14 @@ test("实时市场订单簿提取最低卖价、最高买价并保留无报价�
       itemHrid: "/items/beast_hide",
       orderBooks: {
         0: {
-          asks: [{ price: 53, quantity: 4 }, { price: 51, quantity: 2 }],
-          bids: [{ price: 48, quantity: 9 }, { price: 50, quantity: 1 }]
+          asks: [
+            { price: 53, quantity: 4 },
+            { price: 51, quantity: 2 }
+          ],
+          bids: [
+            { price: 48, quantity: 9 },
+            { price: 50, quantity: 1 }
+          ]
         },
         1: { asks: [], bids: [] }
       }
@@ -108,9 +156,7 @@ test("原生市场 DOM 兜底会识别商品 HRID 并保留完整 ask/bid 深度
       if (selector.includes("Item_itemContainer")) {
         return {
           getAttribute(name) {
-            return name === "href"
-              ? "/static/media/items_sprite.svg#basic_brewing_charm"
-              : null;
+            return name === "href" ? "/static/media/items_sprite.svg#basic_brewing_charm" : null;
           }
         };
       }
@@ -120,8 +166,14 @@ test("原生市场 DOM 兜底会识别商品 HRID 并保留完整 ask/bid 深度
   const booksContainer = {
     querySelectorAll() {
       return [
-        table("购买", [["7", "2400K"], ["1", "2450K"]]),
-        table("出售", [["10", "2350K"], ["2", "2300K"]])
+        table("购买", [
+          ["7", "2400K"],
+          ["1", "2450K"]
+        ]),
+        table("出售", [
+          ["10", "2350K"],
+          ["2", "2300K"]
+        ])
       ];
     }
   };
@@ -143,9 +195,7 @@ test("原生市场 DOM 兜底会识别商品 HRID 并保留完整 ask/bid 深度
     { price: 2350000, quantity: 10 },
     { price: 2300000, quantity: 2 }
   ]);
-  const update = marketDataApi.normalizeMarketOrderBooksUpdate(
-    marketDomApi.createMarketMessage(snapshot)
-  );
+  const update = marketDataApi.normalizeMarketOrderBooksUpdate(marketDomApi.createMarketMessage(snapshot));
   assert.equal(update.levels["0"].a, 2400000);
   assert.equal(update.levels["0"].b, 2350000);
 });
@@ -156,51 +206,72 @@ test("实时市场价格覆盖历史 API，并避免 API 与 WebSocket 并发时
     marketData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
   };
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, { revision: 1, receivedAt: 1000 });
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    { revision: 1, receivedAt: 1000 }
+  );
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 51);
 
-  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
-    previousSnapshotTimestamp: snapshot.timestamp,
-    nextSnapshotTimestamp: snapshot.timestamp,
-    coveredRevision: 1,
-    snapshotData: snapshot.marketData
-  }), false);
+  assert.equal(
+    marketDataApi.expireLiveMarketData(liveData, {
+      previousSnapshotTimestamp: snapshot.timestamp,
+      nextSnapshotTimestamp: snapshot.timestamp,
+      coveredRevision: 1,
+      snapshotData: snapshot.marketData
+    }),
+    false
+  );
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 51);
 
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 49, b: 48 } }
-  }, { revision: 2, receivedAt: 2000 });
-  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
-    previousSnapshotTimestamp: snapshot.timestamp,
-    nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    coveredRevision: 1,
-    snapshotData: snapshot.marketData
-  }), false);
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 49, b: 48 } }
+    },
+    { revision: 2, receivedAt: 2000 }
+  );
+  assert.equal(
+    marketDataApi.expireLiveMarketData(liveData, {
+      previousSnapshotTimestamp: snapshot.timestamp,
+      nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
+      coveredRevision: 1,
+      snapshotData: snapshot.marketData
+    }),
+    false
+  );
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 49);
 
-  assert.equal(marketDataApi.expireLiveMarketData(liveData, {
-    previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
-    coveredRevision: 2,
-    snapshotData: snapshot.marketData
-  }), true);
+  assert.equal(
+    marketDataApi.expireLiveMarketData(liveData, {
+      previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
+      nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
+      coveredRevision: 2,
+      snapshotData: snapshot.marketData
+    }),
+    true
+  );
   assert.equal(marketDataApi.resolveMarketPrice(snapshot, liveData, "/items/beast_hide", 0, "a"), 60);
 });
 
 test("实时市场缓存序列化后可在页面重载时恢复", () => {
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, {
-    revision: 7,
-    receivedAt: 2000,
-    snapshotTimestamp: "2026-07-26T00:00:00Z"
-  });
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    {
+      revision: 7,
+      receivedAt: 2000,
+      snapshotTimestamp: "2026-07-26T00:00:00Z"
+    }
+  );
   const serialized = marketDataApi.serializeLiveMarketData(liveData, {
     revision: 7,
     storedAt: 3000
@@ -217,84 +288,114 @@ test("实时市场缓存序列化后可在页面重载时恢复", () => {
 
 test("再次打开同一商品市场时以新订单簿替换持久缓存", () => {
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 49, b: -1 } }
-  }, { revision: 2, receivedAt: 2000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
-  const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(
-    marketDataApi.serializeLiveMarketData(liveData, { revision: 2 })
-  ));
-  assert.deepEqual({ ...restored.liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: -1 });
-  assert.deepEqual(
-    { ...restored.liveData["/items/beast_hide"].receivedAtByLevel["0"] },
-    { a: 2000, b: 2000 }
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" }
   );
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 49, b: -1 } }
+    },
+    { revision: 2, receivedAt: 2000, snapshotTimestamp: "2026-07-26T00:00:00Z" }
+  );
+  const restored = marketDataApi.restoreLiveMarketData(
+    JSON.stringify(marketDataApi.serializeLiveMarketData(liveData, { revision: 2 }))
+  );
+  assert.deepEqual({ ...restored.liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: -1 });
+  assert.deepEqual({ ...restored.liveData["/items/beast_hide"].receivedAtByLevel["0"] }, { a: 2000, b: 2000 });
 });
 
 test("只返回单边订单簿时仅更新对应报价字段", () => {
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, { revision: 1, receivedAt: 1000 });
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 49 } }
-  }, { revision: 2, receivedAt: 2000 });
-  assert.deepEqual({ ...liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: 50 });
-  assert.deepEqual(
-    { ...liveData["/items/beast_hide"].revisionByLevel["0"] },
-    { a: 2, b: 1 }
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    { revision: 1, receivedAt: 1000 }
   );
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 49 } }
+    },
+    { revision: 2, receivedAt: 2000 }
+  );
+  assert.deepEqual({ ...liveData["/items/beast_hide"].levels["0"] }, { a: 49, b: 50 });
+  assert.deepEqual({ ...liveData["/items/beast_hide"].revisionByLevel["0"] }, { a: 2, b: 1 });
 });
 
 test("重载后的实时缓存遇到冲突快照时延迟一次再淘汰", () => {
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" });
-  const restored = marketDataApi.restoreLiveMarketData(JSON.stringify(
-    marketDataApi.serializeLiveMarketData(liveData, { revision: 1 })
-  ));
-  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
-    previousSnapshotTimestamp: 0,
-    nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
-    coveredRevision: restored.revision,
-    snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
-  }), { changed: false, expired: false });
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    { revision: 1, receivedAt: 1000, snapshotTimestamp: "2026-07-26T00:00:00Z" }
+  );
+  const restored = marketDataApi.restoreLiveMarketData(
+    JSON.stringify(marketDataApi.serializeLiveMarketData(liveData, { revision: 1 }))
+  );
+  assert.deepEqual(
+    marketDataApi.reconcileLiveMarketData(restored.liveData, {
+      previousSnapshotTimestamp: 0,
+      nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
+      coveredRevision: restored.revision,
+      snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
+    }),
+    { changed: false, expired: false }
+  );
   assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
-  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
-    previousSnapshotTimestamp: 0,
-    nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    coveredRevision: restored.revision,
-    snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
-  }), { changed: true, expired: false });
+  assert.deepEqual(
+    marketDataApi.reconcileLiveMarketData(restored.liveData, {
+      previousSnapshotTimestamp: 0,
+      nextSnapshotTimestamp: "2026-07-26T00:30:00Z",
+      coveredRevision: restored.revision,
+      snapshotData: { "/items/beast_hide": { 0: { a: 60, b: 55 } } }
+    }),
+    { changed: true, expired: false }
+  );
   assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
-  assert.deepEqual(marketDataApi.reconcileLiveMarketData(restored.liveData, {
-    previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
-    nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
-    coveredRevision: restored.revision,
-    snapshotData: { "/items/beast_hide": { 0: { a: 61, b: 56 } } }
-  }), { changed: true, expired: true });
+  assert.deepEqual(
+    marketDataApi.reconcileLiveMarketData(restored.liveData, {
+      previousSnapshotTimestamp: "2026-07-26T00:30:00Z",
+      nextSnapshotTimestamp: "2026-07-26T01:00:00Z",
+      coveredRevision: restored.revision,
+      snapshotData: { "/items/beast_hide": { 0: { a: 61, b: 56 } } }
+    }),
+    { changed: true, expired: true }
+  );
   assert.equal(Object.keys(restored.liveData).length, 0);
 });
 
 test("首次 API 快照为无基线实时缓存建立基线而不误删", () => {
   const liveData = Object.create(null);
-  marketDataApi.applyLiveMarketUpdate(liveData, {
-    itemHrid: "/items/beast_hide",
-    levels: { 0: { a: 51, b: 50 } }
-  }, { revision: 1, receivedAt: 1000 });
-  assert.deepEqual(marketDataApi.reconcileLiveMarketData(liveData, {
-    previousSnapshotTimestamp: 0,
-    nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
-    coveredRevision: 1
-  }), { changed: true, expired: false });
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    {
+      itemHrid: "/items/beast_hide",
+      levels: { 0: { a: 51, b: 50 } }
+    },
+    { revision: 1, receivedAt: 1000 }
+  );
+  assert.deepEqual(
+    marketDataApi.reconcileLiveMarketData(liveData, {
+      previousSnapshotTimestamp: 0,
+      nextSnapshotTimestamp: "2026-07-26T00:00:00Z",
+      coveredRevision: 1
+    }),
+    { changed: true, expired: false }
+  );
   assert.deepEqual(
     { ...liveData["/items/beast_hide"].snapshotTimestampByLevel["0"] },
     { a: Date.parse("2026-07-26T00:00:00Z"), b: Date.parse("2026-07-26T00:00:00Z") }
@@ -318,10 +419,7 @@ test("旧版实时市场缓存会迁移为逐字段元数据", () => {
     }
   });
   assert.equal(restored.valid, true);
-  assert.deepEqual(
-    { ...restored.liveData["/items/beast_hide"].revisionByLevel["0"] },
-    { a: 4, b: 4 }
-  );
+  assert.deepEqual({ ...restored.liveData["/items/beast_hide"].revisionByLevel["0"] }, { a: 4, b: 4 });
 });
 
 test("缺项市场快照结构可被识别，避免不完整 API 覆盖完整数据", () => {
@@ -342,18 +440,26 @@ test("损坏或旧版本的实时市场缓存会被安全忽略", () => {
     revision: 0,
     valid: false
   });
-  assert.deepEqual(marketDataApi.restoreLiveMarketData(JSON.stringify({
-    schemaVersion: 999,
-    items: {}
-  })), {
-    liveData: Object.create(null),
-    revision: 0,
-    valid: false
-  });
+  assert.deepEqual(
+    marketDataApi.restoreLiveMarketData(
+      JSON.stringify({
+        schemaVersion: 999,
+        items: {}
+      })
+    ),
+    {
+      liveData: Object.create(null),
+      revision: 0,
+      valid: false
+    }
+  );
 });
 
 test("更新信息只解析 Userscript 头中的版本号", () => {
-  assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n// @version      1.0.0\n// ==/UserScript=="), "1.0.0");
+  assert.equal(
+    releaseInfoApi.parseUserScriptVersion("// @name Test\n// @version      1.0.0\n// ==/UserScript=="),
+    "1.0.0"
+  );
   assert.equal(releaseInfoApi.parseUserScriptVersion("// @name Test\n"), null);
 });
 
@@ -389,7 +495,13 @@ test("更新检查在请求长期无响应时超时", async () => {
 
 test("目标信用点按兑换批次向上取整且买方手续费为零", () => {
   const result = core.evaluateConversion(
-    { itemHrid: "/items/cheese", itemName: "奶酪", itemCount: 10, creditCount: 3, creditItemHrid: "/items/green_guild_credit" },
+    {
+      itemHrid: "/items/cheese",
+      itemName: "奶酪",
+      itemCount: 10,
+      creditCount: 3,
+      creditItemHrid: "/items/green_guild_credit"
+    },
     { asks: [{ price: 5, quantity: 400 }] },
     101
   );
@@ -401,11 +513,21 @@ test("目标信用点按兑换批次向上取整且买方手续费为零", () =>
 });
 
 test("神龛信用点缺口可换算为最优兑换物品数量", () => {
-  const [best] = core.rankConversions([
-    { itemHrid: "/items/beast_hide", itemName: "野兽皮", itemCount: 4, creditCount: 1, creditItemHrid: "/items/green_guild_credit" }
-  ], {
-    "/items/beast_hide": { asks: [{ price: 52, quantity: 100000 }] }
-  }, 20000);
+  const [best] = core.rankConversions(
+    [
+      {
+        itemHrid: "/items/beast_hide",
+        itemName: "野兽皮",
+        itemCount: 4,
+        creditCount: 1,
+        creditItemHrid: "/items/green_guild_credit"
+      }
+    ],
+    {
+      "/items/beast_hide": { asks: [{ price: 52, quantity: 100000 }] }
+    },
+    20000
+  );
   assert.equal(best.status, "ok");
   assert.equal(best.batches, 20000);
   assert.equal(best.requiredItems, 80000);
@@ -413,29 +535,48 @@ test("神龛信用点缺口可换算为最优兑换物品数量", () => {
 });
 
 test("完整方案优先于市场深度不足的更低理论单价", () => {
-  const results = core.rankConversions([
-    { itemHrid: "/items/a", itemName: "A", itemCount: 1, creditCount: 1 },
-    { itemHrid: "/items/b", itemName: "B", itemCount: 1, creditCount: 1 }
-  ], {
-    "/items/a": { asks: [{ price: 1, quantity: 2 }] },
-    "/items/b": { asks: [{ price: 2, quantity: 10 }] }
-  }, 5);
+  const results = core.rankConversions(
+    [
+      { itemHrid: "/items/a", itemName: "A", itemCount: 1, creditCount: 1 },
+      { itemHrid: "/items/b", itemName: "B", itemCount: 1, creditCount: 1 }
+    ],
+    {
+      "/items/a": { asks: [{ price: 1, quantity: 2 }] },
+      "/items/b": { asks: [{ price: 2, quantity: 10 }] }
+    },
+    5
+  );
   assert.equal(results[0].itemHrid, "/items/b");
   assert.equal(results[1].status, "insufficient_depth");
 });
 
 test("公会代币兑换价值按每点成本计算，避免整批兑换放大单代币价值", () => {
-  const values = core.rankGuildTokenCreditValues([
-    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 },
-    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
-    { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
-  ], {
-    "/items/green_guild_credit": [{ status: "ok", cost: 2240, costPerCredit: 224, itemHrid: "/items/beast_hide", itemName: "野兽皮" }],
-    "/items/gold_guild_credit": [{ status: "ok", cost: 180000000, costPerCredit: 450000, itemHrid: "/items/master_melee_charm", itemName: "大师近战护符" }],
-    "/items/purple_guild_credit": [{ status: "ok", cost: 5200000, costPerCredit: 10400, itemHrid: "/items/red_chef_hat", itemName: "红色厨师帽" }],
-    "/items/red_guild_credit": []
-  });
+  const values = core.rankGuildTokenCreditValues(
+    [
+      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+      { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 },
+      { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+      { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
+    ],
+    {
+      "/items/green_guild_credit": [
+        { status: "ok", cost: 2240, costPerCredit: 224, itemHrid: "/items/beast_hide", itemName: "野兽皮" }
+      ],
+      "/items/gold_guild_credit": [
+        {
+          status: "ok",
+          cost: 180000000,
+          costPerCredit: 450000,
+          itemHrid: "/items/master_melee_charm",
+          itemName: "大师近战护符"
+        }
+      ],
+      "/items/purple_guild_credit": [
+        { status: "ok", cost: 5200000, costPerCredit: 10400, itemHrid: "/items/red_chef_hat", itemName: "红色厨师帽" }
+      ],
+      "/items/red_guild_credit": []
+    }
+  );
   assert.equal(values[0].creditItemHrid, "/items/green_guild_credit");
   assert.equal(values[0].goldValuePerToken, 2240);
   assert.equal(values[1].creditItemHrid, "/items/gold_guild_credit");
@@ -446,7 +587,13 @@ test("公会代币兑换价值按每点成本计算，避免整批兑换放大�
 
 test("卖出后按预算回购时按可兑换批次计算信用点", () => {
   const result = core.evaluateBudgetConversion(
-    { itemHrid: "/items/cheese", itemName: "奶酪", itemCount: 4, creditCount: 3, creditItemHrid: "/items/green_guild_credit" },
+    {
+      itemHrid: "/items/cheese",
+      itemName: "奶酪",
+      itemCount: 4,
+      creditCount: 3,
+      creditItemHrid: "/items/green_guild_credit"
+    },
     5,
     43
   );
@@ -460,15 +607,19 @@ test("卖出后按预算回购时按可兑换批次计算信用点", () => {
 });
 
 test("卖出后回购优先选择可获得信用点最多的物品", () => {
-  const best = core.bestConversionForBudget([
-    { itemHrid: "/items/a", itemName: "A", itemCount: 10, creditCount: 1 },
-    { itemHrid: "/items/b", itemName: "B", itemCount: 3, creditCount: 2 },
-    { itemHrid: "/items/c", itemName: "C", itemCount: 1, creditCount: 1 }
-  ], {
-    "/items/a": 4,
-    "/items/b": 5,
-    "/items/c": 30
-  }, 45);
+  const best = core.bestConversionForBudget(
+    [
+      { itemHrid: "/items/a", itemName: "A", itemCount: 10, creditCount: 1 },
+      { itemHrid: "/items/b", itemName: "B", itemCount: 3, creditCount: 2 },
+      { itemHrid: "/items/c", itemName: "C", itemCount: 1, creditCount: 1 }
+    ],
+    {
+      "/items/a": 4,
+      "/items/b": 5,
+      "/items/c": 30
+    },
+    45
+  );
   assert.equal(best.itemHrid, "/items/b");
   assert.equal(best.actualCredits, 6);
   assert.equal(best.remainingBudget, 0);
@@ -557,8 +708,8 @@ test("强化装备使用对应强化等级的公开市场价格", () => {
   const snapshot = {
     marketData: {
       "/items/cheese_boots": {
-        "0": { b: 100 },
-        "5": { a: 900, b: 800 }
+        0: { b: 100 },
+        5: { a: 900, b: 800 }
       }
     }
   };
@@ -583,12 +734,22 @@ test("版本号比较能识别可用更新", () => {
 });
 
 test("神龛增益从起始等级到目标等级逐级累计信用点", () => {
-  const result = core.aggregateGuildBuffLevelCosts([
-    null,
-    { guildTokenCost: 400, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] },
-    { guildTokenCost: 800, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 3000 }, { itemHrid: "/items/red_guild_credit", count: 100 }] },
-    { guildTokenCost: 1600, creditCosts: [{ itemHrid: "/items/red_guild_credit", count: 500 }] }
-  ], 0, 3);
+  const result = core.aggregateGuildBuffLevelCosts(
+    [
+      null,
+      { guildTokenCost: 400, creditCosts: [{ itemHrid: "/items/brown_guild_credit", count: 2000 }] },
+      {
+        guildTokenCost: 800,
+        creditCosts: [
+          { itemHrid: "/items/brown_guild_credit", count: 3000 },
+          { itemHrid: "/items/red_guild_credit", count: 100 }
+        ]
+      },
+      { guildTokenCost: 1600, creditCosts: [{ itemHrid: "/items/red_guild_credit", count: 500 }] }
+    ],
+    0,
+    3
+  );
   assert.deepEqual(result, {
     status: "ok",
     startLevel: 0,
@@ -603,12 +764,16 @@ test("神龛增益从起始等级到目标等级逐级累计信用点", () => {
 });
 
 test("神龛增益从二级升到三级只计入三级成本", () => {
-  const result = core.aggregateGuildBuffLevelCosts([
-    null,
-    { guildTokenCost: 10, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 20 }] },
-    { guildTokenCost: 30, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 40 }] },
-    { guildTokenCost: 50, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 60 }] }
-  ], 2, 3);
+  const result = core.aggregateGuildBuffLevelCosts(
+    [
+      null,
+      { guildTokenCost: 10, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 20 }] },
+      { guildTokenCost: 30, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 40 }] },
+      { guildTokenCost: 50, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 60 }] }
+    ],
+    2,
+    3
+  );
   assert.deepEqual(result.totals, [
     { itemHrid: "/items/green_guild_credit", count: 60 },
     { itemHrid: "/items/guild_token", count: 50 }
@@ -629,7 +794,18 @@ test("多项神龛升级合并相同材料", () => {
       guildBuffHrid: "/guild_buffs/tempo_life",
       startLevel: 2,
       targetLevel: 3,
-      levelCosts: [null, null, null, { guildTokenCost: 600, creditCosts: [{ itemHrid: "/items/green_guild_credit", count: 500 }, { itemHrid: "/items/red_guild_credit", count: 100 }] }]
+      levelCosts: [
+        null,
+        null,
+        null,
+        {
+          guildTokenCost: 600,
+          creditCosts: [
+            { itemHrid: "/items/green_guild_credit", count: 500 },
+            { itemHrid: "/items/red_guild_credit", count: 100 }
+          ]
+        }
+      ]
     }
   ]);
   assert.equal(result.status, "ok");
@@ -641,71 +817,96 @@ test("多项神龛升级合并相同材料", () => {
 });
 
 test("神龛升级分别计算全部信用点成本与扣除库存后的缺口成本", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/guild_token", count: 40 },
-    { itemHrid: "/items/green_guild_credit", count: 200 },
-    { itemHrid: "/items/blue_guild_credit", count: 100 }
-  ], {
-    "/items/green_guild_credit": 10,
-    "/items/blue_guild_credit": 20
-  }, {
-    "/items/guild_token": 5,
-    "/items/green_guild_credit": 60,
-    "/items/blue_guild_credit": 120
-  });
+  const estimate = core.estimateGuildUpgradeCosts(
+    [
+      { itemHrid: "/items/guild_token", count: 40 },
+      { itemHrid: "/items/green_guild_credit", count: 200 },
+      { itemHrid: "/items/blue_guild_credit", count: 100 }
+    ],
+    {
+      "/items/green_guild_credit": 10,
+      "/items/blue_guild_credit": 20
+    },
+    {
+      "/items/guild_token": 5,
+      "/items/green_guild_credit": 60,
+      "/items/blue_guild_credit": 120
+    }
+  );
   assert.equal(estimate.status, "ok");
   assert.equal(estimate.totalGold, 4000);
   assert.equal(estimate.missingGold, 1400);
   assert.equal(estimate.guildTokensRequired, 40);
   assert.equal(estimate.guildTokensMissing, 35);
-  assert.deepEqual(estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit"), {
-    itemHrid: "/items/blue_guild_credit", required: 100, owned: 120, missing: 0, unitCost: 20, totalCost: 2000, missingCost: 0
-  });
+  assert.deepEqual(
+    estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit"),
+    {
+      itemHrid: "/items/blue_guild_credit",
+      required: 100,
+      owned: 120,
+      missing: 0,
+      unitCost: 20,
+      totalCost: 2000,
+      missingCost: 0
+    }
+  );
 });
 
 test("剩余公会代币按兑换价值依次覆盖紫色、银色并保留其余缺口", () => {
-  const result = core.allocateSurplusGuildTokens([
-    { itemHrid: "/items/purple_guild_credit", missing: 3000, unitCost: 11000 },
-    { itemHrid: "/items/silver_guild_credit", missing: 3000, unitCost: 55000 },
-    { itemHrid: "/items/green_guild_credit", missing: 3000, unitCost: 400 }
-  ], [
-    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
-    { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 }
-  ], 10000);
-
-  assert.equal(result.spentGuildTokens, 10000);
-  assert.equal(result.remainingGuildTokens, 0);
-  assert.deepEqual(result.allocations.map((allocation) => ({
-    creditItemHrid: allocation.creditItemHrid,
-    spentGuildTokens: allocation.spentGuildTokens,
-    coveredCredits: allocation.coveredCredits
-  })), [
-    { creditItemHrid: "/items/purple_guild_credit", spentGuildTokens: 3000, coveredCredits: 3000 },
-    { creditItemHrid: "/items/silver_guild_credit", spentGuildTokens: 7000, coveredCredits: 700 }
-  ]);
-});
-
-test("自动兑换预算限制代币用量并保留部分信用点的物品缺口", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/purple_guild_credit", count: 3000 },
-    { itemHrid: "/items/silver_guild_credit", count: 3000 },
-    { itemHrid: "/items/green_guild_credit", count: 3000 }
-  ], {
-    "/items/purple_guild_credit": 11000,
-    "/items/silver_guild_credit": 55000,
-    "/items/green_guild_credit": 400
-  }, {
-    "/items/guild_token": 10000
-  }, {
-    autoAllocateSurplusGuildTokens: true,
-    autoGuildTokenBudget: 5000,
-    guildTokenCreditConversions: [
+  const result = core.allocateSurplusGuildTokens(
+    [
+      { itemHrid: "/items/purple_guild_credit", missing: 3000, unitCost: 11000 },
+      { itemHrid: "/items/silver_guild_credit", missing: 3000, unitCost: 55000 },
+      { itemHrid: "/items/green_guild_credit", missing: 3000, unitCost: 400 }
+    ],
+    [
       { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
       { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
       { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 }
+    ],
+    10000
+  );
+
+  assert.equal(result.spentGuildTokens, 10000);
+  assert.equal(result.remainingGuildTokens, 0);
+  assert.deepEqual(
+    result.allocations.map((allocation) => ({
+      creditItemHrid: allocation.creditItemHrid,
+      spentGuildTokens: allocation.spentGuildTokens,
+      coveredCredits: allocation.coveredCredits
+    })),
+    [
+      { creditItemHrid: "/items/purple_guild_credit", spentGuildTokens: 3000, coveredCredits: 3000 },
+      { creditItemHrid: "/items/silver_guild_credit", spentGuildTokens: 7000, coveredCredits: 700 }
     ]
-  });
+  );
+});
+
+test("自动兑换预算限制代币用量并保留部分信用点的物品缺口", () => {
+  const estimate = core.estimateGuildUpgradeCosts(
+    [
+      { itemHrid: "/items/purple_guild_credit", count: 3000 },
+      { itemHrid: "/items/silver_guild_credit", count: 3000 },
+      { itemHrid: "/items/green_guild_credit", count: 3000 }
+    ],
+    {
+      "/items/purple_guild_credit": 11000,
+      "/items/silver_guild_credit": 55000,
+      "/items/green_guild_credit": 400
+    },
+    {
+      "/items/guild_token": 10000
+    },
+    {
+      autoAllocateSurplusGuildTokens: true,
+      autoGuildTokenBudget: 5000,
+      guildTokenCreditConversions: [
+        { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+        { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+        { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 }
+      ]
+    }
+  );
 
   assert.equal(estimate.autoGuildTokenBudgetAvailable, 10000);
   assert.equal(estimate.autoGuildTokenBudget, 5000);
@@ -729,22 +930,27 @@ test("代币预算滑块按百分比显示并在指定比例附近磁吸", () =>
 });
 
 test("自动兑换只使用扣除神龛和手动兑换后的库存代币", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/guild_token", count: 1000 },
-    { itemHrid: "/items/red_guild_credit", count: 500 },
-    { itemHrid: "/items/purple_guild_credit", count: 3000 }
-  ], {
-    "/items/purple_guild_credit": 11000
-  }, {
-    "/items/guild_token": 10000
-  }, {
-    autoAllocateSurplusGuildTokens: true,
-    guildTokenCreditHrids: ["/items/red_guild_credit"],
-    guildTokenCreditConversions: [
-      { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
-      { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 }
-    ]
-  });
+  const estimate = core.estimateGuildUpgradeCosts(
+    [
+      { itemHrid: "/items/guild_token", count: 1000 },
+      { itemHrid: "/items/red_guild_credit", count: 500 },
+      { itemHrid: "/items/purple_guild_credit", count: 3000 }
+    ],
+    {
+      "/items/purple_guild_credit": 11000
+    },
+    {
+      "/items/guild_token": 10000
+    },
+    {
+      autoAllocateSurplusGuildTokens: true,
+      guildTokenCreditHrids: ["/items/red_guild_credit"],
+      guildTokenCreditConversions: [
+        { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
+        { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 }
+      ]
+    }
+  );
 
   assert.equal(estimate.manualGuildTokenCreditExchangeRequired, 500);
   assert.equal(estimate.autoGuildTokenBudgetAvailable, 8500);
@@ -754,45 +960,53 @@ test("自动兑换只使用扣除神龛和手动兑换后的库存代币", () =>
 });
 
 test("神龛信用点缺口可全部改用公会代币并合并到代币总需求", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/guild_token", count: 1600 },
-    { itemHrid: "/items/green_guild_credit", count: 12001 },
-    { itemHrid: "/items/white_guild_credit", count: 6000 },
-    { itemHrid: "/items/blue_guild_credit", count: 6000 }
-  ], {
-    "/items/green_guild_credit": 200,
-    "/items/white_guild_credit": 700,
-    "/items/blue_guild_credit": 800
-  }, {
-    "/items/guild_token": 10750,
-    "/items/green_guild_credit": 6000,
-    "/items/white_guild_credit": 0,
-    "/items/blue_guild_credit": 98000
-  }, {
-    useGuildTokensForMissingCredits: true,
-    guildTokenCreditConversions: [
-      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
-      { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
-      { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 }
-    ]
-  });
+  const estimate = core.estimateGuildUpgradeCosts(
+    [
+      { itemHrid: "/items/guild_token", count: 1600 },
+      { itemHrid: "/items/green_guild_credit", count: 12001 },
+      { itemHrid: "/items/white_guild_credit", count: 6000 },
+      { itemHrid: "/items/blue_guild_credit", count: 6000 }
+    ],
+    {
+      "/items/green_guild_credit": 200,
+      "/items/white_guild_credit": 700,
+      "/items/blue_guild_credit": 800
+    },
+    {
+      "/items/guild_token": 10750,
+      "/items/green_guild_credit": 6000,
+      "/items/white_guild_credit": 0,
+      "/items/blue_guild_credit": 98000
+    },
+    {
+      useGuildTokensForMissingCredits: true,
+      guildTokenCreditConversions: [
+        { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+        { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
+        { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 }
+      ]
+    }
+  );
   assert.equal(estimate.status, "ok");
   assert.equal(estimate.totalGold, 0);
   assert.equal(estimate.missingGold, 0);
   assert.equal(estimate.guildTokenCreditExchangeRequired, 1201);
   assert.equal(estimate.guildTokensRequired, 2801);
   assert.equal(estimate.guildTokensMissing, 0);
-  assert.deepEqual(estimate.rows.find((row) => row.itemHrid === "/items/guild_token"), {
-    itemHrid: "/items/guild_token",
-    required: 2801,
-    owned: 10750,
-    missing: 0,
-    unitCost: null,
-    totalCost: null,
-    missingCost: null,
-    shrineRequired: 1600,
-    creditExchangeRequired: 1201
-  });
+  assert.deepEqual(
+    estimate.rows.find((row) => row.itemHrid === "/items/guild_token"),
+    {
+      itemHrid: "/items/guild_token",
+      required: 2801,
+      owned: 10750,
+      missing: 0,
+      unitCost: null,
+      totalCost: null,
+      missingCost: null,
+      shrineRequired: 1600,
+      creditExchangeRequired: 1201
+    }
+  );
   assert.deepEqual(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").guildTokenExchange, {
     creditItemHrid: "/items/green_guild_credit",
     guildTokenCount: 1,
@@ -801,27 +1015,35 @@ test("神龛信用点缺口可全部改用公会代币并合并到代币总需�
     actualCredits: 6010,
     requiredGuildTokens: 601
   });
-  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit").guildTokenExchange.requiredGuildTokens, 0);
+  assert.equal(
+    estimate.rows.find((row) => row.itemHrid === "/items/blue_guild_credit").guildTokenExchange.requiredGuildTokens,
+    0
+  );
 });
 
 test("神龛信用点可分别选择最优物品或公会代币并合并成本", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/guild_token", count: 100 },
-    { itemHrid: "/items/green_guild_credit", count: 100 },
-    { itemHrid: "/items/red_guild_credit", count: 10 }
-  ], {
-    "/items/green_guild_credit": 2
-  }, {
-    "/items/guild_token": 3,
-    "/items/green_guild_credit": 40,
-    "/items/red_guild_credit": 4
-  }, {
-    guildTokenCreditHrids: ["/items/red_guild_credit"],
-    guildTokenCreditConversions: [
-      { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
-      { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
-    ]
-  });
+  const estimate = core.estimateGuildUpgradeCosts(
+    [
+      { itemHrid: "/items/guild_token", count: 100 },
+      { itemHrid: "/items/green_guild_credit", count: 100 },
+      { itemHrid: "/items/red_guild_credit", count: 10 }
+    ],
+    {
+      "/items/green_guild_credit": 2
+    },
+    {
+      "/items/guild_token": 3,
+      "/items/green_guild_credit": 40,
+      "/items/red_guild_credit": 4
+    },
+    {
+      guildTokenCreditHrids: ["/items/red_guild_credit"],
+      guildTokenCreditConversions: [
+        { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+        { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 }
+      ]
+    }
+  );
   assert.equal(estimate.status, "ok");
   assert.equal(estimate.totalGold, 200);
   assert.equal(estimate.missingGold, 120);
@@ -831,13 +1053,14 @@ test("神龛信用点可分别选择最优物品或公会代币并合并成本",
   assert.equal(estimate.useGuildTokensForMissingCredits, true);
   assert.deepEqual(estimate.guildTokenCreditHrids, ["/items/red_guild_credit"]);
   assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/green_guild_credit").guildTokenExchange, undefined);
-  assert.equal(estimate.rows.find((row) => row.itemHrid === "/items/red_guild_credit").guildTokenExchange.requiredGuildTokens, 6);
+  assert.equal(
+    estimate.rows.find((row) => row.itemHrid === "/items/red_guild_credit").guildTokenExchange.requiredGuildTokens,
+    6
+  );
 });
 
 test("神龛升级缺少信用点价格时不伪造总价", () => {
-  const estimate = core.estimateGuildUpgradeCosts([
-    { itemHrid: "/items/red_guild_credit", count: 10 }
-  ], {}, {});
+  const estimate = core.estimateGuildUpgradeCosts([{ itemHrid: "/items/red_guild_credit", count: 10 }], {}, {});
   assert.equal(estimate.status, "partial");
   assert.deepEqual(estimate.unpricedItemHrids, ["/items/red_guild_credit"]);
   assert.equal(estimate.totalGold, 0);
@@ -846,7 +1069,10 @@ test("神龛升级缺少信用点价格时不伪造总价", () => {
 
 test("官方 i18n 名称目录优先于旧词典或规则翻译", () => {
   const storageValues = new Map();
-  const storage = { getItem: (key) => storageValues.get(key) || null, setItem: (key, value) => storageValues.set(key, value) };
+  const storage = {
+    getItem: (key) => storageValues.get(key) || null,
+    setItem: (key, value) => storageValues.set(key, value)
+  };
   const itemNames = {
     beast_hide: "官方野兽皮",
     grandmaster_cheesesmithing_charm: "官方宗师奶酪锻造护符",
@@ -859,31 +1085,77 @@ test("官方 i18n 名称目录优先于旧词典或规则翻译", () => {
     minimumEntries: 3
   });
   catalog.refresh();
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }), "官方野兽皮");
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/grandmaster_cheesesmithing_charm", englishFallback: "Grandmaster Cheesesmithing Charm", locale: "zh-CN" }), "官方宗师奶酪锻造护符");
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/ultra_brewing_tea", englishFallback: "Ultra Brewing Tea", locale: "zh-CN" }), "官方究极冲泡茶");
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "en" }), "Beast Hide");
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "官方野兽皮"
+  );
+  assert.equal(
+    catalog.resolveItemName({
+      itemHrid: "/items/grandmaster_cheesesmithing_charm",
+      englishFallback: "Grandmaster Cheesesmithing Charm",
+      locale: "zh-CN"
+    }),
+    "官方宗师奶酪锻造护符"
+  );
+  assert.equal(
+    catalog.resolveItemName({
+      itemHrid: "/items/ultra_brewing_tea",
+      englishFallback: "Ultra Brewing Tea",
+      locale: "zh-CN"
+    }),
+    "官方究极冲泡茶"
+  );
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "en" }),
+    "Beast Hide"
+  );
   assert.deepEqual(catalog.coverage(["/items/beast_hide", "/items/missing"]), {
-    requestedCount: 2, officialHitCount: 1, missingItemHrids: ["/items/missing"], source: "window-i18n", catalogEntryCount: 3
+    requestedCount: 2,
+    officialHitCount: 1,
+    missingItemHrids: ["/items/missing"],
+    source: "window-i18n",
+    catalogEntryCount: 3
   });
   itemNames.newly_added_item = "官方新增物品";
   catalog.refresh();
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/newly_added_item", englishFallback: "Newly Added Item", locale: "zh-CN" }), "官方新增物品");
+  assert.equal(
+    catalog.resolveItemName({
+      itemHrid: "/items/newly_added_item",
+      englishFallback: "Newly Added Item",
+      locale: "zh-CN"
+    }),
+    "官方新增物品"
+  );
 });
 
 test("官方名称目录在官方资源暂不可读时使用缓存，否则诚实回退英文", () => {
   const storageValues = new Map();
-  const storage = { getItem: (key) => storageValues.get(key) || null, setItem: (key, value) => storageValues.set(key, value) };
+  const storage = {
+    getItem: (key) => storageValues.get(key) || null,
+    setItem: (key, value) => storageValues.set(key, value)
+  };
   const firstCatalog = itemNameCatalogApi.createItemNameCatalog({
-    pageWindow: { i18n: { store: { data: { "zh-CN": { translation: { itemNames: { beast_hide: "官方野兽皮" } } } } } } },
+    pageWindow: {
+      i18n: { store: { data: { "zh-CN": { translation: { itemNames: { beast_hide: "官方野兽皮" } } } } } }
+    },
     storage,
     minimumEntries: 1
   });
   firstCatalog.refresh();
   const cachedCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow: {}, storage, minimumEntries: 1 });
-  assert.equal(cachedCatalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }), "官方野兽皮");
-  const emptyCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow: {}, storage: { getItem: () => null, setItem: () => {} }, minimumEntries: 1 });
-  assert.equal(emptyCatalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }), "Beast Hide");
+  assert.equal(
+    cachedCatalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "官方野兽皮"
+  );
+  const emptyCatalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: {},
+    storage: { getItem: () => null, setItem: () => {} },
+    minimumEntries: 1
+  });
+  assert.equal(
+    emptyCatalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "Beast Hide"
+  );
 });
 
 test("官方名称目录兼容参考插件使用的 zh-Hans 与 React Provider 资源形状", () => {
@@ -894,19 +1166,31 @@ test("官方名称目录兼容参考插件使用的 zh-Hans 与 React Provider �
     minimumEntries: 2
   });
   catalog.refresh();
-  assert.equal(catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }), "官方野兽皮");
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "官方野兽皮"
+  );
   assert.equal(catalog.coverage(["/items/beast_hide", "/items/green_guild_credit"]).officialHitCount, 2);
 });
 
 test("支持游戏初始化消息使用的 itemDetailMap 对象结构", () => {
-  const conversions = core.conversionsFromItemDetails({
-    "/items/cheese": {
-      guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 10, creditCount: 1 }]
+  const conversions = core.conversionsFromItemDetails(
+    {
+      "/items/cheese": {
+        guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 10, creditCount: 1 }]
+      }
+    },
+    "/items/green_guild_credit"
+  );
+  assert.deepEqual(conversions, [
+    {
+      itemHrid: "/items/cheese",
+      itemName: "/items/cheese",
+      creditItemHrid: "/items/green_guild_credit",
+      itemCount: 10,
+      creditCount: 1
     }
-  }, "/items/green_guild_credit");
-  assert.deepEqual(conversions, [{
-    itemHrid: "/items/cheese", itemName: "/items/cheese", creditItemHrid: "/items/green_guild_credit", itemCount: 10, creditCount: 1
-  }]);
+  ]);
 });
 
 test("正式版桥接保留游戏实时神龛等级", () => {
@@ -928,11 +1212,17 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   const page = { WebSocket: FakeWebSocket };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String });
   const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
-  socket.receive(JSON.stringify({ payload: {
-    characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } },
-    guildBuildingMap: { "/guild_buildings/tempo_shrine": { level: 4 } },
-    characterItems: [{ itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 123 }]
-  } }));
+  socket.receive(
+    JSON.stringify({
+      payload: {
+        characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } },
+        guildBuildingMap: { "/guild_buildings/tempo_shrine": { level: 4 } },
+        characterItems: [
+          { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 123 }
+        ]
+      }
+    })
+  );
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevels["/guild_buffs/tempo_combat"].level, 7);
   assert.equal(page.__mwiGuildCreditBridge.guildShrineLevels["/guild_buildings/tempo_shrine"].level, 4);
   assert.equal(page.__mwiGuildCreditBridge.characterItems[0].count, 123);
@@ -940,16 +1230,26 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 1);
 
   let callbackCount = 0;
-  page.__mwiGuildCreditBridge.onGuildBuffLevelsUpdated = () => { callbackCount += 1; };
-  socket.receive(JSON.stringify({ payload: {
-    characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } }
-  } }));
+  page.__mwiGuildCreditBridge.onGuildBuffLevelsUpdated = () => {
+    callbackCount += 1;
+  };
+  socket.receive(
+    JSON.stringify({
+      payload: {
+        characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } }
+      }
+    })
+  );
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 1);
   assert.equal(callbackCount, 0);
 
-  socket.receive(JSON.stringify({ payload: {
-    characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 8 } }
-  } }));
+  socket.receive(
+    JSON.stringify({
+      payload: {
+        characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 8 } }
+      }
+    })
+  );
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevels["/guild_buffs/tempo_combat"].level, 8);
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 2);
   assert.equal(callbackCount, 1);
@@ -958,47 +1258,112 @@ test("正式版桥接保留游戏实时神龛等级", () => {
 test("正式版桥接按游戏原生 endCharacterItems 增量实时更新库存", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor(url) { this.url = url; this.listeners = new Map(); }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    receive(data) { this.listeners.get("message")({ data }); }
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+    receive(data) {
+      this.listeners.get("message")({ data });
+    }
   }
   const page = { WebSocket: FakeWebSocket };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number });
   const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
-  socket.receive(JSON.stringify({ payload: { characterItems: [
-    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 10750 },
-    { hash: "1::/item_locations/inventory::/items/green_guild_credit::0", itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 6000 }
-  ] } }));
+  socket.receive(
+    JSON.stringify({
+      payload: {
+        characterItems: [
+          {
+            hash: "1::/item_locations/inventory::/items/guild_token::0",
+            itemHrid: "/items/guild_token",
+            itemLocationHrid: "/item_locations/inventory",
+            enhancementLevel: 0,
+            count: 10750
+          },
+          {
+            hash: "1::/item_locations/inventory::/items/green_guild_credit::0",
+            itemHrid: "/items/green_guild_credit",
+            itemLocationHrid: "/item_locations/inventory",
+            enhancementLevel: 0,
+            count: 6000
+          }
+        ]
+      }
+    })
+  );
   const bridge = page.__mwiGuildCreditBridge;
   assert.equal(bridge.characterItemsRevision, 1);
   let callbackCount = 0;
-  bridge.onCharacterItemsUpdated = () => { callbackCount += 1; };
+  bridge.onCharacterItemsUpdated = () => {
+    callbackCount += 1;
+  };
 
-  socket.receive(JSON.stringify({ type: "action_type_consumable_slots_updated", endCharacterItems: [
-    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 8450 }
-  ] }));
+  socket.receive(
+    JSON.stringify({
+      type: "action_type_consumable_slots_updated",
+      endCharacterItems: [
+        {
+          hash: "1::/item_locations/inventory::/items/guild_token::0",
+          itemHrid: "/items/guild_token",
+          itemLocationHrid: "/item_locations/inventory",
+          enhancementLevel: 0,
+          count: 8450
+        }
+      ]
+    })
+  );
   assert.equal(bridge.characterItems.find((item) => item.itemHrid === "/items/guild_token").count, 8450);
   assert.equal(bridge.characterItems.find((item) => item.itemHrid === "/items/green_guild_credit").count, 6000);
   assert.equal(bridge.characterItemsRevision, 2);
   assert.equal(callbackCount, 1);
   assert.equal(bridge.diagnostics.lastCharacterItemsSource, "incremental");
 
-  socket.receive(JSON.stringify({ type: "items_updated", payload: { endCharacterItems: [
-    { hash: "1::/item_locations/inventory::/items/green_guild_credit::0", itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 0 }
-  ] } }));
-  assert.equal(bridge.characterItems.some((item) => item.itemHrid === "/items/green_guild_credit"), false);
+  socket.receive(
+    JSON.stringify({
+      type: "items_updated",
+      payload: {
+        endCharacterItems: [
+          {
+            hash: "1::/item_locations/inventory::/items/green_guild_credit::0",
+            itemHrid: "/items/green_guild_credit",
+            itemLocationHrid: "/item_locations/inventory",
+            enhancementLevel: 0,
+            count: 0
+          }
+        ]
+      }
+    })
+  );
+  assert.equal(
+    bridge.characterItems.some((item) => item.itemHrid === "/items/green_guild_credit"),
+    false
+  );
   assert.equal(bridge.characterItemsRevision, 3);
   assert.equal(callbackCount, 2);
 
-  socket.receive(JSON.stringify({ type: "items_updated", endCharacterItems: [
-    { hash: "1::/item_locations/inventory::/items/guild_token::0", itemHrid: "/items/guild_token", itemLocationHrid: "/item_locations/inventory", enhancementLevel: 0, count: 8450 }
-  ] }));
+  socket.receive(
+    JSON.stringify({
+      type: "items_updated",
+      endCharacterItems: [
+        {
+          hash: "1::/item_locations/inventory::/items/guild_token::0",
+          itemHrid: "/items/guild_token",
+          itemLocationHrid: "/item_locations/inventory",
+          enhancementLevel: 0,
+          count: 8450
+        }
+      ]
+    })
+  );
   assert.equal(bridge.characterItemsRevision, 3);
   assert.equal(callbackCount, 2);
 });
 
 test("正式版库存修订会触发神龛计划与兑换顾问刷新", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  const source = projectRuntimeSource();
   assert.match(source, /bridge\.onCharacterItemsUpdated = hydrateBridgeData/);
   assert.match(source, /characterItemsRevision > state\.characterItemsBridgeRevision/);
   assert.match(source, /setCharacterItems\(bridge\.characterItems\)\) scheduleInventoryDataRefresh\(\)/);
@@ -1011,20 +1376,29 @@ test("正式版库存修订会触发神龛计划与兑换顾问刷新", () => {
 test("正式版桥接被动保存玩家打开商品时收到的实时市场价格", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor(url) { this.url = url; this.listeners = new Map(); }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    receive(data) { this.listeners.get("message")({ data }); }
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+    receive(data) {
+      this.listeners.get("message")({ data });
+    }
   }
   const page = { WebSocket: FakeWebSocket, MwiGuildCreditMarketData: marketDataApi };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number });
   const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
-  socket.receive(JSON.stringify({
-    type: "market_item_order_books_updated",
-    marketItemOrderBooks: {
-      itemHrid: "/items/snake_fang",
-      orderBooks: { 0: { asks: [{ price: 7600, quantity: 5 }], bids: [{ price: 7200, quantity: 3 }] } }
-    }
-  }));
+  socket.receive(
+    JSON.stringify({
+      type: "market_item_order_books_updated",
+      marketItemOrderBooks: {
+        itemHrid: "/items/snake_fang",
+        orderBooks: { 0: { asks: [{ price: 7600, quantity: 5 }], bids: [{ price: 7200, quantity: 3 }] } }
+      }
+    })
+  );
   const bridge = page.__mwiGuildCreditBridge;
   assert.equal(bridge.marketOrderBookRevision, 1);
   assert.equal(bridge.marketOrderBooks["/items/snake_fang"].update.levels["0"].a, 7600);
@@ -1034,12 +1408,27 @@ test("正式版桥接被动保存玩家打开商品时收到的实时市场价�
 test("正式版桥接只监听官方游戏 WebSocket", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor(url) { this.url = url; this.listeners = new Map(); }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
   }
   const page = { WebSocket: FakeWebSocket, MwiGuildCreditMarketData: marketDataApi };
   vm.runInNewContext(bridgeSource, {
-    window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array, Date, Number
+    window: page,
+    JSON,
+    Map,
+    Object,
+    Set,
+    WeakSet,
+    URL,
+    String,
+    Array,
+    Date,
+    Number
   });
   const unrelatedSocket = new page.WebSocket("wss://example.invalid/ws");
   assert.equal(unrelatedSocket.listeners.has("message"), false);
@@ -1130,18 +1519,23 @@ test("正式版桥接在 unsafeWindow 代理隔离时注入游戏主世界", () 
   assert.equal(page.WebSocket.__mwiGuildCreditBridge, true);
   assert.equal(sandboxWindow.WebSocket, SandboxWebSocket);
   const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
-  socket.receive(JSON.stringify({
-    type: "market_item_order_books_updated",
-    marketItemOrderBooks: {
-      itemHrid: "/items/brewing_speed_amulet",
-      orderBooks: {
-        0: {
-          asks: [{ price: 2400000, quantity: 7 }, { price: 2450000, quantity: 1 }],
-          bids: [{ price: 2350000, quantity: 10 }]
+  socket.receive(
+    JSON.stringify({
+      type: "market_item_order_books_updated",
+      marketItemOrderBooks: {
+        itemHrid: "/items/brewing_speed_amulet",
+        orderBooks: {
+          0: {
+            asks: [
+              { price: 2400000, quantity: 7 },
+              { price: 2450000, quantity: 1 }
+            ],
+            bids: [{ price: 2350000, quantity: 10 }]
+          }
         }
       }
-    }
-  }));
+    })
+  );
   assert.equal(page.__mwiGuildCreditBridge, undefined);
   assert.equal(sandboxWindow.__mwiGuildCreditBridge.marketOrderBookRevision, 1);
   assert.equal(sandboxWindow.__mwiGuildCreditBridge.diagnostics.installMode, "gm_add_element_main_world");
@@ -1154,10 +1548,10 @@ test("正式版桥接在 unsafeWindow 代理隔离时注入游戏主世界", () 
 });
 
 test("正式版把实时市场价格接入浏览器持久缓存", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  const source = projectRuntimeSource();
   assert.match(source, /mwi-guild-credit-live-market-v1/);
   assert.match(source, /restoreLiveMarketData\(raw\)/);
-  assert.match(source, /serializeLiveMarketData\(state\.marketLiveData/);
+  assert.match(source, /serializeLiveMarketData\(liveData/);
   assert.match(source, /persistLiveMarketData\(\);\s+scheduleMarketDataRefresh\(\)/);
   assert.match(source, /reconcileLiveMarketData\(state\.marketLiveData/);
   assert.match(source, /confirmMissingMarketSnapshot\(marketData, nextTimestamp\)/);
@@ -1182,23 +1576,33 @@ test("正式版桥接通过游戏原生控制器打开指定市场物品", () =>
   };
   const page = {
     WebSocket: FakeWebSocket,
-    document: { getElementById: (id) => id === "root" ? root : null }
+    document: { getElementById: (id) => (id === "root" ? root : null) }
   };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
   const bridge = page.__mwiGuildCreditBridge;
   assert.equal(bridge.goToMarketplace("/items/snake_fang", 6), true);
   assert.deepEqual(calls, [["/items/snake_fang", 6]]);
   assert.equal(bridge.goToMarketplace("/items/snake_fang"), true);
-  assert.deepEqual(calls, [["/items/snake_fang", 6], ["/items/snake_fang", 0]]);
+  assert.deepEqual(calls, [
+    ["/items/snake_fang", 6],
+    ["/items/snake_fang", 0]
+  ]);
   assert.equal(bridge.goToMarketplace("invalid-item"), false);
 });
 
 test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor(url) { this.url = url; this.listeners = new Map(); }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    receive(data) { this.listeners.get("message")({ data }); }
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+    receive(data) {
+      this.listeners.get("message")({ data });
+    }
   }
   const page = { WebSocket: FakeWebSocket };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
@@ -1212,37 +1616,57 @@ test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
 test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
-    constructor(url) { this.url = url; this.listeners = new Map(); }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    receive(data) { this.listeners.get("message")({ data }); }
+    constructor(url) {
+      this.url = url;
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+    receive(data) {
+      this.listeners.get("message")({ data });
+    }
   }
   const page = { WebSocket: FakeWebSocket };
   vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
   const socket = new page.WebSocket("wss://api.milkywayidle.com/ws");
-  socket.receive(JSON.stringify({ payload: {
-    guildBuildingDetailMap: {
-      "/guild_buildings/alpha": { guildBuildingHrid: "/guild_buildings/alpha", guildShrineHrid: "/guild_shrines/force" }
-    }
-  } }));
-  assert.equal(page.__mwiGuildCreditBridge.guildShrineDetails["/guild_shrines/force"].guildBuildingHrid, "/guild_buildings/alpha");
+  socket.receive(
+    JSON.stringify({
+      payload: {
+        guildBuildingDetailMap: {
+          "/guild_buildings/alpha": {
+            guildBuildingHrid: "/guild_buildings/alpha",
+            guildShrineHrid: "/guild_shrines/force"
+          }
+        }
+      }
+    })
+  );
+  assert.equal(
+    page.__mwiGuildCreditBridge.guildShrineDetails["/guild_shrines/force"].guildBuildingHrid,
+    "/guild_buildings/alpha"
+  );
 });
 
 test("三个内部页签会持久化并恢复最后打开的视图", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
-  assert.match(source, /const PANEL_VIEWS = \["credit", "upgrade", "construction"\]/);
+  const source = projectRuntimeSource();
+  assert.match(source, /PANEL_VIEWS: \["credit", "upgrade", "construction"\]/);
+  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction"\]/);
   assert.match(source, /activeView: "credit"/);
-  assert.match(source, /activeView: normalizePanelView\(stored\.activeView\)/);
+  assert.match(source, /activeView: normalizePanelView\(stored\.activeView, config\.PANEL_VIEWS\)/);
   assert.match(source, /activeView: state\.activeView/);
+  assert.match(source, /panelOrder: normalizePanelOrder\(state\.panelOrder/);
   assert.match(source, /state\.activeView = selectedView;\s*persistPluginUiState\(\);/);
   assert.match(source, /panel\.dataset\.activeView = state\.activeView/);
-  assert.match(source, /data-role="credit-view"\$\{state\.activeView === "credit"/);
-  assert.match(source, /data-role="upgrade-view"\$\{state\.activeView === "upgrade"/);
-  assert.match(source, /data-role="construction-view"\$\{state\.activeView === "construction"/);
+  assert.match(source, /data-role="credit-view"[\s\S]{0,150}state\.activeView === "credit"/);
+  assert.match(source, /data-role="upgrade-view"[\s\S]{0,150}state\.activeView === "upgrade"/);
+  assert.match(source, /data-role="construction-view"[\s\S]{0,150}state\.activeView === "construction"/);
   assert.match(source, /activeView === "construction"\) refreshGuildConstruction/);
+  assert.match(source, /createPointerSortable/);
 });
 
 test("总览界面固定展示八种信用点、前五项、官方名称与物品图标", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  const source = projectRuntimeSource();
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   const buildSource = fs.readFileSync(path.join(__dirname, "..", "tools", "build.js"), "utf8");
   const harnessSource = fs.readFileSync(path.join(__dirname, "..", "tools", "test-harness.html"), "utf8");
@@ -1257,7 +1681,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /conversionCache: new Map\(\)/);
   assert.match(source, /state\.conversionCache\.clear\(\)/);
   assert.match(source, /state\.conversionCache\.get\(creditItemHrid\)/);
-  assert.match(source, /hydrateBridgeData\(\);\s*extractItemDetailsFromReact\(\);\s*if \(!state\.itemDetails\) hydrateLocalInitData\(\);/);
+  assert.match(
+    source,
+    /hydrateBridgeData\(\);\s*extractItemDetailsFromReact\(\);\s*if \(!state\.itemDetails\) hydrateLocalInitData\(\);/
+  );
   assert.match(source, /!state\.itemDetails && setItemDetails\(data\.itemDetailMap \|\| data\.itemDetailDict\)/);
   assert.match(source, /setPriceReference\(button\.dataset\.priceReference\)/);
   assert.match(source, /mwi-credit-price-reference/);
@@ -1276,7 +1703,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /guildTokenValuesCollapsed: state\.guildTokenValuesCollapsed/);
   assert.match(source, /guildTokenCreditHrids: Array\.from\(state\.guildTokenCreditHrids\)/);
   assert.match(source, /stored\.useGuildTokensForMissingCredits === true/);
-  assert.match(source, /useGuildTokensForMissingCredits: CREDIT_TYPES\.every/);
+  assert.match(source, /useGuildTokensForMissingCredits: config\.CREDIT_TYPES\.every/);
   assert.match(source, /targetCredit: state\.targetCredit/);
   assert.match(source, /value="\$\{state\.targetCredit\}"/);
   assert.match(source, /--mwi-entry-min-width:300px/);
@@ -1324,10 +1751,13 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /state\.creditTab\.parentElement === tabBar/);
   assert.match(source, /mwiCreditNativeTabListener/);
   assert.match(source, /state\.creditTab\.parentElement !== tabBar/);
-  assert.doesNotMatch(source, /state\.panel && state\.panel\.isConnected && state\.creditTab && state\.creditTab\.isConnected\) return;/);
+  assert.doesNotMatch(
+    source,
+    /state\.panel && state\.panel\.isConnected && state\.creditTab && state\.creditTab\.isConnected\) return;/
+  );
   assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
   assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
-  assert.match(source, /String\(child\.innerText \|\| child\.textContent \|\| ""\)\.replaceAll/);
+  assert.match(source, /String\(\s*child\.innerText \|\| child\.textContent \|\| ""\s*\)\s*\.replaceAll/);
   assert.doesNotMatch(source, /child\.innerText\.replaceAll/);
   assert.match(source, /overflow-y:auto/);
   assert.match(source, /data-role="toggle-credit-section"/);
@@ -1339,7 +1769,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="upgrade-plan-list"/);
   assert.match(source, /mwi-upgrade-actions.*data-role="add-upgrade-plan"/);
   assert.match(source, /data-role="clear-upgrade-plans"/);
-  assert.match(source, /const SHOW_ALL_CREDIT_TOKEN_TOGGLE = false/);
+  assert.match(source, /SHOW_ALL_CREDIT_TOKEN_TOGGLE: false/);
   assert.match(source, /if \(!SHOW_ALL_CREDIT_TOKEN_TOGGLE\) return ""/);
   assert.match(source, /\$\{renderGuildTokenCreditPlanToggle\(\)\}/);
   assert.match(source, /data-role="toggle-guild-token-credit-plan"/);
@@ -1352,7 +1782,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /guildTokenCreditPlanSummary/);
   assert.match(source, /function clearGuildUpgradePlans\(\)/);
   assert.match(source, /state\.suppressUpgradePlanAutofill = true/);
-  assert.match(source, /clearGuildUpgradePlans\(\); persistPluginUiState\(\); refreshGuildUpgrade\(panel\);/);
+  assert.match(source, /clearGuildUpgradePlans\(\);\s*persistPluginUiState\(\);\s*refreshGuildUpgrade\(panel\);/);
   assert.match(source, /function removeGuildUpgradePlan\(planId\)/);
   assert.match(source, /const removedLastPlan = state\.upgradePlans\.length === 0/);
   assert.match(source, /state\.suppressUpgradePlanAutofill = removedLastPlan/);
@@ -1361,7 +1791,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="plan-target"/);
   assert.match(source, /\.mwi-upgrade-plan label\.mwi-upgrade-plan-shrine\{grid-column:1;grid-row:1\}/);
   assert.match(source, /\.mwi-upgrade-plan select\{width:100%!important/);
-  assert.match(source, /function updateRenderedMarkup\(element, markup\)/);
+  assert.match(source, /function updateRenderedMarkup\(element, markup, propertyName\)/);
   assert.match(source, /updateRenderedMarkup\(list, columnHeaders \+ plansMarkup\)/);
   assert.doesNotMatch(source, /mwi-upgrade-plan-index|mwi-route-arrive|mwi-upgrade-plan-list::before/);
   assert.match(source, /characterGuildBuffMap/);
@@ -1450,13 +1880,13 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /core\.rankConversions\(conversions, books, targetCredits\)/);
   assert.doesNotMatch(source, /data-role="item-query-/);
   assert.doesNotMatch(source, /core\.analyzeItemConversion\(/);
-  assert.match(source, /mwi-view-tabs[\s\S]{0,500}data-role="view-upgrade"[\s\S]{0,500}data-role="view-credit"/);
+  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction"\]/);
   assert.match(source, /function bestCreditMaterialPlans\(estimate\)/);
   assert.match(source, /row\.remainingMissing \?\? row\.missing/);
   assert.match(source, /data-role="guild-token-budget-range"/);
   assert.match(source, /data-role="guild-token-budget-number"/);
   assert.match(source, /data-role="guild-token-budget-percent"/);
-  assert.match(source, /GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES = \[20, 40, 50, 60, 80, 100\]/);
+  assert.match(source, /GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES: \[20, 40, 50, 60, 80, 100\]/);
   assert.match(source, /guildTokenBudgetRange\.dataset\.dragging === "true"/);
   assert.match(source, /snapGuildTokenBudget/);
   assert.match(source, /autoGuildTokenBudget: state\.autoGuildTokenBudget/);
@@ -1473,12 +1903,15 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /@container \(max-width:760px\)/);
   assert.doesNotMatch(source, /@media \(max-width:720px\)/);
   assert.doesNotMatch(source, /\.mwi-material-list\{display:grid;grid-template-columns:repeat\(2/);
-  assert.match(source, /\.mwi-material-plans\{grid-column:4;display:grid;grid-template-columns:repeat\(auto-fit,minmax\(140px,1fr\)\)/);
+  assert.match(
+    source,
+    /\.mwi-material-plans\{grid-column:4;display:grid;grid-template-columns:repeat\(auto-fit,minmax\(140px,1fr\)\)/
+  );
   assert.doesNotMatch(source, /@container \(max-width:460px\)/);
   assert.match(source, /costSummary/);
   assert.match(source, /plan\.requiredItems/);
   assert.match(source, /core\.estimateSaleReplacement/);
-  assert.match(source, /SELLER_TAX_RATE = 0\.02/);
+  assert.match(source, /SELLER_TAX_RATE: 0\.02/);
   assert.match(source, /sellAndBuyMore/);
   assert.match(source, /noSellPrice/);
   assert.doesNotMatch(source, /if \(replacement\.status !== "ok"\) \{\s*hideGuildExchangeAdvisor\(\);/);
@@ -1493,7 +1926,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /attributeFilter: \["aria-hidden", "class", "hidden", "style"\]/);
   assert.doesNotMatch(source, /characterData: true/);
   assert.match(source, /window\.requestAnimationFrame/);
-  assert.match(source, /exchangeAdvisorForceRender/);
+  assert.match(source, /schedulerApi\.createFrameTask/);
+  assert.match(source, /merge: \(current, next\) => Boolean\(current \|\| next\)/);
   assert.doesNotMatch(source, /exchangeAdvisorTimer/);
   assert.doesNotMatch(source, /exchangeAdvisorVisibilityTimer/);
   assert.doesNotMatch(source, /watchGuildExchangeAdvisorVisibility/);
@@ -1516,7 +1950,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /updateLatest/);
   assert.match(source, /mwi-update-available/);
   assert.match(source, /raw\.githubusercontent\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
-  assert.match(source, /UPDATE_CHECK_TIMEOUT_MS = 8000/);
+  assert.match(source, /UPDATE_CHECK_TIMEOUT_MS: 8000/);
   assert.match(source, /updateChecker\.latestVersion\(\)/);
   assert.match(source, /releaseInfoApi\.createVersionChecker/);
   assert.match(buildSource, /@author       柆雨/);
@@ -1529,10 +1963,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(buildSource, /不会上传账号数据/);
   assert.match(buildSource, /MWI_GUILD_CREDIT_RUNTIME/);
   assert.match(buildSource, /window\.MwiGuildCreditVersion/);
-  assert.match(buildSource, /source\("src\/market-dom\.js"\)/);
-  assert.match(buildSource, /source\("src\/bridge\.js"\)/);
-  assert.match(buildSource, /source\("src\/market-data\.js"\)/);
-  assert.match(buildSource, /source\("src\/release-info\.js"\)/);
+  assert.match(buildSource, /"src\/market-dom\.js"/);
+  assert.match(buildSource, /"src\/bridge\.js"/);
+  assert.match(buildSource, /"src\/market-data\.js"/);
+  assert.match(buildSource, /"src\/release-info\.js"/);
   assert.match(bridgeSource, /ObservedWebSocket/);
   assert.match(bridgeSource, /market_item_order_books_updated/);
   assert.match(bridgeSource, /characterGuildBuffDict/);

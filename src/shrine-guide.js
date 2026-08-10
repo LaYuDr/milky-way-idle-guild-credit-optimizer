@@ -63,7 +63,8 @@
     }
     const itemCount = positiveInteger(materialPlan.itemCount) || 0;
     const creditCount = positiveInteger(materialPlan.creditCount) || 0;
-    const batches = positiveInteger(materialPlan.batches) || (creditCount ? Math.ceil(remainingMissing / creditCount) : 0);
+    const batches =
+      positiveInteger(materialPlan.batches) || (creditCount ? Math.ceil(remainingMissing / creditCount) : 0);
     return {
       creditItemHrid: row.itemHrid,
       remainingMissing,
@@ -97,30 +98,43 @@
     const creditOrder = Array.isArray(settings.creditOrder) ? settings.creditOrder : [];
     const creditIndex = new Map(creditOrder.map((itemHrid, index) => [itemHrid, index]));
     const creditSet = new Set(creditOrder);
-    const materialPlans = settings.creditMaterialPlans && typeof settings.creditMaterialPlans === "object"
-      ? settings.creditMaterialPlans
-      : {};
+    const materialPlans =
+      settings.creditMaterialPlans && typeof settings.creditMaterialPlans === "object"
+        ? settings.creditMaterialPlans
+        : {};
     const missingCredits = settings.estimate.rows
       .filter((row) => creditSet.has(row && row.itemHrid))
       .map((row) => normalizeCreditStep(row, materialPlans[row.itemHrid]))
       .filter(Boolean)
-      .sort((left, right) => (creditIndex.get(left.creditItemHrid) ?? Number.MAX_SAFE_INTEGER) - (creditIndex.get(right.creditItemHrid) ?? Number.MAX_SAFE_INTEGER));
+      .sort(
+        (left, right) =>
+          (creditIndex.get(left.creditItemHrid) ?? Number.MAX_SAFE_INTEGER) -
+          (creditIndex.get(right.creditItemHrid) ?? Number.MAX_SAFE_INTEGER)
+      );
     const blockers = settings.estimate.rows
-      .filter((row) => row && !creditSet.has(row.itemHrid) && nonNegativeNumber(row.remainingMissing ?? row.missing) > 0)
-      .map((row) => ({ itemHrid: row.itemHrid, missing: Math.ceil(nonNegativeNumber(row.remainingMissing ?? row.missing)) }));
+      .filter(
+        (row) => row && !creditSet.has(row.itemHrid) && nonNegativeNumber(row.remainingMissing ?? row.missing) > 0
+      )
+      .map((row) => ({
+        itemHrid: row.itemHrid,
+        missing: Math.ceil(nonNegativeNumber(row.remainingMissing ?? row.missing))
+      }));
     const modal = settings.modal && typeof settings.modal === "object" ? settings.modal : null;
-    const matchedCredit = modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid) || null;
+    const matchedCredit =
+      (modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid)) || null;
     const modalMaxBatches = positiveInteger(modal && modal.maxBatches);
     const suggestedBatches = matchedCredit
       ? Math.min(matchedCredit.batches, modalMaxBatches || matchedCredit.batches)
       : 0;
-    const activeCredit = matchedCredit ? {
-      ...matchedCredit,
-      maxBatches: modalMaxBatches,
-      suggestedBatches,
-      suggestedItems: suggestedBatches * matchedCredit.itemCount,
-      suggestedCredits: suggestedBatches * matchedCredit.creditCount
-    } : null;
+    const activeCredit = matchedCredit
+      ? {
+          ...matchedCredit,
+          maxBatches: modalMaxBatches,
+          suggestedBatches,
+          suggestedItems: suggestedBatches * matchedCredit.itemCount,
+          suggestedCredits: suggestedBatches * matchedCredit.creditCount
+        }
+      : null;
     const result = { ...base, missingCredits, blockers, activeCredit };
 
     if (activeCredit) {

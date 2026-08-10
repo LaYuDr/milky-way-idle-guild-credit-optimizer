@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -8,7 +9,50 @@ const source = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const outputDirectory = path.join(root, "dist");
 fs.mkdirSync(outputDirectory, { recursive: true });
 
+function releaseRecords() {
+  const releasesDirectory = path.join(root, "releases");
+  const records = [];
+  if (!fs.existsSync(releasesDirectory)) return records;
+  for (const seriesEntry of fs.readdirSync(releasesDirectory, { withFileTypes: true })) {
+    if (!seriesEntry.isDirectory() || !/^v\d+\.\d+$/.test(seriesEntry.name)) continue;
+    const seriesDirectory = path.join(releasesDirectory, seriesEntry.name);
+    for (const fileEntry of fs.readdirSync(seriesDirectory, { withFileTypes: true })) {
+      const match = /^银河奶牛公会信用点性价比-v(\d+\.\d+\.\d+)\.user\.js$/.exec(fileEntry.name);
+      if (!fileEntry.isFile() || !match) continue;
+      const file = path.join(seriesDirectory, fileEntry.name);
+      const contents = fs.readFileSync(file);
+      records.push({
+        version: match[1],
+        path: path.posix.join("releases", seriesEntry.name, fileEntry.name),
+        sizeBytes: contents.length,
+        sha256: crypto.createHash("sha256").update(contents).digest("hex")
+      });
+    }
+  }
+  records.sort((left, right) => {
+    const a = left.version.split(".").map(Number);
+    const b = right.version.split(".").map(Number);
+    for (let index = 0; index < 3; index += 1) {
+      if (a[index] !== b[index]) return a[index] - b[index];
+    }
+    return 0;
+  });
+  return records;
+}
+
+function writeReleaseManifest() {
+  const manifest = {
+    schemaVersion: 1,
+    artifactType: "tampermonkey-userscript",
+    policy: "append-only",
+    releases: releaseRecords()
+  };
+  fs.writeFileSync(path.join(root, "releases", "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+}
+
 const version = process.env.MWI_VERSION || require(path.join(root, "package.json")).version;
+const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+if (!versionMatch) throw new Error(`Invalid package version: ${version}`);
 const header = `// ==UserScript==
 // @name         银河奶牛公会信用点性价比
 // @namespace    https://www.milkywayidle.com/
@@ -27,15 +71,50 @@ const header = `// ==UserScript==
 
 `;
 
-const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${source("src/market-data.js")}\n\n${source("src/market-dom.js")}\n\n${source("src/bridge.js")}\n\n${source("src/item-name-catalog.js")}\n\n${source("src/release-info.js")}\n\n${source("src/guild-building-data.js")}\n\n${source("src/localization.js")}\n\n${source("src/core.js")}\n\n${source("src/shrine-guide.js")}\n\n${source("src/userscript.js")}`;
+const SOURCE_FILES = [
+  "src/market-data.js",
+  "src/market-dom.js",
+  "src/bridge.js",
+  "src/item-name-catalog.js",
+  "src/release-info.js",
+  "src/guild-building-data.js",
+  "src/localization.js",
+  "src/core.js",
+  "src/shrine-guide.js",
+  "src/runtime/config.js",
+  "src/runtime/storage.js",
+  "src/runtime/scheduler.js",
+  "src/runtime/game-state.js",
+  "src/runtime/game-data.js",
+  "src/ui/dom.js",
+  "src/ui/sortable.js",
+  "src/ui/styles.js",
+  "src/ui/construction-view.js",
+  "src/ui/upgrade-view.js",
+  "src/ui/shrine-guide-ui.js",
+  "src/ui/exchange-advisor.js",
+  "src/ui/panel-shell.js",
+  "src/ui/credit-view.js",
+  "src/userscript.js"
+];
+const runtimeSource = SOURCE_FILES.map((file) => `// SOURCE: ${file}\n${source(file)}`).join("\n\n");
+const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${runtimeSource}`;
 const bundle = `${header}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
-const versionedOutput = path.join(outputDirectory, `银河奶牛公会信用点性价比-v${version}.user.js`);
 fs.writeFileSync(output, bundle);
-if (!fs.existsSync(versionedOutput) || process.env.MWI_OVERWRITE_VERSIONED_ARCHIVE === "1") {
-  fs.writeFileSync(versionedOutput, bundle);
-} else if (fs.readFileSync(versionedOutput, "utf8") !== bundle) {
-  console.warn(`Preserved existing historical bundle: ${versionedOutput}`);
+
+if (process.env.MWI_ARCHIVE_RELEASE === "1") {
+  const releaseDirectory = path.join(root, "releases", `v${versionMatch[1]}.${versionMatch[2]}`);
+  const versionedOutput = path.join(releaseDirectory, `银河奶牛公会信用点性价比-v${version}.user.js`);
+  fs.mkdirSync(releaseDirectory, { recursive: true });
+  if (fs.existsSync(versionedOutput)) {
+    if (fs.readFileSync(versionedOutput, "utf8") !== bundle) {
+      throw new Error(`Historical release archive is immutable and differs from the current build: ${versionedOutput}`);
+    }
+  } else {
+    fs.writeFileSync(versionedOutput, bundle);
+  }
+  writeReleaseManifest();
 }
 
 const loader = `// ==UserScript==

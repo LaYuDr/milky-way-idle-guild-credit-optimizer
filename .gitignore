@@ -1,1 +1,6 @@
 .DS_Store
+.workbench/
+/node_modules/
+/references/local-plugins/
+*.orig
+*.rej

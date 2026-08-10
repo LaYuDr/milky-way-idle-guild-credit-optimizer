@@ -16,18 +16,20 @@
     const max = Math.max(0, Math.floor(Number(maximum) || 0));
     if (!max) return 0;
     const clamped = Math.min(max, Math.max(0, Math.floor(Number(value) || 0)));
-    return Math.round(clamped / max * 100);
+    return Math.round((clamped / max) * 100);
   }
 
   function snapGuildTokenBudget(rawValue, maximum, options = {}) {
     const max = Math.max(0, Math.floor(Number(maximum) || 0));
     const value = Math.min(max, Math.max(0, Math.floor(Number(rawValue) || 0)));
     if (!max) return { value: 0, percentage: 0, snappedTo: null };
-    const snapPercentages = (Array.isArray(options.snapPercentages) ? options.snapPercentages : DEFAULT_GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES)
+    const snapPercentages = (
+      Array.isArray(options.snapPercentages) ? options.snapPercentages : DEFAULT_GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES
+    )
       .map(Number)
       .filter((percentage) => Number.isFinite(percentage) && percentage > 0 && percentage <= 100);
     const threshold = Math.max(0, Number(options.thresholdPercentage ?? 2.5) || 0);
-    const rawPercentage = value / max * 100;
+    const rawPercentage = (value / max) * 100;
     const snappedTo = snapPercentages.reduce((nearest, percentage) => {
       if (nearest === null) return percentage;
       return Math.abs(percentage - rawPercentage) < Math.abs(nearest - rawPercentage) ? percentage : nearest;
@@ -35,7 +37,7 @@
     if (snappedTo === null || Math.abs(snappedTo - rawPercentage) > threshold) {
       return { value, percentage: guildTokenBudgetPercentage(value, max), snappedTo: null };
     }
-    const snappedValue = Math.min(max, Math.max(0, Math.round(max * snappedTo / 100)));
+    const snappedValue = Math.min(max, Math.max(0, Math.round((max * snappedTo) / 100)));
     return { value: snappedValue, percentage: guildTokenBudgetPercentage(snappedValue, max), snappedTo };
   }
 
@@ -43,13 +45,16 @@
     if (!orderBook || !Array.isArray(orderBook.asks)) return [];
     return orderBook.asks
       .map((ask) => ({ price: Number(ask.price), quantity: Number(ask.quantity) }))
-      .filter((ask) => Number.isFinite(ask.price) && ask.price >= 0 && Number.isSafeInteger(ask.quantity) && ask.quantity > 0)
+      .filter(
+        (ask) => Number.isFinite(ask.price) && ask.price >= 0 && Number.isSafeInteger(ask.quantity) && ask.quantity > 0
+      )
       .sort((left, right) => left.price - right.price);
   }
 
   function quoteAsks(orderBook, requestedQuantity) {
     const quantity = positiveInteger(requestedQuantity);
-    if (!quantity) return { status: "invalid_quantity", requestedQuantity, availableQuantity: 0, cost: null, fills: [] };
+    if (!quantity)
+      return { status: "invalid_quantity", requestedQuantity, availableQuantity: 0, cost: null, fills: [] };
 
     let remaining = quantity;
     let cost = 0;
@@ -109,38 +114,42 @@
         if (left.status === "ok" && right.status !== "ok") return -1;
         if (right.status === "ok" && left.status !== "ok") return 1;
         if (left.status !== "ok" || right.status !== "ok") return left.itemName.localeCompare(right.itemName, "zh-CN");
-        return left.costPerCredit - right.costPerCredit || left.cost - right.cost || left.itemName.localeCompare(right.itemName, "zh-CN");
+        return (
+          left.costPerCredit - right.costPerCredit ||
+          left.cost - right.cost ||
+          left.itemName.localeCompare(right.itemName, "zh-CN")
+        );
       });
   }
 
   function rankGuildTokenCreditValues(exchangeRules, rankedCredits) {
     const rankings = rankedCredits && typeof rankedCredits === "object" ? rankedCredits : {};
-    return (Array.isArray(exchangeRules) ? exchangeRules : [])
-      .map((rule) => {
-        const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
-        const creditCount = positiveInteger(rule && rule.creditCount);
-        const creditItemHrid = rule && rule.creditItemHrid;
-        if (!guildTokenCount || !creditCount || !creditItemHrid) {
-          return { status: "invalid_rule", rule };
-        }
-        const best = (Array.isArray(rankings[creditItemHrid]) ? rankings[creditItemHrid] : [])
-          .find((result) => result && result.status === "ok" && Number.isFinite(result.costPerCredit));
-        if (!best) {
-          return { status: "unpriced", guildTokenCount, creditCount, creditItemHrid };
-        }
-        return {
-          status: "ok",
-          guildTokenCount,
-          creditCount,
-          creditItemHrid,
-          // A token's value is based on the exchange rule's credit quantity, not
-          // the minimum purchasable batch. This avoids overstating sparse credits.
-          goldValue: best.costPerCredit * creditCount,
-          goldValuePerToken: (best.costPerCredit * creditCount) / guildTokenCount,
-          bestItemHrid: best.itemHrid,
-          bestItemName: best.itemName
-        };
-      });
+    return (Array.isArray(exchangeRules) ? exchangeRules : []).map((rule) => {
+      const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
+      const creditCount = positiveInteger(rule && rule.creditCount);
+      const creditItemHrid = rule && rule.creditItemHrid;
+      if (!guildTokenCount || !creditCount || !creditItemHrid) {
+        return { status: "invalid_rule", rule };
+      }
+      const best = (Array.isArray(rankings[creditItemHrid]) ? rankings[creditItemHrid] : []).find(
+        (result) => result && result.status === "ok" && Number.isFinite(result.costPerCredit)
+      );
+      if (!best) {
+        return { status: "unpriced", guildTokenCount, creditCount, creditItemHrid };
+      }
+      return {
+        status: "ok",
+        guildTokenCount,
+        creditCount,
+        creditItemHrid,
+        // A token's value is based on the exchange rule's credit quantity, not
+        // the minimum purchasable batch. This avoids overstating sparse credits.
+        goldValue: best.costPerCredit * creditCount,
+        goldValuePerToken: (best.costPerCredit * creditCount) / guildTokenCount,
+        bestItemHrid: best.itemHrid,
+        bestItemName: best.itemName
+      };
+    });
   }
 
   function evaluateBudgetConversion(conversion, buyPrice, budget) {
@@ -148,7 +157,14 @@
     const creditCount = positiveInteger(conversion && conversion.creditCount);
     const price = Number(buyPrice);
     const availableBudget = Number(budget);
-    if (!itemCount || !creditCount || !Number.isFinite(price) || price <= 0 || !Number.isFinite(availableBudget) || availableBudget < 0) {
+    if (
+      !itemCount ||
+      !creditCount ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isFinite(availableBudget) ||
+      availableBudget < 0
+    ) {
       return { status: "invalid_conversion", conversion, buyPrice, budget };
     }
 
@@ -180,12 +196,13 @@
     const candidates = (Array.isArray(conversions) ? conversions : [])
       .map((conversion) => evaluateBudgetConversion(conversion, buyPrices && buyPrices[conversion.itemHrid], budget))
       .filter((result) => result.status === "ok")
-      .sort((left, right) => (
-        right.actualCredits - left.actualCredits ||
-        left.costPerCredit - right.costPerCredit ||
-        left.cost - right.cost ||
-        left.itemName.localeCompare(right.itemName, "zh-CN")
-      ));
+      .sort(
+        (left, right) =>
+          right.actualCredits - left.actualCredits ||
+          left.costPerCredit - right.costPerCredit ||
+          left.cost - right.cost ||
+          left.itemName.localeCompare(right.itemName, "zh-CN")
+      );
     return candidates[0] || null;
   }
 
@@ -225,18 +242,34 @@
     const itemQuantity = positiveInteger(quantity);
     const price = Number(sellPrice);
     const taxRate = Number(sellerTaxRate);
-    if (!itemQuantity || !Number.isFinite(price) || price <= 0 || !Number.isFinite(taxRate) || taxRate < 0 || taxRate >= 1) {
+    if (
+      !itemQuantity ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      !Number.isFinite(taxRate) ||
+      taxRate < 0 ||
+      taxRate >= 1
+    ) {
       return { status: "invalid_sale", quantity, sellPrice, sellerTaxRate, gross: null, tax: null, net: null };
     }
     const gross = itemQuantity * price;
     const tax = Math.floor(gross * taxRate);
-    return { status: "ok", quantity: itemQuantity, sellPrice: price, sellerTaxRate: taxRate, gross, tax, net: gross - tax };
+    return {
+      status: "ok",
+      quantity: itemQuantity,
+      sellPrice: price,
+      sellerTaxRate: taxRate,
+      gross,
+      tax,
+      net: gross - tax
+    };
   }
 
   function snapshotMarketPrice(snapshot, itemHrid, enhancementLevel, field) {
     const level = Number(enhancementLevel);
     if (!itemHrid || !Number.isSafeInteger(level) || level < 0 || (field !== "a" && field !== "b")) return null;
-    const entry = snapshot && snapshot.marketData && snapshot.marketData[itemHrid] && snapshot.marketData[itemHrid][String(level)];
+    const entry =
+      snapshot && snapshot.marketData && snapshot.marketData[itemHrid] && snapshot.marketData[itemHrid][String(level)];
     const price = Number(entry && entry[field]);
     return Number.isFinite(price) && price > 0 ? price : null;
   }
@@ -266,7 +299,11 @@
   function aggregateGuildBuffLevelCosts(levelCosts, startLevel, targetLevel) {
     const start = Number(startLevel);
     const target = Number(targetLevel);
-    const costs = Array.isArray(levelCosts) ? levelCosts : levelCosts && typeof levelCosts === "object" ? levelCosts : null;
+    const costs = Array.isArray(levelCosts)
+      ? levelCosts
+      : levelCosts && typeof levelCosts === "object"
+        ? levelCosts
+        : null;
     if (!costs || !Number.isSafeInteger(start) || !Number.isSafeInteger(target) || start < 0 || target <= start) {
       return { status: "invalid_range", startLevel, targetLevel, totals: [] };
     }
@@ -288,7 +325,14 @@
     for (let level = start + 1; level <= target; level += 1) {
       const cost = costs[level];
       if (!cost || typeof cost !== "object") {
-        return { status: "missing_cost", startLevel: start, targetLevel: target, maxLevel, missingLevel: level, totals: [] };
+        return {
+          status: "missing_cost",
+          startLevel: start,
+          targetLevel: target,
+          maxLevel,
+          missingLevel: level,
+          totals: []
+        };
       }
       add("/items/guild_token", cost.guildTokenCost);
       for (const creditCost of cost.creditCosts || []) add(creditCost.itemHrid, creditCost.count);
@@ -312,8 +356,13 @@
     const results = [];
     for (let index = 0; index < plans.length; index += 1) {
       const plan = plans[index];
-      const result = aggregateGuildBuffLevelCosts(plan && plan.levelCosts, plan && plan.startLevel, plan && plan.targetLevel);
-      if (result.status !== "ok") return { status: "invalid_plan", planIndex: index, result, plans: results, totals: [] };
+      const result = aggregateGuildBuffLevelCosts(
+        plan && plan.levelCosts,
+        plan && plan.startLevel,
+        plan && plan.targetLevel
+      );
+      if (result.status !== "ok")
+        return { status: "invalid_plan", planIndex: index, result, plans: results, totals: [] };
       results.push({ ...result, id: plan && plan.id, guildBuffHrid: plan && plan.guildBuffHrid });
       for (const item of result.totals) totals.set(item.itemHrid, (totals.get(item.itemHrid) || 0) + item.count);
     }
@@ -330,7 +379,11 @@
   function aggregateGuildBuildingLevelCosts(levelCosts, startLevel, targetLevel) {
     const start = Number(startLevel);
     const target = Number(targetLevel);
-    const costs = Array.isArray(levelCosts) ? levelCosts : levelCosts && typeof levelCosts === "object" ? levelCosts : null;
+    const costs = Array.isArray(levelCosts)
+      ? levelCosts
+      : levelCosts && typeof levelCosts === "object"
+        ? levelCosts
+        : null;
     if (!costs || !Number.isSafeInteger(start) || !Number.isSafeInteger(target) || start < 0 || target <= start) {
       return { status: "invalid_range", startLevel, targetLevel, totalCost: 0, steps: [] };
     }
@@ -347,7 +400,15 @@
       const rawCost = record && (record.guildPointCost ?? record.guildPoints ?? record.cost);
       const cost = Number(rawCost);
       if (rawCost === null || rawCost === undefined || !Number.isFinite(cost) || cost < 0) {
-        return { status: "missing_cost", startLevel: start, targetLevel: target, maxLevel, missingLevel: level, totalCost: 0, steps: [] };
+        return {
+          status: "missing_cost",
+          startLevel: start,
+          targetLevel: target,
+          maxLevel,
+          missingLevel: level,
+          totalCost: 0,
+          steps: []
+        };
       }
       totalCost += cost;
       steps.push({ fromLevel: level - 1, toLevel: level, cost });
@@ -357,7 +418,8 @@
 
   function buildGuildConstructionPlan(plans, availableGuildPoints) {
     const inputPlans = Array.isArray(plans) ? plans : [];
-    const hasBudget = availableGuildPoints !== null && availableGuildPoints !== undefined && availableGuildPoints !== "";
+    const hasBudget =
+      availableGuildPoints !== null && availableGuildPoints !== undefined && availableGuildPoints !== "";
     const budgetNumber = Number(availableGuildPoints);
     if (hasBudget && (!Number.isFinite(budgetNumber) || budgetNumber < 0)) {
       return { status: "invalid_budget", plans: [], steps: [], totalCost: 0, availableGuildPoints };
@@ -370,7 +432,15 @@
       const plan = inputPlans[planIndex] || {};
       const result = aggregateGuildBuildingLevelCosts(plan.levelCosts, plan.startLevel, plan.targetLevel);
       if (result.status !== "ok") {
-        return { status: "invalid_plan", planIndex, result, plans: results, steps: [], totalCost: 0, availableGuildPoints: budget };
+        return {
+          status: "invalid_plan",
+          planIndex,
+          result,
+          plans: results,
+          steps: [],
+          totalCost: 0,
+          availableGuildPoints: budget
+        };
       }
       results.push({ ...result, id: plan.id, buildingHrid: plan.buildingHrid });
       for (const step of result.steps) {
@@ -394,7 +464,8 @@
       availableGuildPoints: budget,
       remainingGuildPoints: budget === null ? null : budget - cumulativeCost,
       overBudget: budget === null ? false : cumulativeCost > budget,
-      affordableStepCount: budget === null ? steps.length : firstOverBudgetIndex < 0 ? steps.length : firstOverBudgetIndex,
+      affordableStepCount:
+        budget === null ? steps.length : firstOverBudgetIndex < 0 ? steps.length : firstOverBudgetIndex,
       firstOverBudgetIndex
     };
   }
@@ -410,20 +481,23 @@
       rules.set(creditItemHrid, { creditItemHrid, guildTokenCount, creditCount });
     }
 
-    const candidates = (Array.isArray(creditRows) ? creditRows : []).map((row) => {
-      const rule = row && rules.get(row.itemHrid);
-      const missing = Math.max(0, Number(row && row.missing) || 0);
-      const unitCost = Number(row && row.unitCost);
-      if (!rule || missing <= 0 || !Number.isFinite(unitCost) || unitCost <= 0) return null;
-      return {
-        ...rule,
-        missing,
-        goldValuePerToken: unitCost * rule.creditCount / rule.guildTokenCount
-      };
-    }).filter(Boolean).sort((left, right) => (
-      right.goldValuePerToken - left.goldValuePerToken
-      || left.creditItemHrid.localeCompare(right.creditItemHrid)
-    ));
+    const candidates = (Array.isArray(creditRows) ? creditRows : [])
+      .map((row) => {
+        const rule = row && rules.get(row.itemHrid);
+        const missing = Math.max(0, Number(row && row.missing) || 0);
+        const unitCost = Number(row && row.unitCost);
+        if (!rule || missing <= 0 || !Number.isFinite(unitCost) || unitCost <= 0) return null;
+        return {
+          ...rule,
+          missing,
+          goldValuePerToken: (unitCost * rule.creditCount) / rule.guildTokenCount
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (left, right) =>
+          right.goldValuePerToken - left.goldValuePerToken || left.creditItemHrid.localeCompare(right.creditItemHrid)
+      );
 
     let remainingGuildTokens = budget;
     const allocations = [];
@@ -465,7 +539,9 @@
     );
     const useGuildTokensForMissingCredits = useGuildTokensForAllMissingCredits || guildTokenCreditHrids.size > 0;
     const guildTokenCreditRules = new Map();
-    for (const rule of Array.isArray(settings.guildTokenCreditConversions) ? settings.guildTokenCreditConversions : []) {
+    for (const rule of Array.isArray(settings.guildTokenCreditConversions)
+      ? settings.guildTokenCreditConversions
+      : []) {
       const creditItemHrid = rule && rule.creditItemHrid;
       const guildTokenCount = positiveInteger(rule && rule.guildTokenCount);
       const creditCount = positiveInteger(rule && rule.creditCount);
@@ -493,8 +569,9 @@
         rows.push(guildTokenRow);
         continue;
       }
-      const guildTokenRule = (useGuildTokensForAllMissingCredits || guildTokenCreditHrids.has(itemHrid))
-        && guildTokenCreditRules.get(itemHrid);
+      const guildTokenRule =
+        (useGuildTokensForAllMissingCredits || guildTokenCreditHrids.has(itemHrid)) &&
+        guildTokenCreditRules.get(itemHrid);
       if (guildTokenRule) {
         const batches = missing > 0 ? Math.ceil(missing / guildTokenRule.creditCount) : 0;
         const requiredGuildTokens = batches * guildTokenRule.guildTokenCount;
@@ -541,15 +618,22 @@
       ? Math.max(0, Math.floor(guildTokensOwned - reservedGuildTokens))
       : 0;
     const requestedAutoGuildTokenBudget = Number(settings.autoGuildTokenBudget);
-    const hasConfiguredAutoGuildTokenBudget = settings.autoGuildTokenBudget !== null
-      && settings.autoGuildTokenBudget !== undefined
-      && Number.isFinite(requestedAutoGuildTokenBudget)
-      && requestedAutoGuildTokenBudget >= 0;
+    const hasConfiguredAutoGuildTokenBudget =
+      settings.autoGuildTokenBudget !== null &&
+      settings.autoGuildTokenBudget !== undefined &&
+      Number.isFinite(requestedAutoGuildTokenBudget) &&
+      requestedAutoGuildTokenBudget >= 0;
     const autoGuildTokenBudget = hasConfiguredAutoGuildTokenBudget
       ? Math.min(availableSurplusGuildTokens, Math.floor(requestedAutoGuildTokenBudget))
       : availableSurplusGuildTokens;
-    const autoGuildTokenPlan = allocateSurplusGuildTokens(rows, Array.from(guildTokenCreditRules.values()), autoGuildTokenBudget);
-    const autoAllocationsByCredit = new Map(autoGuildTokenPlan.allocations.map((allocation) => [allocation.creditItemHrid, allocation]));
+    const autoGuildTokenPlan = allocateSurplusGuildTokens(
+      rows,
+      Array.from(guildTokenCreditRules.values()),
+      autoGuildTokenBudget
+    );
+    const autoAllocationsByCredit = new Map(
+      autoGuildTokenPlan.allocations.map((allocation) => [allocation.creditItemHrid, allocation])
+    );
     if (autoAllocateSurplusGuildTokens) {
       for (const row of rows) {
         if (!guildTokenCreditRules.has(row.itemHrid) || row.guildTokenExchange) continue;
@@ -619,17 +703,44 @@
     const details = Array.isArray(itemDetails)
       ? itemDetails.map((detail) => [detail && (detail.itemHrid || detail.hrid), detail])
       : Object.entries(itemDetails || {});
-    return details.flatMap(([itemKey, detail]) => (detail && Array.isArray(detail.guildCreditConversions) ? detail.guildCreditConversions : [])
-      .filter((conversion) => conversion.creditItemHrid === creditItemHrid)
-      .map((conversion) => ({
-        itemHrid: detail.itemHrid || detail.hrid || itemKey,
-        itemName: detail.name || detail.itemHrid || detail.hrid || itemKey,
-        creditItemHrid: conversion.creditItemHrid,
-        itemCount: conversion.itemCount,
-        creditCount: conversion.creditCount
-      }))
-      .filter((conversion) => conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)));
+    return details.flatMap(([itemKey, detail]) =>
+      (detail && Array.isArray(detail.guildCreditConversions) ? detail.guildCreditConversions : [])
+        .filter((conversion) => conversion.creditItemHrid === creditItemHrid)
+        .map((conversion) => ({
+          itemHrid: detail.itemHrid || detail.hrid || itemKey,
+          itemName: detail.name || detail.itemHrid || detail.hrid || itemKey,
+          creditItemHrid: conversion.creditItemHrid,
+          itemCount: conversion.itemCount,
+          creditCount: conversion.creditCount
+        }))
+        .filter(
+          (conversion) =>
+            conversion.itemHrid && positiveInteger(conversion.itemCount) && positiveInteger(conversion.creditCount)
+        )
+    );
   }
 
-  return { normalizeAsks, quoteAsks, evaluateConversion, rankConversions, rankGuildTokenCreditValues, evaluateBudgetConversion, bestConversionForBudget, calculateSaleProceeds, estimateSaleReplacement, snapshotMarketPrice, formatCompactCost, compareVersions, aggregateGuildBuffLevelCosts, aggregateGuildBuffPlans, aggregateGuildBuildingLevelCosts, buildGuildConstructionPlan, allocateSurplusGuildTokens, estimateGuildUpgradeCosts, conversionsFromItemDetails, guildTokenBudgetPercentage, snapGuildTokenBudget };
+  return {
+    normalizeAsks,
+    quoteAsks,
+    evaluateConversion,
+    rankConversions,
+    rankGuildTokenCreditValues,
+    evaluateBudgetConversion,
+    bestConversionForBudget,
+    calculateSaleProceeds,
+    estimateSaleReplacement,
+    snapshotMarketPrice,
+    formatCompactCost,
+    compareVersions,
+    aggregateGuildBuffLevelCosts,
+    aggregateGuildBuffPlans,
+    aggregateGuildBuildingLevelCosts,
+    buildGuildConstructionPlan,
+    allocateSurplusGuildTokens,
+    estimateGuildUpgradeCosts,
+    conversionsFromItemDetails,
+    guildTokenBudgetPercentage,
+    snapGuildTokenBudget
+  };
 });

@@ -1,14 +1,24 @@
 {
   "name": "milky-way-idle-guild-credit-optimizer",
-  "version": "1.1.43",
+  "version": "1.1.44",
   "private": true,
   "description": "Read-only guild credit and shrine planning helper for Milky Way Idle",
   "scripts": {
     "build": "node tools/build.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint \"src/**/*.js\" \"test/**/*.js\" \"tools/**/*.{js,mjs}\"",
     "test": "node --test test/*.test.js",
     "serve": "node tools/dev-server.js",
-    "check": "npm test && npm run build",
+    "verify:repo": "node tools/verify-repository.mjs",
+    "check": "npm run format:check && npm run lint && npm test && npm run build && npm run verify:repo",
+    "check:ci": "npm run check && git diff --exit-code",
     "release": "node tools/release-current-version.mjs",
     "release:dry-run": "node tools/release-current-version.mjs --dry-run"
+  },
+  "devDependencies": {
+    "eslint": "10.8.1",
+    "globals": "17.9.0",
+    "prettier": "3.9.6"
   }
 }

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.44] - 2026-08-10
+
+### Changed
+
+- Made the three internal navigation tabs and construction queue draggable with persistent ordering, rebuilt the guild construction catalog as a compact responsive square-tile grid, and clarified live guild-building level status while removing internal rule-snapshot copy.
+
 ## [1.1.43] - 2026-08-10
 
 ### Added

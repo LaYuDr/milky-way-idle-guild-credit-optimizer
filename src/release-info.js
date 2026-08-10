@@ -10,7 +10,7 @@
 
   function parseUserScriptVersion(source) {
     const match = String(source || "").match(/^\/\/ @version\s+(.+)$/m);
-    return match && match[1].trim() || null;
+    return (match && match[1].trim()) || null;
   }
 
   function createVersionChecker(options) {
@@ -18,9 +18,10 @@
     const url = options && options.url;
     const cacheTtlMs = Number(options && options.cacheTtlMs) || DEFAULT_CACHE_TTL_MS;
     const timeoutMs = Number(options && options.timeoutMs) || DEFAULT_TIMEOUT_MS;
-    const setTimer = options && options.setTimeout || setTimeout;
-    const clearTimer = options && options.clearTimeout || clearTimeout;
-    const Controller = options && options.AbortController || (typeof AbortController === "function" ? AbortController : null);
+    const setTimer = (options && options.setTimeout) || setTimeout;
+    const clearTimer = (options && options.clearTimeout) || clearTimeout;
+    const Controller =
+      (options && options.AbortController) || (typeof AbortController === "function" ? AbortController : null);
     let cached = null;
     let request = null;
 
@@ -39,7 +40,7 @@
           fetchImpl(url, { cache: "no-store", signal: controller && controller.signal }),
           timeoutPromise
         ]);
-        if (!response || !response.ok) throw new Error(`更新信息请求失败 (${response && response.status || "未知"})`);
+        if (!response || !response.ok) throw new Error(`更新信息请求失败 (${(response && response.status) || "未知"})`);
         const latestVersion = parseUserScriptVersion(await response.text());
         if (!latestVersion) throw new Error("未找到最新版本号");
         cached = { latestVersion, checkedAt: Date.now() };
@@ -51,7 +52,10 @@
 
     function latestVersion() {
       if (cached && Date.now() - cached.checkedAt < cacheTtlMs) return Promise.resolve(cached.latestVersion);
-      if (!request) request = requestLatestVersion().finally(() => { request = null; });
+      if (!request)
+        request = requestLatestVersion().finally(() => {
+          request = null;
+        });
       return request;
     }
 
