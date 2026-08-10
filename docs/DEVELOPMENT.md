@@ -71,9 +71,35 @@ http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebar
 ```
 
 Repeat the construction audit at the same eleven widths. It also verifies the
-28-tile responsive catalog, square tile geometry, actual grid column count,
-game sprite icons, grouped queue order, queue cutoff, search filtering, and
-retained input focus.
+queue-first planning flow against a deterministic `3 / 28` partial-level
+snapshot. The audit adds three known-level buildings, rejects and then accepts
+an unknown building's manual current level, checks inline target editing,
+collapsed step details, button and pointer reordering, Escape cancellation,
+clear-with-undo, search focus, and focus visibility after rerenders. It leaves
+a reusable final sample with 28 visible square catalog tiles, three collapsed
+building groups in their original order, nine total upgrade steps, a `5,000`
+budget, `13,975` planned spend, and a `1 / 9` budget cutoff.
+
+After `document.body.dataset.constructionAuditReady` becomes `"true"`, inspect
+the JSON in `#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiConstructionAuditReady;
+```
+
+For every width, require zero panel horizontal overflow, no reported element
+overflow or control overlap, 28 game sprite icons, 3 known and 25 unknown
+levels, square tile geometry, and no visible per-level steps in the final
+collapsed sample. Use the reported panel rectangle and computed
+`gridTemplateColumns`; the requested sidebar width is not the plugin's actual
+content width, and entering the wide two-column layout can legitimately make
+the catalog column count smaller than the preceding single-column width. Also
+inspect `interactions.checks`: every value must be `true`. Run additional
+English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
+
+```text
+http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
+```
 
 ## Local workbench
 

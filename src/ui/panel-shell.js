@@ -38,10 +38,18 @@
       removeGuildUpgradePlan,
       guildTokenCreditSelectionState,
       guildBuildingDefinitions,
-      currentGuildBuildingLevel,
+      addGuildBuildingPlan,
       setGuildBuildingTarget,
+      removeGuildBuildingPlan,
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
+      setGuildBuildingPickerOpen,
+      setPendingGuildBuildingStartValue,
+      clearPendingGuildBuilding,
+      toggleGuildBuildingSteps,
+      clearGuildBuildingPlans,
+      undoClearGuildBuildingPlans,
+      hasGuildBuildingClearUndo,
       applyGuildBuildingFilters,
       refreshGuildConstructionBudgetPreview,
       copyGuildConstructionPlan,
@@ -89,6 +97,66 @@
       const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
       if (previous) previous.disabled = index <= 0;
       if (next) next.disabled = index < 0 || index >= state.panelOrder.length - 1;
+    }
+
+    function findConstructionControl(panel, target) {
+      if (!target || !target.role) return null;
+      return Array.from(panel.querySelectorAll(`[data-role="${target.role}"]`)).find((element) => {
+        if (target.buildingHrid && element.dataset.buildingHrid !== target.buildingHrid) return false;
+        if (target.direction !== undefined && element.dataset.direction !== String(target.direction)) return false;
+        if (target.delta !== undefined && element.dataset.delta !== String(target.delta)) return false;
+        return !element.disabled && !element.hidden && !element.closest("[hidden]");
+      });
+    }
+
+    function focusConstructionControl(panel, target, reveal = true) {
+      const control = findConstructionControl(panel, target);
+      if (!control) return false;
+      try {
+        control.focus({ preventScroll: true });
+      } catch (_) {
+        control.focus();
+      }
+      if (reveal && typeof control.scrollIntoView === "function") {
+        control.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const controlRect = control.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const viewportHeight = document.defaultView ? document.defaultView.innerHeight : panelRect.bottom;
+        const visibleTop = Math.max(0, panelRect.top);
+        const visibleBottom = Math.min(viewportHeight, panelRect.bottom);
+        if (controlRect.top < visibleTop) panel.scrollTop += controlRect.top - visibleTop;
+        else if (controlRect.bottom > visibleBottom) panel.scrollTop += controlRect.bottom - visibleBottom;
+      }
+      return true;
+    }
+
+    function refreshConstructionAndFocus(panel, target, fallbackTarget = null) {
+      refreshGuildConstruction(panel);
+      return focusConstructionControl(panel, target) || focusConstructionControl(panel, fallbackTarget);
+    }
+
+    function setGuildPointBudgetValidity(panel, input, valid) {
+      const error = panel.querySelector("#mwi-guild-point-budget-error");
+      if (valid) input.removeAttribute("aria-invalid");
+      else input.setAttribute("aria-invalid", "true");
+      if (error) error.hidden = valid;
+    }
+
+    function guildPointBudgetInputValue(input) {
+      const raw = input.value.trim();
+      if (raw === "") return { valid: true, value: null };
+      const value = Number(raw);
+      return Number.isSafeInteger(value) && value >= 0
+        ? { valid: true, value }
+        : { valid: false, value: state.manualGuildPoints };
+    }
+
+    function clearConstructionNotice(panel) {
+      state.buildingPlanNotice = "";
+      const status = panel.querySelector('[data-role="construction-status"]');
+      const statusText = status && status.querySelector('[data-role="construction-status-text"]');
+      if (statusText) statusText.textContent = "";
+      if (status) status.hidden = !hasGuildBuildingClearUndo();
     }
 
     function setPanelView(panel, view) {
@@ -163,7 +231,7 @@
           <div data-role="upgrade-results"></div>
         </div>
         <div id="mwi-view-panel-construction" data-role="construction-view" role="tabpanel" aria-labelledby="mwi-view-tab-construction"${state.activeView === "construction" ? "" : " hidden"}>
-          <div class="mwi-status" data-role="construction-status">${escapeHtml(t("constructionReadOnly"))}</div>
+          <div class="mwi-status mwi-construction-status" data-role="construction-status" hidden><span data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"></span><button data-role="undo-clear-building-plans" type="button" hidden>${escapeHtml(t("undoClearBuildingPlans"))}</button></div>
           <div data-role="construction-results"></div>
         </div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
@@ -248,17 +316,19 @@
       const constructionResults = panel.querySelector('[data-role="construction-results"]');
       constructionResults.addEventListener("input", (event) => {
         if (event.target.matches('[data-role="guild-point-budget"]')) {
-          const raw = event.target.value.trim();
-          const value = Number(raw);
-          if (raw === "") state.manualGuildPoints = null;
-          else if (Number.isSafeInteger(value) && value >= 0) state.manualGuildPoints = value;
-          else {
-            event.target.setAttribute("aria-invalid", "true");
-            return;
-          }
-          event.target.removeAttribute("aria-invalid");
-          state.buildingPlanNotice = "";
+          const parsed = guildPointBudgetInputValue(event.target);
+          setGuildPointBudgetValidity(panel, event.target, parsed.valid);
+          if (!parsed.valid) return;
+          state.manualGuildPoints = parsed.value;
+          clearConstructionNotice(panel);
           refreshGuildConstructionBudgetPreview(panel);
+          return;
+        }
+        if (event.target.matches('[data-role="pending-building-start-level"]')) {
+          setPendingGuildBuildingStartValue(event.target.value);
+          event.target.removeAttribute("aria-invalid");
+          const error = panel.querySelector("#mwi-pending-building-level-error");
+          if (error) error.hidden = true;
           return;
         }
         if (event.target.matches('[data-role="building-search"]')) {
@@ -268,14 +338,13 @@
       });
       constructionResults.addEventListener("change", (event) => {
         if (event.target.matches('[data-role="guild-point-budget"]')) {
-          const raw = event.target.value.trim();
-          const value = Number(raw);
-          if (raw === "") state.manualGuildPoints = null;
-          else if (Number.isSafeInteger(value) && value >= 0) state.manualGuildPoints = value;
-          else return refreshGuildConstruction(panel);
-          state.buildingPlanNotice = "";
+          const parsed = guildPointBudgetInputValue(event.target);
+          setGuildPointBudgetValidity(panel, event.target, parsed.valid);
+          if (!parsed.valid) return;
+          state.manualGuildPoints = parsed.value;
+          clearConstructionNotice(panel);
           persistGuildBuildingPlannerState();
-          refreshGuildConstruction(panel);
+          refreshConstructionAndFocus(panel, { role: "guild-point-budget" }, null);
           return;
         }
         if (event.target.matches('[data-role="building-search"]')) {
@@ -284,22 +353,66 @@
           return;
         }
         if (event.target.matches('[data-role="building-target"]')) {
-          setGuildBuildingTarget(
-            guildBuildingDefinitions(),
-            event.target.dataset.buildingHrid,
-            Number(event.target.value)
-          );
-          refreshGuildConstruction(panel);
+          const buildingHrid = event.target.dataset.buildingHrid;
+          setGuildBuildingTarget(guildBuildingDefinitions(), buildingHrid, Number(event.target.value));
+          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
         }
+      });
+      constructionResults.addEventListener("submit", (event) => {
+        const form = event.target.closest('[data-role="pending-building-start"]');
+        if (!form) return;
+        event.preventDefault();
+        const input = form.querySelector('[data-role="pending-building-start-level"]');
+        if (!input) return;
+        setPendingGuildBuildingStartValue(input.value);
+        const buildingHrid = form.dataset.buildingHrid;
+        const result = addGuildBuildingPlan(guildBuildingDefinitions(), buildingHrid, input.value);
+        if (result.status === "added") {
+          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
+          return;
+        }
+        refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
+      });
+      constructionResults.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !event.target.closest(".mwi-building-picker-body")) return;
+        event.preventDefault();
+        setGuildBuildingPickerOpen(false);
+        refreshConstructionAndFocus(panel, { role: "toggle-building-picker" });
       });
       constructionResults.addEventListener("click", (event) => {
         const button = event.target.closest("button");
         if (!button) return;
         const definitions = guildBuildingDefinitions();
-        if (button.matches('[data-role="select-building"]')) {
-          if (!definitions.some((definition) => definition.hrid === button.dataset.buildingHrid)) return;
-          state.selectedBuildingHrid = button.dataset.buildingHrid;
-          refreshGuildConstruction(panel);
+        if (button.matches('[data-role="toggle-building-picker"]')) {
+          const open = button.getAttribute("aria-expanded") !== "true";
+          setGuildBuildingPickerOpen(open);
+          refreshConstructionAndFocus(panel, { role: open ? "building-search" : "toggle-building-picker" });
+          return;
+        }
+        if (button.matches('[data-role="building-tile"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          const result = addGuildBuildingPlan(definitions, buildingHrid);
+          if (result.status === "added") {
+            refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
+            return;
+          }
+          if (result.status === "already_planned") {
+            focusConstructionControl(panel, { role: "building-target", buildingHrid });
+            return;
+          }
+          if (result.status === "requires_start_level")
+            refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
+          return;
+        }
+        if (button.matches('[data-role="cancel-pending-building"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          clearPendingGuildBuilding();
+          const focused = refreshConstructionAndFocus(
+            panel,
+            { role: "building-tile", buildingHrid },
+            { role: "building-search" }
+          );
+          if (!focused) focusConstructionControl(panel, { role: "toggle-building-picker" });
           return;
         }
         if (button.matches('[data-role="building-category"]')) {
@@ -312,40 +425,92 @@
           const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
           if (!definition) return;
           const existing = state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid);
-          const startLevel = currentGuildBuildingLevel(definition) ?? (existing ? existing.startLevel : 0);
-          const currentTarget = existing ? existing.targetLevel : startLevel;
-          setGuildBuildingTarget(definitions, definition.hrid, currentTarget + Number(button.dataset.delta || 0));
-          refreshGuildConstruction(panel);
+          if (!existing) return;
+          const delta = Number(button.dataset.delta || 0);
+          const targetLevel = Math.min(definition.maxLevel, existing.targetLevel + delta);
+          setGuildBuildingTarget(definitions, definition.hrid, targetLevel);
+          refreshConstructionAndFocus(
+            panel,
+            { role: "adjust-building-target", buildingHrid: definition.hrid, delta },
+            { role: "building-target", buildingHrid: definition.hrid }
+          );
           return;
         }
         if (button.matches('[data-role="remove-building-plan"]')) {
-          const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
-          if (!definition) return;
-          const startLevel =
-            currentGuildBuildingLevel(definition) ??
-            state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid)?.startLevel ??
-            0;
-          setGuildBuildingTarget(definitions, definition.hrid, startLevel);
-          refreshGuildConstruction(panel);
+          const result = removeGuildBuildingPlan(definitions, button.dataset.buildingHrid);
+          if (result.status !== "removed") return;
+          const neighbor = state.buildingPlans[Math.min(result.removedIndex, state.buildingPlans.length - 1)];
+          refreshConstructionAndFocus(
+            panel,
+            neighbor
+              ? { role: "building-target", buildingHrid: neighbor.buildingHrid }
+              : { role: "toggle-building-picker" }
+          );
           return;
         }
         if (button.matches('[data-role="move-building-plan"]')) {
-          if (moveGuildBuildingPlan(button.dataset.buildingHrid, Number(button.dataset.direction)))
-            refreshGuildConstruction(panel);
+          const buildingHrid = button.dataset.buildingHrid;
+          if (moveGuildBuildingPlan(buildingHrid, Number(button.dataset.direction)))
+            refreshConstructionAndFocus(panel, { role: "construction-drag-handle", buildingHrid });
+          return;
+        }
+        if (button.matches('[data-role="toggle-building-steps"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          const definition = definitions.find((entry) => entry.hrid === buildingHrid);
+          if (!definition) return;
+          const expanded = toggleGuildBuildingSteps(buildingHrid);
+          const group = button.closest(".mwi-construction-group");
+          const details = group && group.querySelector(".mwi-construction-group-steps");
+          if (group) group.dataset.expanded = String(expanded);
+          if (details) details.hidden = !expanded;
+          button.setAttribute("aria-expanded", String(expanded));
+          button.setAttribute(
+            "aria-label",
+            t(expanded ? "collapseBuildingSteps" : "expandBuildingSteps", {
+              building: definitions.find((entry) => entry.hrid === buildingHrid)?.nameKey
+                ? t(definition.nameKey)
+                : buildingHrid
+            })
+          );
+          button.setAttribute("title", button.getAttribute("aria-label"));
+          const icon = button.querySelector("span");
+          if (icon) icon.textContent = expanded ? "▴" : "▾";
           return;
         }
         if (button.matches('[data-role="clear-building-plans"]')) {
-          state.buildingPlans = [];
-          state.buildingPlanNotice = t("buildingPlanCleared");
-          persistGuildBuildingPlannerState();
-          refreshGuildConstruction(panel);
+          if (
+            clearGuildBuildingPlans(() => {
+              const undo = panel.querySelector('[data-role="undo-clear-building-plans"]');
+              if (!undo) return;
+              if (document.activeElement === undo) {
+                const restored = focusConstructionControl(panel, { role: "toggle-building-picker" });
+                if (!restored) panel.querySelector('[data-role="view-construction"]')?.focus();
+              }
+              undo.hidden = true;
+            })
+          )
+            refreshConstructionAndFocus(panel, { role: "undo-clear-building-plans" });
           return;
         }
         if (button.matches('[data-role="copy-building-plan"]')) {
-          copyGuildConstructionPlan(panel);
+          void copyGuildConstructionPlan(panel).then(() => {
+            if (state.activeView !== "construction") return;
+            if (document.activeElement && document.activeElement !== document.body) return;
+            focusConstructionControl(panel, { role: "copy-building-plan" });
+          });
           return;
         }
         if (button.matches('[data-role="export-building-plan"]')) exportGuildConstructionCsv();
+      });
+      panel.querySelector('[data-role="undo-clear-building-plans"]').addEventListener("click", () => {
+        if (!undoClearGuildBuildingPlans()) return;
+        const firstPlan = state.buildingPlans[0];
+        refreshConstructionAndFocus(
+          panel,
+          firstPlan
+            ? { role: "building-target", buildingHrid: firstPlan.buildingHrid }
+            : { role: "toggle-building-picker" }
+        );
       });
       panel.addEventListener("click", (event) => {
         const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
@@ -463,11 +628,7 @@
         axis: "y",
         onCommit: ({ key, toIndex }) => {
           if (!reorderGuildBuildingPlan(key, toIndex)) return;
-          refreshGuildConstruction(panel);
-          const movedGroup = Array.from(panel.querySelectorAll(".mwi-construction-group")).find(
-            (group) => group.dataset.sortKey === key
-          );
-          movedGroup?.querySelector(".mwi-construction-drag-handle")?.focus();
+          refreshConstructionAndFocus(panel, { role: "construction-drag-handle", buildingHrid: key });
         }
       });
       panel.__mwiSortableControllers = [tabSortable, constructionSortable];

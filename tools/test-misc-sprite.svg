@@ -1,4 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <g id="guild-building-fixture">
+      <path fill="#7445b8" d="M25 2 3 13h44L25 2Z" />
+      <path fill="#f5f2ff" d="M7 13h36v32H7z" />
+      <circle cx="25" cy="29" r="11" fill="#242640" />
+      <circle cx="25" cy="29" r="5" fill="#a272e4" />
+      <path fill="#f5f2ff" d="M3 45h44v3H3z" />
+    </g>
+  </defs>
   <symbol id="guild_guild_hall" viewBox="0 0 50 50">
     <path fill="#7445b8" d="M25 2 3 13h44L25 2Z" />
     <path fill="#f5f2ff" d="M7 13h36v32H7z" />
@@ -6,4 +15,31 @@
     <circle cx="25" cy="29" r="5" fill="#a272e4" />
     <path fill="#f5f2ff" d="M3 45h44v3H3z" />
   </symbol>
+  <symbol id="guild_builders_hall" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_archives" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_treasury" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_skilling_encampment" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_workshop" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_forge" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_log_shed" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_garden" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_dairy_barn" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_kitchen" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_sewing_parlor" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_brewery" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_library" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_laboratory" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_mystical_study" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_combat_encampment" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_gym" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_dojo" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_archery_range" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_armory" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_dining_room" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_observatory" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_shrine_tempo" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_shrine_spirit" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_shrine_force" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_shrine_rarity" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="guild_shrine_scholar" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
 </svg>

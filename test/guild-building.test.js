@@ -43,7 +43,9 @@ test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
 
 test("公会建筑 HRID 映射到游戏原生 SVG 精灵图符号", () => {
   const definitions = data.definitions();
+  const spriteFixture = projectFile("tools/test-misc-sprite.svg");
   assert.ok(definitions.every((entry) => entry.iconSymbolId));
+  assert.ok(definitions.every((entry) => spriteFixture.includes(`id="${entry.iconSymbolId}"`)));
   assert.equal(data.iconSymbolId("/guild_buildings/guild_hall"), "guild_guild_hall");
   assert.equal(data.iconSymbolId("/guild_buildings/builders_hall"), "guild_builders_hall");
   assert.equal(data.iconSymbolId("/guild_shrines/force"), "guild_shrine_force");
@@ -86,6 +88,31 @@ test("施工队列标记预算截止步骤并保留超预算项目", () => {
   assert.equal(result.steps[1].fitsBudget, true);
   assert.equal(result.steps[2].fitsBudget, false);
   assert.equal(result.remainingGuildPoints, -1025);
+  assert.deepEqual(
+    result.plans.map((plan) => ({
+      buildingHrid: plan.buildingHrid,
+      budgetState: plan.budgetState,
+      affordableStepCount: plan.affordableStepCount,
+      affordableTargetLevel: plan.affordableTargetLevel,
+      nextStepShortfall: plan.nextStepShortfall
+    })),
+    [
+      {
+        buildingHrid: hall.hrid,
+        budgetState: "within",
+        affordableStepCount: 2,
+        affordableTargetLevel: 2,
+        nextStepShortfall: null
+      },
+      {
+        buildingHrid: gym.hrid,
+        budgetState: "outside",
+        affordableStepCount: 0,
+        affordableTargetLevel: 0,
+        nextStepShortfall: 350
+      }
+    ]
+  );
 });
 
 test("调整建筑组顺序后保持逐级依赖并重新计算预算截止位置", () => {
@@ -117,6 +144,53 @@ test("调整建筑组顺序后保持逐级依赖并重新计算预算截止位�
   );
   assert.equal(forward.firstOverBudgetIndex, 2);
   assert.equal(reversed.firstOverBudgetIndex, 3);
+  assert.deepEqual(
+    reversed.plans.map((plan) => ({
+      buildingHrid: plan.buildingHrid,
+      budgetState: plan.budgetState,
+      affordableTargetLevel: plan.affordableTargetLevel,
+      nextStepShortfall: plan.nextStepShortfall
+    })),
+    [
+      {
+        buildingHrid: gym.hrid,
+        budgetState: "within",
+        affordableTargetLevel: 2,
+        nextStepShortfall: null
+      },
+      {
+        buildingHrid: hall.hrid,
+        budgetState: "partial",
+        affordableTargetLevel: 1,
+        nextStepShortfall: 1025
+      }
+    ]
+  );
+});
+
+test("未设置预算时每个建筑组保留全部升级且不伪造缺口", () => {
+  const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
+  const result = core.buildGuildConstructionPlan(
+    [{ id: "hall", buildingHrid: hall.hrid, startLevel: 0, targetLevel: 2, levelCosts: hall.levelCosts }],
+    null
+  );
+  assert.equal(result.status, "ok");
+  assert.deepEqual(
+    result.plans.map((plan) => ({
+      budgetState: plan.budgetState,
+      affordableStepCount: plan.affordableStepCount,
+      affordableTargetLevel: plan.affordableTargetLevel,
+      nextStepShortfall: plan.nextStepShortfall
+    })),
+    [
+      {
+        budgetState: "unbudgeted",
+        affordableStepCount: 2,
+        affordableTargetLevel: 2,
+        nextStepShortfall: null
+      }
+    ]
+  );
 });
 
 test("缺少单级费用时不伪造建筑规划总计", () => {
@@ -141,10 +215,24 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /exportGuildConstructionCsv/);
   assert.match(userscript, /mwi-building-grid/);
   assert.match(userscript, /mwi-building-tile/);
-  assert.match(userscript, /mwi-building-editor/);
+  assert.match(userscript, /mwi-building-picker/);
+  assert.match(userscript, /data-role="toggle-building-picker"/);
+  assert.match(userscript, /data-role="pending-building-start"/);
+  assert.match(userscript, /data-role="pending-building-start-level"/);
   assert.match(userscript, /mwi-construction-group/);
+  assert.match(userscript, /data-role="building-target"/);
+  assert.match(userscript, /data-role="toggle-building-steps"/);
+  assert.match(userscript, /mwi-construction-group-steps/);
   assert.match(userscript, /mwi-construction-drag-handle/);
-  assert.match(userscript, /data-role="construction-plan-scale"/);
+  assert.match(userscript, /data-role="construction-affordable"/);
+  assert.match(userscript, /data-role="construction-budget-summary"/);
+  assert.match(userscript, /data-known-count=/);
+  assert.match(userscript, /data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(userscript, /data-role="undo-clear-building-plans"/);
+  assert.match(
+    userscript,
+    /cancel-pending-building[\s\S]*?building-tile[\s\S]*?building-search[\s\S]*?toggle-building-picker/
+  );
   assert.match(userscript, /function applyGuildBuildingFilters/);
   assert.match(userscript, /function guildBuildingIconMarkup/);
   assert.match(userscript, /misc_sprite/);
@@ -160,12 +248,36 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildConstruction",
     "guildPointBudget",
     "manualBudget",
+    "affordableUpgrades",
+    "constructionBudgetStopsBefore",
     "buildingCatalog",
+    "addBuilding",
+    "closeBuildingPicker",
+    "buildingCategoryFilter",
     "constructionQueue",
     "constructionQueueHint",
     "constructionQueueDragHint",
-    "buildingLevelsReadCompact",
+    "constructionQueueEmptyTitle",
+    "buildingTileAddLabel",
+    "buildingTileUnknownLabel",
+    "buildingTilePlannedLabel",
+    "currentBuildingLevelRequired",
+    "currentBuildingLevelLabel",
+    "currentBuildingLevelRange",
+    "addBuildingToPlan",
+    "constructionGroupBudgetCutoff",
+    "constructionPlanRowMeta",
+    "buildingTargetLabel",
+    "increaseBuildingTarget",
+    "expandBuildingSteps",
+    "collapseBuildingSteps",
+    "removeBuildingFromPlan",
+    "buildingLevelsCoverage",
+    "buildingLevelsPartialHint",
     "dragConstructionPlan",
+    "undoClearBuildingPlans",
+    "buildingPlanRestored",
+    "buildingPlanMovedToPosition",
     "copyBuildingPlan",
     "exportBuildingCsv"
   ]) {

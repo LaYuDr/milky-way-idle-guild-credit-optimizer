@@ -157,7 +157,6 @@
   state.manualGuildPoints = savedBuildingPlannerState.manualGuildPoints;
   state.buildingCategory = savedBuildingPlannerState.category;
   state.buildingSearch = "";
-  state.selectedBuildingHrid = state.buildingPlans[0]?.buildingHrid || "";
   state.buildingPlanNotice = "";
   let guildBuildingSpriteHref = "";
   let guildBuildingSpriteLoadPromise = null;
@@ -218,6 +217,8 @@
     task: () => {
       if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "upgrade")
         refreshGuildUpgrade(state.panel);
+      else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
+        refreshGuildConstruction(state.panel);
       else scheduleShrineGuide();
     },
     delay: 120,
@@ -593,15 +594,24 @@
   });
   const {
     guildBuildingDefinitions,
-    currentGuildBuildingLevel,
+    addGuildBuildingPlan,
     setGuildBuildingTarget,
+    removeGuildBuildingPlan,
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
+    setGuildBuildingPickerOpen,
+    setPendingGuildBuildingStartValue,
+    clearPendingGuildBuilding,
+    toggleGuildBuildingSteps,
+    clearGuildBuildingPlans,
+    undoClearGuildBuildingPlans,
+    hasGuildBuildingClearUndo,
     applyGuildBuildingFilters,
     refreshGuildConstructionBudgetPreview,
     refreshGuildConstruction,
     copyGuildConstructionPlan,
-    exportGuildConstructionCsv
+    exportGuildConstructionCsv,
+    dispose: disposeConstructionView
   } = constructionView;
 
   const shrineGuideUi = shrineGuideUiApi.createShrineGuideUi({
@@ -655,10 +665,18 @@
     removeGuildUpgradePlan,
     guildTokenCreditSelectionState,
     guildBuildingDefinitions,
-    currentGuildBuildingLevel,
+    addGuildBuildingPlan,
     setGuildBuildingTarget,
+    removeGuildBuildingPlan,
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
+    setGuildBuildingPickerOpen,
+    setPendingGuildBuildingStartValue,
+    clearPendingGuildBuilding,
+    toggleGuildBuildingSteps,
+    clearGuildBuildingPlans,
+    undoClearGuildBuildingPlans,
+    hasGuildBuildingClearUndo,
     applyGuildBuildingFilters,
     refreshGuildConstructionBudgetPreview,
     copyGuildConstructionPlan,
@@ -923,6 +941,7 @@
 
   function disposeRuntime() {
     disposePanelShell();
+    disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
     inventoryDataRefreshTask.dispose();

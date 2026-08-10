@@ -442,18 +442,44 @@
           availableGuildPoints: budget
         };
       }
-      results.push({ ...result, id: plan.id, buildingHrid: plan.buildingHrid });
+      const annotatedSteps = [];
+      let affordableStepCount = 0;
+      let nextStepShortfall = null;
       for (const step of result.steps) {
         cumulativeCost += step.cost;
-        steps.push({
+        const fitsBudget = budget === null ? null : cumulativeCost <= budget;
+        const annotatedStep = {
           ...step,
           id: plan.id,
           buildingHrid: plan.buildingHrid,
+          globalIndex: steps.length,
           cumulativeCost,
-          fitsBudget: budget === null ? null : cumulativeCost <= budget,
+          fitsBudget,
           remainingGuildPoints: budget === null ? null : budget - cumulativeCost
-        });
+        };
+        steps.push(annotatedStep);
+        annotatedSteps.push(annotatedStep);
+        if (fitsBudget !== false) affordableStepCount += 1;
+        else if (nextStepShortfall === null) nextStepShortfall = cumulativeCost - budget;
       }
+      const budgetState =
+        budget === null
+          ? "unbudgeted"
+          : affordableStepCount === annotatedSteps.length
+            ? "within"
+            : affordableStepCount > 0
+              ? "partial"
+              : "outside";
+      results.push({
+        ...result,
+        id: plan.id,
+        buildingHrid: plan.buildingHrid,
+        steps: annotatedSteps,
+        budgetState,
+        affordableStepCount,
+        affordableTargetLevel: result.startLevel + affordableStepCount,
+        nextStepShortfall
+      });
     }
     const firstOverBudgetIndex = budget === null ? -1 : steps.findIndex((step) => !step.fitsBudget);
     return {

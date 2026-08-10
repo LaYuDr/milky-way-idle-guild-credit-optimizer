@@ -1756,12 +1756,22 @@ window.MwiGuildCreditVersion = "1.1.45";
       guildPointBudget: "可用公会点数",
       manualBudget: "手工预算",
       budgetOptional: "留空则只计算总成本",
+      invalidGuildPointBudget: "请输入不小于 0 的整数。",
       plannedSpend: "计划消耗",
+      plannedUpgrades: "计划升级",
+      affordableUpgrades: "预算可完成",
       remainingPoints: "预算剩余",
       overBudgetBy: "超出预算",
       constructionPlanScale: "{buildings} 座 · {steps} 级",
+      constructionBudgetEmptySummary: "添加建筑后显示预算可执行范围。",
+      constructionNoBudgetSummary: "未设置预算 · 共 {total} 次升级",
+      constructionBudgetAllFit: "预算覆盖全部 {total} 次升级。",
+      constructionBudgetStopsBefore: "可完成 {affordable}/{total} 次；下一项 {building} {from}→{to} 还差 {count}",
       buildingCatalog: "建筑目录",
-      buildingCatalogHint: "选择建筑后，在下方统一调整目标等级。",
+      buildingCatalogHint: "选择建筑加入计划；可连续添加多座。",
+      addBuilding: "添加建筑",
+      closeBuildingPicker: "收起建筑目录",
+      buildingCategoryFilter: "建筑分类",
       buildingCategoryAll: "全部",
       buildingCategoryCore: "基础",
       buildingCategoryLife: "生活",
@@ -1775,33 +1785,63 @@ window.MwiGuildCreditVersion = "1.1.45";
       buildingMaxLevel: "已满级",
       notPlanned: "未计划",
       buildingTileLabel: "{building}，当前 {current} 级，目标 {target}",
+      buildingTileAddLabel: "添加 {building}，当前 {current} 级",
+      buildingTileUnknownLabel: "添加 {building}；当前等级未知，需先填写",
+      buildingTilePlannedLabel: "定位到 {building} 的施工行，目标 {target} 级",
+      buildingTileMaxLabel: "{building} 已满级，不能加入计划",
+      currentBuildingLevelRequired: "当前等级尚未读取，请先填写后再加入计划。",
+      currentBuildingLevelLabel: "{building} 当前等级",
+      currentBuildingLevelHelp: "请输入 0–{max} 的整数。",
+      currentBuildingLevelRange: "当前等级必须是 0–{max} 的整数。",
+      addBuildingToPlan: "加入施工计划",
+      cancel: "取消",
+      buildingAddedToPlan: "已将 {building} 加入施工计划。",
+      buildingRemovedFromPlan: "已将 {building} 移出施工计划。",
+      buildingTargetUpdated: "{building} 的目标已更新为 {target} 级。",
+      buildingPlansReconciled: "已按实时等级调整 {adjusted} 项计划，并移除 {removed} 项已完成计划。",
       addOneLevel: "加 1 级",
       addFiveLevels: "加 5 级",
       removeBuildingPlan: "移出计划",
-      movePlanUp: "提前",
-      movePlanDown: "延后",
-      constructionQueue: "施工队列",
-      constructionQueueHint: "先调整优先级，再看预算线",
-      constructionQueueDragHint: "拖动建筑组调整顺序，也可使用提前、延后按钮",
-      dragConstructionPlan: "拖动调整 {building} 的施工顺序",
-      constructionQueueEmpty: "设置任意建筑的目标等级后，这里会展开逐级施工顺序。",
+      movePlanUp: "将 {building} 提前一位",
+      movePlanDown: "将 {building} 延后一位",
+      constructionQueue: "施工计划",
+      constructionQueueHint: "按建筑分组排序；逐级费用默认收起。",
+      constructionQueueDragHint: "拖动手柄排序，也可使用提前、延后按钮；键盘可按 Alt 加上下方向键。",
+      dragConstructionPlan: "调整 {building} 的施工顺序",
+      constructionQueueEmptyTitle: "施工计划为空",
+      constructionQueueEmpty: "选择“添加建筑”开始规划。",
       constructionBudgetCutoff: "预算截止线 · 剩余 {count}",
+      constructionGroupBudgetCutoff: "预算可升至 {level} 级 · 下一等级还差 {count}",
+      constructionBudgetUnbudgeted: "待预算",
       constructionWithinBudget: "预算内",
+      constructionPartiallyWithinBudget: "部分预算内",
       constructionOverBudget: "超预算",
       constructionSummary: "{buildings} 座建筑 · {steps} 次升级",
+      constructionPlanRowMeta: "第 {position} 项 · {start}→{target} · {count} 次升级",
+      buildingTargetLabel: "{building} 的目标等级",
+      increaseBuildingTarget: "将 {building} 的目标提高 {count} 级",
+      expandBuildingSteps: "展开 {building} 的逐级费用",
+      collapseBuildingSteps: "收起 {building} 的逐级费用",
+      removeBuildingFromPlan: "将 {building} 移出施工计划",
       buildingLevelsRead: "已读取当前公会建筑等级。",
       buildingLevelsUnknown: "未读取到当前公会建筑等级；请核对各建筑的起始等级。",
       buildingLevelsReadCompact: "等级已读取",
       buildingLevelsUnknownCompact: "等级暂不可用",
+      buildingLevelsCoverage: "已读取 {known}/{total}",
+      buildingLevelsPartialHint: "{unknown} 座建筑等级未知；添加前需填写当前等级。",
       missingBuildingCost: "{building} 缺少 {level} 级费用，未计入总成本。",
-      clearBuildingPlans: "清空计划",
+      moreConstructionActions: "更多施工计划操作",
+      clearBuildingPlans: "清空施工计划",
+      undoClearBuildingPlans: "撤销清空",
       copyBuildingPlan: "复制规划",
       exportBuildingCsv: "导出 CSV",
       buildingPlanCopied: "施工规划已复制。",
       buildingPlanCopyFailed: "无法写入剪贴板，请使用 CSV 导出。",
       noBuildingMatches: "没有符合筛选条件的建筑。",
-      buildingPlanCleared: "已清空公会建筑规划。",
+      buildingPlanCleared: "已清空 {count} 项施工计划。",
+      buildingPlanRestored: "已恢复 {count} 项施工计划。",
       buildingPlanReordered: "施工顺序已保存。",
+      buildingPlanMovedToPosition: "{building} 已移至第 {position} 项，共 {total} 项。",
       constructionOrder: "顺序",
       fromLevel: "起始等级",
       toLevel: "目标等级",
@@ -2003,12 +2043,22 @@ window.MwiGuildCreditVersion = "1.1.45";
       guildPointBudget: "Available guild points",
       manualBudget: "Manual budget",
       budgetOptional: "Leave blank to calculate cost without a budget",
+      invalidGuildPointBudget: "Enter a whole number of 0 or more.",
       plannedSpend: "Planned spend",
+      plannedUpgrades: "Planned upgrades",
+      affordableUpgrades: "Budget covers",
       remainingPoints: "Budget remaining",
       overBudgetBy: "Over budget",
       constructionPlanScale: "{buildings} buildings · {steps} levels",
+      constructionBudgetEmptySummary: "Add a building to see what the budget can cover.",
+      constructionNoBudgetSummary: "No budget set · {total} upgrades planned",
+      constructionBudgetAllFit: "The budget covers all {total} upgrades.",
+      constructionBudgetStopsBefore: "Covers {affordable}/{total}; {building} {from}→{to} needs {count} more",
       buildingCatalog: "Building catalog",
-      buildingCatalogHint: "Select a building, then adjust its target below.",
+      buildingCatalogHint: "Choose buildings to add; the picker stays open for batch planning.",
+      addBuilding: "Add building",
+      closeBuildingPicker: "Close building catalog",
+      buildingCategoryFilter: "Building categories",
       buildingCategoryAll: "All",
       buildingCategoryCore: "Core",
       buildingCategoryLife: "Life",
@@ -2022,34 +2072,64 @@ window.MwiGuildCreditVersion = "1.1.45";
       buildingMaxLevel: "Maximum level",
       notPlanned: "Not planned",
       buildingTileLabel: "{building}, current level {current}, target {target}",
+      buildingTileAddLabel: "Add {building}, current level {current}",
+      buildingTileUnknownLabel: "Add {building}; enter its unknown current level first",
+      buildingTilePlannedLabel: "Go to {building} in the plan, target level {target}",
+      buildingTileMaxLabel: "{building} is at maximum level and cannot be added",
+      currentBuildingLevelRequired: "Its current level is unavailable. Enter it before adding this building.",
+      currentBuildingLevelLabel: "Current level for {building}",
+      currentBuildingLevelHelp: "Enter a whole number from 0 to {max}.",
+      currentBuildingLevelRange: "The current level must be a whole number from 0 to {max}.",
+      addBuildingToPlan: "Add to construction plan",
+      cancel: "Cancel",
+      buildingAddedToPlan: "{building} added to the construction plan.",
+      buildingRemovedFromPlan: "{building} removed from the construction plan.",
+      buildingTargetUpdated: "{building}'s target is now level {target}.",
+      buildingPlansReconciled: "Live levels adjusted {adjusted} plan(s) and removed {removed} completed plan(s).",
       addOneLevel: "Add 1 level",
       addFiveLevels: "Add 5 levels",
       removeBuildingPlan: "Remove from plan",
-      movePlanUp: "Move earlier",
-      movePlanDown: "Move later",
-      constructionQueue: "Construction queue",
-      constructionQueueHint: "Set priority first, then check the budget line",
-      constructionQueueDragHint: "Drag building groups to reorder, or use the earlier and later buttons",
-      dragConstructionPlan: "Drag to reorder {building}",
-      constructionQueueEmpty:
-        "Set a target level for any building to expand its level-by-level construction order here.",
+      movePlanUp: "Move {building} one position earlier",
+      movePlanDown: "Move {building} one position later",
+      constructionQueue: "Construction plan",
+      constructionQueueHint: "Ordered by building; per-level costs are collapsed by default.",
+      constructionQueueDragHint:
+        "Drag the handles to reorder, use the earlier and later buttons, or press Alt with Up or Down.",
+      dragConstructionPlan: "Reorder {building}",
+      constructionQueueEmptyTitle: "Your construction plan is empty",
+      constructionQueueEmpty: "Choose Add building to start planning.",
       constructionBudgetCutoff: "Budget cutoff · {count} remaining",
+      constructionGroupBudgetCutoff: "Budget reaches level {level} · next level needs {count} more",
+      constructionBudgetUnbudgeted: "No budget",
       constructionWithinBudget: "Within budget",
+      constructionPartiallyWithinBudget: "Partially covered",
       constructionOverBudget: "Over budget",
       constructionSummary: "{buildings} building(s) · {steps} upgrade(s)",
+      constructionPlanRowMeta: "Item {position} · {start}→{target} · {count} upgrade(s)",
+      buildingTargetLabel: "Target level for {building}",
+      increaseBuildingTarget: "Increase {building}'s target by {count} level(s)",
+      expandBuildingSteps: "Expand per-level costs for {building}",
+      collapseBuildingSteps: "Collapse per-level costs for {building}",
+      removeBuildingFromPlan: "Remove {building} from the construction plan",
       buildingLevelsRead: "Current guild building levels loaded.",
       buildingLevelsUnknown: "Current guild building levels are unavailable. Verify each building's starting level.",
       buildingLevelsReadCompact: "Levels loaded",
       buildingLevelsUnknownCompact: "Levels unavailable",
+      buildingLevelsCoverage: "Levels loaded: {known}/{total}",
+      buildingLevelsPartialHint: "{unknown} building level(s) are unknown. Enter a current level before adding.",
       missingBuildingCost: "{building} is missing its level {level} cost and is excluded from the total.",
-      clearBuildingPlans: "Clear plan",
+      moreConstructionActions: "More construction plan actions",
+      clearBuildingPlans: "Clear construction plan",
+      undoClearBuildingPlans: "Undo clear",
       copyBuildingPlan: "Copy plan",
       exportBuildingCsv: "Export CSV",
       buildingPlanCopied: "Construction plan copied.",
       buildingPlanCopyFailed: "Clipboard access failed. Use CSV export instead.",
       noBuildingMatches: "No buildings match these filters.",
-      buildingPlanCleared: "Guild construction plan cleared.",
+      buildingPlanCleared: "Cleared {count} construction plan item(s).",
+      buildingPlanRestored: "Restored {count} construction plan item(s).",
       buildingPlanReordered: "Construction order saved.",
+      buildingPlanMovedToPosition: "{building} moved to item {position} of {total}.",
       constructionOrder: "Order",
       fromLevel: "From level",
       toLevel: "To level",
@@ -2652,18 +2732,44 @@ window.MwiGuildCreditVersion = "1.1.45";
           availableGuildPoints: budget
         };
       }
-      results.push({ ...result, id: plan.id, buildingHrid: plan.buildingHrid });
+      const annotatedSteps = [];
+      let affordableStepCount = 0;
+      let nextStepShortfall = null;
       for (const step of result.steps) {
         cumulativeCost += step.cost;
-        steps.push({
+        const fitsBudget = budget === null ? null : cumulativeCost <= budget;
+        const annotatedStep = {
           ...step,
           id: plan.id,
           buildingHrid: plan.buildingHrid,
+          globalIndex: steps.length,
           cumulativeCost,
-          fitsBudget: budget === null ? null : cumulativeCost <= budget,
+          fitsBudget,
           remainingGuildPoints: budget === null ? null : budget - cumulativeCost
-        });
+        };
+        steps.push(annotatedStep);
+        annotatedSteps.push(annotatedStep);
+        if (fitsBudget !== false) affordableStepCount += 1;
+        else if (nextStepShortfall === null) nextStepShortfall = cumulativeCost - budget;
       }
+      const budgetState =
+        budget === null
+          ? "unbudgeted"
+          : affordableStepCount === annotatedSteps.length
+            ? "within"
+            : affordableStepCount > 0
+              ? "partial"
+              : "outside";
+      results.push({
+        ...result,
+        id: plan.id,
+        buildingHrid: plan.buildingHrid,
+        steps: annotatedSteps,
+        budgetState,
+        affordableStepCount,
+        affordableTargetLevel: result.startLevel + affordableStepCount,
+        nextStepShortfall
+      });
     }
     const firstOverBudgetIndex = budget === null ? -1 : steps.findIndex((step) => !step.fitsBudget);
     return {
@@ -4451,11 +4557,11 @@ window.MwiGuildCreditVersion = "1.1.45";
       const backward = axis === "x" ? event.key === "ArrowLeft" : event.key === "ArrowUp";
       const forward = axis === "x" ? event.key === "ArrowRight" : event.key === "ArrowDown";
       if (!backward && !forward) return;
+      event.preventDefault();
       const items = sortableItems(container);
       const fromIndex = items.indexOf(item);
       const toIndex = Math.max(0, Math.min(items.length - 1, fromIndex + (backward ? -1 : 1)));
       if (fromIndex === toIndex || typeof onCommit !== "function") return;
-      event.preventDefault();
       onCommit({ key: item.dataset.sortKey || "", fromIndex, toIndex, container });
     }
 
@@ -4506,7 +4612,7 @@ window.MwiGuildCreditVersion = "1.1.45";
   "use strict";
 
   const PANEL_STYLES = `
-        #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:20;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
+        #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:20;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;margin:0 0 10px;border-bottom:1px solid #474969}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;background:#2a3a45!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;border-left:1px solid #474969;background:#202238}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:30px;min-width:30px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
@@ -4535,14 +4641,113 @@ window.MwiGuildCreditVersion = "1.1.45";
         #mwi-credit-optimizer .mwi-construction-layout{display:grid;gap:12px}#mwi-credit-optimizer .mwi-building-pane{min-width:0;overflow:hidden;border:1px solid #474969;border-radius:8px;background:#24253c}#mwi-credit-optimizer .mwi-building-pane-heading{display:flex;align-items:end;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4160;background:#2b2d48}#mwi-credit-optimizer .mwi-building-pane-heading>span{min-width:0;display:grid;gap:3px}#mwi-credit-optimizer .mwi-building-heading-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px}#mwi-credit-optimizer .mwi-building-pane-heading h4{margin:0;color:#fff;font-size:14px}#mwi-credit-optimizer .mwi-building-pane-heading small{color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-building-level-status{padding:2px 6px;border:1px solid #4d7d73;border-radius:999px;background:#203d3a;color:#bff6ea!important}#mwi-credit-optimizer .mwi-building-level-status[data-levels-read="false"]{border-color:#80663f;background:#3b3323;color:#ffd17c!important}#mwi-credit-optimizer .mwi-building-pane-heading input{width:170px;min-width:110px}
         #mwi-credit-optimizer .mwi-building-categories{display:flex;flex-wrap:wrap;gap:4px;padding:7px 9px;border-bottom:1px solid #3f4160}#mwi-credit-optimizer .mwi-building-categories button{min-height:28px;padding:3px 8px;border:1px solid #555875;background:#30314c;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-building-categories button[data-active="true"]{border-color:#43c4ad;background:#245149;color:#dffff7}
         #mwi-credit-optimizer .mwi-building-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;padding:9px}#mwi-credit-optimizer .mwi-building-tile[hidden]{display:none!important}#mwi-credit-optimizer .mwi-building-tile{--mwi-building-accent:#9567da;position:relative;display:grid;place-items:center;aspect-ratio:1;min-width:0;min-height:56px;padding:6px!important;border:1px solid #4b4e6d!important;border-radius:7px!important;background:#292b45!important;color:#fff!important;box-shadow:none;overflow:hidden}#mwi-credit-optimizer .mwi-building-tile[data-category="core"]{--mwi-building-accent:#d8a33c}#mwi-credit-optimizer .mwi-building-tile[data-category="life"]{--mwi-building-accent:#43c4ad}#mwi-credit-optimizer .mwi-building-tile[data-category="combat"]{--mwi-building-accent:#e65d68}#mwi-credit-optimizer .mwi-building-tile:hover{border-color:#8589b5!important;background:#30334f!important}#mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{border-color:#43c4ad!important;background:#23413f!important}#mwi-credit-optimizer .mwi-building-tile[data-selected="true"]{outline:2px solid #77f3d0;outline-offset:-3px;background:#2b4f4a!important}#mwi-credit-optimizer .mwi-building-icon{display:grid;place-items:center;width:min(72%,44px);height:min(72%,44px);padding:1px;border:1px solid var(--mwi-building-accent);border-radius:6px;background:#22233a}#mwi-credit-optimizer .mwi-building-icon svg{display:block;width:100%;height:100%}#mwi-credit-optimizer .mwi-building-icon-fallback svg{padding:6px;fill:none;stroke:var(--mwi-building-accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}#mwi-credit-optimizer .mwi-building-level-badge,#mwi-credit-optimizer .mwi-building-target-badge{position:absolute;top:4px;display:grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:999px;font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-building-level-badge{left:4px;background:#161827;color:#fff}#mwi-credit-optimizer .mwi-building-level-badge[data-level-known="false"]{color:#ffd17c}#mwi-credit-optimizer .mwi-building-target-badge{right:4px;background:#43c4ad;color:#10201f}#mwi-credit-optimizer .mwi-building-tile-name{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-        #mwi-credit-optimizer .mwi-building-editor{display:grid;grid-template-columns:minmax(110px,1fr) auto minmax(92px,.65fr) auto;align-items:end;gap:6px 9px;padding:10px;border-top:1px solid #474969;background:#202238}#mwi-credit-optimizer .mwi-building-editor[hidden]{display:none!important}#mwi-credit-optimizer .mwi-building-editor-title{display:grid;align-self:center;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-building-editor-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-building-editor-title small,#mwi-credit-optimizer .mwi-building-editor :is(label,span)>small{color:#9da1c1;font-size:9px}#mwi-credit-optimizer .mwi-building-editor-metric{display:grid;align-content:center;gap:2px;white-space:nowrap}#mwi-credit-optimizer .mwi-building-editor-metric b:last-child{color:#ffe09a;font:700 13px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-building-editor-target{min-width:0}#mwi-credit-optimizer .mwi-building-editor-target select{width:100%;min-width:0}#mwi-credit-optimizer .mwi-building-editor-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px}#mwi-credit-optimizer .mwi-building-editor-actions button{min-height:32px;padding:4px 9px}#mwi-credit-optimizer .mwi-building-editor-actions .mwi-building-remove{margin-left:auto;background:#5a3340;color:#ffd5d9}#mwi-credit-optimizer .mwi-building-full-level{align-self:center;color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-building-editor-empty{display:block;color:#aeb1d3}
         #mwi-credit-optimizer .mwi-construction-queue{padding:10px;border:1px solid #605338;border-radius:7px;background:#2c2a36}#mwi-credit-optimizer .mwi-construction-queue h4{margin:0;color:#ffe09a;font-size:14px}#mwi-credit-optimizer .mwi-construction-queue-heading{display:flex;align-items:start;justify-content:space-between;gap:8px;margin-bottom:8px}#mwi-credit-optimizer .mwi-construction-queue-heading>span{display:grid;gap:2px}#mwi-credit-optimizer .mwi-construction-queue-heading small{color:#bdb6a5;font-size:10px}
         #mwi-credit-optimizer .mwi-construction-rail{position:relative;display:grid;gap:6px}#mwi-credit-optimizer .mwi-construction-group{position:relative;border:1px solid #4b4d68;border-radius:6px;background:#292a43;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}#mwi-credit-optimizer .mwi-construction-group>header{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:6px;padding:0 8px 0 0;border-bottom:1px solid #3f4160}#mwi-credit-optimizer .mwi-construction-drag-handle{display:grid;place-items:center;width:44px;min-width:44px;min-height:44px;padding:0!important;border-radius:5px 0 0 0!important;background:transparent!important;color:#aeb1d3!important;touch-action:none;cursor:grab}#mwi-credit-optimizer .mwi-construction-drag-handle:active{cursor:grabbing}#mwi-credit-optimizer .mwi-construction-drag-handle span,#mwi-credit-optimizer .mwi-construction-drag-handle span:before,#mwi-credit-optimizer .mwi-construction-drag-handle span:after{width:3px;height:3px;border-radius:50%;background:currentColor;box-shadow:7px 0 currentColor}#mwi-credit-optimizer .mwi-construction-drag-handle span{position:relative;transform:translateX(-3px)}#mwi-credit-optimizer .mwi-construction-drag-handle span:before,#mwi-credit-optimizer .mwi-construction-drag-handle span:after{position:absolute;left:0;content:""}#mwi-credit-optimizer .mwi-construction-drag-handle span:before{top:-7px}#mwi-credit-optimizer .mwi-construction-drag-handle span:after{top:7px}#mwi-credit-optimizer .mwi-construction-group-select{display:grid;justify-items:start;gap:1px;min-width:0;min-height:44px;padding:5px 0!important;background:transparent!important;color:#fff!important;text-align:left}#mwi-credit-optimizer .mwi-construction-group-select strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mwi-credit-optimizer .mwi-construction-group-select small{color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-construction-group>header>strong{color:#ffe09a;font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-construction-group-steps{display:grid;gap:1px;padding:4px}#mwi-credit-optimizer .mwi-construction-step{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:7px;min-height:30px;padding:3px 5px;background:#24253d}#mwi-credit-optimizer .mwi-construction-step[data-over-budget="true"]{background:#3b2932;opacity:.84}#mwi-credit-optimizer .mwi-construction-step-index{display:grid;place-items:center;width:22px;height:22px;border:1px solid #6b5d40;border-radius:50%;background:#d8a33c;color:#241c0d;font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-construction-step[data-over-budget="true"] .mwi-construction-step-index{border-color:#8b4b56;background:#e65d68;color:#fff}#mwi-credit-optimizer .mwi-construction-step-copy{min-width:0}#mwi-credit-optimizer .mwi-construction-step-copy small{color:#aeb1d3;font-size:10px}#mwi-credit-optimizer .mwi-construction-step-cost{color:#ffe09a;font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace}#mwi-credit-optimizer .mwi-sort-dragging{border-color:#77f3d0!important;box-shadow:0 10px 24px #090a12aa;opacity:.92}#mwi-credit-optimizer .mwi-sort-drop-before:before,#mwi-credit-optimizer .mwi-sort-drop-after:after{position:absolute;right:0;left:0;z-index:9;height:2px;background:#77f3d0;content:""}#mwi-credit-optimizer .mwi-sort-drop-before:before{top:-4px}#mwi-credit-optimizer .mwi-sort-drop-after:after{bottom:-4px}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-before:before,#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-after:after{top:5px;bottom:5px;width:2px;height:auto}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-before:before{right:auto;left:-1px}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-after:after{right:-1px;left:auto}
         #mwi-credit-optimizer .mwi-budget-cutoff{position:relative;z-index:2;display:flex;align-items:center;gap:6px;margin:3px 0;color:#ff9ca3;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-budget-cutoff:before,#mwi-credit-optimizer .mwi-budget-cutoff:after{content:"";height:1px;background:#e65d68}#mwi-credit-optimizer .mwi-budget-cutoff:before{width:12px}#mwi-credit-optimizer .mwi-budget-cutoff:after{flex:1}#mwi-credit-optimizer .mwi-construction-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#mwi-credit-optimizer .mwi-construction-actions button{flex:1 1 auto}#mwi-credit-optimizer .mwi-construction-actions .mwi-clear-building-plans{background:#5a3340;color:#ffd5d9}
         @container (min-width:720px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(330px,1fr) minmax(290px,.82fr);align-items:start}#mwi-credit-optimizer .mwi-construction-queue-pane{position:sticky;top:0}}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-metric strong{font-size:13px}}
-        @container (max-width:400px){#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}#mwi-credit-optimizer .mwi-building-editor{grid-template-columns:minmax(0,1fr) auto minmax(90px,1fr)}#mwi-credit-optimizer .mwi-building-editor-title{grid-column:1/-1}#mwi-credit-optimizer .mwi-building-editor-metric:last-of-type{grid-column:3}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-budget-input>small{text-align:left}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-budget-input>small{text-align:left}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-meter span,#mwi-credit-optimizer .mwi-construction-group{transition:none}}
+        /* Queue-first construction workbench. */
+        #mwi-credit-optimizer .mwi-construction-status{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;padding:7px 9px;border-left:3px solid #43c4ad;background:#242b40;color:#dfe9f4}
+        #mwi-credit-optimizer .mwi-construction-status[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-construction-status>span{min-width:0}
+        #mwi-credit-optimizer .mwi-construction-status button{flex:0 0 auto;min-height:28px;padding:3px 8px}
+        #mwi-credit-optimizer .mwi-field-error{color:#ff9ca3!important}
+        #mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:minmax(175px,1.15fr) repeat(3,minmax(76px,.55fr));margin-bottom:9px}
+        #mwi-credit-optimizer .mwi-construction-budget>div{min-width:0;padding:9px 10px;background:linear-gradient(135deg,#302d36,#292a40)}
+        #mwi-credit-optimizer .mwi-construction-budget-input{align-content:start}
+        #mwi-credit-optimizer .mwi-construction-budget-input>small{white-space:normal}
+        #mwi-credit-optimizer .mwi-construction-budget-input .mwi-field-error{grid-column:1/-1}
+        #mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1;display:block;min-width:0;padding:7px 10px;background:#252433;color:#d9cda9;font-size:10px;line-height:1.35}
+        #mwi-credit-optimizer .mwi-construction-budget[data-over-budget="true"] .mwi-construction-budget-summary{color:#ffb0b6}
+        #mwi-credit-optimizer .mwi-construction-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
+        #mwi-credit-optimizer .mwi-construction-queue-pane,#mwi-credit-optimizer .mwi-building-picker{min-width:0}
+        #mwi-credit-optimizer .mwi-construction-queue{padding:0;border:0;border-radius:0;background:transparent}
+        #mwi-credit-optimizer .mwi-construction-queue-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:0;padding:8px 0;border-bottom:1px solid #605338}
+        #mwi-credit-optimizer .mwi-construction-queue-heading>span:first-child{display:grid;gap:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-construction-queue-heading h4{color:#ffe09a}
+        #mwi-credit-optimizer .mwi-construction-queue-heading small{line-height:1.35}
+        #mwi-credit-optimizer .mwi-construction-queue-meta{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px;min-width:0}
+        #mwi-credit-optimizer .mwi-construction-actions{display:flex;align-items:center;gap:4px;margin:0}
+        #mwi-credit-optimizer .mwi-construction-actions>button{flex:0 0 auto;min-height:28px;padding:3px 8px;font-size:10px}
+        #mwi-credit-optimizer .mwi-construction-more{position:relative}
+        #mwi-credit-optimizer .mwi-construction-more[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-construction-more summary{display:grid;place-items:center;width:30px;height:28px;border:1px solid #555875;border-radius:4px;background:#343650;color:#fff;font-weight:700;cursor:pointer;list-style:none}
+        #mwi-credit-optimizer .mwi-construction-more summary::-webkit-details-marker{display:none}
+        #mwi-credit-optimizer .mwi-construction-more[open] summary{border-color:#8589b5;background:#41435f}
+        #mwi-credit-optimizer .mwi-construction-more>div{position:absolute;top:32px;right:0;z-index:12;width:max-content;padding:4px;border:1px solid #5e4250;border-radius:5px;background:#25263d;box-shadow:0 8px 20px #10111ccc}
+        #mwi-credit-optimizer .mwi-construction-more button{min-height:30px;padding:4px 9px;background:#5a3340;color:#ffd5d9;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-empty{display:grid;justify-items:start;gap:3px;padding:14px 10px;border-bottom:1px solid #3f4160;color:#d7d9ed}
+        #mwi-credit-optimizer .mwi-construction-empty strong{font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-empty small{color:#aeb1d3;font-size:10px}
+        #mwi-credit-optimizer .mwi-construction-rail{position:relative;display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}
+        #mwi-credit-optimizer .mwi-construction-group{overflow:visible;border:1px solid #4b4d68;border-left:3px solid #777aa4;border-radius:6px;background:#292a43}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="within"]{border-left-color:#43c4ad}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="partial"]{border-left-color:#d8a33c}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="outside"]{border-left-color:#e65d68}
+        #mwi-credit-optimizer .mwi-construction-row{display:grid;grid-template-columns:32px 40px minmax(112px,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:5px 7px;padding:7px 8px 7px 0}
+        #mwi-credit-optimizer .mwi-construction-drag-handle{grid-column:1;grid-row:1/3;align-self:stretch;width:32px;min-width:32px;min-height:58px;border-radius:4px 0 0 4px!important}
+        #mwi-credit-optimizer .mwi-construction-building-icon{grid-column:2;grid-row:1;display:grid;place-items:center;width:40px;height:40px}
+        #mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:38px;height:38px}
+        #mwi-credit-optimizer .mwi-construction-identity{grid-column:3;grid-row:1;display:grid;gap:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-construction-identity strong{overflow:hidden;color:#fff;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-identity small{overflow:hidden;color:#aeb1d3;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-cost{grid-column:4;grid-row:1;display:grid;justify-items:end;gap:1px;min-width:68px;text-align:right}
+        #mwi-credit-optimizer .mwi-construction-cost small{color:#aeb1d3;font-size:8px}
+        #mwi-credit-optimizer .mwi-construction-cost strong{color:#ffe09a;font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-cost em{color:#aeb1d3;font-size:8px;font-style:normal;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="within"] .mwi-construction-cost em{color:#77f3d0}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="partial"] .mwi-construction-cost em{color:#ffd17c}
+        #mwi-credit-optimizer .mwi-construction-group[data-budget-state="outside"] .mwi-construction-cost em{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-construction-row-actions{grid-column:2/-1;grid-row:2;display:flex;align-items:end;flex-wrap:wrap;gap:4px;min-width:0}
+        #mwi-credit-optimizer .mwi-construction-target{display:flex;align-items:center;gap:5px;min-width:104px;color:#aeb1d3;font-size:9px}
+        #mwi-credit-optimizer .mwi-construction-target select{width:82px;min-width:0;min-height:30px;padding:3px 6px}
+        #mwi-credit-optimizer .mwi-construction-row-actions button{min-height:30px;padding:3px 7px}
+        #mwi-credit-optimizer .mwi-construction-level-button{min-width:34px;background:#43c4ad;color:#10201f}
+        #mwi-credit-optimizer .mwi-construction-order-actions{display:flex;gap:4px;margin-left:auto}
+        #mwi-credit-optimizer .mwi-construction-order-actions .mwi-icon-button{min-height:30px}
+        #mwi-credit-optimizer .mwi-construction-expand,#mwi-credit-optimizer .mwi-construction-remove{width:32px;min-width:32px;padding:0!important;background:#343650;color:#fff}
+        #mwi-credit-optimizer .mwi-construction-remove{background:#5a3340;color:#ffd5d9;font-size:18px}
+        #mwi-credit-optimizer .mwi-construction-group-steps[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-construction-group-steps{display:grid;gap:1px;padding:4px;border-top:1px solid #3f4160}
+        #mwi-credit-optimizer .mwi-budget-cutoff{margin:0;padding:5px 8px;border-top:1px solid #6f4550;border-bottom:1px solid #6f4550;background:#382831}
+        #mwi-credit-optimizer .mwi-budget-cutoff:before{width:8px}
+        #mwi-credit-optimizer .mwi-sort-dragging.mwi-construction-group{border-color:#77f3d0!important;box-shadow:0 10px 24px #090a12aa;opacity:.92}
+        #mwi-credit-optimizer .mwi-building-picker{overflow:visible;border:1px solid #474969;border-radius:7px;background:#24253c}
+        #mwi-credit-optimizer .mwi-building-picker-toggle{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:7px;width:100%;min-height:42px;padding:6px 8px!important;border-radius:6px!important;background:#2b2d48!important;color:#fff!important;text-align:left}
+        #mwi-credit-optimizer .mwi-building-picker[data-open="true"] .mwi-building-picker-toggle{border-radius:6px 6px 0 0!important;border-bottom:1px solid #3f4160;background:#30324f!important}
+        #mwi-credit-optimizer .mwi-building-picker-plus{display:grid;place-items:center;width:26px;height:26px;border:1px solid #43c4ad;border-radius:5px;background:#245149;color:#dffff7;font-size:17px}
+        #mwi-credit-optimizer .mwi-building-picker-toggle>span:nth-child(2){display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0}
+        #mwi-credit-optimizer .mwi-building-picker-toggle strong{font-size:12px}
+        #mwi-credit-optimizer .mwi-building-picker-chevron{color:#aeb1d3}
+        #mwi-credit-optimizer .mwi-building-level-status{padding:2px 6px;border:1px solid #80663f;border-radius:999px;background:#3b3323;color:#ffd17c!important;font-size:9px!important}
+        #mwi-credit-optimizer .mwi-building-level-status[data-complete="true"]{border-color:#4d7d73;background:#203d3a;color:#bff6ea!important}
+        #mwi-credit-optimizer .mwi-building-picker-body[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-building-picker-body{min-width:0}
+        #mwi-credit-optimizer .mwi-building-pane-heading{padding:8px 9px}
+        #mwi-credit-optimizer .mwi-building-pane-heading>span>h4{margin:0;color:#fff;font-size:12px}
+        #mwi-credit-optimizer .mwi-building-pane-heading input{min-height:30px}
+        #mwi-credit-optimizer .mwi-building-categories{padding:6px 7px}
+        #mwi-credit-optimizer .mwi-building-grid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:5px;padding:7px}
+        #mwi-credit-optimizer .mwi-building-tile{min-height:48px;padding:5px!important}
+        #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{outline:1px solid #77f3d0;outline-offset:-3px}
+        #mwi-credit-optimizer .mwi-building-tile:focus-visible{outline:2px solid #fff;outline-offset:1px}
+        #mwi-credit-optimizer .mwi-building-icon{width:min(70%,42px);height:min(70%,42px)}
+        #mwi-credit-optimizer .mwi-building-start-form{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,.6fr) auto;align-items:end;gap:5px 8px;padding:8px 9px;border-bottom:1px solid #80663f;background:#332e28}
+        #mwi-credit-optimizer .mwi-building-start-copy{display:grid;align-self:center;gap:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-building-start-copy strong{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-building-start-copy small,#mwi-credit-optimizer .mwi-building-start-form>small{color:#c8b78f;font-size:9px;line-height:1.3}
+        #mwi-credit-optimizer .mwi-building-start-form label{min-width:0;font-size:9px}
+        #mwi-credit-optimizer .mwi-building-start-form input{width:100%;min-width:0}
+        #mwi-credit-optimizer .mwi-building-start-form>small{grid-column:2/-1}
+        #mwi-credit-optimizer .mwi-building-start-actions{display:flex;gap:4px}
+        #mwi-credit-optimizer .mwi-building-start-actions button{min-height:32px;padding:4px 8px;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-secondary-button{border:1px solid #555875!important;background:#343650!important;color:#fff!important}
+        @container (min-width:720px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(0,1fr);align-items:start}#mwi-credit-optimizer .mwi-construction-layout[data-picker-open="true"]{grid-template-columns:minmax(360px,1.12fr) minmax(300px,.88fr)}#mwi-credit-optimizer .mwi-construction-queue-pane{position:static;top:auto}}
+        @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-queue-meta{justify-content:space-between}#mwi-credit-optimizer .mwi-construction-actions{margin-left:auto}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:30px 36px minmax(0,1fr) auto;gap:5px;padding-right:6px}#mwi-credit-optimizer .mwi-construction-drag-handle{width:30px;min-width:30px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{min-width:58px}#mwi-credit-optimizer .mwi-construction-target{min-width:96px}#mwi-credit-optimizer .mwi-construction-target select{width:70px}#mwi-credit-optimizer .mwi-building-start-form{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-building-start-form>small{grid-column:1}#mwi-credit-optimizer .mwi-building-start-actions{flex-wrap:wrap}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}}
+        @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group,#mwi-credit-optimizer .mwi-building-picker-toggle{transition:none}}
         #mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"]{border-color:#d8a33c!important;background:linear-gradient(135deg,#493f2a,#353147)!important;color:#fff4d4!important;box-shadow:0 0 0 1px #d8a33c33}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"] .mwi-token-credit-plan-indicator{border-color:#ffd17c;background:#ffd17c;color:#332814}#mwi-credit-optimizer .mwi-material-copy{flex:1 1 auto}#mwi-credit-optimizer .mwi-material-exchange-mode{flex:0 0 auto;min-height:26px!important;padding:4px 7px!important;border:1px solid #66698f!important;border-radius:999px!important;background:#353653!important;color:#dfe1f4!important;font-size:10px;line-height:1.1;white-space:nowrap}#mwi-credit-optimizer .mwi-material-exchange-mode:hover{border-color:#77f3d0!important}#mwi-credit-optimizer .mwi-material-exchange-mode[data-active="true"]{border-color:#43c4ad!important;background:#245149!important;color:#dffff7!important;box-shadow:0 0 0 1px #43c4ad22}
         /* Compact shrine planner and aligned result rows. */
         #mwi-credit-optimizer .mwi-upgrade-planner{margin:0 0 9px;border:1px solid #4b4f75;border-radius:9px;background:#242641;overflow:hidden}
@@ -4941,6 +5146,16 @@ window.MwiGuildCreditVersion = "1.1.45";
       Blob
     } = dependencies;
 
+    const constructionUi = {
+      pickerOpen: state.buildingPlans.length === 0,
+      pendingBuildingHrid: "",
+      pendingStartValue: "",
+      pendingStartErrorKey: "",
+      expandedBuildingHrids: new Set(),
+      clearUndoPlans: null,
+      clearUndoTimer: null
+    };
+
     function guildBuildingDefinitions() {
       return buildingDataApi.definitions();
     }
@@ -4981,14 +5196,23 @@ window.MwiGuildCreditVersion = "1.1.45";
       return null;
     }
 
+    function guildBuildingLevelSnapshot(definitions) {
+      const levels = new Map(definitions.map((definition) => [definition.hrid, currentGuildBuildingLevel(definition)]));
+      const knownCount = Array.from(levels.values()).filter((level) => level !== null).length;
+      return { levels, knownCount, totalCount: definitions.length };
+    }
+
     function reconcileGuildBuildingPlans(definitions) {
       const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
       let changed = false;
+      let adjustedCount = 0;
+      let removedCount = 0;
       const reconciled = [];
       for (const plan of state.buildingPlans) {
         const definition = byHrid.get(plan.buildingHrid);
         if (!definition) {
           changed = true;
+          removedCount += 1;
           continue;
         }
         const liveLevel = currentGuildBuildingLevel(definition);
@@ -4997,15 +5221,25 @@ window.MwiGuildCreditVersion = "1.1.45";
         const targetLevel = Math.max(0, Math.min(definition.maxLevel, Number(plan.targetLevel) || 0));
         if (targetLevel <= startLevel) {
           changed = true;
+          removedCount += 1;
           continue;
         }
-        if (startLevel !== plan.startLevel || targetLevel !== plan.targetLevel) changed = true;
+        if (startLevel !== plan.startLevel || targetLevel !== plan.targetLevel) {
+          changed = true;
+          adjustedCount += 1;
+        }
         reconciled.push({ ...plan, startLevel, targetLevel });
       }
       if (changed) {
         state.buildingPlans = reconciled;
         persistGuildBuildingPlannerState();
+        if (!state.buildingPlanNotice)
+          state.buildingPlanNotice = t("buildingPlansReconciled", {
+            adjusted: formatNumber(adjustedCount),
+            removed: formatNumber(removedCount)
+          });
       }
+      return { changed, adjustedCount, removedCount };
     }
 
     function guildBuildingPlan(definitions) {
@@ -5020,37 +5254,118 @@ window.MwiGuildCreditVersion = "1.1.45";
       );
     }
 
+    function discardGuildBuildingClearUndo() {
+      if (constructionUi.clearUndoTimer !== null) pageWindow.clearTimeout(constructionUi.clearUndoTimer);
+      constructionUi.clearUndoTimer = null;
+      constructionUi.clearUndoPlans = null;
+    }
+
+    function clearPendingGuildBuilding() {
+      constructionUi.pendingBuildingHrid = "";
+      constructionUi.pendingStartValue = "";
+      constructionUi.pendingStartErrorKey = "";
+    }
+
+    function setGuildBuildingPickerOpen(open) {
+      constructionUi.pickerOpen = Boolean(open);
+      if (!constructionUi.pickerOpen) clearPendingGuildBuilding();
+      return constructionUi.pickerOpen;
+    }
+
+    function setPendingGuildBuildingStartValue(value) {
+      constructionUi.pendingStartValue = String(value ?? "");
+      constructionUi.pendingStartErrorKey = "";
+    }
+
+    function addGuildBuildingPlan(definitions, buildingHrid, manualStartLevel) {
+      const definition = definitions.find((entry) => entry.hrid === buildingHrid);
+      if (!definition) return { status: "not_found", buildingHrid };
+      const existing = state.buildingPlans.find((plan) => plan.buildingHrid === buildingHrid);
+      if (existing) return { status: "already_planned", buildingHrid, plan: existing };
+      const liveLevel = currentGuildBuildingLevel(definition);
+      let startLevel = liveLevel;
+      if (startLevel === null) {
+        if (manualStartLevel === undefined || manualStartLevel === null) {
+          constructionUi.pickerOpen = true;
+          constructionUi.pendingBuildingHrid = buildingHrid;
+          constructionUi.pendingStartValue = "";
+          constructionUi.pendingStartErrorKey = "";
+          return { status: "requires_start_level", buildingHrid };
+        }
+        if (String(manualStartLevel).trim() === "") {
+          constructionUi.pendingBuildingHrid = buildingHrid;
+          constructionUi.pendingStartValue = String(manualStartLevel);
+          constructionUi.pendingStartErrorKey = "currentBuildingLevelRequired";
+          return { status: "invalid_start_level", buildingHrid };
+        }
+        startLevel = Number(manualStartLevel);
+        constructionUi.pendingStartValue = String(manualStartLevel);
+        if (!Number.isSafeInteger(startLevel) || startLevel < 0 || startLevel > definition.maxLevel) {
+          constructionUi.pendingStartErrorKey = "currentBuildingLevelRange";
+          return { status: "invalid_start_level", buildingHrid };
+        }
+      }
+      if (startLevel >= definition.maxLevel) {
+        constructionUi.pendingStartErrorKey = "buildingMaxLevel";
+        return { status: "at_max_level", buildingHrid };
+      }
+      discardGuildBuildingClearUndo();
+      const plan = {
+        id: `building-plan-${state.nextBuildingPlanId++}`,
+        buildingHrid,
+        startLevel,
+        targetLevel: startLevel + 1
+      };
+      state.buildingPlans.push(plan);
+      state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
+      clearPendingGuildBuilding();
+      persistGuildBuildingPlannerState();
+      return { status: "added", buildingHrid, plan };
+    }
+
     function setGuildBuildingTarget(definitions, buildingHrid, targetLevel) {
       const definition = definitions.find((entry) => entry.hrid === buildingHrid);
-      if (!definition) return false;
-      const existingIndex = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
-      const existing = existingIndex >= 0 ? state.buildingPlans[existingIndex] : null;
-      const liveLevel = currentGuildBuildingLevel(definition);
-      const startLevel = liveLevel === null ? (existing && existing.startLevel) || 0 : liveLevel;
-      const target = Math.max(startLevel, Math.min(definition.maxLevel, Number(targetLevel) || startLevel));
-      if (target <= startLevel) {
-        if (existingIndex >= 0) state.buildingPlans.splice(existingIndex, 1);
-      } else if (existing) {
-        state.buildingPlans[existingIndex] = { ...existing, startLevel, targetLevel: target };
-      } else {
-        state.buildingPlans.push({
-          id: `building-plan-${state.nextBuildingPlanId++}`,
-          buildingHrid,
-          startLevel,
-          targetLevel: target
-        });
-      }
-      state.buildingPlanNotice = "";
+      const planIndex = state.buildingPlans.findIndex((entry) => entry.buildingHrid === buildingHrid);
+      if (!definition || planIndex < 0) return false;
+      const plan = state.buildingPlans[planIndex];
+      const target = Number(targetLevel);
+      if (!Number.isSafeInteger(target) || target <= plan.startLevel || target > definition.maxLevel) return false;
+      if (target === plan.targetLevel) return false;
+      discardGuildBuildingClearUndo();
+      state.buildingPlans[planIndex] = { ...plan, targetLevel: target };
+      state.buildingPlanNotice = t("buildingTargetUpdated", {
+        building: guildBuildingLabel(definition),
+        target: formatNumber(target)
+      });
       persistGuildBuildingPlannerState();
       return true;
+    }
+
+    function removeGuildBuildingPlan(definitions, buildingHrid) {
+      const index = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
+      if (index < 0) return { status: "not_found", removedIndex: -1 };
+      const definition = definitions.find((entry) => entry.hrid === buildingHrid);
+      discardGuildBuildingClearUndo();
+      const [removed] = state.buildingPlans.splice(index, 1);
+      constructionUi.expandedBuildingHrids.delete(buildingHrid);
+      state.buildingPlanNotice = t("buildingRemovedFromPlan", { building: guildBuildingLabel(definition) });
+      persistGuildBuildingPlannerState();
+      return { status: "removed", removedIndex: index, plan: removed };
     }
 
     function moveGuildBuildingPlan(buildingHrid, direction) {
       const index = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= state.buildingPlans.length) return false;
+      discardGuildBuildingClearUndo();
       const [plan] = state.buildingPlans.splice(index, 1);
       state.buildingPlans.splice(nextIndex, 0, plan);
+      const definition = guildBuildingDefinitions().find((entry) => entry.hrid === buildingHrid);
+      state.buildingPlanNotice = t("buildingPlanMovedToPosition", {
+        building: guildBuildingLabel(definition),
+        position: formatNumber(nextIndex + 1),
+        total: formatNumber(state.buildingPlans.length)
+      });
       persistGuildBuildingPlannerState();
       return true;
     }
@@ -5059,11 +5374,61 @@ window.MwiGuildCreditVersion = "1.1.45";
       const index = state.buildingPlans.findIndex((plan) => plan.buildingHrid === buildingHrid);
       const nextIndex = Math.max(0, Math.min(state.buildingPlans.length - 1, Number(targetIndex)));
       if (index < 0 || !Number.isInteger(nextIndex) || index === nextIndex) return false;
+      discardGuildBuildingClearUndo();
       const [plan] = state.buildingPlans.splice(index, 1);
       state.buildingPlans.splice(nextIndex, 0, plan);
-      state.buildingPlanNotice = t("buildingPlanReordered");
+      const definition = guildBuildingDefinitions().find((entry) => entry.hrid === buildingHrid);
+      state.buildingPlanNotice = t("buildingPlanMovedToPosition", {
+        building: guildBuildingLabel(definition),
+        position: formatNumber(nextIndex + 1),
+        total: formatNumber(state.buildingPlans.length)
+      });
       persistGuildBuildingPlannerState();
       return true;
+    }
+
+    function toggleGuildBuildingSteps(buildingHrid) {
+      if (constructionUi.expandedBuildingHrids.has(buildingHrid)) {
+        constructionUi.expandedBuildingHrids.delete(buildingHrid);
+        return false;
+      }
+      constructionUi.expandedBuildingHrids.add(buildingHrid);
+      return true;
+    }
+
+    function clearGuildBuildingPlans(onUndoExpired) {
+      if (!state.buildingPlans.length) return false;
+      discardGuildBuildingClearUndo();
+      const plans = state.buildingPlans.map((plan) => ({ ...plan }));
+      constructionUi.clearUndoPlans = plans;
+      constructionUi.expandedBuildingHrids.clear();
+      state.buildingPlans = [];
+      constructionUi.pickerOpen = true;
+      state.buildingPlanNotice = t("buildingPlanCleared", { count: formatNumber(plans.length) });
+      persistGuildBuildingPlannerState();
+      constructionUi.clearUndoTimer = pageWindow.setTimeout(() => {
+        constructionUi.clearUndoPlans = null;
+        constructionUi.clearUndoTimer = null;
+        if (typeof onUndoExpired === "function") onUndoExpired();
+      }, 8000);
+      return true;
+    }
+
+    function undoClearGuildBuildingPlans() {
+      if (!constructionUi.clearUndoPlans) return false;
+      const plans = constructionUi.clearUndoPlans.map((plan) => ({ ...plan }));
+      discardGuildBuildingClearUndo();
+      state.buildingPlans = plans;
+      constructionUi.pickerOpen = false;
+      state.buildingPlanNotice = "";
+      reconcileGuildBuildingPlans(guildBuildingDefinitions());
+      state.buildingPlanNotice = t("buildingPlanRestored", { count: formatNumber(state.buildingPlans.length) });
+      persistGuildBuildingPlannerState();
+      return true;
+    }
+
+    function hasGuildBuildingClearUndo() {
+      return Boolean(constructionUi.clearUndoPlans);
     }
 
     function constructionCategoryLabel(category) {
@@ -5078,108 +5443,149 @@ window.MwiGuildCreditVersion = "1.1.45";
       );
     }
 
-    function renderGuildBuildingBudget(plan) {
+    function guildConstructionBudgetSummary(plan, definitions) {
+      if (!plan.steps.length) return t("constructionBudgetEmptySummary");
+      if (plan.availableGuildPoints === null)
+        return t("constructionNoBudgetSummary", { total: formatNumber(plan.steps.length) });
+      if (!plan.overBudget) return t("constructionBudgetAllFit", { total: formatNumber(plan.steps.length) });
+      const cutoff = plan.steps[plan.firstOverBudgetIndex];
+      const definition = definitions.find((entry) => entry.hrid === cutoff.buildingHrid);
+      return t("constructionBudgetStopsBefore", {
+        affordable: formatNumber(plan.affordableStepCount),
+        total: formatNumber(plan.steps.length),
+        building: guildBuildingLabel(definition),
+        from: formatNumber(cutoff.fromLevel),
+        to: formatNumber(cutoff.toLevel),
+        count: formatNumber(Math.max(0, -cutoff.remainingGuildPoints))
+      });
+    }
+
+    function renderGuildBuildingBudget(plan, definitions) {
       const hasBudget = plan.availableGuildPoints !== null;
       const remaining = plan.remainingGuildPoints;
-      const percentage =
-        !hasBudget || plan.availableGuildPoints <= 0
-          ? plan.totalCost > 0 && hasBudget
-            ? 100
-            : 0
-          : Math.min(100, Math.round((plan.totalCost / plan.availableGuildPoints) * 100));
       const remainingLabel = !hasBudget ? "-" : formatNumber(Math.abs(remaining));
       const remainingTitle = hasBudget && remaining < 0 ? t("overBudgetBy") : t("remainingPoints");
+      const coverageLabel = hasBudget ? t("affordableUpgrades") : t("plannedUpgrades");
+      const coverageValue = hasBudget
+        ? `${formatNumber(plan.affordableStepCount)} / ${formatNumber(plan.steps.length)}`
+        : formatNumber(plan.steps.length);
       return `<section class="mwi-construction-budget" data-over-budget="${String(Boolean(plan.overBudget))}">
-        <div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointBudget"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" placeholder="${escapeHtml(t("budgetOptional"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small>${escapeHtml(t("manualBudget"))}</small></div>
+        <div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointBudget"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("budgetOptional"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("manualBudget"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div>
         <div class="mwi-construction-metric"><small>${escapeHtml(t("plannedSpend"))}</small><strong data-role="construction-planned-spend">${formatNumber(plan.totalCost)}</strong></div>
+        <div class="mwi-construction-metric"><small data-role="construction-affordable-label">${escapeHtml(coverageLabel)}</small><strong data-role="construction-affordable">${coverageValue}</strong></div>
         <div class="mwi-construction-metric" data-role="construction-balance-metric" data-state="${hasBudget && remaining < 0 ? "danger" : "safe"}"><small data-role="construction-balance-label">${escapeHtml(remainingTitle)}</small><strong data-role="construction-balance">${remainingLabel}</strong></div>
-        <div class="mwi-construction-metric"><small>${escapeHtml(t("constructionQueue"))}</small><strong data-role="construction-plan-scale">${escapeHtml(t("constructionPlanScale", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</strong></div>
-        <div class="mwi-construction-meter" role="progressbar" aria-label="${escapeHtml(t("plannedSpend"))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percentage}"><span style="width:${percentage}%"></span></div>
+        <output class="mwi-construction-budget-summary" data-role="construction-budget-summary">${escapeHtml(guildConstructionBudgetSummary(plan, definitions))}</output>
       </section>`;
     }
 
-    function renderGuildBuildingTile(definition, plan, spriteBaseHref) {
-      const liveLevel = currentGuildBuildingLevel(definition);
-      const startLevel = liveLevel === null ? (plan && plan.startLevel) || 0 : liveLevel;
-      const targetLevel = plan ? plan.targetLevel : startLevel;
-      const currentLabel = liveLevel === null ? "?" : formatNumber(startLevel);
+    function renderGuildBuildingTile(definition, plan, liveLevel, spriteBaseHref) {
+      const displayLevel = liveLevel === null ? (plan ? plan.startLevel : null) : liveLevel;
+      const currentLabel = displayLevel === null ? "?" : formatNumber(displayLevel);
       const label = guildBuildingLabel(definition);
       const searchText =
         `${label} ${constructionCategoryLabel(definition.category)} ${definition.hrid}`.toLocaleLowerCase(ui().locale);
-      const accessibleLabel = t("buildingTileLabel", {
-        building: label,
-        current: currentLabel,
-        target: plan ? formatNumber(targetLevel) : t("notPlanned")
-      });
-      return `<button class="mwi-building-tile" data-role="select-building" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-selected="${String(state.selectedBuildingHrid === definition.hrid)}" data-building-search="${escapeHtml(searchText)}" aria-pressed="${String(state.selectedBuildingHrid === definition.hrid)}" aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}" type="button">${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(liveLevel !== null)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
+      const accessibleLabel = plan
+        ? t("buildingTilePlannedLabel", { building: label, target: formatNumber(plan.targetLevel) })
+        : liveLevel === null
+          ? t("buildingTileUnknownLabel", { building: label })
+          : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
+      const atMaxLevel = !plan && liveLevel !== null && liveLevel >= definition.maxLevel;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(liveLevel !== null)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(liveLevel !== null)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
     }
 
-    function renderGuildBuildingEditor(definition, plan) {
-      if (!definition)
-        return `<div class="mwi-building-editor mwi-building-editor-empty">${escapeHtml(t("selectBuildingPrompt"))}</div>`;
-      const liveLevel = currentGuildBuildingLevel(definition);
-      const startLevel = liveLevel === null ? (plan && plan.startLevel) || 0 : liveLevel;
-      const targetLevel = plan ? plan.targetLevel : startLevel;
-      const cost = plan ? core.aggregateGuildBuildingLevelCosts(definition.levelCosts, startLevel, targetLevel) : null;
-      const options = Array.from({ length: definition.maxLevel - startLevel + 1 }, (_, index) => startLevel + index)
-        .map(
-          (level) =>
-            `<option value="${level}"${level === targetLevel ? " selected" : ""}>${escapeHtml(t("level", { level: formatNumber(level) }))}</option>`
-        )
-        .join("");
-      const planIndex = state.buildingPlans.findIndex((candidate) => candidate.buildingHrid === definition.hrid);
-      const fullLevel = startLevel >= definition.maxLevel;
-      return `<section class="mwi-building-editor" data-building-hrid="${escapeHtml(definition.hrid)}" aria-label="${escapeHtml(t("buildingEditor"))}">
-        <div class="mwi-building-editor-title"><strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${escapeHtml(constructionCategoryLabel(definition.category))}</small></div>
-        <span class="mwi-building-editor-metric"><small>${escapeHtml(t("currentLevel"))}</small><b>${liveLevel === null ? "?" : formatNumber(startLevel)}</b></span>
-        <label class="mwi-building-editor-target"><small>${escapeHtml(t("targetLevel"))}</small><select data-role="building-target" data-building-hrid="${escapeHtml(definition.hrid)}"${fullLevel ? " disabled" : ""}>${options}</select></label>
-        <span class="mwi-building-editor-metric"><small>${escapeHtml(t("buildingPlanCost"))}</small><b>${cost && cost.status === "ok" ? formatNumber(cost.totalCost) : "-"}</b></span>
-        <div class="mwi-building-editor-actions"><button data-role="adjust-building-target" data-building-hrid="${escapeHtml(definition.hrid)}" data-delta="1" type="button"${targetLevel >= definition.maxLevel ? " disabled" : ""}>+1</button><button data-role="adjust-building-target" data-building-hrid="${escapeHtml(definition.hrid)}" data-delta="5" type="button"${targetLevel >= definition.maxLevel ? " disabled" : ""}>+5</button>${plan ? `<button class="mwi-icon-button mwi-icon-up" data-role="move-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" data-direction="-1" type="button" aria-label="${escapeHtml(t("movePlanUp"))}" title="${escapeHtml(t("movePlanUp"))}"${planIndex <= 0 ? " disabled" : ""}></button><button class="mwi-icon-button mwi-icon-down" data-role="move-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" data-direction="1" type="button" aria-label="${escapeHtml(t("movePlanDown"))}" title="${escapeHtml(t("movePlanDown"))}"${planIndex >= state.buildingPlans.length - 1 ? " disabled" : ""}></button><button class="mwi-building-remove" data-role="remove-building-plan" data-building-hrid="${escapeHtml(definition.hrid)}" type="button">${escapeHtml(t("removeBuildingPlan"))}</button>` : fullLevel ? `<span class="mwi-building-full-level">${escapeHtml(t("buildingMaxLevel"))}</span>` : ""}</div>
-      </section>`;
+    function renderPendingGuildBuilding(definitions) {
+      const definition = definitions.find((entry) => entry.hrid === constructionUi.pendingBuildingHrid);
+      if (!definition) return "";
+      const label = guildBuildingLabel(definition);
+      const errorId = "mwi-pending-building-level-error";
+      const helpId = "mwi-pending-building-level-help";
+      const error = constructionUi.pendingStartErrorKey
+        ? t(constructionUi.pendingStartErrorKey, { max: formatNumber(Math.max(0, definition.maxLevel - 1)) })
+        : "";
+      return `<form class="mwi-building-start-form" data-role="pending-building-start" data-building-hrid="${escapeHtml(definition.hrid)}" novalidate><span class="mwi-building-start-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(t("currentBuildingLevelRequired"))}</small></span><label><span>${escapeHtml(t("currentBuildingLevelLabel", { building: label }))}</span><input data-role="pending-building-start-level" data-building-hrid="${escapeHtml(definition.hrid)}" type="number" min="0" max="${definition.maxLevel - 1}" step="1" inputmode="numeric" aria-describedby="${helpId} ${errorId}"${error ? ' aria-invalid="true"' : ""} value="${escapeHtml(constructionUi.pendingStartValue)}"></label><small id="${helpId}">${escapeHtml(t("currentBuildingLevelHelp", { max: formatNumber(Math.max(0, definition.maxLevel - 1)) }))}</small><small id="${errorId}" class="mwi-field-error"${error ? "" : " hidden"}>${escapeHtml(error)}</small><span class="mwi-building-start-actions"><button type="submit">${escapeHtml(t("addBuildingToPlan"))}</button><button class="mwi-secondary-button" data-role="cancel-pending-building" data-building-hrid="${escapeHtml(definition.hrid)}" type="button">${escapeHtml(t("cancel"))}</button></span></form>`;
     }
 
-    function renderGuildConstructionQueue(plan, definitions) {
-      if (!plan.steps.length)
-        return `<section class="mwi-construction-queue"><h4>${escapeHtml(t("constructionQueue"))}</h4><div class="mwi-empty">${escapeHtml(t("constructionQueueEmpty"))}</div></section>`;
-      const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
-      let globalIndex = 0;
-      const groups = plan.plans.map((buildingPlan) => {
-        const definition = byHrid.get(buildingPlan.buildingHrid);
-        const groupSteps = plan.steps.filter((step) => step.buildingHrid === buildingPlan.buildingHrid);
-        const steps = groupSteps.map((step) => {
-          const index = globalIndex++;
-          const cutoff =
-            index === plan.firstOverBudgetIndex
-              ? `<div class="mwi-budget-cutoff"><span>${escapeHtml(t("constructionBudgetCutoff", { count: formatNumber(Math.max(0, plan.availableGuildPoints - (step.cumulativeCost - step.cost))) }))}</span></div>`
-              : "";
-          const status = step.fitsBudget === false ? t("constructionOverBudget") : t("constructionWithinBudget");
-          return `${cutoff}<div class="mwi-construction-step" data-over-budget="${String(step.fitsBudget === false)}"><span class="mwi-construction-step-index">${formatNumber(index + 1)}</span><span class="mwi-construction-step-copy"><small>${formatNumber(step.fromLevel)} → ${formatNumber(step.toLevel)} · ${escapeHtml(status)}</small></span><span class="mwi-construction-step-cost">${formatNumber(step.cost)}</span></div>`;
-        });
-        return `<article class="mwi-construction-group" data-sort-key="${escapeHtml(buildingPlan.buildingHrid)}" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}"><header><button class="mwi-construction-drag-handle" data-role="construction-drag-handle" type="button" aria-label="${escapeHtml(t("dragConstructionPlan", { building: guildBuildingLabel(definition) }))}" title="${escapeHtml(t("dragConstructionPlan", { building: guildBuildingLabel(definition) }))}"><span aria-hidden="true"></span></button><button class="mwi-construction-group-select" data-role="select-building" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" type="button"><strong>${escapeHtml(guildBuildingLabel(definition))}</strong><small>${formatNumber(buildingPlan.startLevel)} → ${formatNumber(buildingPlan.targetLevel)}</small></button><strong>${formatNumber(buildingPlan.totalCost)}</strong></header><div class="mwi-construction-group-steps">${steps.join("")}</div></article>`;
-      });
-      return `<section class="mwi-construction-queue"><div class="mwi-construction-queue-heading"><span><h4>${escapeHtml(t("constructionQueue"))}</h4><small>${escapeHtml(t("constructionQueueDragHint"))}</small></span><small>${escapeHtml(t("constructionSummary", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</small></div><div class="mwi-construction-rail" data-role="construction-sort-list">${groups.join("")}</div></section>`;
-    }
-
-    function renderGuildConstructionActions(plan) {
-      return `<div class="mwi-construction-actions"><button data-role="copy-building-plan" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("copyBuildingPlan"))}</button><button data-role="export-building-plan" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("exportBuildingCsv"))}</button><button class="mwi-clear-building-plans" data-role="clear-building-plans" type="button"${plan.steps.length ? "" : " disabled"}>${escapeHtml(t("clearBuildingPlans"))}</button></div>`;
-    }
-
-    function renderGuildConstruction(plan, definitions) {
-      const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
+    function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
       const categories = ["all", "core", "life", "combat", "shrine"]
         .map(
           (category) =>
             `<button data-role="building-category" data-category="${category}" data-active="${String(category === state.buildingCategory)}" aria-pressed="${String(category === state.buildingCategory)}" type="button">${escapeHtml(constructionCategoryLabel(category))}</button>`
         )
         .join("");
-      const spriteBaseHref = guildBuildingSpriteBaseHref();
-      if (!definitions.some((definition) => definition.hrid === state.selectedBuildingHrid))
-        state.selectedBuildingHrid = state.buildingPlans[0]?.buildingHrid || definitions[0]?.hrid || "";
       const tiles = definitions
-        .map((definition) => renderGuildBuildingTile(definition, plansByHrid.get(definition.hrid), spriteBaseHref))
+        .map((definition) =>
+          renderGuildBuildingTile(
+            definition,
+            plansByHrid.get(definition.hrid),
+            levels.levels.get(definition.hrid),
+            spriteBaseHref
+          )
+        )
         .join("");
-      const selectedDefinition = definitions.find((definition) => definition.hrid === state.selectedBuildingHrid);
-      return `${renderGuildBuildingBudget(plan)}<div class="mwi-construction-layout"><section class="mwi-building-pane" aria-label="${escapeHtml(t("buildingCatalog"))}"><div class="mwi-building-pane-heading"><span><span class="mwi-building-heading-line"><h4>${escapeHtml(t("buildingCatalog"))}</h4><small class="mwi-building-level-status" data-levels-read="${String(Boolean(state.guildBuildingLevels))}">${escapeHtml(state.guildBuildingLevels ? t("buildingLevelsReadCompact") : t("buildingLevelsUnknownCompact"))}</small></span><small>${escapeHtml(t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" hidden>${escapeHtml(t("noBuildingMatches"))}</div>${renderGuildBuildingEditor(selectedDefinition, plansByHrid.get(state.selectedBuildingHrid))}</section><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions)}${renderGuildConstructionActions(plan)}</div></div>`;
+      const unknownCount = Math.max(0, levels.totalCount - levels.knownCount);
+      const status = t("buildingLevelsCoverage", {
+        known: formatNumber(levels.knownCount),
+        total: formatNumber(levels.totalCount)
+      });
+      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">＋</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionUi.pickerOpen ? "▴" : "▾"}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}>${renderPendingGuildBuilding(definitions)}<div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(unknownCount ? t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }) : t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
+    }
+
+    function renderGuildConstructionActions(plan) {
+      const disabled = plan.steps.length ? "" : " disabled";
+      return `<div class="mwi-construction-actions"><button data-role="copy-building-plan" type="button"${disabled}>${escapeHtml(t("copyBuildingPlan"))}</button><button data-role="export-building-plan" type="button"${disabled}>${escapeHtml(t("exportBuildingCsv"))}</button><details class="mwi-construction-more"${plan.steps.length ? "" : " hidden"}><summary aria-label="${escapeHtml(t("moreConstructionActions"))}" title="${escapeHtml(t("moreConstructionActions"))}">•••</summary><div><button class="mwi-clear-building-plans" data-role="clear-building-plans" type="button">${escapeHtml(t("clearBuildingPlans"))}</button></div></details></div>`;
+    }
+
+    function renderGuildConstructionQueue(plan, definitions, spriteBaseHref) {
+      const byHrid = new Map(definitions.map((definition) => [definition.hrid, definition]));
+      const groups = plan.plans.map((buildingPlan, planIndex) => {
+        const definition = byHrid.get(buildingPlan.buildingHrid);
+        const label = guildBuildingLabel(definition);
+        const expanded = constructionUi.expandedBuildingHrids.has(buildingPlan.buildingHrid);
+        const stepsId = `mwi-building-steps-${String(buildingPlan.buildingHrid)
+          .split("/")
+          .pop()
+          .replace(/[^a-z0-9_-]/gi, "-")}`;
+        const options = Array.from(
+          { length: definition.maxLevel - buildingPlan.startLevel },
+          (_, index) => buildingPlan.startLevel + index + 1
+        )
+          .map(
+            (level) =>
+              `<option value="${level}"${level === buildingPlan.targetLevel ? " selected" : ""}>${escapeHtml(t("level", { level: formatNumber(level) }))}</option>`
+          )
+          .join("");
+        const cutoffInGroup = buildingPlan.steps.some((step) => step.globalIndex === plan.firstOverBudgetIndex);
+        const cutoff = cutoffInGroup
+          ? `<div class="mwi-budget-cutoff"><span>${escapeHtml(
+              t("constructionGroupBudgetCutoff", {
+                level: formatNumber(buildingPlan.affordableTargetLevel),
+                count: formatNumber(buildingPlan.nextStepShortfall || 0)
+              })
+            )}</span></div>`
+          : "";
+        const budgetStateKey =
+          {
+            unbudgeted: "constructionBudgetUnbudgeted",
+            within: "constructionWithinBudget",
+            partial: "constructionPartiallyWithinBudget",
+            outside: "constructionOverBudget"
+          }[buildingPlan.budgetState] || "constructionBudgetUnbudgeted";
+        const steps = buildingPlan.steps
+          .map(
+            (step) =>
+              `<div class="mwi-construction-step" data-over-budget="${String(step.fitsBudget === false)}"><span class="mwi-construction-step-index">${formatNumber(step.globalIndex + 1)}</span><span class="mwi-construction-step-copy"><small>${formatNumber(step.fromLevel)} → ${formatNumber(step.toLevel)} · ${escapeHtml(step.fitsBudget === false ? t("constructionOverBudget") : t("constructionWithinBudget"))}</small></span><span class="mwi-construction-step-cost">${formatNumber(step.cost)}</span></div>`
+          )
+          .join("");
+        return `<li class="mwi-construction-group" data-sort-key="${escapeHtml(buildingPlan.buildingHrid)}" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" data-budget-state="${buildingPlan.budgetState}" data-expanded="${String(expanded)}" aria-posinset="${planIndex + 1}" aria-setsize="${plan.plans.length}"><div class="mwi-construction-row"><button class="mwi-construction-drag-handle" data-role="construction-drag-handle" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" type="button" aria-describedby="mwi-construction-sort-hint" aria-label="${escapeHtml(t("dragConstructionPlan", { building: label }))}" title="${escapeHtml(t("dragConstructionPlan", { building: label }))}"><span aria-hidden="true"></span></button><span class="mwi-construction-building-icon">${guildBuildingIconMarkup(definition, spriteBaseHref)}</span><span class="mwi-construction-identity"><strong title="${escapeHtml(label)}">${escapeHtml(label)}</strong><small>${escapeHtml(t("constructionPlanRowMeta", { position: formatNumber(planIndex + 1), start: formatNumber(buildingPlan.startLevel), target: formatNumber(buildingPlan.targetLevel), count: formatNumber(buildingPlan.steps.length) }))}</small></span><span class="mwi-construction-cost"><small>${escapeHtml(t("buildingPlanCost"))}</small><strong>${formatNumber(buildingPlan.totalCost)}</strong><em>${escapeHtml(t(budgetStateKey))}</em></span><div class="mwi-construction-row-actions"><label class="mwi-construction-target"><span>${escapeHtml(t("targetLevel"))}</span><select data-role="building-target" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" aria-label="${escapeHtml(t("buildingTargetLabel", { building: label }))}">${options}</select></label><button class="mwi-construction-level-button" data-role="adjust-building-target" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" data-delta="1" type="button" aria-label="${escapeHtml(t("increaseBuildingTarget", { building: label, count: formatNumber(1) }))}" title="${escapeHtml(t("increaseBuildingTarget", { building: label, count: formatNumber(1) }))}"${buildingPlan.targetLevel >= definition.maxLevel ? " disabled" : ""}>+1</button><button class="mwi-construction-level-button" data-role="adjust-building-target" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" data-delta="5" type="button" aria-label="${escapeHtml(t("increaseBuildingTarget", { building: label, count: formatNumber(5) }))}" title="${escapeHtml(t("increaseBuildingTarget", { building: label, count: formatNumber(5) }))}"${buildingPlan.targetLevel >= definition.maxLevel ? " disabled" : ""}>+5</button><span class="mwi-construction-order-actions"><button class="mwi-icon-button mwi-icon-up" data-role="move-building-plan" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" data-direction="-1" type="button" aria-label="${escapeHtml(t("movePlanUp", { building: label }))}" title="${escapeHtml(t("movePlanUp", { building: label }))}"${planIndex <= 0 ? " disabled" : ""}></button><button class="mwi-icon-button mwi-icon-down" data-role="move-building-plan" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" data-direction="1" type="button" aria-label="${escapeHtml(t("movePlanDown", { building: label }))}" title="${escapeHtml(t("movePlanDown", { building: label }))}"${planIndex >= plan.plans.length - 1 ? " disabled" : ""}></button></span><button class="mwi-construction-expand" data-role="toggle-building-steps" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" type="button" aria-expanded="${String(expanded)}" aria-controls="${stepsId}" aria-label="${escapeHtml(t(expanded ? "collapseBuildingSteps" : "expandBuildingSteps", { building: label }))}" title="${escapeHtml(t(expanded ? "collapseBuildingSteps" : "expandBuildingSteps", { building: label }))}"><span aria-hidden="true">${expanded ? "▴" : "▾"}</span></button><button class="mwi-construction-remove" data-role="remove-building-plan" data-building-hrid="${escapeHtml(buildingPlan.buildingHrid)}" type="button" aria-label="${escapeHtml(t("removeBuildingFromPlan", { building: label }))}" title="${escapeHtml(t("removeBuildingFromPlan", { building: label }))}">×</button></div></div>${cutoff}<div id="${stepsId}" class="mwi-construction-group-steps"${expanded ? "" : " hidden"}>${steps}</div></li>`;
+      });
+      return `<section class="mwi-construction-queue" aria-label="${escapeHtml(t("constructionQueue"))}"><div class="mwi-construction-queue-heading"><span><h4>${escapeHtml(t("constructionQueue"))}</h4><small id="mwi-construction-sort-hint">${escapeHtml(t("constructionQueueDragHint"))}</small></span><span class="mwi-construction-queue-meta"><small>${escapeHtml(t("constructionSummary", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</small>${renderGuildConstructionActions(plan)}</span></div>${groups.length ? `<ol class="mwi-construction-rail" data-role="construction-sort-list">${groups.join("")}</ol>` : `<div class="mwi-construction-empty"><strong>${escapeHtml(t("constructionQueueEmptyTitle"))}</strong><small>${escapeHtml(t("constructionQueueEmpty"))}</small></div>`}</section>`;
+    }
+
+    function renderGuildConstruction(plan, definitions) {
+      const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
+      const levels = guildBuildingLevelSnapshot(definitions);
+      const spriteBaseHref = guildBuildingSpriteBaseHref();
+      return `${renderGuildBuildingBudget(plan, definitions)}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>`;
     }
 
     function applyGuildBuildingFilters(results) {
@@ -5198,12 +5604,10 @@ window.MwiGuildCreditVersion = "1.1.45";
         button.setAttribute("aria-pressed", String(active));
       }
       const empty = results.querySelector('[data-role="building-filter-empty"]');
-      if (empty) empty.hidden = visibleCount !== 0;
-      const selectedTile = results.querySelector(
-        `.mwi-building-tile[data-building-hrid="${String(state.selectedBuildingHrid).replaceAll('"', '\\"')}"]`
-      );
-      const editor = results.querySelector(".mwi-building-editor");
-      if (editor) editor.hidden = Boolean(selectedTile && selectedTile.hidden);
+      if (empty) {
+        empty.textContent = visibleCount === 0 ? t("noBuildingMatches") : "";
+        empty.hidden = visibleCount !== 0;
+      }
       return visibleCount;
     }
 
@@ -5216,38 +5620,29 @@ window.MwiGuildCreditVersion = "1.1.45";
       if (budget) {
         const hasBudget = plan.availableGuildPoints !== null;
         const remaining = plan.remainingGuildPoints;
-        const percentage =
-          !hasBudget || plan.availableGuildPoints <= 0
-            ? plan.totalCost > 0 && hasBudget
-              ? 100
-              : 0
-            : Math.min(100, Math.round((plan.totalCost / plan.availableGuildPoints) * 100));
         budget.dataset.overBudget = String(Boolean(plan.overBudget));
         const spend = budget.querySelector('[data-role="construction-planned-spend"]');
+        const affordableLabel = budget.querySelector('[data-role="construction-affordable-label"]');
+        const affordable = budget.querySelector('[data-role="construction-affordable"]');
         const balanceLabel = budget.querySelector('[data-role="construction-balance-label"]');
         const balance = budget.querySelector('[data-role="construction-balance"]');
         const balanceMetric = budget.querySelector('[data-role="construction-balance-metric"]');
-        const scale = budget.querySelector('[data-role="construction-plan-scale"]');
-        const meter = budget.querySelector(".mwi-construction-meter");
+        const summary = budget.querySelector('[data-role="construction-budget-summary"]');
         if (spend) spend.textContent = formatNumber(plan.totalCost);
+        if (affordableLabel) affordableLabel.textContent = hasBudget ? t("affordableUpgrades") : t("plannedUpgrades");
+        if (affordable)
+          affordable.textContent = hasBudget
+            ? `${formatNumber(plan.affordableStepCount)} / ${formatNumber(plan.steps.length)}`
+            : formatNumber(plan.steps.length);
         if (balanceLabel)
           balanceLabel.textContent = hasBudget && remaining < 0 ? t("overBudgetBy") : t("remainingPoints");
         if (balance) balance.textContent = hasBudget ? formatNumber(Math.abs(remaining)) : "-";
         if (balanceMetric) balanceMetric.dataset.state = hasBudget && remaining < 0 ? "danger" : "safe";
-        if (scale)
-          scale.textContent = t("constructionPlanScale", {
-            buildings: formatNumber(plan.plans.length),
-            steps: formatNumber(plan.steps.length)
-          });
-        if (meter) {
-          meter.setAttribute("aria-valuenow", String(percentage));
-          const fill = meter.querySelector("span");
-          if (fill) fill.style.width = `${percentage}%`;
-        }
+        if (summary) summary.textContent = guildConstructionBudgetSummary(plan, definitions);
       }
       const queuePane = results.querySelector(".mwi-construction-queue-pane");
       if (queuePane)
-        queuePane.innerHTML = `${renderGuildConstructionQueue(plan, definitions)}${renderGuildConstructionActions(plan)}`;
+        queuePane.innerHTML = renderGuildConstructionQueue(plan, definitions, guildBuildingSpriteBaseHref());
     }
 
     function refreshGuildConstruction(panel) {
@@ -5258,8 +5653,12 @@ window.MwiGuildCreditVersion = "1.1.45";
       const plan = guildBuildingPlan(definitions);
       const status = panel.querySelector('[data-role="construction-status"]');
       const results = panel.querySelector('[data-role="construction-results"]');
-      status.textContent = state.buildingPlanNotice || "";
-      status.hidden = !state.buildingPlanNotice;
+      const statusText = status && status.querySelector('[data-role="construction-status-text"]');
+      const undoButton = status && status.querySelector('[data-role="undo-clear-building-plans"]');
+      if (statusText) statusText.textContent = state.buildingPlanNotice || "";
+      else if (status) status.textContent = state.buildingPlanNotice || "";
+      if (undoButton) undoButton.hidden = !hasGuildBuildingClearUndo();
+      if (status) status.hidden = !state.buildingPlanNotice && !hasGuildBuildingClearUndo();
       updateRenderedMarkup(results, renderGuildConstruction(plan, definitions));
       applyGuildBuildingFilters(results);
     }
@@ -5341,17 +5740,30 @@ window.MwiGuildCreditVersion = "1.1.45";
       pageWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
     }
 
+    function dispose() {
+      discardGuildBuildingClearUndo();
+    }
+
     return {
       guildBuildingDefinitions,
-      currentGuildBuildingLevel,
+      addGuildBuildingPlan,
       setGuildBuildingTarget,
+      removeGuildBuildingPlan,
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
+      setGuildBuildingPickerOpen,
+      setPendingGuildBuildingStartValue,
+      clearPendingGuildBuilding,
+      toggleGuildBuildingSteps,
+      clearGuildBuildingPlans,
+      undoClearGuildBuildingPlans,
+      hasGuildBuildingClearUndo,
       applyGuildBuildingFilters,
       refreshGuildConstructionBudgetPreview,
       refreshGuildConstruction,
       copyGuildConstructionPlan,
-      exportGuildConstructionCsv
+      exportGuildConstructionCsv,
+      dispose
     };
   }
 
@@ -7139,10 +7551,18 @@ window.MwiGuildCreditVersion = "1.1.45";
       removeGuildUpgradePlan,
       guildTokenCreditSelectionState,
       guildBuildingDefinitions,
-      currentGuildBuildingLevel,
+      addGuildBuildingPlan,
       setGuildBuildingTarget,
+      removeGuildBuildingPlan,
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
+      setGuildBuildingPickerOpen,
+      setPendingGuildBuildingStartValue,
+      clearPendingGuildBuilding,
+      toggleGuildBuildingSteps,
+      clearGuildBuildingPlans,
+      undoClearGuildBuildingPlans,
+      hasGuildBuildingClearUndo,
       applyGuildBuildingFilters,
       refreshGuildConstructionBudgetPreview,
       copyGuildConstructionPlan,
@@ -7190,6 +7610,66 @@ window.MwiGuildCreditVersion = "1.1.45";
       const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
       if (previous) previous.disabled = index <= 0;
       if (next) next.disabled = index < 0 || index >= state.panelOrder.length - 1;
+    }
+
+    function findConstructionControl(panel, target) {
+      if (!target || !target.role) return null;
+      return Array.from(panel.querySelectorAll(`[data-role="${target.role}"]`)).find((element) => {
+        if (target.buildingHrid && element.dataset.buildingHrid !== target.buildingHrid) return false;
+        if (target.direction !== undefined && element.dataset.direction !== String(target.direction)) return false;
+        if (target.delta !== undefined && element.dataset.delta !== String(target.delta)) return false;
+        return !element.disabled && !element.hidden && !element.closest("[hidden]");
+      });
+    }
+
+    function focusConstructionControl(panel, target, reveal = true) {
+      const control = findConstructionControl(panel, target);
+      if (!control) return false;
+      try {
+        control.focus({ preventScroll: true });
+      } catch (_) {
+        control.focus();
+      }
+      if (reveal && typeof control.scrollIntoView === "function") {
+        control.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const controlRect = control.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const viewportHeight = document.defaultView ? document.defaultView.innerHeight : panelRect.bottom;
+        const visibleTop = Math.max(0, panelRect.top);
+        const visibleBottom = Math.min(viewportHeight, panelRect.bottom);
+        if (controlRect.top < visibleTop) panel.scrollTop += controlRect.top - visibleTop;
+        else if (controlRect.bottom > visibleBottom) panel.scrollTop += controlRect.bottom - visibleBottom;
+      }
+      return true;
+    }
+
+    function refreshConstructionAndFocus(panel, target, fallbackTarget = null) {
+      refreshGuildConstruction(panel);
+      return focusConstructionControl(panel, target) || focusConstructionControl(panel, fallbackTarget);
+    }
+
+    function setGuildPointBudgetValidity(panel, input, valid) {
+      const error = panel.querySelector("#mwi-guild-point-budget-error");
+      if (valid) input.removeAttribute("aria-invalid");
+      else input.setAttribute("aria-invalid", "true");
+      if (error) error.hidden = valid;
+    }
+
+    function guildPointBudgetInputValue(input) {
+      const raw = input.value.trim();
+      if (raw === "") return { valid: true, value: null };
+      const value = Number(raw);
+      return Number.isSafeInteger(value) && value >= 0
+        ? { valid: true, value }
+        : { valid: false, value: state.manualGuildPoints };
+    }
+
+    function clearConstructionNotice(panel) {
+      state.buildingPlanNotice = "";
+      const status = panel.querySelector('[data-role="construction-status"]');
+      const statusText = status && status.querySelector('[data-role="construction-status-text"]');
+      if (statusText) statusText.textContent = "";
+      if (status) status.hidden = !hasGuildBuildingClearUndo();
     }
 
     function setPanelView(panel, view) {
@@ -7264,7 +7744,7 @@ window.MwiGuildCreditVersion = "1.1.45";
           <div data-role="upgrade-results"></div>
         </div>
         <div id="mwi-view-panel-construction" data-role="construction-view" role="tabpanel" aria-labelledby="mwi-view-tab-construction"${state.activeView === "construction" ? "" : " hidden"}>
-          <div class="mwi-status" data-role="construction-status">${escapeHtml(t("constructionReadOnly"))}</div>
+          <div class="mwi-status mwi-construction-status" data-role="construction-status" hidden><span data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"></span><button data-role="undo-clear-building-plans" type="button" hidden>${escapeHtml(t("undoClearBuildingPlans"))}</button></div>
           <div data-role="construction-results"></div>
         </div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
@@ -7349,17 +7829,19 @@ window.MwiGuildCreditVersion = "1.1.45";
       const constructionResults = panel.querySelector('[data-role="construction-results"]');
       constructionResults.addEventListener("input", (event) => {
         if (event.target.matches('[data-role="guild-point-budget"]')) {
-          const raw = event.target.value.trim();
-          const value = Number(raw);
-          if (raw === "") state.manualGuildPoints = null;
-          else if (Number.isSafeInteger(value) && value >= 0) state.manualGuildPoints = value;
-          else {
-            event.target.setAttribute("aria-invalid", "true");
-            return;
-          }
-          event.target.removeAttribute("aria-invalid");
-          state.buildingPlanNotice = "";
+          const parsed = guildPointBudgetInputValue(event.target);
+          setGuildPointBudgetValidity(panel, event.target, parsed.valid);
+          if (!parsed.valid) return;
+          state.manualGuildPoints = parsed.value;
+          clearConstructionNotice(panel);
           refreshGuildConstructionBudgetPreview(panel);
+          return;
+        }
+        if (event.target.matches('[data-role="pending-building-start-level"]')) {
+          setPendingGuildBuildingStartValue(event.target.value);
+          event.target.removeAttribute("aria-invalid");
+          const error = panel.querySelector("#mwi-pending-building-level-error");
+          if (error) error.hidden = true;
           return;
         }
         if (event.target.matches('[data-role="building-search"]')) {
@@ -7369,14 +7851,13 @@ window.MwiGuildCreditVersion = "1.1.45";
       });
       constructionResults.addEventListener("change", (event) => {
         if (event.target.matches('[data-role="guild-point-budget"]')) {
-          const raw = event.target.value.trim();
-          const value = Number(raw);
-          if (raw === "") state.manualGuildPoints = null;
-          else if (Number.isSafeInteger(value) && value >= 0) state.manualGuildPoints = value;
-          else return refreshGuildConstruction(panel);
-          state.buildingPlanNotice = "";
+          const parsed = guildPointBudgetInputValue(event.target);
+          setGuildPointBudgetValidity(panel, event.target, parsed.valid);
+          if (!parsed.valid) return;
+          state.manualGuildPoints = parsed.value;
+          clearConstructionNotice(panel);
           persistGuildBuildingPlannerState();
-          refreshGuildConstruction(panel);
+          refreshConstructionAndFocus(panel, { role: "guild-point-budget" }, null);
           return;
         }
         if (event.target.matches('[data-role="building-search"]')) {
@@ -7385,22 +7866,66 @@ window.MwiGuildCreditVersion = "1.1.45";
           return;
         }
         if (event.target.matches('[data-role="building-target"]')) {
-          setGuildBuildingTarget(
-            guildBuildingDefinitions(),
-            event.target.dataset.buildingHrid,
-            Number(event.target.value)
-          );
-          refreshGuildConstruction(panel);
+          const buildingHrid = event.target.dataset.buildingHrid;
+          setGuildBuildingTarget(guildBuildingDefinitions(), buildingHrid, Number(event.target.value));
+          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
         }
+      });
+      constructionResults.addEventListener("submit", (event) => {
+        const form = event.target.closest('[data-role="pending-building-start"]');
+        if (!form) return;
+        event.preventDefault();
+        const input = form.querySelector('[data-role="pending-building-start-level"]');
+        if (!input) return;
+        setPendingGuildBuildingStartValue(input.value);
+        const buildingHrid = form.dataset.buildingHrid;
+        const result = addGuildBuildingPlan(guildBuildingDefinitions(), buildingHrid, input.value);
+        if (result.status === "added") {
+          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
+          return;
+        }
+        refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
+      });
+      constructionResults.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !event.target.closest(".mwi-building-picker-body")) return;
+        event.preventDefault();
+        setGuildBuildingPickerOpen(false);
+        refreshConstructionAndFocus(panel, { role: "toggle-building-picker" });
       });
       constructionResults.addEventListener("click", (event) => {
         const button = event.target.closest("button");
         if (!button) return;
         const definitions = guildBuildingDefinitions();
-        if (button.matches('[data-role="select-building"]')) {
-          if (!definitions.some((definition) => definition.hrid === button.dataset.buildingHrid)) return;
-          state.selectedBuildingHrid = button.dataset.buildingHrid;
-          refreshGuildConstruction(panel);
+        if (button.matches('[data-role="toggle-building-picker"]')) {
+          const open = button.getAttribute("aria-expanded") !== "true";
+          setGuildBuildingPickerOpen(open);
+          refreshConstructionAndFocus(panel, { role: open ? "building-search" : "toggle-building-picker" });
+          return;
+        }
+        if (button.matches('[data-role="building-tile"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          const result = addGuildBuildingPlan(definitions, buildingHrid);
+          if (result.status === "added") {
+            refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
+            return;
+          }
+          if (result.status === "already_planned") {
+            focusConstructionControl(panel, { role: "building-target", buildingHrid });
+            return;
+          }
+          if (result.status === "requires_start_level")
+            refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
+          return;
+        }
+        if (button.matches('[data-role="cancel-pending-building"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          clearPendingGuildBuilding();
+          const focused = refreshConstructionAndFocus(
+            panel,
+            { role: "building-tile", buildingHrid },
+            { role: "building-search" }
+          );
+          if (!focused) focusConstructionControl(panel, { role: "toggle-building-picker" });
           return;
         }
         if (button.matches('[data-role="building-category"]')) {
@@ -7413,40 +7938,92 @@ window.MwiGuildCreditVersion = "1.1.45";
           const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
           if (!definition) return;
           const existing = state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid);
-          const startLevel = currentGuildBuildingLevel(definition) ?? (existing ? existing.startLevel : 0);
-          const currentTarget = existing ? existing.targetLevel : startLevel;
-          setGuildBuildingTarget(definitions, definition.hrid, currentTarget + Number(button.dataset.delta || 0));
-          refreshGuildConstruction(panel);
+          if (!existing) return;
+          const delta = Number(button.dataset.delta || 0);
+          const targetLevel = Math.min(definition.maxLevel, existing.targetLevel + delta);
+          setGuildBuildingTarget(definitions, definition.hrid, targetLevel);
+          refreshConstructionAndFocus(
+            panel,
+            { role: "adjust-building-target", buildingHrid: definition.hrid, delta },
+            { role: "building-target", buildingHrid: definition.hrid }
+          );
           return;
         }
         if (button.matches('[data-role="remove-building-plan"]')) {
-          const definition = definitions.find((entry) => entry.hrid === button.dataset.buildingHrid);
-          if (!definition) return;
-          const startLevel =
-            currentGuildBuildingLevel(definition) ??
-            state.buildingPlans.find((plan) => plan.buildingHrid === definition.hrid)?.startLevel ??
-            0;
-          setGuildBuildingTarget(definitions, definition.hrid, startLevel);
-          refreshGuildConstruction(panel);
+          const result = removeGuildBuildingPlan(definitions, button.dataset.buildingHrid);
+          if (result.status !== "removed") return;
+          const neighbor = state.buildingPlans[Math.min(result.removedIndex, state.buildingPlans.length - 1)];
+          refreshConstructionAndFocus(
+            panel,
+            neighbor
+              ? { role: "building-target", buildingHrid: neighbor.buildingHrid }
+              : { role: "toggle-building-picker" }
+          );
           return;
         }
         if (button.matches('[data-role="move-building-plan"]')) {
-          if (moveGuildBuildingPlan(button.dataset.buildingHrid, Number(button.dataset.direction)))
-            refreshGuildConstruction(panel);
+          const buildingHrid = button.dataset.buildingHrid;
+          if (moveGuildBuildingPlan(buildingHrid, Number(button.dataset.direction)))
+            refreshConstructionAndFocus(panel, { role: "construction-drag-handle", buildingHrid });
+          return;
+        }
+        if (button.matches('[data-role="toggle-building-steps"]')) {
+          const buildingHrid = button.dataset.buildingHrid;
+          const definition = definitions.find((entry) => entry.hrid === buildingHrid);
+          if (!definition) return;
+          const expanded = toggleGuildBuildingSteps(buildingHrid);
+          const group = button.closest(".mwi-construction-group");
+          const details = group && group.querySelector(".mwi-construction-group-steps");
+          if (group) group.dataset.expanded = String(expanded);
+          if (details) details.hidden = !expanded;
+          button.setAttribute("aria-expanded", String(expanded));
+          button.setAttribute(
+            "aria-label",
+            t(expanded ? "collapseBuildingSteps" : "expandBuildingSteps", {
+              building: definitions.find((entry) => entry.hrid === buildingHrid)?.nameKey
+                ? t(definition.nameKey)
+                : buildingHrid
+            })
+          );
+          button.setAttribute("title", button.getAttribute("aria-label"));
+          const icon = button.querySelector("span");
+          if (icon) icon.textContent = expanded ? "▴" : "▾";
           return;
         }
         if (button.matches('[data-role="clear-building-plans"]')) {
-          state.buildingPlans = [];
-          state.buildingPlanNotice = t("buildingPlanCleared");
-          persistGuildBuildingPlannerState();
-          refreshGuildConstruction(panel);
+          if (
+            clearGuildBuildingPlans(() => {
+              const undo = panel.querySelector('[data-role="undo-clear-building-plans"]');
+              if (!undo) return;
+              if (document.activeElement === undo) {
+                const restored = focusConstructionControl(panel, { role: "toggle-building-picker" });
+                if (!restored) panel.querySelector('[data-role="view-construction"]')?.focus();
+              }
+              undo.hidden = true;
+            })
+          )
+            refreshConstructionAndFocus(panel, { role: "undo-clear-building-plans" });
           return;
         }
         if (button.matches('[data-role="copy-building-plan"]')) {
-          copyGuildConstructionPlan(panel);
+          void copyGuildConstructionPlan(panel).then(() => {
+            if (state.activeView !== "construction") return;
+            if (document.activeElement && document.activeElement !== document.body) return;
+            focusConstructionControl(panel, { role: "copy-building-plan" });
+          });
           return;
         }
         if (button.matches('[data-role="export-building-plan"]')) exportGuildConstructionCsv();
+      });
+      panel.querySelector('[data-role="undo-clear-building-plans"]').addEventListener("click", () => {
+        if (!undoClearGuildBuildingPlans()) return;
+        const firstPlan = state.buildingPlans[0];
+        refreshConstructionAndFocus(
+          panel,
+          firstPlan
+            ? { role: "building-target", buildingHrid: firstPlan.buildingHrid }
+            : { role: "toggle-building-picker" }
+        );
       });
       panel.addEventListener("click", (event) => {
         const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
@@ -7564,11 +8141,7 @@ window.MwiGuildCreditVersion = "1.1.45";
         axis: "y",
         onCommit: ({ key, toIndex }) => {
           if (!reorderGuildBuildingPlan(key, toIndex)) return;
-          refreshGuildConstruction(panel);
-          const movedGroup = Array.from(panel.querySelectorAll(".mwi-construction-group")).find(
-            (group) => group.dataset.sortKey === key
-          );
-          movedGroup?.querySelector(".mwi-construction-drag-handle")?.focus();
+          refreshConstructionAndFocus(panel, { role: "construction-drag-handle", buildingHrid: key });
         }
       });
       panel.__mwiSortableControllers = [tabSortable, constructionSortable];
@@ -7877,7 +8450,6 @@ window.MwiGuildCreditVersion = "1.1.45";
   state.manualGuildPoints = savedBuildingPlannerState.manualGuildPoints;
   state.buildingCategory = savedBuildingPlannerState.category;
   state.buildingSearch = "";
-  state.selectedBuildingHrid = state.buildingPlans[0]?.buildingHrid || "";
   state.buildingPlanNotice = "";
   let guildBuildingSpriteHref = "";
   let guildBuildingSpriteLoadPromise = null;
@@ -7938,6 +8510,8 @@ window.MwiGuildCreditVersion = "1.1.45";
     task: () => {
       if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "upgrade")
         refreshGuildUpgrade(state.panel);
+      else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
+        refreshGuildConstruction(state.panel);
       else scheduleShrineGuide();
     },
     delay: 120,
@@ -8313,15 +8887,24 @@ window.MwiGuildCreditVersion = "1.1.45";
   });
   const {
     guildBuildingDefinitions,
-    currentGuildBuildingLevel,
+    addGuildBuildingPlan,
     setGuildBuildingTarget,
+    removeGuildBuildingPlan,
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
+    setGuildBuildingPickerOpen,
+    setPendingGuildBuildingStartValue,
+    clearPendingGuildBuilding,
+    toggleGuildBuildingSteps,
+    clearGuildBuildingPlans,
+    undoClearGuildBuildingPlans,
+    hasGuildBuildingClearUndo,
     applyGuildBuildingFilters,
     refreshGuildConstructionBudgetPreview,
     refreshGuildConstruction,
     copyGuildConstructionPlan,
-    exportGuildConstructionCsv
+    exportGuildConstructionCsv,
+    dispose: disposeConstructionView
   } = constructionView;
 
   const shrineGuideUi = shrineGuideUiApi.createShrineGuideUi({
@@ -8375,10 +8958,18 @@ window.MwiGuildCreditVersion = "1.1.45";
     removeGuildUpgradePlan,
     guildTokenCreditSelectionState,
     guildBuildingDefinitions,
-    currentGuildBuildingLevel,
+    addGuildBuildingPlan,
     setGuildBuildingTarget,
+    removeGuildBuildingPlan,
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
+    setGuildBuildingPickerOpen,
+    setPendingGuildBuildingStartValue,
+    clearPendingGuildBuilding,
+    toggleGuildBuildingSteps,
+    clearGuildBuildingPlans,
+    undoClearGuildBuildingPlans,
+    hasGuildBuildingClearUndo,
     applyGuildBuildingFilters,
     refreshGuildConstructionBudgetPreview,
     copyGuildConstructionPlan,
@@ -8643,6 +9234,7 @@ window.MwiGuildCreditVersion = "1.1.45";
 
   function disposeRuntime() {
     disposePanelShell();
+    disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
     inventoryDataRefreshTask.dispose();

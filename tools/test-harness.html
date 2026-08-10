@@ -309,8 +309,122 @@
     const elementRect = (element) => {
       if (!element) return null;
       const rect = element.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom };
+      return {
+        x: rect.x,
+        y: rect.y,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        right: rect.right,
+        bottom: rect.bottom
+      };
     };
+
+    const elementIsVisible = (element) => {
+      if (!element) return false;
+      if (element.closest("[hidden]")) return false;
+      const closedDetails = element.closest("details:not([open])");
+      if (closedDetails && !closedDetails.querySelector("summary")?.contains(element)) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    };
+
+    const normalizedText = (element) =>
+      String(element?.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const constructionPlannerStorageKey = `mwi-guild-building-planner-v1:${location.hostname}:default`;
+
+    const savedConstructionPlans = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(constructionPlannerStorageKey) || "{}");
+        return Array.isArray(saved.plans) ? saved.plans.map((plan) => ({ ...plan })) : [];
+      } catch (_) {
+        return [];
+      }
+    };
+
+    const activeConstructionControl = (panel) => {
+      const active = document.activeElement;
+      const root = document.getElementById("mwi-credit-optimizer");
+      const activeRect = panel?.contains(active) ? elementRect(active) : null;
+      const rootRect = elementRect(root);
+      return {
+        role: panel?.contains(active) ? active.getAttribute("data-role") || active.tagName : "",
+        buildingHrid: panel?.contains(active) ? active.dataset.buildingHrid || "" : "",
+        value: panel?.contains(active) && "value" in active ? active.value : "",
+        inViewport: Boolean(
+          activeRect &&
+          rootRect &&
+          activeRect.height > 0 &&
+          activeRect.top >= Math.max(0, rootRect.top) - 1 &&
+          activeRect.bottom <= Math.min(window.innerHeight, rootRect.bottom) + 1
+        )
+      };
+    };
+
+    const constructionGroupOrder = (panel) =>
+      Array.from(panel.querySelectorAll(".mwi-construction-group"), (group) => group.dataset.buildingHrid);
+
+    const constructionStateSnapshot = (panel) => {
+      const groups = Array.from(panel.querySelectorAll(".mwi-construction-group"));
+      const tiles = Array.from(panel.querySelectorAll(".mwi-building-tile"));
+      const pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
+      const status = panel.querySelector('[data-role="construction-status"]');
+      const undo = panel.querySelector('[data-role="undo-clear-building-plans"]');
+      return {
+        groupCount: groups.length,
+        groupOrder: constructionGroupOrder(panel),
+        allStepCount: panel.querySelectorAll(".mwi-construction-step").length,
+        visibleStepCount: Array.from(panel.querySelectorAll(".mwi-construction-step")).filter(elementIsVisible).length,
+        expandedGroupCount: groups.filter((group) => group.dataset.expanded === "true").length,
+        cutoffCount: panel.querySelectorAll(".mwi-budget-cutoff").length,
+        cutoffText: normalizedText(panel.querySelector(".mwi-budget-cutoff")),
+        plannedSpend: normalizedText(panel.querySelector('[data-role="construction-planned-spend"]')),
+        affordable: normalizedText(panel.querySelector('[data-role="construction-affordable"]')),
+        budgetSummary: normalizedText(panel.querySelector('[data-role="construction-budget-summary"]')),
+        pickerOpen:
+          panel.querySelector('[data-role="toggle-building-picker"]')?.getAttribute("aria-expanded") === "true",
+        tileCount: tiles.length,
+        visibleTileCount: tiles.filter(elementIsVisible).length,
+        knownLevelCount: tiles.filter((tile) => tile.dataset.levelKnown === "true").length,
+        unknownLevelCount: tiles.filter((tile) => tile.dataset.levelKnown === "false").length,
+        levelStatus: normalizedText(panel.querySelector(".mwi-building-level-status")),
+        pendingStart: pendingInput
+          ? {
+              buildingHrid: pendingInput.dataset.buildingHrid || "",
+              value: pendingInput.value,
+              ariaInvalid: pendingInput.getAttribute("aria-invalid") === "true",
+              error: normalizedText(panel.querySelector("#mwi-pending-building-level-error"))
+            }
+          : null,
+        status: status && !status.hidden ? normalizedText(status) : "",
+        undoVisible: elementIsVisible(undo),
+        storedPlans: savedConstructionPlans(),
+        focus: activeConstructionControl(panel)
+      };
+    };
+
+    const dispatchAuditPointer = (target, type, init) => {
+      const PointerEventConstructor = window.PointerEvent || window.MouseEvent;
+      target.dispatchEvent(
+        new PointerEventConstructor(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: type === "pointerup" || type === "pointercancel" ? 0 : 1,
+          isPrimary: true,
+          pointerId: 41,
+          pointerType: "mouse",
+          ...init
+        })
+      );
+    };
+
+    const settleConstructionAudit = () => new Promise((resolve) => setTimeout(resolve, 60));
 
     window.__mwiLayoutAuditContract = {
       widths: [320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200],
@@ -513,16 +627,13 @@
       const layout = root.querySelector(".mwi-construction-layout");
       const buildingGrid = root.querySelector(".mwi-building-grid");
       const buildingTiles = Array.from(root.querySelectorAll(".mwi-building-tile"));
+      const visibleBuildingTiles = buildingTiles.filter(elementIsVisible);
       const queueGroups = Array.from(root.querySelectorAll(".mwi-construction-group"));
       const queueSteps = Array.from(root.querySelectorAll(".mwi-construction-step"));
       const auditElements = Array.from(
         root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *")
       );
-      const visibleAuditElements = auditElements.filter((element) => {
-        const style = getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
-      });
+      const visibleAuditElements = auditElements.filter(elementIsVisible);
       const horizontalOverflow = visibleAuditElements
         .filter((element) => {
           const style = getComputedStyle(element);
@@ -538,7 +649,7 @@
           scrollWidth: element.scrollWidth
         }));
       const interactiveElements = visibleAuditElements.filter((element) =>
-        ["BUTTON", "INPUT", "SELECT"].includes(element.tagName)
+        ["BUTTON", "INPUT", "SELECT", "SUMMARY"].includes(element.tagName)
       );
       const controlOverlaps = [];
       for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
@@ -559,6 +670,8 @@
             });
         }
       }
+      const levelStatus = root.querySelector(".mwi-building-level-status");
+      const pickerToggle = root.querySelector('[data-role="toggle-building-picker"]');
       return {
         requestedSidebarWidth: sidebarWidth,
         panel: {
@@ -568,26 +681,38 @@
         },
         layout: {
           columns: layout ? getComputedStyle(layout).gridTemplateColumns : "",
-          width: elementRect(layout)?.width || 0
+          width: elementRect(layout)?.width || 0,
+          pickerOpen: pickerToggle?.getAttribute("aria-expanded") === "true"
         },
         cards: {
           count: buildingTiles.length,
-          widths: buildingTiles.map((tile) => elementRect(tile).width),
-          heights: buildingTiles.map((tile) => elementRect(tile).height),
-          minimumWidth: buildingTiles.length ? Math.min(...buildingTiles.map((tile) => elementRect(tile).width)) : 0,
-          maximumAspectRatioError: buildingTiles.length
-            ? Math.max(...buildingTiles.map((tile) => Math.abs(elementRect(tile).width / elementRect(tile).height - 1)))
+          widths: visibleBuildingTiles.map((tile) => elementRect(tile).width),
+          heights: visibleBuildingTiles.map((tile) => elementRect(tile).height),
+          minimumWidth: visibleBuildingTiles.length
+            ? Math.min(...visibleBuildingTiles.map((tile) => elementRect(tile).width))
+            : 0,
+          maximumWidth: visibleBuildingTiles.length
+            ? Math.max(...visibleBuildingTiles.map((tile) => elementRect(tile).width))
+            : 0,
+          maximumAspectRatioError: visibleBuildingTiles.length
+            ? Math.max(
+                ...visibleBuildingTiles.map((tile) => Math.abs(elementRect(tile).width / elementRect(tile).height - 1))
+              )
             : 0
         },
         catalog: {
           tileCount: buildingTiles.length,
-          visibleTileCount: buildingTiles.filter((tile) => getComputedStyle(tile).display !== "none").length,
+          visibleTileCount: visibleBuildingTiles.length,
           plannedTileCount: buildingTiles.filter((tile) => tile.dataset.planned === "true").length,
-          columns: buildingGrid ? getComputedStyle(buildingGrid).gridTemplateColumns.split(" ").length : 0,
-          selectedBuilding: root.querySelector('.mwi-building-tile[data-selected="true"]')?.dataset.buildingHrid || "",
-          currentLevelBadgeCount: root.querySelectorAll(".mwi-building-level-badge").length,
+          columns: buildingGrid
+            ? getComputedStyle(buildingGrid).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length
+            : 0,
+          knownLevelCount: buildingTiles.filter((tile) => tile.dataset.levelKnown === "true").length,
+          unknownLevelCount: buildingTiles.filter((tile) => tile.dataset.levelKnown === "false").length,
+          reportedKnownCount: Number(levelStatus?.dataset.knownCount || 0),
+          reportedTotalCount: Number(levelStatus?.dataset.totalCount || 0),
           gameIconCount: root.querySelectorAll(
-            '.mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]'
+            '.mwi-building-grid .mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]'
           ).length,
           filterAudit: window.__mwiConstructionFilterAudit || null
         },
@@ -595,17 +720,279 @@
           groupCount: queueGroups.length,
           groupOrder: queueGroups.map((group) => group.dataset.buildingHrid),
           stepCount: queueSteps.length,
+          visibleStepCount: queueSteps.filter(elementIsVisible).length,
+          expandedGroupCount: queueGroups.filter((group) => group.dataset.expanded === "true").length,
           cutoffCount: root.querySelectorAll(".mwi-budget-cutoff").length,
+          cutoffText: normalizedText(root.querySelector(".mwi-budget-cutoff")),
           overBudgetCount: queueSteps.filter((step) => step.dataset.overBudget === "true").length
         },
         budget: {
           value: root.querySelector('[data-role="guild-point-budget"]')?.value || "",
-          plannedSpend: root.querySelector('[data-role="construction-planned-spend"]')?.textContent || "",
+          plannedSpend: normalizedText(root.querySelector('[data-role="construction-planned-spend"]')),
+          affordable: normalizedText(root.querySelector('[data-role="construction-affordable"]')),
+          summary: normalizedText(root.querySelector('[data-role="construction-budget-summary"]')),
           overBudget: root.querySelector(".mwi-construction-budget")?.dataset.overBudget || "false"
         },
+        focus: activeConstructionControl(root),
         horizontalOverflow,
-        controlOverlaps
+        controlOverlaps,
+        interactions: window.__mwiConstructionInteractionAudit || null
       };
+    };
+
+    const runConstructionInteractionAudit = async (panel) => {
+      const audit = {};
+      const expectedOrder = [
+        "/guild_buildings/guild_hall",
+        "/guild_buildings/skilling_encampment",
+        "/guild_buildings/gym"
+      ];
+      const targetPlans = expectedOrder.map((buildingHrid) => [buildingHrid, 5]);
+      const tileFor = (buildingHrid) =>
+        panel.querySelector(`[data-role="building-tile"][data-building-hrid="${buildingHrid}"]`);
+      const moveButtonFor = (buildingHrid, direction) =>
+        panel.querySelector(
+          `[data-role="move-building-plan"][data-building-hrid="${buildingHrid}"][data-direction="${direction}"]`
+        );
+      const targetFor = (buildingHrid) =>
+        panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`);
+      const waitForOrder = (order) =>
+        waitFor(() => constructionGroupOrder(panel).join("|") === order.join("|") && constructionGroupOrder(panel));
+
+      audit.initial = constructionStateSnapshot(panel);
+
+      let budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
+      budgetInput.value = "5000";
+      budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => panel.querySelector('[data-role="guild-point-budget"]')?.value === "5000");
+
+      for (let index = 0; index < targetPlans.length; index += 1) {
+        const [buildingHrid, targetLevel] = targetPlans[index];
+        const tile = await waitFor(() => tileFor(buildingHrid));
+        tile.click();
+        const select = await waitFor(() => targetFor(buildingHrid));
+        if (index === 0) audit.knownAdd = constructionStateSnapshot(panel);
+        select.value = String(targetLevel);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        await waitFor(() => targetFor(buildingHrid)?.value === String(targetLevel));
+      }
+      await waitFor(() => panel.querySelectorAll(".mwi-construction-step").length === 9);
+      audit.sample = constructionStateSnapshot(panel);
+
+      const unknownBuildingHrid = "/guild_buildings/builders_hall";
+      (await waitFor(() => tileFor(unknownBuildingHrid))).click();
+      await waitFor(() => panel.querySelector('[data-role="pending-building-start-level"]'));
+      audit.unknownPrompt = constructionStateSnapshot(panel);
+
+      let pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
+      pendingInput
+        .closest('[data-role="pending-building-start"]')
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(
+        () => panel.querySelector('[data-role="pending-building-start-level"]')?.getAttribute("aria-invalid") === "true"
+      );
+      audit.unknownEmpty = constructionStateSnapshot(panel);
+
+      pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
+      pendingInput.value = "21";
+      pendingInput.dispatchEvent(new Event("input", { bubbles: true }));
+      pendingInput
+        .closest('[data-role="pending-building-start"]')
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(
+        () => panel.querySelector('[data-role="pending-building-start-level"]')?.getAttribute("aria-invalid") === "true"
+      );
+      audit.unknownInvalid = constructionStateSnapshot(panel);
+
+      pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
+      pendingInput.value = "3";
+      pendingInput.dispatchEvent(new Event("input", { bubbles: true }));
+      pendingInput
+        .closest('[data-role="pending-building-start"]')
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => constructionGroupOrder(panel).includes(unknownBuildingHrid));
+      audit.unknownAdded = constructionStateSnapshot(panel);
+      panel.querySelector(`[data-role="remove-building-plan"][data-building-hrid="${unknownBuildingHrid}"]`).click();
+      await waitForOrder(expectedOrder);
+
+      let searchInput = panel.querySelector('[data-role="building-search"]');
+      searchInput.focus();
+      searchInput.value = "gym";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(
+        () => Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(elementIsVisible).length === 1
+      );
+      window.__mwiConstructionFilterAudit = {
+        visibleCount: Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(elementIsVisible).length,
+        matchedBuilding: panel.querySelector(".mwi-building-tile:not([hidden])")?.getAttribute("aria-label") || "",
+        searchRetainedFocus: document.activeElement === searchInput
+      };
+      audit.filtered = constructionStateSnapshot(panel);
+      searchInput.value = "";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(
+        () => Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(elementIsVisible).length === 28
+      );
+
+      let detailsToggle = panel.querySelector(
+        '[data-role="toggle-building-steps"][data-building-hrid="/guild_buildings/guild_hall"]'
+      );
+      detailsToggle.click();
+      await waitFor(() => detailsToggle.getAttribute("aria-expanded") === "true");
+      audit.detailsExpanded = constructionStateSnapshot(panel);
+      detailsToggle.click();
+      await waitFor(() => detailsToggle.getAttribute("aria-expanded") === "false");
+      audit.detailsCollapsed = constructionStateSnapshot(panel);
+
+      const gymHrid = "/guild_buildings/gym";
+      moveButtonFor(gymHrid, -1).click();
+      await waitFor(() => constructionGroupOrder(panel).indexOf(gymHrid) === 1);
+      moveButtonFor(gymHrid, -1).click();
+      await waitFor(() => constructionGroupOrder(panel)[0] === gymHrid);
+      audit.buttonReorder = constructionStateSnapshot(panel);
+      moveButtonFor(gymHrid, 1).click();
+      await waitFor(() => constructionGroupOrder(panel).indexOf(gymHrid) === 1);
+      moveButtonFor(gymHrid, 1).click();
+      await waitForOrder(expectedOrder);
+
+      let dragHandle = panel.querySelector(`[data-role="construction-drag-handle"][data-building-hrid="${gymHrid}"]`);
+      let dragGroup = dragHandle.closest(".mwi-construction-group");
+      let firstGroup = panel.querySelector(".mwi-construction-group");
+      let handleRect = dragHandle.getBoundingClientRect();
+      let firstRect = firstGroup.getBoundingClientRect();
+      dispatchAuditPointer(dragHandle, "pointerdown", {
+        clientX: handleRect.left + handleRect.width / 2,
+        clientY: handleRect.top + handleRect.height / 2
+      });
+      dispatchAuditPointer(dragHandle, "pointermove", {
+        clientX: handleRect.left + handleRect.width / 2,
+        clientY: firstRect.top + 1
+      });
+      audit.pointerDuringDrag = {
+        draggingCount: panel.querySelectorAll(".mwi-sort-dragging").length,
+        markerCount: panel.querySelectorAll(".mwi-sort-drop-before,.mwi-sort-drop-after").length,
+        draggedBuildingHrid: dragGroup.dataset.buildingHrid
+      };
+      dispatchAuditPointer(dragHandle, "pointerup", {
+        clientX: handleRect.left + handleRect.width / 2,
+        clientY: firstRect.top + 1
+      });
+      await waitFor(() => constructionGroupOrder(panel)[0] === gymHrid);
+      panel
+        .querySelector(`[data-role="construction-drag-handle"][data-building-hrid="${gymHrid}"]`)
+        .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      audit.pointerReorder = constructionStateSnapshot(panel);
+      moveButtonFor(gymHrid, 1).click();
+      await waitFor(() => constructionGroupOrder(panel).indexOf(gymHrid) === 1);
+      moveButtonFor(gymHrid, 1).click();
+      await waitForOrder(expectedOrder);
+
+      dragHandle = panel.querySelector(`[data-role="construction-drag-handle"][data-building-hrid="${gymHrid}"]`);
+      firstGroup = panel.querySelector(".mwi-construction-group");
+      handleRect = dragHandle.getBoundingClientRect();
+      firstRect = firstGroup.getBoundingClientRect();
+      dispatchAuditPointer(dragHandle, "pointerdown", {
+        clientX: handleRect.left + handleRect.width / 2,
+        clientY: handleRect.top + handleRect.height / 2
+      });
+      dispatchAuditPointer(dragHandle, "pointermove", {
+        clientX: handleRect.left + handleRect.width / 2,
+        clientY: firstRect.top + 1
+      });
+      dragHandle.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      await settleConstructionAudit();
+      audit.dragCancelled = {
+        ...constructionStateSnapshot(panel),
+        draggingCount: panel.querySelectorAll(".mwi-sort-dragging").length,
+        markerCount: panel.querySelectorAll(".mwi-sort-drop-before,.mwi-sort-drop-after").length
+      };
+
+      const moreActions = panel.querySelector(".mwi-construction-more");
+      moreActions.open = true;
+      panel.querySelector('[data-role="clear-building-plans"]').click();
+      await waitFor(
+        () =>
+          panel.querySelectorAll(".mwi-construction-group").length === 0 &&
+          elementIsVisible(panel.querySelector('[data-role="undo-clear-building-plans"]'))
+      );
+      audit.cleared = constructionStateSnapshot(panel);
+      panel.querySelector('[data-role="undo-clear-building-plans"]').click();
+      await waitForOrder(expectedOrder);
+      audit.restored = constructionStateSnapshot(panel);
+
+      const pickerToggle = panel.querySelector('[data-role="toggle-building-picker"]');
+      if (pickerToggle.getAttribute("aria-expanded") !== "true") pickerToggle.click();
+      await waitFor(
+        () => Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(elementIsVisible).length === 28
+      );
+      await settleConstructionAudit();
+      audit.final = constructionStateSnapshot(panel);
+
+      const compactNumber = (value) => String(value || "").replace(/[\s,，]/g, "");
+      const storedUnknownPlan = audit.unknownAdded.storedPlans.find(
+        (plan) => plan.buildingHrid === unknownBuildingHrid
+      );
+      audit.checks = {
+        initialEmptyPlan: audit.initial.groupCount === 0 && audit.initial.pickerOpen,
+        partialLevelCoverage:
+          audit.initial.tileCount === 28 &&
+          audit.initial.knownLevelCount === 3 &&
+          audit.initial.unknownLevelCount === 25,
+        knownBuildingAddedInline:
+          audit.knownAdd.groupCount === 1 &&
+          audit.knownAdd.focus.role === "building-target" &&
+          audit.knownAdd.focus.inViewport,
+        unknownBuildingRequiresLevel:
+          audit.unknownPrompt.groupCount === 3 && audit.unknownPrompt.focus.role === "pending-building-start-level",
+        unknownEmptyLevelRejected:
+          audit.unknownEmpty.groupCount === 3 &&
+          audit.unknownEmpty.pendingStart?.value === "" &&
+          audit.unknownEmpty.pendingStart?.ariaInvalid &&
+          Boolean(audit.unknownEmpty.pendingStart?.error),
+        unknownValidationPreservesInput:
+          audit.unknownInvalid.groupCount === 3 &&
+          audit.unknownInvalid.pendingStart?.value === "21" &&
+          audit.unknownInvalid.pendingStart?.ariaInvalid,
+        unknownManualLevelPersisted: storedUnknownPlan?.startLevel === 3 && storedUnknownPlan?.targetLevel === 4,
+        detailsCollapsedByDefault:
+          audit.sample.visibleStepCount === 0 &&
+          audit.detailsExpanded.visibleStepCount === 2 &&
+          audit.detailsCollapsed.visibleStepCount === 0,
+        sampleBudgetIsOneOfNine:
+          compactNumber(audit.sample.plannedSpend) === "13975" &&
+          compactNumber(audit.sample.affordable) === "1/9" &&
+          audit.sample.cutoffCount === 1 &&
+          compactNumber(audit.sample.cutoffText).includes("750"),
+        buttonReorderRecalculatesBudget:
+          audit.buttonReorder.groupOrder[0] === gymHrid &&
+          compactNumber(audit.buttonReorder.affordable) === "4/9" &&
+          compactNumber(audit.buttonReorder.budgetSummary).includes("1900"),
+        pointerDragShowsInsertionMarker:
+          audit.pointerDuringDrag.draggingCount === 1 && audit.pointerDuringDrag.markerCount === 1,
+        pointerDragCommitted:
+          audit.pointerReorder.groupOrder[0] === gymHrid &&
+          audit.pointerReorder.focus.role === "construction-drag-handle",
+        escapeCancelsDrag:
+          audit.dragCancelled.groupOrder.join("|") === expectedOrder.join("|") &&
+          audit.dragCancelled.draggingCount === 0 &&
+          audit.dragCancelled.markerCount === 0,
+        clearOffersFocusedUndo:
+          audit.cleared.groupCount === 0 &&
+          audit.cleared.storedPlans.length === 0 &&
+          audit.cleared.undoVisible &&
+          audit.cleared.focus.role === "undo-clear-building-plans",
+        undoRestoresExactOrder:
+          audit.restored.groupOrder.join("|") === expectedOrder.join("|") &&
+          audit.restored.storedPlans.length === 3 &&
+          audit.restored.focus.role === "building-target",
+        finalSampleReady:
+          audit.final.pickerOpen &&
+          audit.final.groupOrder.join("|") === expectedOrder.join("|") &&
+          audit.final.visibleTileCount === 28 &&
+          audit.final.visibleStepCount === 0 &&
+          compactNumber(audit.final.affordable) === "1/9"
+      };
+      return audit;
     };
 
     const prepareConstructionAudit = async () => {
@@ -616,53 +1003,13 @@
       const constructionViewTab = await waitFor(() => panel.querySelector('[data-role="view-construction"]'));
       constructionViewTab.click();
       await waitFor(() => panel.querySelectorAll(".mwi-building-tile").length === 28);
-      const budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
-      budgetInput.value = "5000";
-      budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
-      const targets = [
-        ["/guild_buildings/guild_hall", 5],
-        ["/guild_buildings/skilling_encampment", 5],
-        ["/guild_buildings/gym", 5]
-      ];
-      for (const [buildingHrid, targetLevel] of targets) {
-        const tile = await waitFor(() =>
-          panel.querySelector(`.mwi-building-tile[data-building-hrid="${buildingHrid}"]`)
-        );
-        tile.click();
-        const select = await waitFor(() =>
-          panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`)
-        );
-        select.value = String(targetLevel);
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-        await new Promise((resolve) => setTimeout(resolve, 60));
-      }
-      await waitFor(() => panel.querySelectorAll(".mwi-construction-step").length === 9);
-      const searchInput = panel.querySelector('[data-role="building-search"]');
-      searchInput.focus();
-      searchInput.value = "gym";
-      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
       await waitFor(
         () =>
-          Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
-            (tile) => getComputedStyle(tile).display !== "none"
-          ).length === 1
-      );
-      window.__mwiConstructionFilterAudit = {
-        visibleCount: Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
-          (tile) => getComputedStyle(tile).display !== "none"
-        ).length,
-        matchedBuilding: panel.querySelector(".mwi-building-tile:not([hidden])")?.getAttribute("aria-label") || "",
-        searchRetainedFocus: document.activeElement === searchInput
-      };
-      searchInput.value = "";
-      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-      await waitFor(
-        () =>
-          Array.from(panel.querySelectorAll(".mwi-building-tile")).filter(
-            (tile) => getComputedStyle(tile).display !== "none"
+          panel.querySelectorAll(
+            '.mwi-building-grid .mwi-building-icon[data-icon-source="game"] svg use[href*="misc_sprite"]'
           ).length === 28
       );
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      window.__mwiConstructionInteractionAudit = await runConstructionInteractionAudit(panel);
       const report = window.__mwiCollectConstructionAudit();
       document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
       document.body.dataset.constructionAuditReady = "true";

@@ -201,11 +201,11 @@
       const backward = axis === "x" ? event.key === "ArrowLeft" : event.key === "ArrowUp";
       const forward = axis === "x" ? event.key === "ArrowRight" : event.key === "ArrowDown";
       if (!backward && !forward) return;
+      event.preventDefault();
       const items = sortableItems(container);
       const fromIndex = items.indexOf(item);
       const toIndex = Math.max(0, Math.min(items.length - 1, fromIndex + (backward ? -1 : 1)));
       if (fromIndex === toIndex || typeof onCommit !== "function") return;
-      event.preventDefault();
       onCommit({ key: item.dataset.sortKey || "", fromIndex, toIndex, container });
     }
 
