@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.46] - 2026-08-11
+
+### Changed
+
+- Rebuilt Guild Construction into a queue-first planner with a responsive official-icon building picker, persistent whole-building drag ordering, inline unknown-level capture, per-building budget status, collapsible steps, clear undo, and robust focus restoration.
+
 ## [1.1.45] - 2026-08-10
 
 ### Fixed
