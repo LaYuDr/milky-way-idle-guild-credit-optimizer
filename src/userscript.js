@@ -159,6 +159,8 @@
   state.buildingSearch = "";
   state.selectedBuildingHrid = state.buildingPlans[0]?.buildingHrid || "";
   state.buildingPlanNotice = "";
+  let guildBuildingSpriteHref = "";
+  let guildBuildingSpriteLoadPromise = null;
   const gameState = gameStateApi.createGameStateAdapter(state);
   const { guildShrineLevelRecordKey } = gameStateApi;
   const {
@@ -383,18 +385,50 @@
   }
 
   function guildBuildingSpriteBaseHref() {
-    const use = document.querySelector('use[href*="misc_sprite"],use[xlink\\:href*="misc_sprite"]');
-    const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
-    if (!href) return "";
-    return href.includes("#") ? href.slice(0, href.indexOf("#")) : href;
+    if (guildBuildingSpriteHref) return guildBuildingSpriteHref;
+    const discovered = domApi.findSpriteBaseHref(document, "misc_sprite");
+    if (discovered) {
+      guildBuildingSpriteHref = discovered;
+      return guildBuildingSpriteHref;
+    }
+    void loadGuildBuildingSpriteBaseHref();
+    return "";
+  }
+
+  function loadGuildBuildingSpriteBaseHref() {
+    if (guildBuildingSpriteHref) return Promise.resolve(guildBuildingSpriteHref);
+    if (guildBuildingSpriteLoadPromise) return guildBuildingSpriteLoadPromise;
+    const fetchImpl = pageWindow.fetch && pageWindow.fetch.bind(pageWindow);
+    if (!fetchImpl || !pageWindow.location || !pageWindow.location.origin) return Promise.resolve("");
+    const manifestUrl = new URL("/asset-manifest.json", pageWindow.location.origin).href;
+    guildBuildingSpriteLoadPromise = fetchImpl(manifestUrl, { cache: "force-cache" })
+      .then((response) => {
+        if (!response || !response.ok) throw new Error("asset manifest unavailable");
+        return response.json();
+      })
+      .then((manifest) => {
+        const reference = domApi.spriteBaseFromAssetManifest(manifest, "misc_sprite");
+        if (!reference) throw new Error("misc sprite unavailable");
+        guildBuildingSpriteHref = new URL(reference, pageWindow.location.origin).href;
+        if (
+          state.panel &&
+          state.panel.isConnected &&
+          !state.panel.hidden &&
+          state.panel.dataset.activeView === "construction"
+        )
+          refreshGuildConstruction(state.panel);
+        return guildBuildingSpriteHref;
+      })
+      .catch(() => "");
+    return guildBuildingSpriteLoadPromise;
   }
 
   function guildBuildingIconMarkup(definition, spriteBaseHref) {
     const symbolId = definition && (definition.iconSymbolId || buildingDataApi.iconSymbolId(definition.hrid));
     if (!spriteBaseHref || !symbolId)
-      return '<span class="mwi-building-icon mwi-building-icon-fallback" aria-hidden="true"><i class="mwi-building-type-mark"></i></span>';
+      return '<span class="mwi-building-icon mwi-building-icon-fallback" aria-hidden="true"><svg viewBox="0 0 50 50" focusable="false"><path d="M7 43V20l18-12 18 12v23H7Z"></path><path d="M17 43V28h16v15M4 43h42"></path></svg></span>';
     const href = `${spriteBaseHref}#${symbolId}`;
-    return `<span class="mwi-building-icon" data-icon-source="game"><svg aria-hidden="true" focusable="false"><use href="${escapeHtml(href)}"></use></svg></span>`;
+    return `<span class="mwi-building-icon" data-icon-source="game"><svg aria-hidden="true" focusable="false" viewBox="0 0 50 50" width="100%" height="100%"><use href="${escapeHtml(href)}" width="50" height="50"></use></svg></span>`;
   }
 
   function marketItemIconMarkup(itemHrid, label, className = "") {

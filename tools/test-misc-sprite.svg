@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="guild_guild_hall" viewBox="0 0 50 50">
+    <path fill="#7445b8" d="M25 2 3 13h44L25 2Z" />
+    <path fill="#f5f2ff" d="M7 13h36v32H7z" />
+    <circle cx="25" cy="29" r="11" fill="#242640" />
+    <circle cx="25" cy="29" r="5" fill="#a272e4" />
+    <path fill="#f5f2ff" d="M3 45h44v3H3z" />
+  </symbol>
+</svg>

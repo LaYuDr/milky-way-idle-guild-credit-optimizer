@@ -16,15 +16,18 @@ http
       "/milky-way-idle-guild-credit-dev-loader.user.js": "milky-way-idle-guild-credit-dev-loader.user.js",
       "/runtime.js": "runtime.js",
       "/test-harness.html": "test-harness.html",
-      "/game_data/marketplace.json": "test-marketplace.json"
+      "/game_data/marketplace.json": "test-marketplace.json",
+      "/asset-manifest.json": "test-asset-manifest.json",
+      "/assets/misc_sprite.svg": "test-misc-sprite.svg"
     };
     const filename = files[pathname];
     if (!filename) {
       response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       return response.end("Not found");
     }
-    const file =
-      pathname === "/game_data/marketplace.json" ? path.join(root, "tools", filename) : path.join(dist, filename);
+    const file = ["/game_data/marketplace.json", "/asset-manifest.json", "/assets/misc_sprite.svg"].includes(pathname)
+      ? path.join(root, "tools", filename)
+      : path.join(dist, filename);
     if (!fs.existsSync(file)) {
       response.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
       return response.end("Run npm run build first");
@@ -34,7 +37,9 @@ http
         ? "text/html; charset=utf-8"
         : filename.endsWith(".json")
           ? "application/json; charset=utf-8"
-          : "application/javascript; charset=utf-8",
+          : filename.endsWith(".svg")
+            ? "image/svg+xml; charset=utf-8"
+            : "application/javascript; charset=utf-8",
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "Access-Control-Allow-Origin": "*"
     });

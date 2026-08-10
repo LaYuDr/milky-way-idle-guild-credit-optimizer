@@ -30,3 +30,26 @@ test("物品图标解析保留 HRID 与强化等级边界", () => {
   assert.equal(domApi.enhancementLevelFromIcon(icon), 12);
   assert.equal(domApi.itemHridFromIcon(null), null);
 });
+
+test("精灵图路径可从页面引用和带哈希的官方资源清单解析", () => {
+  const root = {
+    querySelectorAll() {
+      return [
+        { getAttribute: (name) => (name === "href" ? "/static/media/items_sprite.1234.svg#milk" : null) },
+        {
+          getAttribute: (name) =>
+            name === "xlink:href" ? "/static/media/misc_sprite.cfad291b.svg#guild_guild_hall" : null
+        }
+      ];
+    }
+  };
+  assert.equal(domApi.findSpriteBaseHref(root, "misc_sprite"), "/static/media/misc_sprite.cfad291b.svg");
+  assert.equal(
+    domApi.spriteBaseFromAssetManifest(
+      { files: { "static/media/misc_sprite.cfad291b.svg": "/static/media/misc_sprite.cfad291b.svg" } },
+      "misc_sprite"
+    ),
+    "/static/media/misc_sprite.cfad291b.svg"
+  );
+  assert.equal(domApi.spriteBaseFromAssetManifest({ files: {} }, "misc_sprite"), "");
+});

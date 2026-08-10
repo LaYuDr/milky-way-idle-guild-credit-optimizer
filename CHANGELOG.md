@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.45] - 2026-08-10
+
+### Fixed
+
+- Restored guild-building and shrine icons in the compact construction catalog by resolving the current game sprite from its same-origin asset manifest and defining an explicit SVG viewport.
+- Added a visible vector fallback so unavailable game assets no longer leave empty building tiles.
+
+### Verified
+
+- Replaced the self-seeded sprite reference in the browser harness with an asset-manifest fixture and verified all 28 icon references across the documented 320px to 1200px construction width matrix.
+
 ## [1.1.44] - 2026-08-10
 
 ### Changed
