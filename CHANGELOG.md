@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.47] - 2026-08-11
+
+### Fixed
+
+- Treated buildings omitted from a complete guild-building snapshot as known level 0 while preserving unknown levels for partial live frames and preferring current-session values over older initialization data.
+- Extended shrine guidance for guild-token credit exchanges to highlight the native Guild Token item, distinguish exchange batches from token counts, focus the quantity step after selection, and suppress conflicting market-item advice.
+
+### Verified
+
+- Added unit and browser coverage for complete versus partial building snapshots, non-1:1 guild-token conversions, native exchange guidance, and the documented 320px to 1200px construction width matrix.
+
 ## [1.1.46] - 2026-08-11
 
 ### Changed
