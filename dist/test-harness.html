@@ -63,15 +63,18 @@
   <output id="layout-audit-output" hidden></output>
   <div class="Modal_modal__test" id="test-exchange-modal" role="dialog" aria-label="测试兑换窗口">
     <div class="GuildPanel_exchangeModalContent__test">
-      <div class="Item_item__test">
+      <div class="Item_item__test" data-test-exchange-item="beast_hide">
         <svg role="img" aria-label="Beast Hide"><use href="/assets/items_sprite.svg#beast_hide"></use></svg>
       </div>
-      <div class="Item_item__test">
+      <div class="Item_item__test" data-test-exchange-item="guild_token">
+        <svg role="img" aria-label="Guild Token"><use href="/assets/items_sprite.svg#guild_token"></use></svg>
+      </div>
+      <div class="Item_item__test" data-test-exchange-item="green_guild_credit">
         <svg role="img" aria-label="Green Guild Credit">
           <use href="/assets/items_sprite.svg#green_guild_credit"></use>
         </svg>
       </div>
-      <input id="test-exchange-count" type="number" value="1" aria-label="兑换数量" />
+      <input id="test-exchange-count" type="number" min="1" max="200" value="1" aria-label="兑换数量" />
     </div>
   </div>
   <div class="test-sidebar-wrapper" id="test-sidebar-wrapper" data-sidebar-layout="wide">
@@ -109,16 +112,22 @@
   </div>
   <script>
     const searchParams = new URLSearchParams(location.search);
-    const surplusPlan = searchParams.get("surplusPlan") === "1";
+    const tokenGuideAudit = searchParams.get("tokenGuideAudit") === "1";
+    const surplusPlan = searchParams.get("surplusPlan") === "1" || tokenGuideAudit;
     const layoutAudit = searchParams.get("layoutAudit") === "1";
     const stabilityAudit = searchParams.get("stabilityAudit") === "1";
     const creditAudit = searchParams.get("creditAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
-    if (layoutAudit || constructionAudit) document.body.dataset.layoutAudit = "true";
-    if ((surplusPlan || layoutAudit || creditAudit || constructionAudit) && searchParams.get("resetState") === "1") {
+    const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
+    if (layoutAudit || constructionAudit || constructionSnapshotAudit) document.body.dataset.layoutAudit = "true";
+    if (
+      (surplusPlan || layoutAudit || creditAudit || constructionAudit || constructionSnapshotAudit) &&
+      searchParams.get("resetState") === "1"
+    ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
       localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
     }
+    if (constructionAudit || constructionSnapshotAudit) localStorage.removeItem("initClientData");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -287,6 +296,13 @@
             { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
           ]
     };
+    if (constructionSnapshotAudit) {
+      const completeGuildBuildingSnapshot = {
+        guildBuildingMap: window.__mwiGuildCreditBridge.guildBuildingMap
+      };
+      localStorage.setItem("initClientData", JSON.stringify(completeGuildBuildingSnapshot));
+      delete window.__mwiGuildCreditBridge.guildBuildingMap;
+    }
   </script>
   <script src="/runtime.js"></script>
   <script>
@@ -1017,6 +1033,209 @@
     };
 
     window.__mwiConstructionAuditReady = constructionAudit ? prepareConstructionAudit() : Promise.resolve(null);
+
+    const prepareConstructionSnapshotAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      const constructionViewTab = await waitFor(() => panel.querySelector('[data-role="view-construction"]'));
+      constructionViewTab.click();
+      const tiles = await waitFor(() => {
+        const candidates = Array.from(panel.querySelectorAll('[data-role="building-tile"]'));
+        return candidates.length === 28 ? candidates : null;
+      });
+      const builtBuildingHrids = new Set([
+        "/guild_buildings/guild_hall",
+        "/guild_buildings/skilling_encampment",
+        "/guild_buildings/gym"
+      ]);
+      const omittedTiles = tiles.filter((tile) => !builtBuildingHrids.has(tile.dataset.buildingHrid));
+      const initial = {
+        tileCount: tiles.length,
+        knownLevelCount: tiles.filter((tile) => tile.dataset.levelKnown === "true").length,
+        unknownLevelCount: tiles.filter((tile) => tile.dataset.levelKnown === "false").length,
+        reportedKnownCount: Number(panel.querySelector(".mwi-building-level-status")?.dataset.knownCount || 0),
+        omittedLevelBadges: omittedTiles.map((tile) => ({
+          buildingHrid: tile.dataset.buildingHrid,
+          level: normalizedText(tile.querySelector(".mwi-building-level-badge")),
+          known: tile.dataset.levelKnown === "true"
+        })),
+        pendingStartForm: Boolean(panel.querySelector('[data-role="pending-building-start"]'))
+      };
+
+      const omittedBuildingHrid = "/guild_buildings/builders_hall";
+      const omittedTile = tiles.find((tile) => tile.dataset.buildingHrid === omittedBuildingHrid);
+      omittedTile.click();
+      const addedGroup = await waitFor(() =>
+        panel.querySelector(`.mwi-construction-group[data-building-hrid="${omittedBuildingHrid}"]`)
+      );
+      const target = addedGroup.querySelector('[data-role="building-target"]');
+      const storedPlan = savedConstructionPlans().find((plan) => plan.buildingHrid === omittedBuildingHrid);
+      const added = {
+        groupCount: panel.querySelectorAll(".mwi-construction-group").length,
+        startLevel: storedPlan?.startLevel ?? null,
+        targetLevel: storedPlan?.targetLevel ?? null,
+        targetValue: target?.value || "",
+        pendingStartForm: Boolean(panel.querySelector('[data-role="pending-building-start"]')),
+        focus: activeConstructionControl(panel)
+      };
+      const report = {
+        source: "initClientData",
+        initial,
+        added,
+        checks: {
+          completeSnapshotCoversCatalog:
+            initial.tileCount === 28 &&
+            initial.knownLevelCount === 28 &&
+            initial.unknownLevelCount === 0 &&
+            initial.reportedKnownCount === 28,
+          omittedBuildingsAreKnownZero:
+            initial.omittedLevelBadges.length === 25 &&
+            initial.omittedLevelBadges.every((entry) => entry.known && entry.level === "0"),
+          omittedBuildingAddsWithoutPrompt:
+            !initial.pendingStartForm &&
+            !added.pendingStartForm &&
+            added.groupCount === 1 &&
+            added.startLevel === 0 &&
+            added.targetLevel === 1 &&
+            added.targetValue === "1",
+          addedPlanReceivesFocus:
+            added.focus.role === "building-target" &&
+            added.focus.buildingHrid === omittedBuildingHrid &&
+            added.focus.inViewport
+        }
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.constructionSnapshotAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiConstructionSnapshotAuditReady = constructionSnapshotAudit
+      ? prepareConstructionSnapshotAudit()
+      : Promise.resolve(null);
+
+    const advisorCard = () =>
+      document.getElementById("mwi-guild-exchange-advisor-host")?.shadowRoot?.querySelector('[data-role="advisor"]');
+
+    const prepareTokenGuideAudit = async () => {
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      panel.querySelector('[data-role="view-upgrade"]').click();
+      await waitFor(() => panel.querySelector(".mwi-upgrade-plan"));
+      const greenCreditHrid = "/items/green_guild_credit";
+      const greenRow = await waitFor(() =>
+        panel.querySelector(`.mwi-material-row[data-item-hrid="${greenCreditHrid}"]`)
+      );
+      const tokenModeButton = greenRow.querySelector(
+        `[data-role="toggle-credit-token-mode"][data-credit-hrid="${greenCreditHrid}"]`
+      );
+      if (tokenModeButton.getAttribute("aria-pressed") !== "true") tokenModeButton.click();
+      const guideToggle = panel.querySelector('[data-role="toggle-shrine-guide"]');
+      if (guideToggle.getAttribute("aria-pressed") !== "true") guideToggle.click();
+
+      const route = panel.querySelector('[data-role="shrine-guide-route"]');
+      const nativeModal = document.querySelector(".GuildPanel_exchangeModalContent__test");
+      const materialItem = nativeModal.querySelector('[data-test-exchange-item="beast_hide"]');
+      const tokenItem = nativeModal.querySelector('[data-test-exchange-item="guild_token"]');
+      const creditItem = nativeModal.querySelector('[data-test-exchange-item="green_guild_credit"]');
+      await waitFor(
+        () => route.dataset.status === "use_guild_token" && tokenItem.getAttribute("data-mwi-shrine-guide") === "active"
+      );
+      const refreshedGreenRow = panel.querySelector(`.mwi-material-row[data-item-hrid="${greenCreditHrid}"]`);
+      const tokenPlan = refreshedGreenRow
+        .querySelector('[data-guide-item-hrid="/items/guild_token"]')
+        ?.closest(".mwi-material-plan");
+      const requiredTokens = Number(
+        normalizedText(tokenPlan?.querySelector(".mwi-material-plan-need strong")).replace(/[^\d]/g, "")
+      );
+      const chooseToken = {
+        nativeItemCount: nativeModal.querySelectorAll(".Item_item__test").length,
+        allItemsPresent: Boolean(materialItem && tokenItem && creditItem),
+        routeStatus: route.dataset.status,
+        routeTitle: normalizedText(route.querySelector('[data-role="shrine-guide-title"]')),
+        tokenGuideRole: tokenItem.getAttribute("data-mwi-shrine-guide") || "",
+        requiredTokens,
+        quantityGuideRole: document.getElementById("test-exchange-count").getAttribute("data-mwi-shrine-guide") || "",
+        quantityHintPresent: Boolean(document.getElementById("mwi-shrine-guide-quantity-hint"))
+      };
+
+      nativeModal.insertBefore(tokenItem, materialItem);
+      tokenItem.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      const quantityInput = document.getElementById("test-exchange-count");
+      const quantityHint = await waitFor(() => {
+        const hint = document.getElementById("mwi-shrine-guide-quantity-hint");
+        return route.dataset.status === "set_quantity" &&
+          quantityInput.getAttribute("data-mwi-shrine-guide") === "active" &&
+          hint
+          ? hint
+          : null;
+      });
+      const hiddenAdvisor = await waitFor(() => {
+        const card = advisorCard();
+        return card && card.hidden ? card : null;
+      });
+      const remainingBatches = Number(
+        normalizedText(quantityHint.querySelector('[data-role="quantity-hint-number"]')).replace(/[^\d]/g, "")
+      );
+      const hintDetailNode = quantityHint.querySelector('[data-role="quantity-hint-detail"]');
+      const hintDetail = normalizedText(hintDetailNode);
+      const hintDetailNumbers = Array.from(hintDetail.matchAll(/\d[\d,]*/g), (match) =>
+        Number(match[0].replace(/,/g, ""))
+      );
+      const setQuantity = {
+        routeStatus: route.dataset.status,
+        routeTitle: normalizedText(route.querySelector('[data-role="shrine-guide-title"]')),
+        selectedItem: nativeModal.querySelector(".Item_item__test")?.dataset.testExchangeItem || "",
+        quantityGuideRole: quantityInput.getAttribute("data-mwi-shrine-guide") || "",
+        quantityDescribedBy: quantityInput.getAttribute("aria-describedby") || "",
+        hintPresent: Boolean(quantityHint),
+        hintLabel: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-label"]')),
+        remainingBatches,
+        hintUnit: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-unit"]')),
+        hintDetail,
+        hintDetailHidden: hintDetailNode.hidden,
+        hintDetailNumbers,
+        advisorHidden: hiddenAdvisor.hidden
+      };
+      const report = {
+        chooseToken,
+        setQuantity,
+        checks: {
+          modalContainsMaterialTokenAndCredit: chooseToken.nativeItemCount === 3 && chooseToken.allItemsPresent,
+          guildTokenModeShowsRequirement:
+            chooseToken.routeStatus === "use_guild_token" &&
+            chooseToken.tokenGuideRole === "active" &&
+            chooseToken.requiredTokens === 300 &&
+            chooseToken.routeTitle.includes("300"),
+          quantityWaitsForGuildTokenSelection: chooseToken.quantityGuideRole === "" && !chooseToken.quantityHintPresent,
+          selectedGuildTokenEntersQuantityState:
+            setQuantity.selectedItem === "guild_token" &&
+            setQuantity.routeStatus === "set_quantity" &&
+            setQuantity.quantityGuideRole === "active",
+          inlineHintDescribesQuantityInput:
+            setQuantity.hintPresent &&
+            setQuantity.quantityDescribedBy.split(/\s+/).includes("mwi-shrine-guide-quantity-hint") &&
+            Boolean(setQuantity.hintLabel) &&
+            Boolean(setQuantity.hintUnit),
+          batchesMatchRequiredGuildTokens:
+            setQuantity.remainingBatches === 300 && setQuantity.remainingBatches === chooseToken.requiredTokens,
+          currentExchangeDistinguishesBatchesAndTokens:
+            setQuantity.routeTitle.includes("200") &&
+            !setQuantity.hintDetailHidden &&
+            setQuantity.hintDetailNumbers.length >= 2 &&
+            setQuantity.hintDetailNumbers[0] === 200 &&
+            setQuantity.hintDetailNumbers[1] === 200,
+          exchangeAdvisorHiddenForGuildTokens: setQuantity.advisorHidden
+        }
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.tokenGuideAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiTokenGuideAuditReady = tokenGuideAudit ? prepareTokenGuideAudit() : Promise.resolve(null);
 
     const runPlanStabilityAudit = async () => {
       await window.__mwiLayoutAuditReady;

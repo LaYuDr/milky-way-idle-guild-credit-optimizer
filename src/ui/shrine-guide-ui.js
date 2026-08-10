@@ -19,6 +19,7 @@
       shrineGuideApi,
       refreshGuildUpgrade,
       persistPluginUiState,
+      scheduleGuildExchangeAdvisor,
       guildExchangeMutationObserver,
       findGuildExchangeModal
     } = dependencies;
@@ -139,8 +140,17 @@
       setGuideText(hint.querySelector('[data-role="quantity-hint-unit"]'), t("guideQuantityUnit"));
       const limited = step.suggestedBatches < step.batches;
       const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
-      detailNode.hidden = !limited;
-      setGuideText(detailNode, limited ? t("guideQuantityCurrentExchange", { count: suggestedBatches }) : "");
+      const detail =
+        step.method === "guild_token"
+          ? t("guideTokenQuantityDetail", {
+              batches: suggestedBatches,
+              items: formatNumber(step.suggestedItems)
+            })
+          : limited
+            ? t("guideQuantityCurrentExchange", { count: suggestedBatches })
+            : "";
+      detailNode.hidden = !detail;
+      setGuideText(detailNode, detail);
       hint.setAttribute("aria-label", t("guideQuantityRemaining", { count: remainingBatches }));
     }
 
@@ -345,7 +355,7 @@
             `[data-guide-item-hrid="${guideAttributeSelectorValue(step.recommendedItemHrid)}"]`
           );
         markShrineGuideNode(pluginItem, "active", color);
-        if (step.method === "market_item") {
+        if (step.recommendedItemHrid) {
           for (const item of nativeRecommendedItems(step.recommendedItemHrid))
             markShrineGuideNode(item, "active", color);
         }
@@ -467,6 +477,7 @@
         stopShrineGuideObserver();
         scheduleShrineGuide();
       }
+      scheduleGuildExchangeAdvisor(true);
     }
 
     return {

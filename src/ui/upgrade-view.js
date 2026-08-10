@@ -37,6 +37,7 @@
       loadSnapshot,
       refreshOfficialItemNameCatalog,
       scheduleShrineGuide,
+      scheduleGuildExchangeAdvisor,
       guildTokenBudgetRefreshTask
     } = dependencies;
 
@@ -654,6 +655,7 @@
     function setShrineGuideContext(context) {
       state.shrineGuideContext = context;
       scheduleShrineGuide();
+      scheduleGuildExchangeAdvisor(true);
     }
 
     async function refreshGuildUpgrade(panel) {

@@ -34,6 +34,15 @@
     return merged;
   }
 
+  const GUILD_BUILDING_LEVEL_FIELDS = [
+    "guildBuildingMap",
+    "guildBuildingDict",
+    "guildBuildings",
+    "guildBuildingLevelMap",
+    "guildBuildingLevelDict",
+    "guildBuildingLevels"
+  ];
+
   function createGameStateAdapter(state) {
     function setItemDetails(candidate) {
       if (!objectCollection(candidate)) return false;
@@ -142,18 +151,24 @@
     }
 
     function setGuildBuildingLevelsFrom(source) {
-      return applyCandidates(
-        source,
-        [
-          "guildBuildingMap",
-          "guildBuildingDict",
-          "guildBuildings",
-          "guildBuildingLevelMap",
-          "guildBuildingLevelDict",
-          "guildBuildingLevels"
-        ],
-        setGuildBuildingLevels
-      );
+      return applyCandidates(source, GUILD_BUILDING_LEVEL_FIELDS, setGuildBuildingLevels);
+    }
+
+    function seedCompleteGuildBuildingLevelsFrom(source) {
+      if (!source || typeof source !== "object") return false;
+      let snapshot = null;
+      let found = false;
+      for (const field of GUILD_BUILDING_LEVEL_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(source, field) || !objectCollection(source[field])) continue;
+        snapshot = mergeGuildShrineLevels(snapshot, source[field]);
+        found = true;
+      }
+      if (!found) return false;
+      // Initialization data is the complete baseline; current-session frames
+      // already merged into state take precedence when the snapshot is older.
+      state.guildBuildingLevels = mergeGuildShrineLevels(snapshot, state.guildBuildingLevels);
+      state.guildBuildingLevelsComplete = true;
+      return true;
     }
 
     function setGuildBuildingDetailsFrom(source) {
@@ -177,6 +192,7 @@
       setGuildShrineLevelsFrom,
       setGuildShrineDetailsFrom,
       setGuildBuildingLevelsFrom,
+      seedCompleteGuildBuildingLevelsFrom,
       setGuildBuildingDetailsFrom
     };
   }

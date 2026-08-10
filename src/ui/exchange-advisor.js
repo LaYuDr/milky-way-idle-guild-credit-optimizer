@@ -258,6 +258,10 @@
         hideGuildExchangeAdvisor();
         return false;
       }
+      if (shrineGuideUsesGuildTokensFor(modalData.creditItemHrid)) {
+        hideGuildExchangeAdvisor();
+        return false;
+      }
 
       const conversions = allConversions(modalData.creditItemHrid);
       if (!conversions.length) {
@@ -347,6 +351,16 @@
       );
     }
 
+    function shrineGuideUsesGuildTokensFor(creditItemHrid) {
+      const rows =
+        state.shrineGuideContext && state.shrineGuideContext.estimate && state.shrineGuideContext.estimate.rows;
+      return Boolean(
+        state.shrineGuideEnabled === true &&
+        Array.isArray(rows) &&
+        rows.some((row) => row && row.itemHrid === creditItemHrid && row.guildTokenExchange)
+      );
+    }
+
     function scheduleGuildExchangeAdvisor(forceRender) {
       if (!state.exchangeAdvisorUi) return;
       exchangeAdvisorFrameTask.schedule(Boolean(forceRender));
@@ -426,6 +440,7 @@
 
     return {
       findGuildExchangeModal,
+      shrineGuideUsesGuildTokensFor,
       refreshGuildExchangeAdvisor,
       scheduleGuildExchangeAdvisor,
       guildExchangeMutationObserver,

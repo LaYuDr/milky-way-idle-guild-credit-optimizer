@@ -1903,6 +1903,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       guideQuantityUnit: "批",
       guideQuantityRemaining: "完成当前规划还需 {count} 批",
       guideQuantityCurrentExchange: "本次填写 {count} 批",
+      guideTokenQuantityDetail: "本次填写 {batches} 批，将使用 {items} 枚公会代币",
       guideUseGuildTokens: "下一步：使用 {count} 枚公会代币",
       guideUseGuildTokensHint: "当前已为 {credit} 选择公会代币兑换。",
       guideUnavailable: "暂时无法生成兑换指引",
@@ -2191,6 +2192,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       guideQuantityUnit: "batches",
       guideQuantityRemaining: "The current plan needs {count} more batches",
       guideQuantityCurrentExchange: "Enter {count} batches this time",
+      guideTokenQuantityDetail: "Enter {batches} batches to use {items} guild tokens this time",
       guideUseGuildTokens: "Next: use {count} guild tokens",
       guideUseGuildTokensHint: "Guild-token exchange is selected for {credit}.",
       guideUnavailable: "An exchange step is unavailable",
@@ -3203,9 +3205,9 @@ window.MwiGuildCreditVersion = "1.1.46";
     const result = { ...base, missingCredits, blockers, activeCredit };
 
     if (activeCredit) {
-      if (activeCredit.method === "guild_token") return { ...result, status: "use_guild_token" };
       if (activeCredit.method === "unavailable") return { ...result, status: "unavailable" };
       if (modal.selectedItemHrid === activeCredit.recommendedItemHrid) return { ...result, status: "set_quantity" };
+      if (activeCredit.method === "guild_token") return { ...result, status: "use_guild_token" };
       return { ...result, status: "choose_item" };
     }
     if (missingCredits.length) return { ...result, status: "choose_credit" };
@@ -3664,6 +3666,15 @@ window.MwiGuildCreditVersion = "1.1.46";
     return merged;
   }
 
+  const GUILD_BUILDING_LEVEL_FIELDS = [
+    "guildBuildingMap",
+    "guildBuildingDict",
+    "guildBuildings",
+    "guildBuildingLevelMap",
+    "guildBuildingLevelDict",
+    "guildBuildingLevels"
+  ];
+
   function createGameStateAdapter(state) {
     function setItemDetails(candidate) {
       if (!objectCollection(candidate)) return false;
@@ -3772,18 +3783,24 @@ window.MwiGuildCreditVersion = "1.1.46";
     }
 
     function setGuildBuildingLevelsFrom(source) {
-      return applyCandidates(
-        source,
-        [
-          "guildBuildingMap",
-          "guildBuildingDict",
-          "guildBuildings",
-          "guildBuildingLevelMap",
-          "guildBuildingLevelDict",
-          "guildBuildingLevels"
-        ],
-        setGuildBuildingLevels
-      );
+      return applyCandidates(source, GUILD_BUILDING_LEVEL_FIELDS, setGuildBuildingLevels);
+    }
+
+    function seedCompleteGuildBuildingLevelsFrom(source) {
+      if (!source || typeof source !== "object") return false;
+      let snapshot = null;
+      let found = false;
+      for (const field of GUILD_BUILDING_LEVEL_FIELDS) {
+        if (!Object.prototype.hasOwnProperty.call(source, field) || !objectCollection(source[field])) continue;
+        snapshot = mergeGuildShrineLevels(snapshot, source[field]);
+        found = true;
+      }
+      if (!found) return false;
+      // Initialization data is the complete baseline; current-session frames
+      // already merged into state take precedence when the snapshot is older.
+      state.guildBuildingLevels = mergeGuildShrineLevels(snapshot, state.guildBuildingLevels);
+      state.guildBuildingLevelsComplete = true;
+      return true;
     }
 
     function setGuildBuildingDetailsFrom(source) {
@@ -3807,6 +3824,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       setGuildShrineLevelsFrom,
       setGuildShrineDetailsFrom,
       setGuildBuildingLevelsFrom,
+      seedCompleteGuildBuildingLevelsFrom,
       setGuildBuildingDetailsFrom
     };
   }
@@ -3837,6 +3855,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       setGuildShrineLevelsFrom,
       setGuildShrineDetailsFrom,
       setGuildBuildingLevelsFrom,
+      seedCompleteGuildBuildingLevelsFrom,
       setGuildBuildingDetailsFrom,
       persistLiveMarketData,
       scheduleMarketDataRefresh,
@@ -3934,6 +3953,7 @@ window.MwiGuildCreditVersion = "1.1.46";
         state.guildBuffLevels &&
         state.guildShrineLevels &&
         state.guildBuildingLevels &&
+        state.guildBuildingLevelsComplete === true &&
         state.characterItems
       )
         return true;
@@ -3945,8 +3965,13 @@ window.MwiGuildCreditVersion = "1.1.46";
       }
       if (!raw) return false;
       try {
-        const decoded = decompressFromUtf16(raw) || raw;
-        const data = JSON.parse(decoded);
+        const decoded = decompressFromUtf16(raw);
+        let data;
+        try {
+          data = JSON.parse(decoded || raw);
+        } catch (_) {
+          data = JSON.parse(raw);
+        }
         // initClientData is a durable fallback and can outlive a game data update.
         // Never let it overwrite values already captured from the current session.
         const hasItems = !state.itemDetails && setItemDetails(data.itemDetailMap || data.itemDetailDict);
@@ -3958,8 +3983,9 @@ window.MwiGuildCreditVersion = "1.1.46";
           !state.guildShrineLevels && (setGuildShrineLevelsFrom(data) || setGuildShrineLevelsFrom(data.guild));
         const hasGuildShrineDetails =
           !state.guildShrineDetails && (setGuildShrineDetailsFrom(data) || setGuildShrineDetailsFrom(data.guild));
-        const hasGuildBuildingLevels =
-          !state.guildBuildingLevels && (setGuildBuildingLevelsFrom(data) || setGuildBuildingLevelsFrom(data.guild));
+        const hasRootGuildBuildingLevels = seedCompleteGuildBuildingLevelsFrom(data);
+        const hasNestedGuildBuildingLevels = seedCompleteGuildBuildingLevelsFrom(data.guild);
+        const hasGuildBuildingLevels = hasRootGuildBuildingLevels || hasNestedGuildBuildingLevels;
         const hasGuildBuildingDetails =
           !state.guildBuildingDetails && (setGuildBuildingDetailsFrom(data) || setGuildBuildingDetailsFrom(data.guild));
         const hasCharacterItems =
@@ -5193,7 +5219,7 @@ window.MwiGuildCreditVersion = "1.1.46";
         const level = shrineLevelValue(record);
         if (level !== null) return Math.min(level, definition.maxLevel);
       }
-      return null;
+      return state.guildBuildingLevelsComplete === true ? 0 : null;
     }
 
     function guildBuildingLevelSnapshot(definitions) {
@@ -5746,6 +5772,7 @@ window.MwiGuildCreditVersion = "1.1.46";
 
     return {
       guildBuildingDefinitions,
+      currentGuildBuildingLevel,
       addGuildBuildingPlan,
       setGuildBuildingTarget,
       removeGuildBuildingPlan,
@@ -5811,6 +5838,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       loadSnapshot,
       refreshOfficialItemNameCatalog,
       scheduleShrineGuide,
+      scheduleGuildExchangeAdvisor,
       guildTokenBudgetRefreshTask
     } = dependencies;
 
@@ -6428,6 +6456,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     function setShrineGuideContext(context) {
       state.shrineGuideContext = context;
       scheduleShrineGuide();
+      scheduleGuildExchangeAdvisor(true);
     }
 
     async function refreshGuildUpgrade(panel) {
@@ -6608,6 +6637,7 @@ window.MwiGuildCreditVersion = "1.1.46";
       shrineGuideApi,
       refreshGuildUpgrade,
       persistPluginUiState,
+      scheduleGuildExchangeAdvisor,
       guildExchangeMutationObserver,
       findGuildExchangeModal
     } = dependencies;
@@ -6728,8 +6758,17 @@ window.MwiGuildCreditVersion = "1.1.46";
       setGuideText(hint.querySelector('[data-role="quantity-hint-unit"]'), t("guideQuantityUnit"));
       const limited = step.suggestedBatches < step.batches;
       const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
-      detailNode.hidden = !limited;
-      setGuideText(detailNode, limited ? t("guideQuantityCurrentExchange", { count: suggestedBatches }) : "");
+      const detail =
+        step.method === "guild_token"
+          ? t("guideTokenQuantityDetail", {
+              batches: suggestedBatches,
+              items: formatNumber(step.suggestedItems)
+            })
+          : limited
+            ? t("guideQuantityCurrentExchange", { count: suggestedBatches })
+            : "";
+      detailNode.hidden = !detail;
+      setGuideText(detailNode, detail);
       hint.setAttribute("aria-label", t("guideQuantityRemaining", { count: remainingBatches }));
     }
 
@@ -6934,7 +6973,7 @@ window.MwiGuildCreditVersion = "1.1.46";
             `[data-guide-item-hrid="${guideAttributeSelectorValue(step.recommendedItemHrid)}"]`
           );
         markShrineGuideNode(pluginItem, "active", color);
-        if (step.method === "market_item") {
+        if (step.recommendedItemHrid) {
           for (const item of nativeRecommendedItems(step.recommendedItemHrid))
             markShrineGuideNode(item, "active", color);
         }
@@ -7056,6 +7095,7 @@ window.MwiGuildCreditVersion = "1.1.46";
         stopShrineGuideObserver();
         scheduleShrineGuide();
       }
+      scheduleGuildExchangeAdvisor(true);
     }
 
     return {
@@ -7331,6 +7371,10 @@ window.MwiGuildCreditVersion = "1.1.46";
         hideGuildExchangeAdvisor();
         return false;
       }
+      if (shrineGuideUsesGuildTokensFor(modalData.creditItemHrid)) {
+        hideGuildExchangeAdvisor();
+        return false;
+      }
 
       const conversions = allConversions(modalData.creditItemHrid);
       if (!conversions.length) {
@@ -7420,6 +7464,16 @@ window.MwiGuildCreditVersion = "1.1.46";
       );
     }
 
+    function shrineGuideUsesGuildTokensFor(creditItemHrid) {
+      const rows =
+        state.shrineGuideContext && state.shrineGuideContext.estimate && state.shrineGuideContext.estimate.rows;
+      return Boolean(
+        state.shrineGuideEnabled === true &&
+        Array.isArray(rows) &&
+        rows.some((row) => row && row.itemHrid === creditItemHrid && row.guildTokenExchange)
+      );
+    }
+
     function scheduleGuildExchangeAdvisor(forceRender) {
       if (!state.exchangeAdvisorUi) return;
       exchangeAdvisorFrameTask.schedule(Boolean(forceRender));
@@ -7499,6 +7553,7 @@ window.MwiGuildCreditVersion = "1.1.46";
 
     return {
       findGuildExchangeModal,
+      shrineGuideUsesGuildTokensFor,
       refreshGuildExchangeAdvisor,
       scheduleGuildExchangeAdvisor,
       guildExchangeMutationObserver,
@@ -8441,6 +8496,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     exchangeAdvisorSnapshotFailed: false
   };
   state.guildBuildingLevels = null;
+  state.guildBuildingLevelsComplete = false;
   state.guildBuildingDetails = null;
   state.buildingPlans = savedBuildingPlannerState.plans.map((plan, index) => ({
     id: `building-plan-${index + 1}`,
@@ -8463,6 +8519,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     setGuildShrineLevelsFrom,
     setGuildShrineDetailsFrom,
     setGuildBuildingLevelsFrom,
+    seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom
   } = gameState;
   const updateRenderedMarkup = (element, markup) =>
@@ -8642,6 +8699,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     setGuildShrineLevelsFrom,
     setGuildShrineDetailsFrom,
     setGuildBuildingLevelsFrom,
+    seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom,
     persistLiveMarketData,
     scheduleMarketDataRefresh,
@@ -8841,6 +8899,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     loadSnapshot,
     refreshOfficialItemNameCatalog,
     scheduleShrineGuide: (...args) => scheduleShrineGuide(...args),
+    scheduleGuildExchangeAdvisor: (...args) => scheduleGuildExchangeAdvisor(...args),
     guildTokenBudgetRefreshTask
   });
   const {
@@ -8920,6 +8979,7 @@ window.MwiGuildCreditVersion = "1.1.46";
     shrineGuideApi,
     refreshGuildUpgrade,
     persistPluginUiState,
+    scheduleGuildExchangeAdvisor: (...args) => scheduleGuildExchangeAdvisor(...args),
     guildExchangeMutationObserver: (...args) => guildExchangeMutationObserver(...args),
     findGuildExchangeModal: (...args) => findGuildExchangeModal(...args)
   });

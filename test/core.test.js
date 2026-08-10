@@ -1820,7 +1820,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function updateShrineGuideQuantityHint/);
   assert.match(source, /guideQuantityLabel/);
   assert.match(source, /data-role="quantity-hint-number"/);
-  assert.match(source, /detailNode\.hidden = !limited/);
+  assert.match(source, /detailNode\.hidden = !detail/);
   assert.match(source, /guideQuantityRemaining/);
   assert.match(source, /guideQuantityCurrentExchange/);
   assert.match(source, /function shrineGuideQuantityRow/);

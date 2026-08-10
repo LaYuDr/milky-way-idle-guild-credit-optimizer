@@ -78,7 +78,7 @@
         const level = shrineLevelValue(record);
         if (level !== null) return Math.min(level, definition.maxLevel);
       }
-      return null;
+      return state.guildBuildingLevelsComplete === true ? 0 : null;
     }
 
     function guildBuildingLevelSnapshot(definitions) {
@@ -631,6 +631,7 @@
 
     return {
       guildBuildingDefinitions,
+      currentGuildBuildingLevel,
       addGuildBuildingPlan,
       setGuildBuildingTarget,
       removeGuildBuildingPlan,

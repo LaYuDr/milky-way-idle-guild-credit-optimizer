@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const data = require("../src/guild-building-data.js");
 const core = require("../src/core.js");
+const constructionViewApi = require("../src/ui/construction-view.js");
 
 const projectFile = (relativePath) => fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 const projectRuntimeSource = () => {
@@ -24,6 +25,47 @@ const projectRuntimeSource = () => {
     .map((file) => fs.readFileSync(file, "utf8"))
     .join("\n");
 };
+
+function createConstructionHarness({ guildBuildingLevels = null, guildBuildingLevelsComplete = false } = {}) {
+  const state = {
+    guildBuildingLevels,
+    guildBuildingLevelsComplete,
+    buildingPlans: [],
+    nextBuildingPlanId: 1,
+    buildingPlanNotice: ""
+  };
+  let persistCount = 0;
+  const view = constructionViewApi.createConstructionView({
+    state,
+    buildingDataApi: data,
+    t: (key) => key,
+    titleCase: (value) => value,
+    simpleItemName: (hrid) =>
+      String(hrid || "")
+        .split("/")
+        .pop(),
+    shrineIdentityValues: (record, fallbackHrid) =>
+      [
+        record && record.guildBuildingHrid,
+        record && record.guildShrineHrid,
+        record && record.hrid,
+        fallbackHrid
+      ].filter(Boolean),
+    shrineLevelValue: (record) => {
+      const level = Number(record && (record.level ?? record.currentLevel));
+      return Number.isSafeInteger(level) && level >= 0 ? level : null;
+    },
+    formatNumber: String,
+    persistGuildBuildingPlannerState: () => {
+      persistCount += 1;
+    },
+    pageWindow: {
+      clearTimeout() {},
+      setTimeout() {}
+    }
+  });
+  return { state, view, persistCount: () => persistCount };
+}
 
 test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
   const definitions = data.definitions();
@@ -68,6 +110,39 @@ test("半价建筑使用精确的逐级费用", () => {
   const result = core.aggregateGuildBuildingLevelCosts(gym.levelCosts, 0, 2);
   assert.equal(result.status, "ok");
   assert.equal(result.totalCost, 1175);
+});
+
+test("完整建筑等级快照中缺少的建筑视为 0 级并可直接规划 0→1", () => {
+  const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
+  const harness = createConstructionHarness({ guildBuildingLevels: {}, guildBuildingLevelsComplete: true });
+  assert.equal(harness.view.currentGuildBuildingLevel(hall), 0);
+
+  const result = harness.view.addGuildBuildingPlan([hall], hall.hrid);
+  assert.equal(result.status, "added");
+  assert.deepEqual(result.plan, {
+    id: "building-plan-1",
+    buildingHrid: hall.hrid,
+    startLevel: 0,
+    targetLevel: 1
+  });
+  assert.equal(harness.persistCount(), 1);
+});
+
+test("局部建筑等级帧缺少的建筑仍要求手动填写起始等级", () => {
+  const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
+  const harness = createConstructionHarness({
+    guildBuildingLevels: {
+      "/guild_buildings/gym": { guildBuildingHrid: "/guild_buildings/gym", level: 2 }
+    },
+    guildBuildingLevelsComplete: false
+  });
+  assert.equal(harness.view.currentGuildBuildingLevel(hall), null);
+  assert.deepEqual(harness.view.addGuildBuildingPlan([hall], hall.hrid), {
+    status: "requires_start_level",
+    buildingHrid: hall.hrid
+  });
+  assert.deepEqual(harness.state.buildingPlans, []);
+  assert.equal(harness.persistCount(), 0);
 });
 
 test("施工队列标记预算截止步骤并保留超预算项目", () => {

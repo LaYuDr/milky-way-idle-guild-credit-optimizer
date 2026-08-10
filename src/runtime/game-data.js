@@ -19,6 +19,7 @@
       setGuildShrineLevelsFrom,
       setGuildShrineDetailsFrom,
       setGuildBuildingLevelsFrom,
+      seedCompleteGuildBuildingLevelsFrom,
       setGuildBuildingDetailsFrom,
       persistLiveMarketData,
       scheduleMarketDataRefresh,
@@ -116,6 +117,7 @@
         state.guildBuffLevels &&
         state.guildShrineLevels &&
         state.guildBuildingLevels &&
+        state.guildBuildingLevelsComplete === true &&
         state.characterItems
       )
         return true;
@@ -127,8 +129,13 @@
       }
       if (!raw) return false;
       try {
-        const decoded = decompressFromUtf16(raw) || raw;
-        const data = JSON.parse(decoded);
+        const decoded = decompressFromUtf16(raw);
+        let data;
+        try {
+          data = JSON.parse(decoded || raw);
+        } catch (_) {
+          data = JSON.parse(raw);
+        }
         // initClientData is a durable fallback and can outlive a game data update.
         // Never let it overwrite values already captured from the current session.
         const hasItems = !state.itemDetails && setItemDetails(data.itemDetailMap || data.itemDetailDict);
@@ -140,8 +147,9 @@
           !state.guildShrineLevels && (setGuildShrineLevelsFrom(data) || setGuildShrineLevelsFrom(data.guild));
         const hasGuildShrineDetails =
           !state.guildShrineDetails && (setGuildShrineDetailsFrom(data) || setGuildShrineDetailsFrom(data.guild));
-        const hasGuildBuildingLevels =
-          !state.guildBuildingLevels && (setGuildBuildingLevelsFrom(data) || setGuildBuildingLevelsFrom(data.guild));
+        const hasRootGuildBuildingLevels = seedCompleteGuildBuildingLevelsFrom(data);
+        const hasNestedGuildBuildingLevels = seedCompleteGuildBuildingLevelsFrom(data.guild);
+        const hasGuildBuildingLevels = hasRootGuildBuildingLevels || hasNestedGuildBuildingLevels;
         const hasGuildBuildingDetails =
           !state.guildBuildingDetails && (setGuildBuildingDetailsFrom(data) || setGuildBuildingDetailsFrom(data.guild));
         const hasCharacterItems =

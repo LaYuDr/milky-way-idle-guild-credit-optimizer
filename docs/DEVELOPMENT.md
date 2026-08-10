@@ -72,13 +72,14 @@ http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebar
 
 Repeat the construction audit at the same eleven widths. It also verifies the
 queue-first planning flow against a deterministic `3 / 28` partial-level
-snapshot. The audit adds three known-level buildings, rejects and then accepts
-an unknown building's manual current level, checks inline target editing,
-collapsed step details, button and pointer reordering, Escape cancellation,
-clear-with-undo, search focus, and focus visibility after rerenders. It leaves
-a reusable final sample with 28 visible square catalog tiles, three collapsed
-building groups in their original order, nine total upgrade steps, a `5,000`
-budget, `13,975` planned spend, and a `1 / 9` budget cutoff.
+live frame. Missing records remain unknown in this audit by design. The audit
+adds three known-level buildings, rejects and then accepts an unknown
+building's manual current level, checks inline target editing, collapsed step
+details, button and pointer reordering, Escape cancellation, clear-with-undo,
+search focus, and focus visibility after rerenders. It leaves a reusable final
+sample with 28 visible square catalog tiles, three collapsed building groups in
+their original order, nine total upgrade steps, a `5,000` budget, `13,975`
+planned spend, and a `1 / 9` budget cutoff.
 
 After `document.body.dataset.constructionAuditReady` becomes `"true"`, inspect
 the JSON in `#layout-audit-output` or evaluate:
@@ -100,6 +101,57 @@ English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
 ```text
 http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
 ```
+
+To verify the different semantics of a complete `initClientData` guild-building
+snapshot, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?constructionSnapshotAudit=1&resetState=1&sidebarWidth=420
+```
+
+This fixture stores a complete initialization snapshot whose
+`guildBuildingMap` contains only the three non-zero buildings, then removes the
+partial bridge frame before loading the userscript. After
+`document.body.dataset.constructionSnapshotAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiConstructionSnapshotAuditReady;
+```
+
+Require every value in `checks` to be `true`. In particular, the complete
+snapshot must report `28 / 28` known levels, treat all 25 omitted records as
+known level `0`, and add an omitted building directly as `0 -> 1` without
+rendering the manual current-level form. Do not replace the regular
+`constructionAudit=1` width matrix with this audit: the former intentionally
+retains the partial-frame `3 / 28` behavior.
+
+For the shrine guide's guild-token exchange path, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?tokenGuideAudit=1&resetState=1&sidebarWidth=420
+```
+
+`tokenGuideAudit=1` enables the deterministic `surplusPlan` fixture. Its native
+exchange modal simultaneously contains an ordinary material, Guild Token, and
+Green Guild Credit. The audit selects guild-token mode for the missing green
+credits and enables the shrine guide. It first requires the native Guild Token
+item to carry the active guide highlight while the guide reports the
+`use_guild_token` state and a requirement of `300` tokens. It then makes Guild
+Token the modal's selected item and requires the guide to enter
+`set_quantity`: the native quantity input is active, an inline status hint is
+linked through `aria-describedby`, the remaining `300` batches match the `300`
+required tokens at one token per batch, and the inline detail distinguishes the
+current modal limit of `200` batches from the `200` tokens used in that
+exchange. The separate exchange advisor must be hidden. After
+`document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiTokenGuideAuditReady;
+```
+
+Every value in `checks` must be `true`.
 
 ## Local workbench
 

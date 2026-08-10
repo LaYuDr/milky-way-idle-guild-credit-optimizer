@@ -138,9 +138,9 @@
     const result = { ...base, missingCredits, blockers, activeCredit };
 
     if (activeCredit) {
-      if (activeCredit.method === "guild_token") return { ...result, status: "use_guild_token" };
       if (activeCredit.method === "unavailable") return { ...result, status: "unavailable" };
       if (modal.selectedItemHrid === activeCredit.recommendedItemHrid) return { ...result, status: "set_quantity" };
+      if (activeCredit.method === "guild_token") return { ...result, status: "use_guild_token" };
       return { ...result, status: "choose_item" };
     }
     if (missingCredits.length) return { ...result, status: "choose_credit" };

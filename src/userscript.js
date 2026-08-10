@@ -148,6 +148,7 @@
     exchangeAdvisorSnapshotFailed: false
   };
   state.guildBuildingLevels = null;
+  state.guildBuildingLevelsComplete = false;
   state.guildBuildingDetails = null;
   state.buildingPlans = savedBuildingPlannerState.plans.map((plan, index) => ({
     id: `building-plan-${index + 1}`,
@@ -170,6 +171,7 @@
     setGuildShrineLevelsFrom,
     setGuildShrineDetailsFrom,
     setGuildBuildingLevelsFrom,
+    seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom
   } = gameState;
   const updateRenderedMarkup = (element, markup) =>
@@ -349,6 +351,7 @@
     setGuildShrineLevelsFrom,
     setGuildShrineDetailsFrom,
     setGuildBuildingLevelsFrom,
+    seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom,
     persistLiveMarketData,
     scheduleMarketDataRefresh,
@@ -548,6 +551,7 @@
     loadSnapshot,
     refreshOfficialItemNameCatalog,
     scheduleShrineGuide: (...args) => scheduleShrineGuide(...args),
+    scheduleGuildExchangeAdvisor: (...args) => scheduleGuildExchangeAdvisor(...args),
     guildTokenBudgetRefreshTask
   });
   const {
@@ -627,6 +631,7 @@
     shrineGuideApi,
     refreshGuildUpgrade,
     persistPluginUiState,
+    scheduleGuildExchangeAdvisor: (...args) => scheduleGuildExchangeAdvisor(...args),
     guildExchangeMutationObserver: (...args) => guildExchangeMutationObserver(...args),
     findGuildExchangeModal: (...args) => findGuildExchangeModal(...args)
   });

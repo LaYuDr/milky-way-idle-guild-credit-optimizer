@@ -2,7 +2,10 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const guide = require("../src/shrine-guide.js");
+const exchangeAdvisorApi = require("../src/ui/exchange-advisor.js");
 
 const creditOrder = ["/items/green_guild_credit", "/items/blue_guild_credit"];
 
@@ -156,8 +159,8 @@ test("一种信用点补齐后只保留另一种待处理", () => {
   );
 });
 
-test("公会代币模式不会错误指向市场物品", () => {
-  const result = derive({
+test("公会代币未选中时提示选币，选中后进入数量步骤", () => {
+  const base = {
     estimate: {
       rows: [
         {
@@ -172,12 +175,92 @@ test("公会代币模式不会错误指向市场物品", () => {
           }
         }
       ]
-    },
+    }
+  };
+  const chooseToken = derive({
+    ...base,
     modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
   });
-  assert.equal(result.status, "use_guild_token");
-  assert.equal(result.activeCredit.recommendedItemHrid, "/items/guild_token");
-  assert.equal(result.activeCredit.requiredItems, 2);
+  assert.equal(chooseToken.status, "use_guild_token");
+  assert.equal(chooseToken.activeCredit.recommendedItemHrid, "/items/guild_token");
+  assert.equal(chooseToken.activeCredit.requiredItems, 2);
+
+  const quantity = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/guild_token" }
+  });
+  assert.equal(quantity.status, "set_quantity");
+  assert.equal(quantity.activeCredit.suggestedBatches, 2);
+  assert.equal(quantity.activeCredit.suggestedItems, 2);
+});
+
+test("公会代币非一比一兑换同时区分总批数、本次批数与代币枚数", () => {
+  const result = derive({
+    estimate: {
+      rows: [
+        {
+          itemHrid: "/items/green_guild_credit",
+          missing: 70,
+          guildTokenExchange: {
+            batches: 7,
+            guildTokenCount: 3,
+            creditCount: 10,
+            requiredGuildTokens: 21,
+            actualCredits: 70
+          }
+        }
+      ]
+    },
+    modal: {
+      creditItemHrid: "/items/green_guild_credit",
+      selectedItemHrid: "/items/guild_token",
+      maxBatches: 4
+    }
+  });
+  assert.equal(result.status, "set_quantity");
+  assert.equal(result.activeCredit.batches, 7);
+  assert.equal(result.activeCredit.requiredItems, 21);
+  assert.equal(result.activeCredit.suggestedBatches, 4);
+  assert.equal(result.activeCredit.suggestedItems, 12);
+  assert.equal(result.activeCredit.suggestedCredits, 40);
+});
+
+test("兑换建议仅为已开启指引且当前估算选择代币的信用点返回高亮状态", () => {
+  const state = {
+    shrineGuideEnabled: true,
+    shrineGuideContext: {
+      estimate: {
+        rows: [
+          {
+            itemHrid: "/items/green_guild_credit",
+            missing: 20,
+            guildTokenExchange: { requiredGuildTokens: 2 }
+          },
+          { itemHrid: "/items/blue_guild_credit", missing: 20 }
+        ]
+      }
+    }
+  };
+  const advisor = exchangeAdvisorApi.createExchangeAdvisor({ state });
+  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/green_guild_credit"), true);
+  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/blue_guild_credit"), false);
+  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/red_guild_credit"), false);
+
+  state.shrineGuideEnabled = false;
+  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/green_guild_credit"), false);
+});
+
+test("公会代币推荐会进入原生物品高亮，并提供双语代币数量详情", () => {
+  const projectFile = (relativePath) => fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
+  const shrineGuideUi = projectFile("src/ui/shrine-guide-ui.js");
+  const localization = projectFile("src/localization.js");
+  assert.match(shrineGuideUi, /for \(const item of nativeRecommendedItems\(step\.recommendedItemHrid\)\)/);
+  assert.doesNotMatch(
+    shrineGuideUi,
+    /if \(step\.method === "market_item"\)\s*\{\s*for \(const item of nativeRecommendedItems/
+  );
+  assert.match(shrineGuideUi, /t\("guideTokenQuantityDetail"/);
+  assert.equal((localization.match(/guideTokenQuantityDetail:/g) || []).length, 2);
 });
 
 test("材料齐全后指向神龛，等级达到目标后完成", () => {
