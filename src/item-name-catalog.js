@@ -8,6 +8,8 @@
   const STORAGE_KEY = "mwi-official-item-name-catalog-v1";
   const SCHEMA_VERSION = 1;
   const ITEM_HRID = /^\/items\/[a-z0-9_]+$/i;
+  const INITIAL_RETRY_DELAY_MS = 3000;
+  const MAX_RETRY_DELAY_MS = 60000;
 
   function normalizeLocale(locale) {
     return String(locale || "")
@@ -25,6 +27,16 @@
 
   function cleanName(value) {
     return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  function liveCatalogSource(source) {
+    return source === "window-i18n" || source === "react-provider";
+  }
+
+  function refreshRetryDelay(attemptCount) {
+    const attempts = Number.isSafeInteger(attemptCount) && attemptCount > 0 ? attemptCount : 0;
+    if (attempts < 5) return INITIAL_RETRY_DELAY_MS;
+    return Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** Math.min(attempts - 4, 5));
   }
 
   function catalogFromItemNames(itemNames) {
@@ -217,6 +229,8 @@
       updatedAt: null,
       version
     };
+    let lastRefreshAt = null;
+    let refreshAttempts = 0;
 
     function refresh() {
       const direct = extractOfficialItemNameCatalog(pageI18nRoots(pageWindow), { minimumEntries });
@@ -233,6 +247,27 @@
       };
       persistCatalog(storage, current);
       return current;
+    }
+
+    function refreshIfDue(options = {}) {
+      const force = options.force === true;
+      const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
+      const ready = liveCatalogSource(current.source);
+      const delay = refreshRetryDelay(refreshAttempts);
+      if (!force && (ready || (lastRefreshAt !== null && now - lastRefreshAt < delay))) {
+        return { attempted: false, changed: false, ready, retryCount: refreshAttempts, nextDelayMs: delay };
+      }
+      const previous = current;
+      lastRefreshAt = now;
+      refreshAttempts += 1;
+      const refreshed = refresh();
+      return {
+        attempted: true,
+        changed: refreshed !== previous,
+        ready: liveCatalogSource(refreshed.source),
+        retryCount: refreshAttempts,
+        nextDelayMs: refreshRetryDelay(refreshAttempts)
+      };
     }
 
     function resolveItemName({ itemHrid, englishFallback, locale }) {
@@ -256,13 +291,15 @@
       };
     }
 
-    return { refresh, resolveItemName, coverage, metadata: () => ({ ...current, names: undefined }) };
+    return { refresh, refreshIfDue, resolveItemName, coverage, metadata: () => ({ ...current, names: undefined }) };
   }
 
   return {
     STORAGE_KEY,
     normalizeLocale,
     normalizeItemHrid,
+    liveCatalogSource,
+    refreshRetryDelay,
     catalogFromItemNames,
     extractOfficialItemNameCatalog,
     createItemNameCatalog

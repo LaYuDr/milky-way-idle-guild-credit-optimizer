@@ -34,6 +34,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/runtime/game-data.js",
     "src/ui/dom.js",
     "src/ui/sortable.js",
+    "src/ui/sidebar-integration.js",
     "src/ui/styles.js",
     "src/ui/upgrade-view.js",
     "src/ui/settings-view.js",

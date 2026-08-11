@@ -11,6 +11,7 @@ const marketDomApi = require("../src/market-dom.js");
 const itemNameCatalogApi = require("../src/item-name-catalog.js");
 const releaseInfoApi = require("../src/release-info.js");
 const localizationApi = require("../src/localization.js");
+const sidebarIntegrationApi = require("../src/ui/sidebar-integration.js");
 
 function projectRuntimeSource() {
   const sourceRoot = path.join(__dirname, "..", "src");
@@ -65,12 +66,26 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
 });
 
+test("语言候选只接受受支持的字符串，并优先使用可见界面语言", () => {
+  assert.equal(
+    localizationApi.resolveLocaleCandidates([{}, () => "zh-CN", "", "   ", "ja-JP", "en-US"], "zh-CN"),
+    "en"
+  );
+  assert.equal(localizationApi.resolveLocaleCandidates(["zh-CN", "en-US"]), "zh-CN");
+  assert.equal(localizationApi.resolveLocaleCandidates([null, "zh-Hans", "en-US"]), "zh-CN");
+  assert.equal(localizationApi.resolveLocaleCandidates(["en-US"]), "en");
+  assert.equal(localizationApi.resolveLocaleCandidates([{}, " ", "fr-FR"], "en_US"), "en");
+});
+
 test("运行时 UI 不保留写死中文，原生页面识别仅保留中英文别名", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   const directChinese = Array.from(source.matchAll(/[\u4e00-\u9fff]+/g), (match) => match[0]);
-  assert.deepEqual(directChinese, ["物品搜索", "市场", "库存", "装备", "技能", "房屋", "配装", "收获", "库存"]);
+  assert.deepEqual(directChinese, ["物品搜索", "市场"]);
   assert.match(source, /\["市场", "Marketplace", "Market"\]/);
-  assert.match(source, /\["库存", "Inventory"\]/);
+  assert.deepEqual(sidebarIntegrationApi.SIDEBAR_LABELS["zh-CN"], ["库存", "装备", "技能", "房屋", "配装", "收获"]);
+  assert.equal(sidebarIntegrationApi.sidebarLocale(["库存", "装备", "技能", "房屋"]), "zh-CN");
+  assert.equal(sidebarIntegrationApi.sidebarLocale(["Inventory", "Equipment", "Skills", "House"]), "en");
+  assert.equal(sidebarIntegrationApi.sidebarLocale(["库存", "Inventory"]), null);
 });
 
 test("按价格逐档累计订单簿成本", () => {
@@ -1188,6 +1203,110 @@ test("官方名称目录在官方资源暂不可读时使用缓存，否则诚�
   );
 });
 
+test("官方名称目录缓存可继续解析名称，但不会被误判为实时资源已就绪", () => {
+  const storageValues = new Map();
+  const storage = {
+    getItem: (key) => storageValues.get(key) || null,
+    setItem: (key, value) => storageValues.set(key, value)
+  };
+  const liveCatalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: {
+      i18next: { resources: { "zh-CN": { translation: { itemNames: { beast_hide: "官方野兽皮" } } } } }
+    },
+    storage,
+    minimumEntries: 1
+  });
+  const liveRefresh = liveCatalog.refreshIfDue({ force: true, now: 1000 });
+  assert.equal(liveRefresh.attempted, true);
+  assert.equal(liveRefresh.ready, true);
+  assert.equal(liveCatalog.metadata().source, "window-i18n");
+
+  const cachedCatalog = itemNameCatalogApi.createItemNameCatalog({ pageWindow: {}, storage, minimumEntries: 1 });
+  assert.equal(cachedCatalog.metadata().source, "cache");
+  const cacheRefresh = cachedCatalog.refreshIfDue({ force: true, now: 2000 });
+  assert.equal(cacheRefresh.attempted, true);
+  assert.equal(cacheRefresh.changed, false);
+  assert.equal(cacheRefresh.ready, false);
+  assert.equal(
+    cachedCatalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "官方野兽皮"
+  );
+});
+
+test("官方名称目录按有上限的退避重试，五次未就绪后仍能在第六次接入官方中文", () => {
+  const pageWindow = {};
+  const catalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow,
+    storage: { getItem: () => null, setItem: () => {} },
+    minimumEntries: 1
+  });
+  let now = 1000;
+  const first = catalog.refreshIfDue({ now });
+  assert.deepEqual(
+    { attempted: first.attempted, changed: first.changed, ready: first.ready },
+    { attempted: true, changed: false, ready: false }
+  );
+
+  const tooSoon = catalog.refreshIfDue({ now: now + itemNameCatalogApi.refreshRetryDelay(1) - 1 });
+  assert.equal(tooSoon.attempted, false);
+  assert.equal(tooSoon.ready, false);
+
+  for (let attempt = 2; attempt <= 5; attempt += 1) {
+    now += itemNameCatalogApi.refreshRetryDelay(attempt - 1);
+    const retry = catalog.refreshIfDue({ now });
+    assert.equal(retry.attempted, true);
+    assert.equal(retry.changed, false);
+    assert.equal(retry.ready, false);
+  }
+
+  pageWindow.i18next = {
+    resources: { "zh-Hans": { translation: { itemNames: { beast_hide: "稍后读取的官方野兽皮" } } } }
+  };
+  now += itemNameCatalogApi.refreshRetryDelay(5);
+  const sixth = catalog.refreshIfDue({ now });
+  assert.deepEqual(
+    { attempted: sixth.attempted, changed: sixth.changed, ready: sixth.ready },
+    { attempted: true, changed: true, ready: true }
+  );
+  assert.equal(catalog.metadata().source, "window-i18n");
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "稍后读取的官方野兽皮"
+  );
+
+  const cappedDelay = itemNameCatalogApi.refreshRetryDelay(100);
+  assert.ok(Number.isFinite(cappedDelay));
+  assert.ok(cappedDelay >= itemNameCatalogApi.refreshRetryDelay(1));
+  assert.equal(itemNameCatalogApi.refreshRetryDelay(1000), cappedDelay);
+});
+
+test("React Provider 中的官方名称资源会标记为实时就绪", () => {
+  const gamePageRoot = {
+    __reactFiber$test: {
+      memoizedProps: {
+        i18n: {
+          resources: { "zh-CN": { translation: { itemNames: { beast_hide: "React 官方野兽皮" } } } }
+        }
+      }
+    }
+  };
+  const catalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: {},
+    document: {
+      querySelectorAll: () => [gamePageRoot],
+      getElementById: () => null,
+      body: null
+    },
+    storage: { getItem: () => null, setItem: () => {} },
+    minimumEntries: 1
+  });
+  const result = catalog.refreshIfDue({ force: true, now: 1000 });
+  assert.equal(result.attempted, true);
+  assert.equal(result.changed, true);
+  assert.equal(result.ready, true);
+  assert.equal(catalog.metadata().source, "react-provider");
+});
+
 test("官方名称目录兼容参考插件使用的 zh-Hans 与 React Provider 资源形状", () => {
   const itemNames = { "/items/beast_hide": "官方野兽皮", "/items/green_guild_credit": "官方绿色公会信用点" };
   const catalog = itemNameCatalogApi.createItemNameCatalog({
@@ -1697,6 +1816,20 @@ test("内部页签会持久化并恢复最后打开的可见视图", () => {
   assert.match(source, /createPointerSortable/);
 });
 
+test("侧栏语言稳定后会重建静态文案，且插件根层不遮挡原生拖拽宽度控件", () => {
+  const userscriptSource = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
+  const stylesSource = fs.readFileSync(path.join(__dirname, "..", "src", "ui", "styles.js"), "utf8");
+  const harnessSource = fs.readFileSync(path.join(__dirname, "..", "tools", "test-harness.html"), "utf8");
+  assert.match(userscriptSource, /integration\.detectedLocale/);
+  assert.match(userscriptSource, /state\.panelLocale\s*!==\s*locale/);
+  assert.match(userscriptSource, /localeChanged[\s\S]{0,400}recreatePanel/);
+  assert.match(userscriptSource, /state\.panelLocale\s*=\s*locale/);
+  assert.doesNotMatch(userscriptSource, /itemNameCatalogRetryCount\s*>=\s*5/);
+  assert.match(stylesSource, /#mwi-credit-optimizer\{[^}]*z-index:0/);
+  assert.match(harnessSource, /searchParams\.get\("localeRaceAudit"\)/);
+  assert.match(harnessSource, /searchParams\.get\("sidebarResizeAudit"\)/);
+});
+
 test("总览界面固定展示八种信用点、前五项、官方名称与物品图标", () => {
   const source = projectRuntimeSource();
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
@@ -1771,9 +1904,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /MwiGuildCreditChineseItems|refreshPageItemNames/);
   assert.match(source, /function resolveItemName/);
   assert.match(source, /itemNameCatalog\.resolveItemName/);
-  assert.match(source, /itemNameCatalogReady/);
-  assert.match(source, /itemNameCatalogRetryCount/);
-  assert.match(source, /if \(!force && state\.itemNameCatalogReady\) return;/);
+  assert.match(source, /itemNameCatalog\.refreshIfDue/);
+  assert.doesNotMatch(source, /itemNameCatalogRetryCount\s*>=\s*5/);
   assert.doesNotMatch(source, /item-name-catalog-status|updateItemNameCoverage/);
   assert.match(source, /items_sprite/);
   assert.match(source, /tabPanelsContainer/);
@@ -1789,8 +1921,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   );
   assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
   assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
-  assert.match(source, /String\(\s*child\.innerText \|\| child\.textContent \|\| ""\s*\)\s*\.replaceAll/);
-  assert.doesNotMatch(source, /child\.innerText\.replaceAll/);
+  assert.match(source, /MwiGuildCreditSidebarIntegration/);
   assert.match(source, /overflow-y:auto/);
   assert.match(source, /data-role="toggle-credit-section"/);
   assert.match(source, /collapsedCreditSections/);

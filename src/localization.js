@@ -620,12 +620,24 @@
     }
   };
 
+  function supportedLocale(locale) {
+    if (typeof locale !== "string") return null;
+    const candidate = locale.trim().toLowerCase().replaceAll("_", "-");
+    if (/^zh(?:-|$)/.test(candidate)) return "zh-CN";
+    if (/^en(?:-|$)/.test(candidate)) return "en";
+    return null;
+  }
+
+  function resolveLocaleCandidates(candidates, fallback = "zh-CN") {
+    for (const candidate of Array.isArray(candidates) ? candidates : [candidates]) {
+      const locale = supportedLocale(candidate);
+      if (locale) return locale;
+    }
+    return supportedLocale(fallback) || "zh-CN";
+  }
+
   function normalizeLocale(locale) {
-    return String(locale || "")
-      .toLowerCase()
-      .startsWith("zh")
-      ? "zh-CN"
-      : "en";
+    return supportedLocale(locale) || "en";
   }
 
   function interpolate(template, values) {
@@ -662,5 +674,5 @@
     return { locale: normalizedLocale, t, number, quantity };
   }
 
-  return { STRINGS, normalizeLocale, createLocalizer };
+  return { STRINGS, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
 });

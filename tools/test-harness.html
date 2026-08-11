@@ -22,6 +22,26 @@
       height: 100vh;
       background: #202139;
     }
+    .test-sidebar-resize-gutter {
+      position: absolute;
+      z-index: 1;
+      top: 0;
+      bottom: 0;
+      left: -5px;
+      display: none;
+      width: 10px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: col-resize;
+      touch-action: none;
+    }
+    body[data-sidebar-resize-audit="true"] #test-sidebar-wrapper > .test-sidebar-resize-gutter {
+      display: block;
+    }
+    body[data-sidebar-resize-audit="true"] #test-sidebar-wrapper > [data-native-content] {
+      padding-left: 0;
+    }
     body[data-layout-audit="true"] > #test-page-title,
     body[data-layout-audit="true"] > #toggle-responsive-layout,
     body[data-layout-audit="true"] > #close-exchange-modal {
@@ -78,6 +98,14 @@
     </div>
   </div>
   <div class="test-sidebar-wrapper" id="test-sidebar-wrapper" data-sidebar-layout="wide">
+    <div
+      class="test-sidebar-resize-gutter"
+      id="test-sidebar-resize-gutter"
+      role="separator"
+      aria-label="调整侧栏宽度"
+      aria-orientation="vertical"
+      tabindex="0"
+    ></div>
     <aside id="test-sidebar">
       <div class="sidebar-shell">
         <div class="tabs-shell">
@@ -92,7 +120,9 @@
         </div>
       </div>
     </aside>
-    <section class="tabPanelsContainer" data-native-content>原生右侧内容</section>
+    <section class="tabPanelsContainer" data-native-content>
+      <span data-native-content-copy>原生右侧内容</span>
+    </section>
   </div>
   <div class="test-sidebar-wrapper" id="test-narrow-sidebar-wrapper" data-sidebar-layout="narrow">
     <aside>
@@ -108,7 +138,9 @@
         </div>
       </div>
     </aside>
-    <section class="tabPanelsContainer" data-native-content>原生窄屏内容</section>
+    <section class="tabPanelsContainer" data-native-content>
+      <span data-native-content-copy>原生窄屏内容</span>
+    </section>
   </div>
   <script>
     const searchParams = new URLSearchParams(location.search);
@@ -120,10 +152,20 @@
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
     const settingsAudit = searchParams.get("settingsAudit") === "1";
+    const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
+    const sidebarResizeAudit = searchParams.get("sidebarResizeAudit") === "1";
     if (layoutAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
       document.body.dataset.layoutAudit = "true";
+    if (sidebarResizeAudit) document.body.dataset.sidebarResizeAudit = "true";
     if (
-      (surplusPlan || layoutAudit || creditAudit || constructionAudit || constructionSnapshotAudit || settingsAudit) &&
+      (surplusPlan ||
+        layoutAudit ||
+        creditAudit ||
+        constructionAudit ||
+        constructionSnapshotAudit ||
+        settingsAudit ||
+        localeRaceAudit ||
+        sidebarResizeAudit) &&
       searchParams.get("resetState") === "1"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
@@ -160,56 +202,125 @@
         wrapper.style.width = `${sidebarWidth}px`;
       });
     }
-    const copy = english
-      ? {
-          pageTitle: "Local sidebar automation harness",
-          close: "Close test exchange modal",
-          dialog: "Test exchange modal",
-          exchangeCount: "Exchange quantity",
-          nativeContent: "Native sidebar content",
-          tabs: {
-            inventory: "Inventory",
-            equipment: "Equipment",
-            skills: "Skills",
-            house: "House",
-            loadout: "Loadout",
-            harvest: "Harvest"
-          }
+    const copies = {
+      en: {
+        pageTitle: "Local sidebar automation harness",
+        close: "Close test exchange modal",
+        dialog: "Test exchange modal",
+        exchangeCount: "Exchange quantity",
+        nativeContent: "Native sidebar content",
+        tabs: {
+          inventory: "Inventory",
+          equipment: "Equipment",
+          skills: "Skills",
+          house: "House",
+          loadout: "Loadout",
+          harvest: "Harvest"
         }
-      : {
-          pageTitle: "本地右侧栏自动化测试页",
-          close: "关闭测试兑换窗口",
-          dialog: "测试兑换窗口",
-          exchangeCount: "兑换数量",
-          nativeContent: "原生右侧内容",
-          tabs: {
-            inventory: "库存",
-            equipment: "装备",
-            skills: "技能",
-            house: "房屋",
-            loadout: "配装",
-            harvest: "收获"
-          }
-        };
-    document.documentElement.lang = english ? "en" : "zh-CN";
-    window.i18next = { language: document.documentElement.lang };
-    document.title = copy.pageTitle;
-    document.getElementById("test-page-title").textContent = copy.pageTitle;
-    document.getElementById("close-exchange-modal").textContent = copy.close;
-    document.getElementById("test-exchange-modal").setAttribute("aria-label", copy.dialog);
-    document.getElementById("test-exchange-count").setAttribute("aria-label", copy.exchangeCount);
-    document.querySelectorAll("[data-native-content]").forEach((content) => {
-      content.textContent = copy.nativeContent;
-    });
-    document.querySelectorAll("[data-tab-key]").forEach((tab) => {
-      tab.textContent = copy.tabs[tab.dataset.tabKey];
-    });
+      },
+      "zh-CN": {
+        pageTitle: "本地右侧栏自动化测试页",
+        close: "关闭测试兑换窗口",
+        dialog: "测试兑换窗口",
+        exchangeCount: "兑换数量",
+        nativeContent: "原生右侧内容",
+        tabs: {
+          inventory: "库存",
+          equipment: "装备",
+          skills: "技能",
+          house: "房屋",
+          loadout: "配装",
+          harvest: "收获"
+        }
+      }
+    };
+    const i18nextListeners = new Map();
+    const initialRuntimeLocale = english || localeRaceAudit ? "en" : "zh-CN";
+    document.documentElement.lang = initialRuntimeLocale;
+    window.i18next = {
+      language: initialRuntimeLocale,
+      resolvedLanguage: initialRuntimeLocale,
+      on(eventName, listener) {
+        if (typeof listener !== "function") return this;
+        if (!i18nextListeners.has(eventName)) i18nextListeners.set(eventName, new Set());
+        i18nextListeners.get(eventName).add(listener);
+        return this;
+      },
+      off(eventName, listener) {
+        if (typeof listener === "function") i18nextListeners.get(eventName)?.delete(listener);
+        else i18nextListeners.delete(eventName);
+        return this;
+      }
+    };
+    const applyHarnessNativeCopy = (locale) => {
+      const normalizedLocale = String(locale).toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+      const copy = copies[normalizedLocale];
+      document.title = copy.pageTitle;
+      document.getElementById("test-page-title").textContent = copy.pageTitle;
+      document.getElementById("close-exchange-modal").textContent = copy.close;
+      document.getElementById("test-exchange-modal").setAttribute("aria-label", copy.dialog);
+      document.getElementById("test-exchange-count").setAttribute("aria-label", copy.exchangeCount);
+      document.querySelectorAll("[data-native-content-copy]").forEach((content) => {
+        content.textContent = copy.nativeContent;
+      });
+      document.querySelectorAll("[data-tab-key]").forEach((tab) => {
+        tab.textContent = copy.tabs[tab.dataset.tabKey];
+      });
+      return normalizedLocale;
+    };
+    window.__mwiHarnessSetLocale = (locale) => {
+      const normalizedLocale = applyHarnessNativeCopy(locale);
+      document.documentElement.lang = normalizedLocale;
+      window.i18next.language = normalizedLocale;
+      window.i18next.resolvedLanguage = normalizedLocale;
+      for (const listener of i18nextListeners.get("languageChanged") || []) listener(normalizedLocale);
+      window.dispatchEvent(new Event("languagechange"));
+      return normalizedLocale;
+    };
+    applyHarnessNativeCopy(localeRaceAudit ? "zh-CN" : initialRuntimeLocale);
     document.getElementById("toggle-responsive-layout").addEventListener("click", () => {
       const narrow = document.body.dataset.sidebarLayout !== "narrow";
       document.body.dataset.sidebarLayout = narrow ? "narrow" : "wide";
       document.getElementById("toggle-responsive-layout").textContent = narrow ? "切换宽屏布局" : "切换窄屏布局";
       window.dispatchEvent(new Event("resize"));
     });
+    const resizeGutter = document.getElementById("test-sidebar-resize-gutter");
+    const resizeWrapper = document.getElementById("test-sidebar-wrapper");
+    let sidebarResizeDrag = null;
+    resizeGutter.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      sidebarResizeDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: resizeWrapper.getBoundingClientRect().width
+      };
+      try {
+        resizeGutter.setPointerCapture?.(event.pointerId);
+      } catch (_) {
+        // Synthetic harness pointers are not registered as active browser pointers.
+      }
+      event.preventDefault();
+    });
+    window.addEventListener("pointermove", (event) => {
+      if (!sidebarResizeDrag || event.pointerId !== sidebarResizeDrag.pointerId) return;
+      const nextWidth = Math.min(
+        1200,
+        Math.max(320, sidebarResizeDrag.startWidth + sidebarResizeDrag.startX - event.clientX)
+      );
+      resizeWrapper.style.width = `${nextWidth}px`;
+      window.dispatchEvent(new Event("resize"));
+    });
+    const finishSidebarResize = (event) => {
+      if (!sidebarResizeDrag || event.pointerId !== sidebarResizeDrag.pointerId) return;
+      try {
+        resizeGutter.releasePointerCapture?.(event.pointerId);
+      } catch (_) {
+        // Synthetic harness pointers may not own capture.
+      }
+      sidebarResizeDrag = null;
+    };
+    window.addEventListener("pointerup", finishSidebarResize);
+    window.addEventListener("pointercancel", finishSidebarResize);
     window.__mwiGuildCreditBridge = {
       itemDetails: {
         "/items/guild_token": { itemHrid: "/items/guild_token", name: "Guild Token" },
@@ -1712,6 +1823,318 @@
           document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
           document.body.dataset.settingsAuditFailed = "true";
           document.body.dataset.settingsAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
+
+    const localeAuditCopy = {
+      "zh-CN": {
+        sidebarCredit: "信用",
+        panelTitle: "公会助手",
+        creditView: "信用点性价比",
+        upgradeView: "神龛升级",
+        constructionView: "公会建设",
+        settingsTitle: "设置",
+        constructionSwitch: "显示公会建设页面",
+        dynamicPrefix: "公会神龛等级已读取："
+      },
+      en: {
+        sidebarCredit: "Credits",
+        panelTitle: "Guild Assistant",
+        creditView: "Credit value",
+        upgradeView: "Shrine upgrades",
+        constructionView: "Guild construction",
+        settingsTitle: "Settings",
+        constructionSwitch: "Show the Guild construction page",
+        dynamicPrefix: "Guild shrine levels read:"
+      }
+    };
+
+    const pluginLocaleSnapshot = () => {
+      const root = document.getElementById("mwi-credit-optimizer");
+      const constructionSwitch = root?.querySelector('[data-role="settings-show-construction"]');
+      return {
+        sidebarCredit: normalizedText(document.querySelector('#test-tabs [data-mwi-credit-tab="true"]')),
+        panelTitle: normalizedText(root?.querySelector(":scope > h3")),
+        creditView: normalizedText(root?.querySelector('[data-role="view-credit"]')),
+        upgradeView: normalizedText(root?.querySelector('[data-role="view-upgrade"]')),
+        constructionView: normalizedText(root?.querySelector('[data-role="view-construction"]')),
+        settingsTitle: normalizedText(root?.querySelector("#mwi-settings-title")),
+        constructionSwitch: normalizedText(
+          constructionSwitch?.closest(".mwi-settings-switch")?.querySelector(".mwi-settings-switch-copy strong")
+        ),
+        dynamicStatus: normalizedText(root?.querySelector('[data-role="guild-shrine-target-status"]'))
+      };
+    };
+
+    const localeSnapshotMatches = (snapshot, expected) =>
+      [
+        "sidebarCredit",
+        "panelTitle",
+        "creditView",
+        "upgradeView",
+        "constructionView",
+        "settingsTitle",
+        "constructionSwitch"
+      ].every((key) => snapshot[key] === expected[key]) && snapshot.dynamicStatus.startsWith(expected.dynamicPrefix);
+
+    const localeSnapshotExcludes = (snapshot, unexpected) =>
+      [
+        "sidebarCredit",
+        "panelTitle",
+        "creditView",
+        "upgradeView",
+        "constructionView",
+        "settingsTitle",
+        "constructionSwitch"
+      ].every((key) => snapshot[key] !== unexpected[key]) &&
+      !snapshot.dynamicStatus.startsWith(unexpected.dynamicPrefix);
+
+    const localeAuditFocusSnapshot = (root) => {
+      const active = document.activeElement;
+      return {
+        role: root?.contains(active) ? active.getAttribute("data-role") || active.tagName : "",
+        guildBuffHrid: root?.contains(active) ? active.dataset.guildBuffHrid || "" : "",
+        inPlugin: Boolean(root?.contains(active))
+      };
+    };
+
+    const localeAuditStateSnapshot = (excludedHrid = "") => {
+      const root = document.getElementById("mwi-credit-optimizer");
+      const settingsPanel = root?.querySelector('[data-role="settings-panel"]');
+      const excludedInput = Array.from(root?.querySelectorAll('[data-role="settings-shrine-autofill"]') || []).find(
+        (input) => input.dataset.guildBuffHrid === excludedHrid
+      );
+      const persisted = savedPluginUiState();
+      return {
+        activeView: root?.dataset.activeView || "",
+        selectedView: root?.querySelector('.mwi-view-tab[aria-selected="true"]')?.dataset.role || "",
+        settingsOpen:
+          root?.querySelector('[data-role="toggle-settings"]')?.getAttribute("aria-expanded") === "true" &&
+          settingsPanel?.hidden === false,
+        constructionChecked: Boolean(root?.querySelector('[data-role="settings-show-construction"]')?.checked),
+        excludedHrid,
+        excludedChecked: excludedInput ? excludedInput.checked : null,
+        persistedExcluded: Array.isArray(persisted.guildShrineAutofillExcludedBuffHrids)
+          ? persisted.guildShrineAutofillExcludedBuffHrids.includes(excludedHrid)
+          : false,
+        focus: localeAuditFocusSnapshot(root)
+      };
+    };
+
+    const prepareLocaleRaceAudit = async () => {
+      const creditTab = await waitFor(() => document.querySelector('#test-tabs [data-mwi-credit-tab="true"]'), 6000);
+      creditTab.click();
+      let root = await waitFor(() => {
+        const candidate = document.getElementById("mwi-credit-optimizer");
+        return candidate && !candidate.hidden ? candidate : null;
+      }, 6000);
+      root.querySelector('[data-role="view-upgrade"]').click();
+      await waitFor(() => root.dataset.activeView === "upgrade");
+      const settingsTrigger = root.querySelector('[data-role="toggle-settings"]');
+      if (settingsTrigger.getAttribute("aria-expanded") !== "true") settingsTrigger.click();
+      const firstShrineInput = await waitFor(() => root.querySelector('[data-role="settings-shrine-autofill"]'), 6000);
+      firstShrineInput.focus();
+      if (firstShrineInput.checked) firstShrineInput.click();
+      firstShrineInput.focus();
+      await new Promise((resolve) => setTimeout(resolve, 180));
+
+      const excludedHrid = firstShrineInput.dataset.guildBuffHrid;
+      const initial = {
+        htmlLocale: document.documentElement.lang,
+        i18nextLanguage: window.i18next.language,
+        i18nextResolvedLanguage: window.i18next.resolvedLanguage,
+        nativeFirstTab: normalizedText(document.querySelector('#test-tabs [data-tab-key="inventory"]')),
+        copy: pluginLocaleSnapshot(),
+        state: localeAuditStateSnapshot(excludedHrid)
+      };
+
+      const localeChangedAt = performance.now();
+      window.__mwiHarnessSetLocale("en");
+      await new Promise((resolve) => setTimeout(resolve, 3200));
+      root = await waitFor(() => {
+        const candidate = document.getElementById("mwi-credit-optimizer");
+        return candidate && !candidate.hidden ? candidate : null;
+      }, 6000);
+      const switched = {
+        elapsedMs: Math.round(performance.now() - localeChangedAt),
+        htmlLocale: document.documentElement.lang,
+        i18nextLanguage: window.i18next.language,
+        i18nextResolvedLanguage: window.i18next.resolvedLanguage,
+        nativeFirstTab: normalizedText(document.querySelector('#test-tabs [data-tab-key="inventory"]')),
+        copy: pluginLocaleSnapshot(),
+        state: localeAuditStateSnapshot(excludedHrid)
+      };
+
+      const report = { initial, switched };
+      report.checks = {
+        fixtureStartsWithConflictingSignals:
+          initial.htmlLocale === "en" &&
+          initial.i18nextLanguage === "en" &&
+          initial.i18nextResolvedLanguage === "en" &&
+          initial.nativeFirstTab === "库存",
+        visibleNativeChineseWinsInitialRace: localeSnapshotMatches(initial.copy, localeAuditCopy["zh-CN"]),
+        initialKeyCopyContainsNoEnglish: localeSnapshotExcludes(initial.copy, localeAuditCopy.en),
+        localeSwitchRunsAfterThreeSecondInspection:
+          switched.elapsedMs >= 3000 &&
+          switched.htmlLocale === "en" &&
+          switched.i18nextLanguage === "en" &&
+          switched.i18nextResolvedLanguage === "en" &&
+          switched.nativeFirstTab === "Inventory",
+        staticAndDynamicCopySwitchToEnglish: localeSnapshotMatches(switched.copy, localeAuditCopy.en),
+        switchedKeyCopyContainsNoChinese: localeSnapshotExcludes(switched.copy, localeAuditCopy["zh-CN"]),
+        activeViewSurvivesLocaleRefresh:
+          initial.state.activeView === "upgrade" &&
+          switched.state.activeView === initial.state.activeView &&
+          switched.state.selectedView === "view-upgrade",
+        settingsStateSurvivesLocaleRefresh:
+          initial.state.settingsOpen &&
+          switched.state.settingsOpen &&
+          initial.state.constructionChecked &&
+          switched.state.constructionChecked &&
+          initial.state.excludedChecked === false &&
+          switched.state.excludedChecked === false &&
+          initial.state.persistedExcluded &&
+          switched.state.persistedExcluded,
+        focusSurvivesLocaleRefresh:
+          initial.state.focus.inPlugin &&
+          switched.state.focus.inPlugin &&
+          switched.state.focus.role === initial.state.focus.role &&
+          switched.state.focus.guildBuffHrid === initial.state.focus.guildBuffHrid
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.localeRaceAuditFailed = "false";
+      document.body.dataset.localeRaceAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiLocaleRaceAuditReady = localeRaceAudit
+      ? prepareLocaleRaceAudit().catch((error) => {
+          const report = {
+            failed: true,
+            error: {
+              name: String(error?.name || "Error"),
+              message: String(error?.message || error || "Unknown locale race audit error"),
+              stack: String(error?.stack || "")
+            },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.localeRaceAuditFailed = "true";
+          document.body.dataset.localeRaceAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
+
+    const prepareSidebarResizeAudit = async () => {
+      const creditTab = await waitFor(() => document.querySelector('#test-tabs [data-mwi-credit-tab="true"]'), 6000);
+      creditTab.click();
+      const root = await waitFor(() => {
+        const candidate = document.getElementById("mwi-credit-optimizer");
+        return candidate && !candidate.hidden ? candidate : null;
+      }, 6000);
+      const wrapper = document.getElementById("test-sidebar-wrapper");
+      const gutter = document.getElementById("test-sidebar-resize-gutter");
+      const initialWrapperRect = elementRect(wrapper);
+      const initialGutterRect = elementRect(gutter);
+      const initialGutterStyle = getComputedStyle(gutter);
+      const initialCenter = {
+        x: initialGutterRect.left + initialGutterRect.width / 2,
+        y: initialGutterRect.top + initialGutterRect.height / 2
+      };
+      const initialHit = document.elementFromPoint(initialCenter.x, initialCenter.y);
+      const pointerId = 91;
+      dispatchAuditPointer(gutter, "pointerdown", {
+        pointerId,
+        pointerType: "mouse",
+        isPrimary: true,
+        button: 0,
+        buttons: 1,
+        clientX: initialCenter.x,
+        clientY: initialCenter.y
+      });
+      dispatchAuditPointer(window, "pointermove", {
+        pointerId,
+        pointerType: "mouse",
+        isPrimary: true,
+        button: -1,
+        buttons: 1,
+        clientX: initialCenter.x - 64,
+        clientY: initialCenter.y
+      });
+      dispatchAuditPointer(window, "pointerup", {
+        pointerId,
+        pointerType: "mouse",
+        isPrimary: true,
+        button: 0,
+        buttons: 0,
+        clientX: initialCenter.x - 64,
+        clientY: initialCenter.y
+      });
+      await new Promise((resolve) => setTimeout(resolve, 240));
+
+      const finalWrapperRect = elementRect(wrapper);
+      const finalGutterRect = elementRect(gutter);
+      const finalCenter = {
+        x: finalGutterRect.left + finalGutterRect.width / 2,
+        y: finalGutterRect.top + finalGutterRect.height / 2
+      };
+      const finalHit = document.elementFromPoint(finalCenter.x, finalCenter.y);
+      const report = {
+        requestedSidebarWidth: Number(searchParams.get("sidebarWidth")) || null,
+        initial: {
+          wrapper: initialWrapperRect,
+          gutter: initialGutterRect,
+          gutterCursor: initialGutterStyle.cursor,
+          gutterZIndex: initialGutterStyle.zIndex,
+          overlapWithSidebar: initialGutterRect.right - initialWrapperRect.left,
+          centerHit: {
+            id: initialHit?.id || "",
+            className: String(initialHit?.className || "")
+          }
+        },
+        final: {
+          wrapper: finalWrapperRect,
+          gutter: finalGutterRect,
+          centerHit: {
+            id: finalHit?.id || "",
+            className: String(finalHit?.className || "")
+          },
+          widthDelta: finalWrapperRect.width - initialWrapperRect.width,
+          rootOverflow: Math.max(0, root.scrollWidth - root.clientWidth)
+        }
+      };
+      report.checks = {
+        nativeGutterFixtureMatchesContract:
+          Math.abs(initialGutterRect.width - 10) <= 0.5 &&
+          Math.abs(report.initial.overlapWithSidebar - 5) <= 0.5 &&
+          report.initial.gutterCursor === "col-resize" &&
+          report.initial.gutterZIndex === "1",
+        gutterCenterWinsHitTesting: initialHit === gutter,
+        pointerDragChangesSidebarWidth: report.final.widthDelta >= 60,
+        gutterRemainsReachableAfterResize: finalHit === gutter,
+        pluginHasNoHorizontalOverflow: report.final.rootOverflow === 0
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.sidebarResizeAuditFailed = "false";
+      document.body.dataset.sidebarResizeAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiSidebarResizeAuditReady = sidebarResizeAudit
+      ? prepareSidebarResizeAudit().catch((error) => {
+          const report = {
+            failed: true,
+            error: {
+              name: String(error?.name || "Error"),
+              message: String(error?.message || error || "Unknown sidebar resize audit error"),
+              stack: String(error?.stack || "")
+            },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.sidebarResizeAuditFailed = "true";
+          document.body.dataset.sidebarResizeAuditReady = "true";
           return report;
         })
       : Promise.resolve(null);

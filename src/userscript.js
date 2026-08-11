@@ -14,6 +14,7 @@
   const gameStateApi = window.MwiGuildCreditGameState;
   const gameDataApi = window.MwiGuildCreditGameData;
   const domApi = window.MwiGuildCreditDom;
+  const sidebarIntegrationApi = window.MwiGuildCreditSidebarIntegration;
   const sortableApi = window.MwiGuildCreditSortable;
   const stylesApi = window.MwiGuildCreditStyles;
   const constructionViewApi = window.MwiGuildCreditConstructionView;
@@ -37,6 +38,7 @@
     !gameStateApi ||
     !gameDataApi ||
     !domApi ||
+    !sidebarIntegrationApi ||
     !sortableApi ||
     !stylesApi ||
     !constructionViewApi ||
@@ -100,9 +102,8 @@
     characterItems: null,
     characterItemsBridgeRevision: 0,
     guildBuffLevelsBridgeRevision: 0,
-    itemNameCatalogLastRefresh: 0,
-    itemNameCatalogReady: false,
-    itemNameCatalogRetryCount: 0,
+    detectedGameLocale: null,
+    panelLocale: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
     suppressUpgradePlanAutofill: false,
@@ -309,29 +310,22 @@
   }
 
   function currentGameLocale() {
+    const candidates = [state.detectedGameLocale];
     try {
-      return (
-        (pageWindow.i18next && pageWindow.i18next.language) ||
-        (pageWindow.i18n && pageWindow.i18n.language) ||
-        (pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng")) ||
-        document.documentElement.lang ||
-        "zh-CN"
+      candidates.push(
+        pageWindow.i18next && pageWindow.i18next.resolvedLanguage,
+        pageWindow.i18next && pageWindow.i18next.language,
+        pageWindow.i18n && pageWindow.i18n.resolvedLanguage,
+        pageWindow.i18n && pageWindow.i18n.language,
+        pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng")
       );
-    } catch (_) {
-      return document.documentElement.lang || "zh-CN";
-    }
+    } catch (_) {}
+    candidates.push(document.documentElement.lang);
+    return localizationApi.resolveLocaleCandidates(candidates, "zh-CN");
   }
 
   function refreshOfficialItemNameCatalog(force) {
-    if (!force && state.itemNameCatalogReady) return;
-    const now = Date.now();
-    if (!force && now - state.itemNameCatalogLastRefresh < 3000) return;
-    state.itemNameCatalogLastRefresh = now;
-    itemNameCatalog.refresh();
-    state.itemNameCatalogRetryCount += 1;
-    const metadata = itemNameCatalog.metadata();
-    state.itemNameCatalogReady =
-      metadata.source === "window-i18n" || metadata.source === "react-provider" || state.itemNameCatalogRetryCount >= 5;
+    return itemNameCatalog.refreshIfDue({ force: force === true }).changed;
   }
 
   // This is the sole item-name resolver used by the UI. It never translates
@@ -710,7 +704,7 @@
     setPriceReference,
     openMarketplaceForItem
   });
-  const { createPanel, dispose: disposePanelShell } = panelShell;
+  const { createPanel, recreatePanel, dispose: disposePanelShell } = panelShell;
 
   const creditView = creditViewApi.createCreditView({
     state,
@@ -779,54 +773,7 @@
   } = exchangeAdvisor;
 
   function findSidebarTabBar() {
-    const sidebarTabAliases = [
-      ["库存", "Inventory"],
-      ["装备", "Equipment"],
-      ["技能", "Skills"],
-      ["房屋", "House"],
-      ["配装", "Loadout", "Loadouts"],
-      ["收获", "Harvest", "Gathering"]
-    ];
-    const expectedTabs = new Set(sidebarTabAliases.flat());
-    const preferredPrototypeLabels = ui().locale === "zh-CN" ? sidebarTabAliases[0] : ["Inventory", "库存"];
-    const elements = document.getElementsByTagName("*");
-    let bestIntegration = null;
-    for (let index = 0; index < elements.length; index += 1) {
-      const candidate = elements[index];
-      const children = Array.from(candidate.children);
-      if (children.length < 4) continue;
-      const tabs = children.map((child) => ({
-        element: child,
-        label: String(child.innerText || child.textContent || "")
-          .replaceAll("\n", "")
-          .trim()
-      }));
-      const recognized = tabs.filter((tab) => expectedTabs.has(tab.label));
-      if (recognized.length >= 4) {
-        const prototype = recognized.find((tab) => preferredPrototypeLabels.includes(tab.label)) || recognized[0];
-        const tabsRoot =
-          candidate.parentElement &&
-          candidate.parentElement.parentElement &&
-          candidate.parentElement.parentElement.parentElement;
-        const sidebar = tabsRoot && tabsRoot.parentElement;
-        const panelHost =
-          sidebar &&
-          Array.from(sidebar.children).find(
-            (node) => node !== tabsRoot && /tabPanelsContainer/.test(String(node.className))
-          );
-        if (!panelHost) continue;
-        const rect = candidate.getBoundingClientRect();
-        const visible = candidate.isConnected && rect.width > 0 && rect.height > 0;
-        const integration = {
-          tabBar: candidate,
-          tabPrototype: prototype.element,
-          panelHost,
-          score: (visible ? 1000 : 0) + recognized.length
-        };
-        if (!bestIntegration || integration.score > bestIntegration.score) bestIntegration = integration;
-      }
-    }
-    return bestIntegration;
+    return sidebarIntegrationApi.findSidebarIntegration(document, currentGameLocale());
   }
 
   function hideCreditPanel() {
@@ -883,17 +830,24 @@
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
-    if (state.settingsOpen) refreshSettings(state.panel);
-    if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
-    else if (state.panel.dataset.activeView === "construction") refreshGuildConstruction(state.panel);
-    else refreshPanel(state.panel);
+    refreshActivePanel(state.panel);
+  }
+
+  function refreshActivePanel(panel) {
+    if (state.settingsOpen) refreshSettings(panel);
+    if (panel.dataset.activeView === "upgrade") refreshGuildUpgrade(panel);
+    else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
+    else refreshPanel(panel);
   }
 
   function ensureSidebarIntegration() {
-    refreshOfficialItemNameCatalog();
+    const itemNamesChanged = refreshOfficialItemNameCatalog();
     const integration = findSidebarTabBar();
     if (!integration || !integration.panelHost) return;
     const { tabBar, tabPrototype, panelHost } = integration;
+    if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
+    const locale = currentGameLocale();
+    const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
     const currentIntegrationMatches = Boolean(
       state.panel &&
       state.panel.isConnected &&
@@ -902,17 +856,23 @@
       state.creditTab.isConnected &&
       state.creditTab.parentElement === tabBar
     );
-    if (currentIntegrationMatches) return;
+    if (currentIntegrationMatches && !localeChanged) {
+      if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
+      return;
+    }
 
     const keepPanelOpen = Boolean(
       state.panel && !state.panel.hidden && state.creditTab && state.creditTab.getAttribute("aria-selected") === "true"
     );
+    const replacementPanel =
+      localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
     hideCreditPanel();
     if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
     const existingTab = tabBar.querySelector('[data-mwi-credit-tab="true"]');
     if (existingTab) existingTab.remove();
 
-    if (state.panel && !state.panel.isConnected) state.panel = null;
+    if (replacementPanel) state.panel = replacementPanel;
+    else if (state.panel && !state.panel.isConnected) state.panel = null;
     state.creditTab = null;
 
     const creditTab = tabPrototype.cloneNode(true);
@@ -945,6 +905,7 @@
       });
     }
     state.panel = panel;
+    state.panelLocale = locale;
     state.creditTab = creditTab;
     if (state.shrineGuideEnabled) {
       startShrineGuideObserver();

@@ -87,6 +87,7 @@ const SOURCE_FILES = [
   "src/runtime/game-state.js",
   "src/runtime/game-data.js",
   "src/ui/dom.js",
+  "src/ui/sidebar-integration.js",
   "src/ui/sortable.js",
   "src/ui/styles.js",
   "src/ui/construction-view.js",

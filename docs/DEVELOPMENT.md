@@ -55,6 +55,70 @@ Then install:
 http://127.0.0.1:4173/milky-way-idle-guild-credit-dev-loader.user.js
 ```
 
+### Locale race regression audit
+
+To reproduce a transient startup-locale mismatch, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?localeRaceAudit=1&resetState=1&sidebarWidth=420
+```
+
+The fixture deliberately exposes Chinese native sidebar labels while
+`i18next.language`, `i18next.resolvedLanguage`, and `<html lang>` still report
+English. It opens the plugin, selects the shrine-upgrade view, opens settings,
+excludes one shrine from batch fill, and focuses that shrine control. The audit
+first requires the sidebar entry, panel title, all three internal tabs, settings
+title, construction visibility switch, and live shrine-level status to be
+Chinese with no matching English copy in those nodes. It then changes both the
+visible native labels and the runtime locale signals to English, waits through
+the three-second sidebar inspection interval, and requires all static and live
+copy to become English without losing the active view, open settings state,
+persisted exclusion, construction switch value, or focused control.
+
+After `document.body.dataset.localeRaceAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiLocaleRaceAuditReady;
+```
+
+Successful and failed runs both set the ready dataset. Failures additionally
+set `document.body.dataset.localeRaceAuditFailed` to `"true"` and return a JSON
+error with `checks.auditCompleted: false`. Require every value in `checks` to be
+`true`. Run this audit independently at sidebar widths `320`, `420`, `610`, and
+`900`.
+
+### Native sidebar resize regression audit
+
+To verify that the plugin does not cover the game's resize target, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?sidebarResizeAudit=1&resetState=1&sidebarWidth=420
+```
+
+This fixture adds a native-style `10px` resize gutter with `z-index: 1` and
+`cursor: col-resize`; its right half overlaps the sidebar. With the plugin open,
+the audit requires `elementFromPoint()` at the gutter center to resolve to the
+gutter, performs a pointer drag, verifies that the wrapper width grows by at
+least `60px`, checks that the gutter remains the hit target at its new position,
+and requires zero plugin-root horizontal overflow.
+
+After `document.body.dataset.sidebarResizeAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiSidebarResizeAuditReady;
+```
+
+Successful and failed runs both set the ready dataset. Failures additionally
+set `document.body.dataset.sidebarResizeAuditFailed` to `"true"` and return a
+JSON error with `checks.auditCompleted: false`. Require every value in `checks`
+to be `true`. Run this audit independently at sidebar widths `320`, `420`,
+`610`, and `900`; at every width the gutter contract, hit testing, drag delta,
+post-drag reachability, and root overflow checks must all pass.
+
+### Responsive layout matrix
+
 For responsive layout auditing, open:
 
 ```text

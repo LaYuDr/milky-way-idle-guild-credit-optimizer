@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.49] - 2026-08-12
+
+### Changed
+
+- 修复中文游戏界面启动时插件误用英文的问题，恢复官方中文物品名称的延迟重试；同时修复插件遮挡游戏原生侧栏宽度拖拽条的问题。
+
 ## [1.1.48] - 2026-08-11
 
 ### Changed

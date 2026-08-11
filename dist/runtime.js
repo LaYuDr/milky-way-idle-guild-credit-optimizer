@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.48";
+window.MwiGuildCreditVersion = "1.1.49";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1212,6 +1212,8 @@ window.MwiGuildCreditVersion = "1.1.48";
   const STORAGE_KEY = "mwi-official-item-name-catalog-v1";
   const SCHEMA_VERSION = 1;
   const ITEM_HRID = /^\/items\/[a-z0-9_]+$/i;
+  const INITIAL_RETRY_DELAY_MS = 3000;
+  const MAX_RETRY_DELAY_MS = 60000;
 
   function normalizeLocale(locale) {
     return String(locale || "")
@@ -1229,6 +1231,16 @@ window.MwiGuildCreditVersion = "1.1.48";
 
   function cleanName(value) {
     return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
+  function liveCatalogSource(source) {
+    return source === "window-i18n" || source === "react-provider";
+  }
+
+  function refreshRetryDelay(attemptCount) {
+    const attempts = Number.isSafeInteger(attemptCount) && attemptCount > 0 ? attemptCount : 0;
+    if (attempts < 5) return INITIAL_RETRY_DELAY_MS;
+    return Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** Math.min(attempts - 4, 5));
   }
 
   function catalogFromItemNames(itemNames) {
@@ -1421,6 +1433,8 @@ window.MwiGuildCreditVersion = "1.1.48";
       updatedAt: null,
       version
     };
+    let lastRefreshAt = null;
+    let refreshAttempts = 0;
 
     function refresh() {
       const direct = extractOfficialItemNameCatalog(pageI18nRoots(pageWindow), { minimumEntries });
@@ -1437,6 +1451,27 @@ window.MwiGuildCreditVersion = "1.1.48";
       };
       persistCatalog(storage, current);
       return current;
+    }
+
+    function refreshIfDue(options = {}) {
+      const force = options.force === true;
+      const now = Number.isFinite(options.now) ? Number(options.now) : Date.now();
+      const ready = liveCatalogSource(current.source);
+      const delay = refreshRetryDelay(refreshAttempts);
+      if (!force && (ready || (lastRefreshAt !== null && now - lastRefreshAt < delay))) {
+        return { attempted: false, changed: false, ready, retryCount: refreshAttempts, nextDelayMs: delay };
+      }
+      const previous = current;
+      lastRefreshAt = now;
+      refreshAttempts += 1;
+      const refreshed = refresh();
+      return {
+        attempted: true,
+        changed: refreshed !== previous,
+        ready: liveCatalogSource(refreshed.source),
+        retryCount: refreshAttempts,
+        nextDelayMs: refreshRetryDelay(refreshAttempts)
+      };
     }
 
     function resolveItemName({ itemHrid, englishFallback, locale }) {
@@ -1460,13 +1495,15 @@ window.MwiGuildCreditVersion = "1.1.48";
       };
     }
 
-    return { refresh, resolveItemName, coverage, metadata: () => ({ ...current, names: undefined }) };
+    return { refresh, refreshIfDue, resolveItemName, coverage, metadata: () => ({ ...current, names: undefined }) };
   }
 
   return {
     STORAGE_KEY,
     normalizeLocale,
     normalizeItemHrid,
+    liveCatalogSource,
+    refreshRetryDelay,
     catalogFromItemNames,
     extractOfficialItemNameCatalog,
     createItemNameCatalog
@@ -2279,12 +2316,24 @@ window.MwiGuildCreditVersion = "1.1.48";
     }
   };
 
+  function supportedLocale(locale) {
+    if (typeof locale !== "string") return null;
+    const candidate = locale.trim().toLowerCase().replaceAll("_", "-");
+    if (/^zh(?:-|$)/.test(candidate)) return "zh-CN";
+    if (/^en(?:-|$)/.test(candidate)) return "en";
+    return null;
+  }
+
+  function resolveLocaleCandidates(candidates, fallback = "zh-CN") {
+    for (const candidate of Array.isArray(candidates) ? candidates : [candidates]) {
+      const locale = supportedLocale(candidate);
+      if (locale) return locale;
+    }
+    return supportedLocale(fallback) || "zh-CN";
+  }
+
   function normalizeLocale(locale) {
-    return String(locale || "")
-      .toLowerCase()
-      .startsWith("zh")
-      ? "zh-CN"
-      : "en";
+    return supportedLocale(locale) || "en";
   }
 
   function interpolate(template, values) {
@@ -2321,7 +2370,7 @@ window.MwiGuildCreditVersion = "1.1.48";
     return { locale: normalizedLocale, t, number, quantity };
   }
 
-  return { STRINGS, normalizeLocale, createLocalizer };
+  return { STRINGS, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
 });
 
 
@@ -4480,6 +4529,76 @@ window.MwiGuildCreditVersion = "1.1.48";
 });
 
 
+// SOURCE: src/ui/sidebar-integration.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditSidebarIntegration = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const SIDEBAR_LABELS = {
+    "zh-CN": ["库存", "装备", "技能", "房屋", "配装", "收获"],
+    en: ["Inventory", "Equipment", "Skills", "House", "Loadout", "Loadouts", "Harvest", "Gathering"]
+  };
+  const EXPECTED_LABELS = new Set(Object.values(SIDEBAR_LABELS).flat());
+
+  function sidebarLocale(labels) {
+    const counts = { "zh-CN": 0, en: 0 };
+    for (const label of Array.isArray(labels) ? labels : []) {
+      if (SIDEBAR_LABELS["zh-CN"].includes(label)) counts["zh-CN"] += 1;
+      else if (SIDEBAR_LABELS.en.includes(label)) counts.en += 1;
+    }
+    if (counts["zh-CN"] === counts.en) return null;
+    return counts["zh-CN"] > counts.en ? "zh-CN" : "en";
+  }
+
+  function findSidebarIntegration(documentRef, preferredLocale) {
+    if (!documentRef || typeof documentRef.getElementsByTagName !== "function") return null;
+    const elements = documentRef.getElementsByTagName("*");
+    let bestIntegration = null;
+    for (let index = 0; index < elements.length; index += 1) {
+      const candidate = elements[index];
+      const children = Array.from(candidate.children || []);
+      if (children.length < 4) continue;
+      const tabs = children.map((element) => ({
+        element,
+        label: String(element.innerText || element.textContent || "")
+          .replaceAll("\n", "")
+          .trim()
+      }));
+      const recognized = tabs.filter((tab) => EXPECTED_LABELS.has(tab.label));
+      if (recognized.length < 4) continue;
+      const detectedLocale = sidebarLocale(recognized.map((tab) => tab.label));
+      const prototypeLabels =
+        (detectedLocale || preferredLocale) === "zh-CN" ? ["库存", "Inventory"] : ["Inventory", "库存"];
+      const prototype = recognized.find((tab) => prototypeLabels.includes(tab.label)) || recognized[0];
+      const tabsRoot = candidate.parentElement?.parentElement?.parentElement;
+      const sidebar = tabsRoot && tabsRoot.parentElement;
+      const panelHost =
+        sidebar &&
+        Array.from(sidebar.children || []).find(
+          (node) => node !== tabsRoot && /tabPanelsContainer/.test(String(node.className))
+        );
+      if (!panelHost) continue;
+      const rect = candidate.getBoundingClientRect();
+      const visible = candidate.isConnected && rect.width > 0 && rect.height > 0;
+      const integration = {
+        tabBar: candidate,
+        tabPrototype: prototype.element,
+        panelHost,
+        detectedLocale,
+        score: (visible ? 1000 : 0) + recognized.length
+      };
+      if (!bestIntegration || integration.score > bestIntegration.score) bestIntegration = integration;
+    }
+    return bestIntegration;
+  }
+
+  return { SIDEBAR_LABELS, sidebarLocale, findSidebarIntegration };
+});
+
+
 // SOURCE: src/ui/sortable.js
 (function (root, factory) {
   const api = factory();
@@ -4750,7 +4869,7 @@ window.MwiGuildCreditVersion = "1.1.48";
   "use strict";
 
   const PANEL_STYLES = `
-        #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:20;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
+        #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         #mwi-credit-optimizer .mwi-view-tabs-shell{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:stretch;margin:0 0 10px;border-bottom:1px solid #474969}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;background:#2a3a45!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;border-left:1px solid #474969;background:#202238}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:30px;min-width:30px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
@@ -8625,11 +8744,50 @@ window.MwiGuildCreditVersion = "1.1.48";
       return panel;
     }
 
+    function destroyPanel(panel) {
+      const controllers = Array.isArray(panel && panel.__mwiSortableControllers) ? panel.__mwiSortableControllers : [];
+      for (const controller of controllers) {
+        const index = sortableControllers.indexOf(controller);
+        if (index >= 0) sortableControllers.splice(index, 1);
+        controller.destroy();
+      }
+      if (panel) delete panel.__mwiSortableControllers;
+    }
+
+    function recreatePanel(previousPanel) {
+      const active = previousPanel && previousPanel.contains(document.activeElement) ? document.activeElement : null;
+      const focusSnapshot = active
+        ? { id: active.id || "", role: active.dataset.role || "", dataset: { ...active.dataset } }
+        : null;
+      const scrollTop = previousPanel ? previousPanel.scrollTop : 0;
+      destroyPanel(previousPanel);
+      if (previousPanel) previousPanel.remove();
+      const panel = createPanel();
+      Promise.resolve().then(() => {
+        if (!panel.isConnected) return;
+        panel.scrollTop = scrollTop;
+        if (!focusSnapshot) return;
+        const candidates = Array.from(panel.querySelectorAll(focusSnapshot.role ? "[data-role]" : "[id]"));
+        const target = candidates.find((candidate) => {
+          if (focusSnapshot.role && candidate.dataset.role !== focusSnapshot.role) return false;
+          if (!focusSnapshot.role && candidate.id !== focusSnapshot.id) return false;
+          return Object.entries(focusSnapshot.dataset).every(([key, value]) => candidate.dataset[key] === value);
+        });
+        if (!target || target.disabled || target.closest("[hidden]")) return;
+        try {
+          target.focus({ preventScroll: true });
+        } catch (_) {
+          target.focus();
+        }
+      });
+      return panel;
+    }
+
     function dispose() {
       for (const controller of sortableControllers.splice(0)) controller.destroy();
     }
 
-    return { createPanel, dispose };
+    return { createPanel, recreatePanel, dispose };
   }
 
   return { createPanelShell };
@@ -8782,6 +8940,7 @@ window.MwiGuildCreditVersion = "1.1.48";
   const gameStateApi = window.MwiGuildCreditGameState;
   const gameDataApi = window.MwiGuildCreditGameData;
   const domApi = window.MwiGuildCreditDom;
+  const sidebarIntegrationApi = window.MwiGuildCreditSidebarIntegration;
   const sortableApi = window.MwiGuildCreditSortable;
   const stylesApi = window.MwiGuildCreditStyles;
   const constructionViewApi = window.MwiGuildCreditConstructionView;
@@ -8805,6 +8964,7 @@ window.MwiGuildCreditVersion = "1.1.48";
     !gameStateApi ||
     !gameDataApi ||
     !domApi ||
+    !sidebarIntegrationApi ||
     !sortableApi ||
     !stylesApi ||
     !constructionViewApi ||
@@ -8868,9 +9028,8 @@ window.MwiGuildCreditVersion = "1.1.48";
     characterItems: null,
     characterItemsBridgeRevision: 0,
     guildBuffLevelsBridgeRevision: 0,
-    itemNameCatalogLastRefresh: 0,
-    itemNameCatalogReady: false,
-    itemNameCatalogRetryCount: 0,
+    detectedGameLocale: null,
+    panelLocale: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
     suppressUpgradePlanAutofill: false,
@@ -9077,29 +9236,22 @@ window.MwiGuildCreditVersion = "1.1.48";
   }
 
   function currentGameLocale() {
+    const candidates = [state.detectedGameLocale];
     try {
-      return (
-        (pageWindow.i18next && pageWindow.i18next.language) ||
-        (pageWindow.i18n && pageWindow.i18n.language) ||
-        (pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng")) ||
-        document.documentElement.lang ||
-        "zh-CN"
+      candidates.push(
+        pageWindow.i18next && pageWindow.i18next.resolvedLanguage,
+        pageWindow.i18next && pageWindow.i18next.language,
+        pageWindow.i18n && pageWindow.i18n.resolvedLanguage,
+        pageWindow.i18n && pageWindow.i18n.language,
+        pageWindow.localStorage && pageWindow.localStorage.getItem("i18nextLng")
       );
-    } catch (_) {
-      return document.documentElement.lang || "zh-CN";
-    }
+    } catch (_) {}
+    candidates.push(document.documentElement.lang);
+    return localizationApi.resolveLocaleCandidates(candidates, "zh-CN");
   }
 
   function refreshOfficialItemNameCatalog(force) {
-    if (!force && state.itemNameCatalogReady) return;
-    const now = Date.now();
-    if (!force && now - state.itemNameCatalogLastRefresh < 3000) return;
-    state.itemNameCatalogLastRefresh = now;
-    itemNameCatalog.refresh();
-    state.itemNameCatalogRetryCount += 1;
-    const metadata = itemNameCatalog.metadata();
-    state.itemNameCatalogReady =
-      metadata.source === "window-i18n" || metadata.source === "react-provider" || state.itemNameCatalogRetryCount >= 5;
+    return itemNameCatalog.refreshIfDue({ force: force === true }).changed;
   }
 
   // This is the sole item-name resolver used by the UI. It never translates
@@ -9478,7 +9630,7 @@ window.MwiGuildCreditVersion = "1.1.48";
     setPriceReference,
     openMarketplaceForItem
   });
-  const { createPanel, dispose: disposePanelShell } = panelShell;
+  const { createPanel, recreatePanel, dispose: disposePanelShell } = panelShell;
 
   const creditView = creditViewApi.createCreditView({
     state,
@@ -9547,54 +9699,7 @@ window.MwiGuildCreditVersion = "1.1.48";
   } = exchangeAdvisor;
 
   function findSidebarTabBar() {
-    const sidebarTabAliases = [
-      ["库存", "Inventory"],
-      ["装备", "Equipment"],
-      ["技能", "Skills"],
-      ["房屋", "House"],
-      ["配装", "Loadout", "Loadouts"],
-      ["收获", "Harvest", "Gathering"]
-    ];
-    const expectedTabs = new Set(sidebarTabAliases.flat());
-    const preferredPrototypeLabels = ui().locale === "zh-CN" ? sidebarTabAliases[0] : ["Inventory", "库存"];
-    const elements = document.getElementsByTagName("*");
-    let bestIntegration = null;
-    for (let index = 0; index < elements.length; index += 1) {
-      const candidate = elements[index];
-      const children = Array.from(candidate.children);
-      if (children.length < 4) continue;
-      const tabs = children.map((child) => ({
-        element: child,
-        label: String(child.innerText || child.textContent || "")
-          .replaceAll("\n", "")
-          .trim()
-      }));
-      const recognized = tabs.filter((tab) => expectedTabs.has(tab.label));
-      if (recognized.length >= 4) {
-        const prototype = recognized.find((tab) => preferredPrototypeLabels.includes(tab.label)) || recognized[0];
-        const tabsRoot =
-          candidate.parentElement &&
-          candidate.parentElement.parentElement &&
-          candidate.parentElement.parentElement.parentElement;
-        const sidebar = tabsRoot && tabsRoot.parentElement;
-        const panelHost =
-          sidebar &&
-          Array.from(sidebar.children).find(
-            (node) => node !== tabsRoot && /tabPanelsContainer/.test(String(node.className))
-          );
-        if (!panelHost) continue;
-        const rect = candidate.getBoundingClientRect();
-        const visible = candidate.isConnected && rect.width > 0 && rect.height > 0;
-        const integration = {
-          tabBar: candidate,
-          tabPrototype: prototype.element,
-          panelHost,
-          score: (visible ? 1000 : 0) + recognized.length
-        };
-        if (!bestIntegration || integration.score > bestIntegration.score) bestIntegration = integration;
-      }
-    }
-    return bestIntegration;
+    return sidebarIntegrationApi.findSidebarIntegration(document, currentGameLocale());
   }
 
   function hideCreditPanel() {
@@ -9651,17 +9756,24 @@ window.MwiGuildCreditVersion = "1.1.48";
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
-    if (state.settingsOpen) refreshSettings(state.panel);
-    if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
-    else if (state.panel.dataset.activeView === "construction") refreshGuildConstruction(state.panel);
-    else refreshPanel(state.panel);
+    refreshActivePanel(state.panel);
+  }
+
+  function refreshActivePanel(panel) {
+    if (state.settingsOpen) refreshSettings(panel);
+    if (panel.dataset.activeView === "upgrade") refreshGuildUpgrade(panel);
+    else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
+    else refreshPanel(panel);
   }
 
   function ensureSidebarIntegration() {
-    refreshOfficialItemNameCatalog();
+    const itemNamesChanged = refreshOfficialItemNameCatalog();
     const integration = findSidebarTabBar();
     if (!integration || !integration.panelHost) return;
     const { tabBar, tabPrototype, panelHost } = integration;
+    if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
+    const locale = currentGameLocale();
+    const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
     const currentIntegrationMatches = Boolean(
       state.panel &&
       state.panel.isConnected &&
@@ -9670,17 +9782,23 @@ window.MwiGuildCreditVersion = "1.1.48";
       state.creditTab.isConnected &&
       state.creditTab.parentElement === tabBar
     );
-    if (currentIntegrationMatches) return;
+    if (currentIntegrationMatches && !localeChanged) {
+      if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
+      return;
+    }
 
     const keepPanelOpen = Boolean(
       state.panel && !state.panel.hidden && state.creditTab && state.creditTab.getAttribute("aria-selected") === "true"
     );
+    const replacementPanel =
+      localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
     hideCreditPanel();
     if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
     const existingTab = tabBar.querySelector('[data-mwi-credit-tab="true"]');
     if (existingTab) existingTab.remove();
 
-    if (state.panel && !state.panel.isConnected) state.panel = null;
+    if (replacementPanel) state.panel = replacementPanel;
+    else if (state.panel && !state.panel.isConnected) state.panel = null;
     state.creditTab = null;
 
     const creditTab = tabPrototype.cloneNode(true);
@@ -9713,6 +9831,7 @@ window.MwiGuildCreditVersion = "1.1.48";
       });
     }
     state.panel = panel;
+    state.panelLocale = locale;
     state.creditTab = creditTab;
     if (state.shrineGuideEnabled) {
       startShrineGuideObserver();

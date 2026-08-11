@@ -772,11 +772,50 @@
       return panel;
     }
 
+    function destroyPanel(panel) {
+      const controllers = Array.isArray(panel && panel.__mwiSortableControllers) ? panel.__mwiSortableControllers : [];
+      for (const controller of controllers) {
+        const index = sortableControllers.indexOf(controller);
+        if (index >= 0) sortableControllers.splice(index, 1);
+        controller.destroy();
+      }
+      if (panel) delete panel.__mwiSortableControllers;
+    }
+
+    function recreatePanel(previousPanel) {
+      const active = previousPanel && previousPanel.contains(document.activeElement) ? document.activeElement : null;
+      const focusSnapshot = active
+        ? { id: active.id || "", role: active.dataset.role || "", dataset: { ...active.dataset } }
+        : null;
+      const scrollTop = previousPanel ? previousPanel.scrollTop : 0;
+      destroyPanel(previousPanel);
+      if (previousPanel) previousPanel.remove();
+      const panel = createPanel();
+      Promise.resolve().then(() => {
+        if (!panel.isConnected) return;
+        panel.scrollTop = scrollTop;
+        if (!focusSnapshot) return;
+        const candidates = Array.from(panel.querySelectorAll(focusSnapshot.role ? "[data-role]" : "[id]"));
+        const target = candidates.find((candidate) => {
+          if (focusSnapshot.role && candidate.dataset.role !== focusSnapshot.role) return false;
+          if (!focusSnapshot.role && candidate.id !== focusSnapshot.id) return false;
+          return Object.entries(focusSnapshot.dataset).every(([key, value]) => candidate.dataset[key] === value);
+        });
+        if (!target || target.disabled || target.closest("[hidden]")) return;
+        try {
+          target.focus({ preventScroll: true });
+        } catch (_) {
+          target.focus();
+        }
+      });
+      return panel;
+    }
+
     function dispose() {
       for (const controller of sortableControllers.splice(0)) controller.destroy();
     }
 
-    return { createPanel, dispose };
+    return { createPanel, recreatePanel, dispose };
   }
 
   return { createPanelShell };
