@@ -154,6 +154,7 @@
     const settingsAudit = searchParams.get("settingsAudit") === "1";
     const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
     const sidebarResizeAudit = searchParams.get("sidebarResizeAudit") === "1";
+    const sidebarStartupAudit = searchParams.get("sidebarStartupAudit") === "1";
     if (layoutAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
       document.body.dataset.layoutAudit = "true";
     if (sidebarResizeAudit) document.body.dataset.sidebarResizeAudit = "true";
@@ -165,7 +166,8 @@
         constructionSnapshotAudit ||
         settingsAudit ||
         localeRaceAudit ||
-        sidebarResizeAudit) &&
+        sidebarResizeAudit ||
+        sidebarStartupAudit) &&
       searchParams.get("resetState") === "1"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
@@ -437,6 +439,28 @@
       };
       localStorage.setItem("initClientData", JSON.stringify(completeGuildBuildingSnapshot));
       delete window.__mwiGuildCreditBridge.guildBuildingMap;
+    }
+    if (sidebarStartupAudit) {
+      const delayedSidebarWrappers = Array.from(document.querySelectorAll(".test-sidebar-wrapper"));
+      delayedSidebarWrappers.forEach((wrapper) => wrapper.remove());
+      const startupMutationNoise = document.createElement("span");
+      startupMutationNoise.hidden = true;
+      document.body.append(startupMutationNoise);
+      let startupMutationCount = 0;
+      const startupMutationTimer = window.setInterval(() => {
+        startupMutationNoise.replaceChildren(document.createElement("i"));
+        startupMutationCount += 1;
+        document.body.dataset.sidebarStartupMutationCount = String(startupMutationCount);
+      }, 10);
+      window.setTimeout(() => window.clearInterval(startupMutationTimer), 900);
+      document.body.dataset.sidebarStartupFixtureRemovedAt = String(performance.now());
+      window.setTimeout(() => {
+        document.body.dataset.sidebarStartupCreditTabBeforeInsert = String(
+          Boolean(document.querySelector('[data-mwi-credit-tab="true"]'))
+        );
+        document.body.append(...delayedSidebarWrappers);
+        document.body.dataset.sidebarStartupFixtureInsertedAt = String(performance.now());
+      }, 160);
     }
   </script>
   <script src="/runtime.js"></script>
@@ -2022,6 +2046,68 @@
           document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
           document.body.dataset.localeRaceAuditFailed = "true";
           document.body.dataset.localeRaceAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
+
+    const prepareSidebarStartupAudit = async () => {
+      const fixtureInsertedAt = Number(
+        await waitFor(() => document.body.dataset.sidebarStartupFixtureInsertedAt, 2000)
+      );
+      const creditTab = await waitFor(() => document.querySelector('#test-tabs [data-mwi-credit-tab="true"]'), 1000);
+      const mountedAt = performance.now();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"), 1000);
+      creditTab.click();
+      await waitFor(() => !panel.hidden, 1000);
+      const noise = document.createElement("span");
+      noise.hidden = true;
+      document.body.append(noise);
+      noise.remove();
+      await new Promise((resolve) => setTimeout(resolve, 180));
+
+      const report = {
+        fixtureRemovedAt: Number(document.body.dataset.sidebarStartupFixtureRemovedAt),
+        fixtureInsertedAt,
+        mountedAt,
+        mountLatencyMs: mountedAt - fixtureInsertedAt,
+        creditTabBeforeFixtureInsert: document.body.dataset.sidebarStartupCreditTabBeforeInsert,
+        mutationCountAtMeasurement: Number(document.body.dataset.sidebarStartupMutationCount || 0),
+        creditTabLabel: normalizedText(creditTab),
+        creditTabCount: document.querySelectorAll('[data-mwi-credit-tab="true"]').length,
+        panelConnected: panel.isConnected,
+        panelVisibleAfterClick: !panel.hidden
+      };
+      report.checks = {
+        fixtureActuallyDelaysSidebar:
+          Number.isFinite(report.fixtureRemovedAt) &&
+          report.fixtureInsertedAt > report.fixtureRemovedAt &&
+          report.creditTabBeforeFixtureInsert === "false" &&
+          report.mutationCountAtMeasurement >= 5,
+        creditTabMountsWithinHalfSecond: report.mountLatencyMs >= 0 && report.mountLatencyMs < 500,
+        creditTabUsesChineseGameLocale: report.creditTabLabel === "信用",
+        exactlyOneCreditTabAfterFurtherMutations: report.creditTabCount === 1,
+        mountedPanelOpensNormally: report.panelConnected && report.panelVisibleAfterClick
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.sidebarStartupAuditFailed = "false";
+      document.body.dataset.sidebarStartupAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiSidebarStartupAuditReady = sidebarStartupAudit
+      ? prepareSidebarStartupAudit().catch((error) => {
+          const report = {
+            failed: true,
+            error: {
+              name: String(error?.name || "Error"),
+              message: String(error?.message || error || "Unknown sidebar startup audit error"),
+              stack: String(error?.stack || "")
+            },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.sidebarStartupAuditFailed = "true";
+          document.body.dataset.sidebarStartupAuditReady = "true";
           return report;
         })
       : Promise.resolve(null);

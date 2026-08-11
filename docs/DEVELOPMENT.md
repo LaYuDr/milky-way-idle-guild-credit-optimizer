@@ -55,6 +55,35 @@ Then install:
 http://127.0.0.1:4173/milky-way-idle-guild-credit-dev-loader.user.js
 ```
 
+### Sidebar cold-start regression audit
+
+To verify that the credit tab mounts as soon as the game's sidebar appears,
+open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?sidebarStartupAudit=1&resetState=1&sidebarWidth=420
+```
+
+The fixture removes both native sidebar variants before the runtime starts,
+keeps unrelated child-list mutations flowing every `10ms`, and inserts the
+sidebars `160ms` later. The audit measures the delay from fixture insertion to
+the credit tab becoming available and requires it to stay below `500ms`, use
+the visible Chinese game locale, remain a single tab after additional DOM
+mutations, and open its connected panel normally. This catches both legacy
+three-second polling delays and debounced observers that can be starved by a
+continuously changing game DOM.
+
+After `document.body.dataset.sidebarStartupAuditReady` becomes `"true"`,
+inspect `#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiSidebarStartupAuditReady;
+```
+
+Failures set `document.body.dataset.sidebarStartupAuditFailed` to `"true"` and
+return `checks.auditCompleted: false`. Require every value in `checks` to be
+`true`.
+
 ### Locale race regression audit
 
 To reproduce a transient startup-locale mismatch, open:

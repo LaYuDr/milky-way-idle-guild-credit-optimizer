@@ -1921,6 +1921,15 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   );
   assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
   assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
+  assert.match(source, /function bootstrapSidebarIntegration\(\)/);
+  assert.match(source, /new MutationObserver\(\(\) =>/);
+  assert.match(source, /sidebarIntegrationTask\.pending\(\)/);
+  assert.match(source, /state\.sidebarIntegrationObserver\.disconnect\(\)/);
+  assert.match(source, /window\.setInterval\(bootstrapSidebarIntegration, 3000\)/);
+  assert.match(source, /\n\s*bootstrapSidebarIntegration\(\);\s*\n\}\)\(\);/);
+  assert.doesNotMatch(source, /window\.setTimeout\(ensureSidebarIntegration, 1000\)/);
+  assert.match(harnessSource, /searchParams\.get\("sidebarStartupAudit"\)/);
+  assert.match(harnessSource, /creditTabMountsWithinHalfSecond/);
   assert.match(source, /MwiGuildCreditSidebarIntegration/);
   assert.match(source, /overflow-y:auto/);
   assert.match(source, /data-role="toggle-credit-section"/);

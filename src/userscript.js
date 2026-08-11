@@ -104,6 +104,7 @@
     guildBuffLevelsBridgeRevision: 0,
     detectedGameLocale: null,
     panelLocale: null,
+    sidebarIntegrationObserver: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
     suppressUpgradePlanAutofill: false,
@@ -843,7 +844,7 @@
   function ensureSidebarIntegration() {
     const itemNamesChanged = refreshOfficialItemNameCatalog();
     const integration = findSidebarTabBar();
-    if (!integration || !integration.panelHost) return;
+    if (!integration || !integration.panelHost) return false;
     const { tabBar, tabPrototype, panelHost } = integration;
     if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
     const locale = currentGameLocale();
@@ -858,7 +859,8 @@
     );
     if (currentIntegrationMatches && !localeChanged) {
       if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
-      return;
+      stopSidebarIntegrationObserver();
+      return true;
     }
 
     const keepPanelOpen = Boolean(
@@ -914,10 +916,40 @@
       scheduleShrineGuide();
     }
     if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
+    stopSidebarIntegrationObserver();
+    return true;
   }
 
   function scheduleSidebarIntegration() {
     sidebarIntegrationTask.schedule();
+  }
+
+  function sidebarIntegrationMounted() {
+    return Boolean(state.panel && state.panel.isConnected && state.creditTab && state.creditTab.isConnected);
+  }
+
+  function stopSidebarIntegrationObserver() {
+    if (!state.sidebarIntegrationObserver) return;
+    state.sidebarIntegrationObserver.disconnect();
+    state.sidebarIntegrationObserver = null;
+  }
+
+  function watchForSidebarIntegration() {
+    if (sidebarIntegrationMounted() || state.sidebarIntegrationObserver || typeof MutationObserver !== "function")
+      return;
+    const target = document.documentElement || document;
+    state.sidebarIntegrationObserver = new MutationObserver(() => {
+      if (sidebarIntegrationMounted()) {
+        stopSidebarIntegrationObserver();
+        return;
+      }
+      if (!sidebarIntegrationTask.pending()) scheduleSidebarIntegration();
+    });
+    state.sidebarIntegrationObserver.observe(target, { childList: true, subtree: true });
+  }
+
+  function bootstrapSidebarIntegration() {
+    if (!ensureSidebarIntegration()) watchForSidebarIntegration();
   }
 
   function exchangeModalInteractionHandler(event) {
@@ -935,6 +967,7 @@
     guildDataRefreshTask.dispose();
     sidebarIntegrationTask.dispose();
     exchangeAdvisorFrameTask.dispose();
+    stopSidebarIntegrationObserver();
     window.clearTimeout(state.refreshTimer);
     window.clearInterval(state.panelSearchTimer);
     stopShrineGuideObserver();
@@ -961,11 +994,11 @@
   document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
-  state.panelSearchTimer = window.setInterval(ensureSidebarIntegration, 3000);
+  state.panelSearchTimer = window.setInterval(bootstrapSidebarIntegration, 3000);
   window.addEventListener("resize", scheduleSidebarIntegration, { passive: true });
   window.addEventListener("orientationchange", scheduleSidebarIntegration, { passive: true });
   window.addEventListener("pagehide", disposeRuntime, { once: true });
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
-  window.setTimeout(ensureSidebarIntegration, 1000);
+  bootstrapSidebarIntegration();
 })();

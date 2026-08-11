@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.50] - 2026-08-12
+
+### Changed
+
+- 修复进入游戏后信用侧栏页签延迟出现的问题：改为侧栏 DOM 就绪后事件驱动挂载，并保留低频恢复检查。
+
 ## [1.1.49] - 2026-08-12
 
 ### Changed
