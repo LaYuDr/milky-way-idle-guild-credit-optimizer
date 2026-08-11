@@ -85,6 +85,17 @@ test("无效或未变化的排序索引保持内容不变", () => {
   assert.deepEqual(sortable.reorderByIndex(source, 1, 8), source);
 });
 
+test("只重排可见项并保留隐藏项在完整顺序中的槽位", () => {
+  const fullOrder = ["upgrade", "construction", "credit"];
+  assert.deepEqual(sortable.reorderVisibleByIndex(fullOrder, ["upgrade", "credit"], "credit", 0), [
+    "credit",
+    "construction",
+    "upgrade"
+  ]);
+  assert.deepEqual(fullOrder, ["upgrade", "construction", "credit"]);
+  assert.deepEqual(sortable.reorderVisibleByIndex(fullOrder, ["upgrade", "credit"], "construction", 0), fullOrder);
+});
+
 test("持久化顺序会去重、忽略未知项并按默认顺序补齐", () => {
   const allowed = ["credit", "upgrade", "construction"];
   const fallback = ["upgrade", "credit", "construction"];

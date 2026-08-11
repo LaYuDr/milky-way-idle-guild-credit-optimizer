@@ -37,6 +37,17 @@
     return next;
   }
 
+  function reorderVisibleByIndex(order, visibleValues, value, toIndex) {
+    const fullOrder = Array.from(order || []);
+    const visibleSet = new Set(visibleValues || []);
+    const visibleOrder = fullOrder.filter((candidate) => visibleSet.has(candidate));
+    const fromIndex = visibleOrder.indexOf(value);
+    const nextVisibleOrder = reorderByIndex(visibleOrder, fromIndex, toIndex);
+    if (nextVisibleOrder.every((candidate, index) => candidate === visibleOrder[index])) return fullOrder;
+    let visibleIndex = 0;
+    return fullOrder.map((candidate) => (visibleSet.has(candidate) ? nextVisibleOrder[visibleIndex++] : candidate));
+  }
+
   function createPointerSortable(options) {
     const {
       root,
@@ -243,5 +254,5 @@
     };
   }
 
-  return { normalizeOrder, reorderByIndex, createPointerSortable };
+  return { normalizeOrder, reorderByIndex, reorderVisibleByIndex, createPointerSortable };
 });

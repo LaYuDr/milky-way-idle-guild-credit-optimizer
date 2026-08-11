@@ -253,15 +253,23 @@
 
     function applyGuildShrineTargets(entries, domain) {
       const combat = domain === "combat";
-      const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+      const requestedDomainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+      const { eligibleEntries: domainEntries, preservedPlans } = core.selectGuildShrineAutofillScope({
+        entries,
+        plans: state.upgradePlans,
+        domain,
+        excludedGuildBuffHrids: state.guildShrineAutofillExcludedBuffHrids
+      });
+      if (!requestedDomainEntries.length) return false;
+      if (!domainEntries.length) {
+        state.upgradePresetNotice = t("guildAutofillAllExcluded", {
+          domain: combat ? t("domainCombat") : t("domainLife")
+        });
+        return false;
+      }
       const targets = guildShrineTargetLevels(domainEntries);
       if (!domainEntries.length || domainEntries.some((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid)))
         return false;
-      const entriesByHrid = new Map(entries.map((entry) => [entry.hrid, entry]));
-      const preservedPlans = state.upgradePlans.filter((plan) => {
-        const entry = entriesByHrid.get(plan.guildBuffHrid);
-        return !entry || isCombatGuildBuff(entry) !== combat;
-      });
       const planned = domainEntries
         .map((entry) => {
           const startLevel = currentGuildBuffLevel(entry);
@@ -351,15 +359,25 @@
     function updateGuildShrineTargetActions(panel, entries) {
       const targets = guildShrineTargetLevels(entries);
       const summaries = [];
+      const excludedDomainNotices = [];
       for (const domain of ["life", "combat"]) {
         const combat = domain === "combat";
+        const domainLabel = combat ? t("domainCombat") : t("domainLife");
         const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+        const { eligibleEntries } = core.selectGuildShrineAutofillScope({
+          entries,
+          plans: [],
+          domain,
+          excludedGuildBuffHrids: state.guildShrineAutofillExcludedBuffHrids
+        });
+        const eligibleTargets = guildShrineTargetLevels(eligibleEntries);
         const ready =
-          domainEntries.length > 0 && domainEntries.every((entry) => Object.hasOwn(targets, entry.detail.shrineHrid));
+          eligibleEntries.length > 0 &&
+          eligibleEntries.every((entry) => Object.hasOwn(eligibleTargets, entry.detail.shrineHrid));
         const missing = Array.from(
           new Set(
-            domainEntries
-              .filter((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid))
+            eligibleEntries
+              .filter((entry) => !Object.hasOwn(eligibleTargets, entry.detail.shrineHrid))
               .map((entry) => {
                 const nameKey = GUILD_SHRINE_NAME_KEYS[entry.detail.shrineHrid];
                 return nameKey ? t(nameKey) : entry.detail.shrineHrid;
@@ -367,11 +385,18 @@
           )
         );
         const button = panel.querySelector(`[data-role="set-guild-shrine-target"][data-domain="${domain}"]`);
+        const excludedDomainNotice =
+          !eligibleEntries.length && domainEntries.length
+            ? t("guildAutofillDomainExcluded", { domain: domainLabel })
+            : "";
+        if (excludedDomainNotice) excludedDomainNotices.push(excludedDomainNotice);
         if (button) {
           button.disabled = !ready;
-          button.title = ready
-            ? t("targetButtonReady")
-            : t("targetButtonMissing", { missing: missing.join(ui().locale === "zh-CN" ? "、" : ", ") });
+          button.title =
+            excludedDomainNotice ||
+            (ready
+              ? t("targetButtonReady")
+              : t("targetButtonMissing", { missing: missing.join(ui().locale === "zh-CN" ? "、" : ", ") }));
         }
         const count = Object.keys(targets).filter((shrineHrid) =>
           domainEntries.some((entry) => entry.detail.shrineHrid === shrineHrid)
@@ -381,7 +406,7 @@
           : "";
         summaries.push(
           t("targetSummary", {
-            domain: combat ? t("domainCombat") : t("domainLife"),
+            domain: domainLabel,
             count: formatNumber(count),
             total: formatNumber(domainEntries.length),
             missing: missingText
@@ -389,10 +414,12 @@
         );
       }
       const status = panel.querySelector('[data-role="guild-shrine-target-status"]');
-      if (status)
-        status.textContent = state.guildShrineLevels
+      if (status) {
+        const levelStatus = state.guildShrineLevels
           ? t("shrineLevelsRead", { summaries: summaries.join(" · ") })
           : t("shrineLevelsReading");
+        status.textContent = [levelStatus, ...excludedDomainNotices].join(" ");
+      }
     }
 
     function renderGuildUpgradePlans(panel, entries) {
@@ -793,11 +820,13 @@
 
     return {
       guildBuffEntries,
+      guildBuffLabel,
       itemNameForMaterial,
       currentGuildBuffLevel,
       shrineLevelValue,
       shrineIdentityValues,
       applyGuildShrineTargets,
+      updateGuildShrineTargetActions,
       addGuildUpgradePlan,
       clearGuildUpgradePlans,
       removeGuildUpgradePlan,

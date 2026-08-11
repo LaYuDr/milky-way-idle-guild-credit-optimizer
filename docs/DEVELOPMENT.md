@@ -102,6 +102,64 @@ English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
 http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
 ```
 
+For the persistent settings and hidden-view interaction contract, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&sidebarWidth=420
+```
+
+`settingsAudit=1` seeds one existing Spirit Shrine (life) upgrade plan, one
+Guild Hall construction plan, and the complete panel order
+`construction, credit, upgrade`. It then exercises the real controls to:
+
+- open the inline settings region and inspect its accessible name, linked
+  trigger, labelled inputs, live status, focus entry, and Escape focus return;
+- exclude only Spirit Shrine (life), fill life upgrades, and require the
+  excluded existing plan to remain unchanged while Tempo Shrine (life) is
+  filled;
+- fill combat upgrades and require Spirit Shrine (combat) to remain eligible;
+- exclude every life shrine and require the disabled fill action to leave all
+  existing plans unchanged while its visible live status explains why filling
+  is unavailable;
+- hide the currently active construction view and require a safe fallback to
+  the adjacent visible view without changing the construction-plan storage or
+  dropping construction from the complete persisted panel order;
+- require normal tab keyboard navigation and pointer sorting to operate on the
+  two visible views only while merging their new order back around the hidden
+  construction slot;
+- re-enable construction, require its tab and panel to be reachable in the
+  merged complete order, enter it again, and require the original construction
+  plan to remain intact.
+
+After `document.body.dataset.settingsAuditReady` becomes `"true"`, inspect the
+JSON in `#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiSettingsAuditReady;
+```
+
+Both successful and failed runs set
+`document.body.dataset.settingsAuditReady` to `"true"`. A failed setup also
+sets `document.body.dataset.settingsAuditFailed` to `"true"` and writes the
+error name, message, stack, and a false `auditCompleted` check into
+`#layout-audit-output`, so automation must report the failure instead of
+waiting for a readiness timeout.
+
+Require every value in `checks` to be `true`. Repeat the audit at sidebar widths
+`320`, `360`, `420`, `460`, `480`, `520`, `560`, `610`, `720`, `900`, and
+`1200`; require zero root or element horizontal overflow, zero boundary
+overflow, and zero control overlap. Also run English-locale passes at `320`,
+`610`, and `900`:
+
+```text
+http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&locale=en&sidebarWidth=320
+```
+
+The browser audit verifies the values written through the live UI. Reload and
+malformed-storage compatibility remain deterministic Node storage tests rather
+than an in-page reload, because the settings audit intentionally reseeds its
+fixture whenever `resetState=1` is present.
+
 To verify the different semantics of a complete `initClientData` guild-building
 snapshot, open:
 

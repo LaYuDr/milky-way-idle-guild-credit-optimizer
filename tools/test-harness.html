@@ -119,13 +119,37 @@
     const creditAudit = searchParams.get("creditAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
-    if (layoutAudit || constructionAudit || constructionSnapshotAudit) document.body.dataset.layoutAudit = "true";
+    const settingsAudit = searchParams.get("settingsAudit") === "1";
+    if (layoutAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
+      document.body.dataset.layoutAudit = "true";
     if (
-      (surplusPlan || layoutAudit || creditAudit || constructionAudit || constructionSnapshotAudit) &&
+      (surplusPlan || layoutAudit || creditAudit || constructionAudit || constructionSnapshotAudit || settingsAudit) &&
       searchParams.get("resetState") === "1"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
       localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
+    }
+    if (settingsAudit && searchParams.get("resetState") === "1") {
+      localStorage.setItem(
+        "mwi-guild-credit-ui-state-v1",
+        JSON.stringify({
+          activeView: "construction",
+          panelOrder: ["construction", "credit", "upgrade"],
+          showConstructionView: true,
+          guildShrineAutofillExcludedBuffHrids: [],
+          upgradePlans: [{ guildBuffHrid: "/guild_buffs/spirit_life", startLevel: 0, targetLevel: 1 }]
+        })
+      );
+      localStorage.setItem(
+        `mwi-guild-building-planner-v1:${location.hostname}:default`,
+        JSON.stringify({
+          schemaVersion: 1,
+          rulesVersion: "2026-08-04-v1",
+          manualGuildPoints: 5000,
+          category: "all",
+          plans: [{ buildingHrid: "/guild_buildings/guild_hall", startLevel: 3, targetLevel: 4 }]
+        })
+      );
     }
     if (constructionAudit || constructionSnapshotAudit) localStorage.removeItem("initClientData");
     document.body.dataset.sidebarLayout = "wide";
@@ -1236,6 +1260,461 @@
     };
 
     window.__mwiTokenGuideAuditReady = tokenGuideAudit ? prepareTokenGuideAudit() : Promise.resolve(null);
+
+    const savedPluginUiState = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+        return saved && typeof saved === "object" ? saved : {};
+      } catch (_) {
+        return {};
+      }
+    };
+
+    const savedUpgradePlans = () =>
+      (Array.isArray(savedPluginUiState().upgradePlans) ? savedPluginUiState().upgradePlans : [])
+        .map((plan) => ({
+          guildBuffHrid: plan.guildBuffHrid,
+          startLevel: plan.startLevel,
+          targetLevel: plan.targetLevel
+        }))
+        .sort((left, right) => String(left.guildBuffHrid).localeCompare(String(right.guildBuffHrid)));
+
+    const upgradePlanFor = (plans, guildBuffHrid) => plans.find((plan) => plan.guildBuffHrid === guildBuffHrid) || null;
+
+    const settingsFocusSnapshot = (root, settingsPanel) => {
+      const active = document.activeElement;
+      const rect = root?.contains(active) ? elementRect(active) : null;
+      const rootRect = elementRect(root);
+      return {
+        role: root?.contains(active) ? active.getAttribute("data-role") || active.tagName : "",
+        inSettings: Boolean(settingsPanel?.contains(active)),
+        inViewport: Boolean(
+          rect &&
+          rootRect &&
+          rect.height > 0 &&
+          rect.top >= Math.max(0, rootRect.top) - 1 &&
+          rect.bottom <= Math.min(window.innerHeight, rootRect.bottom) + 1
+        )
+      };
+    };
+
+    const settingsGeometrySnapshot = (root) => {
+      const settingsPanel = root.querySelector('[data-role="settings-panel"]');
+      const settingsTrigger = root.querySelector('[data-role="toggle-settings"]');
+      const auditElements = Array.from(
+        root.querySelectorAll(
+          ".mwi-view-tabs-shell,.mwi-view-tabs-shell *,[data-role='settings-panel'],[data-role='settings-panel'] *"
+        )
+      );
+      const visibleElements = auditElements.filter(elementIsVisible);
+      const rootRect = elementRect(root);
+      const horizontalOverflow = visibleElements
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const intentionallyEllipsized =
+            style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+          return !intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2;
+        })
+        .map((element) => ({
+          className: String(element.className || ""),
+          role: element.getAttribute("data-role") || "",
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth
+        }));
+      const boundaryOverflow = visibleElements
+        .filter((element) => {
+          const rect = elementRect(element);
+          return rect && rootRect && (rect.left < rootRect.left - 1 || rect.right > rootRect.right + 1);
+        })
+        .map((element) => ({
+          className: String(element.className || ""),
+          role: element.getAttribute("data-role") || "",
+          rect: elementRect(element)
+        }));
+      const interactiveElements = visibleElements.filter((element) =>
+        element.matches("button,input,select,textarea,a[href],[tabindex]:not([tabindex='-1'])")
+      );
+      const controlOverlaps = [];
+      for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
+        for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
+          const left = interactiveElements[leftIndex];
+          const right = interactiveElements[rightIndex];
+          if (left.contains(right) || right.contains(left)) continue;
+          const leftRect = elementRect(left);
+          const rightRect = elementRect(right);
+          const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
+          const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
+          if (overlapWidth > 1 && overlapHeight > 1)
+            controlOverlaps.push({
+              leftRole: left.getAttribute("data-role") || left.tagName,
+              rightRole: right.getAttribute("data-role") || right.tagName,
+              overlapWidth,
+              overlapHeight
+            });
+        }
+      }
+      const shrineInputs = Array.from(settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'));
+      const constructionSwitch = settingsPanel.querySelector('[data-role="settings-show-construction"]');
+      const closeButton = settingsPanel.querySelector('[data-role="settings-close"]');
+      const labelledBy = settingsPanel.getAttribute("aria-labelledby") || "";
+      return {
+        rootOverflow: Math.max(0, root.scrollWidth - root.clientWidth),
+        panelRect: elementRect(settingsPanel),
+        horizontalOverflow,
+        boundaryOverflow,
+        controlOverlaps,
+        trigger: {
+          label: settingsTrigger.getAttribute("aria-label") || "",
+          controls: settingsTrigger.getAttribute("aria-controls") || "",
+          expanded: settingsTrigger.getAttribute("aria-expanded") || ""
+        },
+        settings: {
+          id: settingsPanel.id,
+          labelledBy,
+          labelPresent: Boolean(labelledBy && document.getElementById(labelledBy)),
+          closeLabel: closeButton?.getAttribute("aria-label") || "",
+          statusLive: settingsPanel.querySelector('[data-role="settings-status"]')?.getAttribute("aria-live") || "",
+          shrineInputCount: shrineInputs.length,
+          allShrineInputsLabelled: shrineInputs.every((input) =>
+            Boolean(input.id && settingsPanel.querySelector(`label[for="${CSS.escape(input.id)}"]`))
+          ),
+          constructionRole: constructionSwitch?.getAttribute("role") || "",
+          constructionDescribedBy: constructionSwitch?.getAttribute("aria-describedby") || ""
+        },
+        focus: settingsFocusSnapshot(root, settingsPanel)
+      };
+    };
+
+    const prepareSettingsAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      await waitFor(() => panel.dataset.activeView === "construction");
+      await waitFor(() => panel.querySelectorAll(".mwi-construction-group").length === 1);
+
+      const initial = {
+        activeView: panel.dataset.activeView,
+        panelOrder: savedPluginUiState().panelOrder || [],
+        upgradePlans: savedUpgradePlans(),
+        constructionPlans: savedConstructionPlans()
+      };
+      const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
+      settingsTrigger.focus();
+      settingsTrigger.click();
+      const settingsPanel = await waitFor(() => {
+        const candidate = panel.querySelector('[data-role="settings-panel"]');
+        return candidate && elementIsVisible(candidate) ? candidate : null;
+      });
+      await waitFor(() => settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]').length === 4);
+      const opened = settingsGeometrySnapshot(panel);
+
+      const spiritLifeHrid = "/guild_buffs/spirit_life";
+      const spiritCombatHrid = "/guild_buffs/spirit_combat";
+      const tempoLifeHrid = "/guild_buffs/tempo_life";
+      const spiritLifeInput = settingsPanel.querySelector(
+        `[data-role="settings-shrine-autofill"][data-guild-buff-hrid="${spiritLifeHrid}"]`
+      );
+      spiritLifeInput.click();
+      await waitFor(() => (savedPluginUiState().guildShrineAutofillExcludedBuffHrids || []).includes(spiritLifeHrid));
+      const exclusion = {
+        excludedHrids: savedPluginUiState().guildShrineAutofillExcludedBuffHrids || [],
+        spiritLifeChecked: spiritLifeInput.checked,
+        spiritCombatChecked: settingsPanel.querySelector(
+          `[data-role="settings-shrine-autofill"][data-guild-buff-hrid="${spiritCombatHrid}"]`
+        ).checked
+      };
+
+      panel.querySelector('[data-role="view-upgrade"]').click();
+      const lifeButton = await waitFor(() => {
+        const button = panel.querySelector('[data-role="set-guild-shrine-target"][data-domain="life"]');
+        return button && !button.disabled ? button : null;
+      });
+      lifeButton.click();
+      const afterLifePlans = await waitFor(() => {
+        const plans = savedUpgradePlans();
+        return upgradePlanFor(plans, tempoLifeHrid) && upgradePlanFor(plans, spiritLifeHrid) ? plans : null;
+      });
+      const lifeFill = {
+        plans: afterLifePlans,
+        preservedSpiritLife: upgradePlanFor(afterLifePlans, spiritLifeHrid),
+        filledTempoLife: upgradePlanFor(afterLifePlans, tempoLifeHrid)
+      };
+
+      const combatButton = await waitFor(() => {
+        const button = panel.querySelector('[data-role="set-guild-shrine-target"][data-domain="combat"]');
+        return button && !button.disabled ? button : null;
+      });
+      combatButton.click();
+      const afterCombatPlans = await waitFor(() => {
+        const plans = savedUpgradePlans();
+        return upgradePlanFor(plans, spiritCombatHrid) ? plans : null;
+      });
+      const combatFill = {
+        plans: afterCombatPlans,
+        filledSpiritCombat: upgradePlanFor(afterCombatPlans, spiritCombatHrid)
+      };
+
+      const tempoLifeInput = settingsPanel.querySelector(
+        `[data-role="settings-shrine-autofill"][data-guild-buff-hrid="${tempoLifeHrid}"]`
+      );
+      tempoLifeInput.click();
+      await waitFor(() => lifeButton.disabled);
+      const guildShrineTargetStatus = panel.querySelector('[data-role="guild-shrine-target-status"]');
+      const beforeExcludedNoop = savedUpgradePlans();
+      lifeButton.click();
+      await settleConstructionAudit();
+      const afterExcludedNoop = savedUpgradePlans();
+      const fullLifeExclusion = {
+        buttonDisabled: lifeButton.disabled,
+        buttonTitle: lifeButton.title,
+        statusVisible: elementIsVisible(guildShrineTargetStatus),
+        statusText: normalizedText(guildShrineTargetStatus),
+        statusRole: guildShrineTargetStatus?.getAttribute("role") || "",
+        statusLive: guildShrineTargetStatus?.getAttribute("aria-live") || "",
+        beforePlans: beforeExcludedNoop,
+        afterPlans: afterExcludedNoop,
+        unchanged: JSON.stringify(beforeExcludedNoop) === JSON.stringify(afterExcludedNoop)
+      };
+
+      panel.querySelector('[data-role="view-construction"]').click();
+      await waitFor(() => panel.dataset.activeView === "construction");
+      await waitFor(() => panel.querySelectorAll(".mwi-construction-group").length === 1);
+      const constructionStorageBefore = localStorage.getItem(constructionPlannerStorageKey) || "";
+      const fullOrderBeforeHide = (savedPluginUiState().panelOrder || []).slice();
+      const constructionSwitch = settingsPanel.querySelector('[data-role="settings-show-construction"]');
+      constructionSwitch.click();
+      await waitFor(() => {
+        const item = panel.querySelector('.mwi-view-tab-item[data-sort-key="construction"]');
+        return panel.dataset.activeView === "credit" && item?.hidden;
+      });
+      const constructionHidden = {
+        activeView: panel.dataset.activeView,
+        tabVisible: elementIsVisible(panel.querySelector('[data-role="view-construction"]')),
+        panelVisible: elementIsVisible(panel.querySelector('[data-role="construction-view"]')),
+        settingsVisible: elementIsVisible(settingsPanel),
+        switchChecked: constructionSwitch.checked,
+        fullOrderBeforeHide,
+        fullOrderAfterHide: (savedPluginUiState().panelOrder || []).slice(),
+        constructionStorageUnchanged:
+          constructionStorageBefore === (localStorage.getItem(constructionPlannerStorageKey) || ""),
+        constructionPlans: savedConstructionPlans()
+      };
+
+      const visibleTabRolesBeforeKeyboard = Array.from(
+        panel.querySelectorAll(".mwi-view-tab-item:not([hidden]) .mwi-view-tab"),
+        (tab) => tab.dataset.role
+      );
+      const visibleCreditTab = panel.querySelector('[data-role="view-credit"]');
+      visibleCreditTab.focus();
+      visibleCreditTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      await waitFor(() => panel.dataset.activeView === "upgrade");
+      const keyboardNavigation = {
+        visibleTabRoles: visibleTabRolesBeforeKeyboard,
+        activeView: panel.dataset.activeView,
+        focus: settingsFocusSnapshot(panel, settingsPanel)
+      };
+
+      const creditItem = panel.querySelector('.mwi-view-tab-item[data-sort-key="credit"]');
+      const upgradeItem = panel.querySelector('.mwi-view-tab-item[data-sort-key="upgrade"]');
+      const creditRect = elementRect(creditItem);
+      const upgradeRect = elementRect(upgradeItem);
+      dispatchAuditPointer(creditItem, "pointerdown", {
+        clientX: creditRect.left + creditRect.width / 2,
+        clientY: creditRect.top + creditRect.height / 2
+      });
+      dispatchAuditPointer(creditItem, "pointermove", {
+        clientX: upgradeRect.right + 8,
+        clientY: upgradeRect.top + upgradeRect.height / 2
+      });
+      dispatchAuditPointer(creditItem, "pointerup", {
+        clientX: upgradeRect.right + 8,
+        clientY: upgradeRect.top + upgradeRect.height / 2
+      });
+      await waitFor(() => (savedPluginUiState().panelOrder || []).join("|") === "construction|upgrade|credit");
+      const pointerReorder = {
+        fullOrder: (savedPluginUiState().panelOrder || []).slice(),
+        visibleOrder: Array.from(
+          panel.querySelectorAll(".mwi-view-tab-item:not([hidden])"),
+          (item) => item.dataset.sortKey
+        ),
+        constructionHidden: panel.querySelector('.mwi-view-tab-item[data-sort-key="construction"]').hidden
+      };
+      // Synthetic pointer events do not emit their own follow-up click. Consume
+      // the sortable's click guard before exercising the next real control.
+      creditItem.click();
+
+      constructionSwitch.click();
+      await waitFor(() => {
+        const item = panel.querySelector('.mwi-view-tab-item[data-sort-key="construction"]');
+        return savedPluginUiState().showConstructionView === true && item && !item.hidden && elementIsVisible(item);
+      });
+      const restoredConstructionTab = panel.querySelector('[data-role="view-construction"]');
+      restoredConstructionTab.click();
+      await waitFor(
+        () =>
+          panel.dataset.activeView === "construction" &&
+          elementIsVisible(panel.querySelector('[data-role="construction-view"]')) &&
+          panel.querySelectorAll(".mwi-construction-group").length === 1
+      );
+      const constructionRestored = {
+        activeView: panel.dataset.activeView,
+        tabVisible: elementIsVisible(restoredConstructionTab),
+        tabSelected: restoredConstructionTab.getAttribute("aria-selected"),
+        panelVisible: elementIsVisible(panel.querySelector('[data-role="construction-view"]')),
+        panelLabelledBy: panel.querySelector('[data-role="construction-view"]').getAttribute("aria-labelledby") || "",
+        settingsVisible: elementIsVisible(settingsPanel),
+        switchChecked: constructionSwitch.checked,
+        fullOrder: (savedPluginUiState().panelOrder || []).slice(),
+        visibleOrder: Array.from(
+          panel.querySelectorAll(".mwi-view-tab-item:not([hidden])"),
+          (item) => item.dataset.sortKey
+        ),
+        constructionStorageUnchanged:
+          constructionStorageBefore === (localStorage.getItem(constructionPlannerStorageKey) || ""),
+        constructionPlans: savedConstructionPlans()
+      };
+
+      const layout = settingsGeometrySnapshot(panel);
+      const closeTarget = settingsPanel.querySelector('[data-role="settings-close"]');
+      closeTarget.focus();
+      closeTarget.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await waitFor(() => settingsPanel.hidden && settingsTrigger.getAttribute("aria-expanded") === "false");
+      const closed = {
+        hidden: settingsPanel.hidden,
+        expanded: settingsTrigger.getAttribute("aria-expanded"),
+        focus: settingsFocusSnapshot(panel, settingsPanel)
+      };
+      const persisted = savedPluginUiState();
+      const report = {
+        locale: document.documentElement.lang,
+        requestedSidebarWidth: Number(searchParams.get("sidebarWidth")) || null,
+        initial,
+        opened,
+        exclusion,
+        lifeFill,
+        combatFill,
+        fullLifeExclusion,
+        constructionHidden,
+        keyboardNavigation,
+        pointerReorder,
+        constructionRestored,
+        layout,
+        closed,
+        persisted: {
+          excludedHrids: persisted.guildShrineAutofillExcludedBuffHrids || [],
+          showConstructionView: persisted.showConstructionView,
+          activeView: persisted.activeView,
+          panelOrder: persisted.panelOrder || []
+        }
+      };
+      report.checks = {
+        deterministicFixtureLoaded:
+          initial.activeView === "construction" &&
+          initial.panelOrder.join("|") === "construction|credit|upgrade" &&
+          initial.constructionPlans.length === 1 &&
+          initial.constructionPlans[0].buildingHrid === "/guild_buildings/guild_hall" &&
+          upgradePlanFor(initial.upgradePlans, spiritLifeHrid)?.targetLevel === 1,
+        inlineSettingsAreAccessible:
+          opened.trigger.controls === "mwi-settings-panel" &&
+          opened.trigger.expanded === "true" &&
+          Boolean(opened.trigger.label) &&
+          opened.settings.id === "mwi-settings-panel" &&
+          opened.settings.labelPresent &&
+          Boolean(opened.settings.closeLabel) &&
+          opened.settings.statusLive === "polite" &&
+          opened.settings.shrineInputCount === 4 &&
+          opened.settings.allShrineInputsLabelled &&
+          opened.settings.constructionRole === "switch" &&
+          Boolean(opened.settings.constructionDescribedBy),
+        openingMovesFocusIntoSettings:
+          opened.focus.role === "settings-shrine-autofill" && opened.focus.inSettings && opened.focus.inViewport,
+        spiritLifeExclusionIsDomainSpecific:
+          !exclusion.spiritLifeChecked &&
+          exclusion.spiritCombatChecked &&
+          exclusion.excludedHrids.includes(spiritLifeHrid) &&
+          !exclusion.excludedHrids.includes(spiritCombatHrid),
+        excludedExistingLifePlanIsPreserved:
+          lifeFill.preservedSpiritLife?.startLevel === 0 &&
+          lifeFill.preservedSpiritLife?.targetLevel === 1 &&
+          lifeFill.filledTempoLife?.startLevel === 1 &&
+          lifeFill.filledTempoLife?.targetLevel === 2,
+        combatAutofillStillIncludesSpirit:
+          combatFill.filledSpiritCombat?.startLevel === 0 && combatFill.filledSpiritCombat?.targetLevel === 2,
+        excludingAllLifeShrinesNeverClearsPlans:
+          fullLifeExclusion.buttonDisabled &&
+          Boolean(fullLifeExclusion.buttonTitle) &&
+          fullLifeExclusion.statusVisible &&
+          fullLifeExclusion.statusText.includes(fullLifeExclusion.buttonTitle) &&
+          (fullLifeExclusion.statusRole === "status" || fullLifeExclusion.statusLive === "polite") &&
+          fullLifeExclusion.unchanged,
+        hidingActiveConstructionFallsBackSafely:
+          constructionHidden.activeView === "credit" &&
+          !constructionHidden.tabVisible &&
+          !constructionHidden.panelVisible &&
+          constructionHidden.settingsVisible &&
+          !constructionHidden.switchChecked,
+        hidingConstructionPreservesPlanAndFullOrder:
+          constructionHidden.constructionStorageUnchanged &&
+          constructionHidden.constructionPlans.length === 1 &&
+          constructionHidden.fullOrderBeforeHide.join("|") === "construction|credit|upgrade" &&
+          constructionHidden.fullOrderAfterHide.join("|") === "construction|credit|upgrade",
+        keyboardNavigationSkipsHiddenConstruction:
+          keyboardNavigation.visibleTabRoles.join("|") === "view-credit|view-upgrade" &&
+          keyboardNavigation.activeView === "upgrade" &&
+          keyboardNavigation.focus.role === "view-upgrade",
+        pointerSortingSkipsHiddenConstruction:
+          pointerReorder.constructionHidden &&
+          pointerReorder.visibleOrder.join("|") === "upgrade|credit" &&
+          pointerReorder.fullOrder.join("|") === "construction|upgrade|credit",
+        restoringConstructionPreservesMergedOrderAndPlan:
+          constructionRestored.activeView === "construction" &&
+          constructionRestored.tabVisible &&
+          constructionRestored.tabSelected === "true" &&
+          constructionRestored.panelVisible &&
+          constructionRestored.panelLabelledBy === "mwi-view-tab-construction" &&
+          constructionRestored.settingsVisible &&
+          constructionRestored.switchChecked &&
+          constructionRestored.fullOrder.join("|") === "construction|upgrade|credit" &&
+          constructionRestored.visibleOrder.join("|") === "construction|upgrade|credit" &&
+          constructionRestored.constructionStorageUnchanged &&
+          constructionRestored.constructionPlans.length === 1 &&
+          constructionRestored.constructionPlans[0].buildingHrid === "/guild_buildings/guild_hall",
+        settingsPersistImmediately:
+          report.persisted.excludedHrids.includes(spiritLifeHrid) &&
+          report.persisted.excludedHrids.includes(tempoLifeHrid) &&
+          report.persisted.showConstructionView === true &&
+          report.persisted.activeView === "construction" &&
+          report.persisted.panelOrder.join("|") === "construction|upgrade|credit",
+        escapeClosesSettingsAndRestoresTriggerFocus:
+          closed.hidden && closed.expanded === "false" && closed.focus.role === "toggle-settings",
+        noHorizontalOverflow:
+          layout.rootOverflow === 0 && layout.horizontalOverflow.length === 0 && layout.boundaryOverflow.length === 0,
+        noControlOverlap: layout.controlOverlaps.length === 0
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.settingsAuditFailed = "false";
+      document.body.dataset.settingsAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiSettingsAuditReady = settingsAudit
+      ? prepareSettingsAudit().catch((error) => {
+          const report = {
+            failed: true,
+            error: {
+              name: String(error?.name || "Error"),
+              message: String(error?.message || error || "Unknown settings audit error"),
+              stack: String(error?.stack || "")
+            },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.settingsAuditFailed = "true";
+          document.body.dataset.settingsAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
 
     const runPlanStabilityAudit = async () => {
       await window.__mwiLayoutAuditReady;

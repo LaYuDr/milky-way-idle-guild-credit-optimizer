@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.47";
+window.MwiGuildCreditVersion = "1.1.48";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1752,6 +1752,21 @@ window.MwiGuildCreditVersion = "1.1.47";
       panelViewOrder: "页签顺序",
       moveViewLeft: "将当前页签左移",
       moveViewRight: "将当前页签右移",
+      interfaceSettings: "设置",
+      interfaceSettingsHint: "调整一键填充范围和插件页面；修改会立即在本机生效。",
+      openInterfaceSettings: "打开设置",
+      closeInterfaceSettings: "关闭设置",
+      shrineAutofillRange: "一键填充范围",
+      shrineAutofillRangeHint: "取消勾选后，一键填充不会新增或更新该神龛；已有计划不会删除。",
+      settingsShrinesLoading: "正在读取可配置的公会神龛…",
+      settingsShrinesEmpty: "已读取游戏数据，但没有可配置的公会神龛。",
+      interfaceVisibility: "界面",
+      showConstructionView: "显示公会建设页面",
+      showConstructionViewHint: "关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
+      settingsSaved: "设置已保存。",
+      settingsSaveFailed: "设置已生效，但未能保存；刷新页面后可能恢复。",
+      constructionViewShown: "已显示公会建设页面。",
+      constructionViewHidden: "已隐藏公会建设页面；施工计划仍已保留。",
       constructionReadOnly: "管理员规划工具 · 只计算，不会执行建筑升级",
       guildPointBudget: "可用公会点数",
       manualBudget: "手工预算",
@@ -1879,6 +1894,8 @@ window.MwiGuildCreditVersion = "1.1.47";
       guildShrineBatchPlan: "按当前公会神龛等级批量规划",
       setGuildLifeTarget: "填充生活等级",
       setGuildCombatTarget: "填充战斗等级",
+      guildAutofillAllExcluded: "所有{domain}神龛均已从一键填充中排除。",
+      guildAutofillDomainExcluded: "当前没有参与一键填充的{domain}神龛；请在设置中至少勾选一项。",
       selectedUpgradePlanCount: "已选择 {count} 项升级计划",
       addShrine: "添加神龛",
       clearAll: "清空全部",
@@ -2040,6 +2057,23 @@ window.MwiGuildCreditVersion = "1.1.47";
       panelViewOrder: "Tab order",
       moveViewLeft: "Move current tab left",
       moveViewRight: "Move current tab right",
+      interfaceSettings: "Settings",
+      interfaceSettingsHint:
+        "Choose what batch fill includes and which plugin pages are visible. Changes apply locally.",
+      openInterfaceSettings: "Open settings",
+      closeInterfaceSettings: "Close settings",
+      shrineAutofillRange: "Batch-fill scope",
+      shrineAutofillRangeHint:
+        "Clear an item to stop batch fill from adding or updating it. Existing plans are never deleted.",
+      settingsShrinesLoading: "Reading configurable guild shrines…",
+      settingsShrinesEmpty: "Game data is available, but there are no configurable guild shrines.",
+      interfaceVisibility: "Interface",
+      showConstructionView: "Show the Guild construction page",
+      showConstructionViewHint: "Turning this off hides the tab but keeps every construction plan for later.",
+      settingsSaved: "Settings saved.",
+      settingsSaveFailed: "The change is active but could not be saved; it may reset after a page refresh.",
+      constructionViewShown: "The Guild construction page is now visible.",
+      constructionViewHidden: "The Guild construction page is hidden; its plans are still saved.",
       constructionReadOnly: "Admin planning tool · calculates only and never upgrades buildings",
       guildPointBudget: "Available guild points",
       manualBudget: "Manual budget",
@@ -2168,6 +2202,8 @@ window.MwiGuildCreditVersion = "1.1.47";
       guildShrineBatchPlan: "Batch plan by current guild shrine levels",
       setGuildLifeTarget: "Fill Life levels",
       setGuildCombatTarget: "Fill Combat levels",
+      guildAutofillAllExcluded: "Every {domain} shrine is excluded from batch fill.",
+      guildAutofillDomainExcluded: "No {domain} shrine participates in batch fill. Select one in Settings.",
       selectedUpgradePlanCount: "{count} upgrade plan(s) selected",
       addShrine: "Add shrine",
       clearAll: "Clear all",
@@ -2586,6 +2622,37 @@ window.MwiGuildCreditVersion = "1.1.47";
       if (difference !== 0) return difference;
     }
     return 0;
+  }
+
+  function selectGuildShrineAutofillScope(options = {}) {
+    const entries = Array.isArray(options.entries) ? options.entries : [];
+    const plans = Array.isArray(options.plans) ? options.plans : [];
+    const domain = options.domain === "combat" ? "combat" : options.domain === "life" ? "life" : null;
+    if (!domain) return { eligibleEntries: [], preservedPlans: plans.slice() };
+
+    const excludedSource = options.excludedGuildBuffHrids;
+    const excludedGuildBuffHrids = new Set(
+      excludedSource && typeof excludedSource !== "string" && typeof excludedSource[Symbol.iterator] === "function"
+        ? excludedSource
+        : []
+    );
+    const entriesByHrid = new Map(
+      entries.filter((entry) => entry && typeof entry.hrid === "string").map((entry) => [entry.hrid, entry])
+    );
+    const entryDomain = (entry) => (entry && entry.detail && entry.detail.isCombat === true ? "combat" : "life");
+    const eligibleEntries = entries.filter(
+      (entry) =>
+        entry &&
+        typeof entry.hrid === "string" &&
+        entryDomain(entry) === domain &&
+        !excludedGuildBuffHrids.has(entry.hrid)
+    );
+    const preservedPlans = plans.filter((plan) => {
+      const guildBuffHrid = plan && plan.guildBuffHrid;
+      const entry = entriesByHrid.get(guildBuffHrid);
+      return !entry || entryDomain(entry) !== domain || excludedGuildBuffHrids.has(guildBuffHrid);
+    });
+    return { eligibleEntries, preservedPlans };
   }
 
   function aggregateGuildBuffLevelCosts(levelCosts, startLevel, targetLevel) {
@@ -3051,6 +3118,7 @@ window.MwiGuildCreditVersion = "1.1.47";
     snapshotMarketPrice,
     formatCompactCost,
     compareVersions,
+    selectGuildShrineAutofillScope,
     aggregateGuildBuffLevelCosts,
     aggregateGuildBuffPlans,
     aggregateGuildBuildingLevelCosts,
@@ -3288,6 +3356,22 @@ window.MwiGuildCreditVersion = "1.1.47";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
+
+  function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
+    const values =
+      Array.isArray(value) || (value && typeof value !== "string" && typeof value[Symbol.iterator] === "function")
+        ? Array.from(value)
+        : [];
+    return Array.from(
+      new Set(
+        values.filter(
+          (guildBuffHrid) => typeof guildBuffHrid === "string" && GUILD_BUFF_HRID_PATTERN.test(guildBuffHrid)
+        )
+      )
+    );
+  }
+
   function normalizePanelView(view, panelViews) {
     return panelViews.includes(view) ? view : "credit";
   }
@@ -3329,6 +3413,8 @@ window.MwiGuildCreditVersion = "1.1.47";
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
+        guildShrineAutofillExcludedBuffHrids: [],
+        showConstructionView: true,
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -3376,6 +3462,10 @@ window.MwiGuildCreditVersion = "1.1.47";
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
+          guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
+            stored.guildShrineAutofillExcludedBuffHrids
+          ),
+          showConstructionView: stored.showConstructionView !== false,
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -3453,32 +3543,38 @@ window.MwiGuildCreditVersion = "1.1.47";
     }
 
     function persistPluginUiState(state) {
-      const upgradePlans = state.upgradePlans.map((plan) => ({
-        guildBuffHrid: plan.guildBuffHrid,
-        startLevel: plan.startLevel,
-        targetLevel: plan.targetLevel
-      }));
       try {
-        storage &&
-          storage.setItem(
-            config.UI_STATE_STORAGE_KEY,
-            JSON.stringify({
-              collapsedCreditSections: Array.from(state.collapsedCreditSections),
-              guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
-              guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
-              autoGuildTokenBudget: state.autoGuildTokenBudget,
-              shrineGuideEnabled: state.shrineGuideEnabled,
-              activeView: state.activeView,
-              panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
-              useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
-                state.guildTokenCreditHrids.has(hrid)
-              ),
-              targetCredit: state.targetCredit,
-              upgradePlans
-            })
-          );
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const upgradePlans = state.upgradePlans.map((plan) => ({
+          guildBuffHrid: plan.guildBuffHrid,
+          startLevel: plan.startLevel,
+          targetLevel: plan.targetLevel
+        }));
+        storage.setItem(
+          config.UI_STATE_STORAGE_KEY,
+          JSON.stringify({
+            collapsedCreditSections: Array.from(state.collapsedCreditSections),
+            guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
+            guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
+            autoGuildTokenBudget: state.autoGuildTokenBudget,
+            shrineGuideEnabled: state.shrineGuideEnabled,
+            guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
+              state.guildShrineAutofillExcludedBuffHrids
+            ),
+            showConstructionView: state.showConstructionView !== false,
+            activeView: state.activeView,
+            panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
+            useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
+              state.guildTokenCreditHrids.has(hrid)
+            ),
+            targetCredit: state.targetCredit,
+            upgradePlans
+          })
+        );
+        return true;
       } catch (_) {
         // Keep the current page state when browser storage is unavailable.
+        return false;
       }
     }
 
@@ -3535,7 +3631,12 @@ window.MwiGuildCreditVersion = "1.1.47";
     };
   }
 
-  return { normalizePanelView, normalizePanelOrder, createPluginStorage };
+  return {
+    normalizePanelView,
+    normalizePanelOrder,
+    normalizeGuildShrineAutofillExcludedBuffHrids,
+    createPluginStorage
+  };
 });
 
 
@@ -4419,6 +4520,17 @@ window.MwiGuildCreditVersion = "1.1.47";
     return next;
   }
 
+  function reorderVisibleByIndex(order, visibleValues, value, toIndex) {
+    const fullOrder = Array.from(order || []);
+    const visibleSet = new Set(visibleValues || []);
+    const visibleOrder = fullOrder.filter((candidate) => visibleSet.has(candidate));
+    const fromIndex = visibleOrder.indexOf(value);
+    const nextVisibleOrder = reorderByIndex(visibleOrder, fromIndex, toIndex);
+    if (nextVisibleOrder.every((candidate, index) => candidate === visibleOrder[index])) return fullOrder;
+    let visibleIndex = 0;
+    return fullOrder.map((candidate) => (visibleSet.has(candidate) ? nextVisibleOrder[visibleIndex++] : candidate));
+  }
+
   function createPointerSortable(options) {
     const {
       root,
@@ -4625,7 +4737,7 @@ window.MwiGuildCreditVersion = "1.1.47";
     };
   }
 
-  return { normalizeOrder, reorderByIndex, createPointerSortable };
+  return { normalizeOrder, reorderByIndex, reorderVisibleByIndex, createPointerSortable };
 });
 
 
@@ -4641,7 +4753,11 @@ window.MwiGuildCreditVersion = "1.1.47";
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:20;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
-        #mwi-credit-optimizer .mwi-view-tabs-shell{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;margin:0 0 10px;border-bottom:1px solid #474969}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;background:#2a3a45!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;border-left:1px solid #474969;background:#202238}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:30px;min-width:30px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
+        #mwi-credit-optimizer .mwi-view-tabs-shell{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:stretch;margin:0 0 10px;border-bottom:1px solid #474969}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #43c4ad!important;background:#2a3a45!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;border-left:1px solid #474969;background:#202238}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:30px;min-width:30px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
+        #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
+        #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
+        @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
+        @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
@@ -5106,6 +5222,33 @@ window.MwiGuildCreditVersion = "1.1.47";
         @media (prefers-reduced-motion:reduce){
           #mwi-credit-optimizer .mwi-upgrade-plan,
           #mwi-credit-optimizer .mwi-remove-plan{transition:none}
+        }
+        @container (max-width:400px){
+          #mwi-credit-optimizer .mwi-view-tabs{overflow-x:hidden}
+          #mwi-credit-optimizer .mwi-view-tab-item:not([hidden]){
+            display:flex;
+            flex:1 1 0;
+            min-width:0;
+          }
+          #mwi-credit-optimizer .mwi-view-tab{
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            width:100%;
+            min-width:0;
+            height:100%;
+            min-height:40px!important;
+            padding:5px 3px!important;
+            font-size:11px;
+            line-height:1.15;
+            overflow-wrap:anywhere;
+            hyphens:auto;
+            text-align:center;
+            white-space:normal;
+            word-break:normal;
+          }
+          #mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button,
+          #mwi-credit-optimizer .mwi-settings-trigger{height:100%}
         }
   `;
 
@@ -6054,15 +6197,23 @@ window.MwiGuildCreditVersion = "1.1.47";
 
     function applyGuildShrineTargets(entries, domain) {
       const combat = domain === "combat";
-      const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+      const requestedDomainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+      const { eligibleEntries: domainEntries, preservedPlans } = core.selectGuildShrineAutofillScope({
+        entries,
+        plans: state.upgradePlans,
+        domain,
+        excludedGuildBuffHrids: state.guildShrineAutofillExcludedBuffHrids
+      });
+      if (!requestedDomainEntries.length) return false;
+      if (!domainEntries.length) {
+        state.upgradePresetNotice = t("guildAutofillAllExcluded", {
+          domain: combat ? t("domainCombat") : t("domainLife")
+        });
+        return false;
+      }
       const targets = guildShrineTargetLevels(domainEntries);
       if (!domainEntries.length || domainEntries.some((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid)))
         return false;
-      const entriesByHrid = new Map(entries.map((entry) => [entry.hrid, entry]));
-      const preservedPlans = state.upgradePlans.filter((plan) => {
-        const entry = entriesByHrid.get(plan.guildBuffHrid);
-        return !entry || isCombatGuildBuff(entry) !== combat;
-      });
       const planned = domainEntries
         .map((entry) => {
           const startLevel = currentGuildBuffLevel(entry);
@@ -6152,15 +6303,25 @@ window.MwiGuildCreditVersion = "1.1.47";
     function updateGuildShrineTargetActions(panel, entries) {
       const targets = guildShrineTargetLevels(entries);
       const summaries = [];
+      const excludedDomainNotices = [];
       for (const domain of ["life", "combat"]) {
         const combat = domain === "combat";
+        const domainLabel = combat ? t("domainCombat") : t("domainLife");
         const domainEntries = entries.filter((entry) => isCombatGuildBuff(entry) === combat);
+        const { eligibleEntries } = core.selectGuildShrineAutofillScope({
+          entries,
+          plans: [],
+          domain,
+          excludedGuildBuffHrids: state.guildShrineAutofillExcludedBuffHrids
+        });
+        const eligibleTargets = guildShrineTargetLevels(eligibleEntries);
         const ready =
-          domainEntries.length > 0 && domainEntries.every((entry) => Object.hasOwn(targets, entry.detail.shrineHrid));
+          eligibleEntries.length > 0 &&
+          eligibleEntries.every((entry) => Object.hasOwn(eligibleTargets, entry.detail.shrineHrid));
         const missing = Array.from(
           new Set(
-            domainEntries
-              .filter((entry) => !Object.hasOwn(targets, entry.detail.shrineHrid))
+            eligibleEntries
+              .filter((entry) => !Object.hasOwn(eligibleTargets, entry.detail.shrineHrid))
               .map((entry) => {
                 const nameKey = GUILD_SHRINE_NAME_KEYS[entry.detail.shrineHrid];
                 return nameKey ? t(nameKey) : entry.detail.shrineHrid;
@@ -6168,11 +6329,18 @@ window.MwiGuildCreditVersion = "1.1.47";
           )
         );
         const button = panel.querySelector(`[data-role="set-guild-shrine-target"][data-domain="${domain}"]`);
+        const excludedDomainNotice =
+          !eligibleEntries.length && domainEntries.length
+            ? t("guildAutofillDomainExcluded", { domain: domainLabel })
+            : "";
+        if (excludedDomainNotice) excludedDomainNotices.push(excludedDomainNotice);
         if (button) {
           button.disabled = !ready;
-          button.title = ready
-            ? t("targetButtonReady")
-            : t("targetButtonMissing", { missing: missing.join(ui().locale === "zh-CN" ? "、" : ", ") });
+          button.title =
+            excludedDomainNotice ||
+            (ready
+              ? t("targetButtonReady")
+              : t("targetButtonMissing", { missing: missing.join(ui().locale === "zh-CN" ? "、" : ", ") }));
         }
         const count = Object.keys(targets).filter((shrineHrid) =>
           domainEntries.some((entry) => entry.detail.shrineHrid === shrineHrid)
@@ -6182,7 +6350,7 @@ window.MwiGuildCreditVersion = "1.1.47";
           : "";
         summaries.push(
           t("targetSummary", {
-            domain: combat ? t("domainCombat") : t("domainLife"),
+            domain: domainLabel,
             count: formatNumber(count),
             total: formatNumber(domainEntries.length),
             missing: missingText
@@ -6190,10 +6358,12 @@ window.MwiGuildCreditVersion = "1.1.47";
         );
       }
       const status = panel.querySelector('[data-role="guild-shrine-target-status"]');
-      if (status)
-        status.textContent = state.guildShrineLevels
+      if (status) {
+        const levelStatus = state.guildShrineLevels
           ? t("shrineLevelsRead", { summaries: summaries.join(" · ") })
           : t("shrineLevelsReading");
+        status.textContent = [levelStatus, ...excludedDomainNotices].join(" ");
+      }
     }
 
     function renderGuildUpgradePlans(panel, entries) {
@@ -6594,11 +6764,13 @@ window.MwiGuildCreditVersion = "1.1.47";
 
     return {
       guildBuffEntries,
+      guildBuffLabel,
       itemNameForMaterial,
       currentGuildBuffLevel,
       shrineLevelValue,
       shrineIdentityValues,
       applyGuildShrineTargets,
+      updateGuildShrineTargetActions,
       addGuildUpgradePlan,
       clearGuildUpgradePlans,
       removeGuildUpgradePlan,
@@ -6612,6 +6784,119 @@ window.MwiGuildCreditVersion = "1.1.47";
   }
 
   return { createUpgradeView };
+});
+
+
+// SOURCE: src/ui/settings-view.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditSettingsView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  function createSettingsView(dependencies) {
+    const { state, t, ui, escapeHtml, guildBuffEntries, guildBuffLabel, updateRenderedMarkup } = dependencies;
+
+    function currentExcludedGuildBuffHrids() {
+      const value = state.guildShrineAutofillExcludedBuffHrids;
+      if (value instanceof Set) return value;
+      return new Set(Array.isArray(value) ? value : []);
+    }
+
+    function guildBuffSettingsSnapshot() {
+      const entries = guildBuffEntries()
+        .filter((entry) => entry && entry.hrid && entry.detail)
+        .sort((left, right) =>
+          guildBuffLabel(left.detail, left.hrid).localeCompare(guildBuffLabel(right.detail, right.hrid), ui().locale)
+        );
+      return {
+        entries,
+        ready: entries.length > 0 || (state.guildBuffDetails !== null && state.guildBuffDetails !== undefined)
+      };
+    }
+
+    function guildBuffInputId(entry) {
+      return `mwi-settings-autofill-${String(entry.hrid).replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
+    }
+
+    function renderGuildBuffOption(entry) {
+      const id = guildBuffInputId(entry);
+      const label = guildBuffLabel(entry.detail, entry.hrid);
+      return `<label class="mwi-settings-option" for="${escapeHtml(id)}"><input id="${escapeHtml(id)}" data-role="settings-shrine-autofill" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" type="checkbox"><span>${escapeHtml(label)}</span></label>`;
+    }
+
+    function renderGuildBuffDomain(domain, entries) {
+      const combat = domain === "combat";
+      const matching = entries.filter((entry) => (entry.detail && entry.detail.isCombat === true) === combat);
+      return `<fieldset class="mwi-settings-domain" data-domain="${domain}"><legend>${escapeHtml(
+        combat ? t("domainCombat") : t("domainLife")
+      )}</legend><div class="mwi-settings-options">${matching.map(renderGuildBuffOption).join("")}</div></fieldset>`;
+    }
+
+    function renderShrineAutofillSettings(snapshot) {
+      if (!snapshot.ready)
+        return `<p class="mwi-settings-placeholder" data-role="settings-shrines-loading" role="status">${escapeHtml(
+          t("settingsShrinesLoading")
+        )}</p>`;
+      if (!snapshot.entries.length)
+        return `<p class="mwi-settings-placeholder" data-role="settings-shrines-empty" role="status">${escapeHtml(
+          t("settingsShrinesEmpty")
+        )}</p>`;
+      return `<div class="mwi-settings-domains">${renderGuildBuffDomain(
+        "life",
+        snapshot.entries
+      )}${renderGuildBuffDomain("combat", snapshot.entries)}</div>`;
+    }
+
+    function renderSettingsContent(snapshot) {
+      return `<section class="mwi-settings-block" aria-labelledby="mwi-settings-autofill-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-autofill-heading">${escapeHtml(
+        t("shrineAutofillRange")
+      )}</h4><p>${escapeHtml(t("shrineAutofillRangeHint"))}</p></div>${renderShrineAutofillSettings(
+        snapshot
+      )}</section><section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(
+        t("interfaceVisibility")
+      )}</h4></div><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
+        t("showConstructionView")
+      )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
+        t("showConstructionViewHint")
+      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label></section>`;
+    }
+
+    function renderSettingsMarkup() {
+      const snapshot = guildBuffSettingsSnapshot();
+      const hidden = state.settingsOpen === true ? "" : " hidden";
+      return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-labelledby="mwi-settings-title" tabindex="-1"${hidden}><header class="mwi-settings-header"><span><h3 id="mwi-settings-title">${escapeHtml(
+        t("interfaceSettings")
+      )}</h3><p>${escapeHtml(t("interfaceSettingsHint"))}</p></span><button class="mwi-settings-close" data-role="settings-close" type="button" title="${escapeHtml(
+        t("closeInterfaceSettings")
+      )}" aria-label="${escapeHtml(t("closeInterfaceSettings"))}">×</button></header><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
+        snapshot
+      )}</div><p class="mwi-settings-status" data-role="settings-status" role="status" aria-live="polite" aria-atomic="true"></p></section>`;
+    }
+
+    function refreshSettings(panel) {
+      if (!panel || typeof panel.querySelector !== "function") return null;
+      const settingsPanel =
+        (typeof panel.matches === "function" && panel.matches('[data-role="settings-panel"]') && panel) ||
+        panel.querySelector('[data-role="settings-panel"]');
+      if (!settingsPanel) return null;
+      settingsPanel.hidden = state.settingsOpen !== true;
+      const content = settingsPanel.querySelector('[data-role="settings-content"]');
+      const snapshot = guildBuffSettingsSnapshot();
+      updateRenderedMarkup(content, renderSettingsContent(snapshot));
+      const excludedHrids = currentExcludedGuildBuffHrids();
+      for (const input of settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'))
+        input.checked = !excludedHrids.has(input.dataset.guildBuffHrid);
+      const constructionInput = settingsPanel.querySelector('[data-role="settings-show-construction"]');
+      if (constructionInput) constructionInput.checked = state.showConstructionView !== false;
+      return settingsPanel;
+    }
+
+    return { renderSettingsMarkup, refreshSettings };
+  }
+
+  return { createSettingsView };
 });
 
 
@@ -7593,6 +7878,8 @@ window.MwiGuildCreditVersion = "1.1.47";
       refreshGuildUpgrade,
       refreshGuildConstruction,
       refreshGuildExchangeAdvisor,
+      renderSettingsMarkup,
+      refreshSettings,
       renderGuildTokenCreditPlanToggle,
       renderGuildTokenBudgetControl,
       updateGuildTokenCreditPlanButton,
@@ -7634,19 +7921,43 @@ window.MwiGuildCreditVersion = "1.1.47";
       construction: "guildConstruction"
     };
 
-    function renderPanelTabs() {
+    function panelViewEnabled(view) {
+      return view !== "construction" || state.showConstructionView !== false;
+    }
+
+    function normalizedPanelOrder() {
       state.panelOrder = sortableApi.normalizeOrder(state.panelOrder, PANEL_VIEWS, DEFAULT_PANEL_ORDER);
-      return state.panelOrder
+      return state.panelOrder;
+    }
+
+    function visiblePanelOrder() {
+      return normalizedPanelOrder().filter(panelViewEnabled);
+    }
+
+    function nearestVisiblePanelView(view) {
+      const order = normalizedPanelOrder();
+      const index = order.indexOf(view);
+      for (let distance = 1; distance < order.length; distance += 1) {
+        const after = order[index + distance];
+        if (after && panelViewEnabled(after)) return after;
+        const before = order[index - distance];
+        if (before && panelViewEnabled(before)) return before;
+      }
+      return visiblePanelOrder()[0] || "credit";
+    }
+
+    function renderPanelTabs() {
+      return normalizedPanelOrder()
         .map(
           (view) =>
-            `<span class="mwi-view-tab-item" data-sort-key="${view}"><button id="mwi-view-tab-${view}" class="mwi-view-tab${state.activeView === view ? " mwi-view-tab-active" : ""}" data-role="view-${view}" role="tab" aria-controls="mwi-view-panel-${view}" aria-selected="${String(state.activeView === view)}" tabindex="${state.activeView === view ? "0" : "-1"}" type="button">${escapeHtml(t(panelViewLabels[view]))}</button></span>`
+            `<span class="mwi-view-tab-item" data-sort-key="${view}"${panelViewEnabled(view) ? "" : " hidden"}><button id="mwi-view-tab-${view}" class="mwi-view-tab${state.activeView === view ? " mwi-view-tab-active" : ""}" data-role="view-${view}" role="tab" aria-controls="mwi-view-panel-${view}" aria-selected="${String(state.activeView === view)}" tabindex="${state.activeView === view ? "0" : "-1"}" type="button">${escapeHtml(t(panelViewLabels[view]))}</button></span>`
         )
         .join("");
     }
 
     function reorderPanelView(panel, view, targetIndex) {
-      const fromIndex = state.panelOrder.indexOf(view);
-      const nextOrder = sortableApi.reorderByIndex(state.panelOrder, fromIndex, targetIndex);
+      const visibleOrder = visiblePanelOrder();
+      const nextOrder = sortableApi.reorderVisibleByIndex(state.panelOrder, visibleOrder, view, targetIndex);
       if (nextOrder.every((candidate, index) => candidate === state.panelOrder[index])) return false;
       state.panelOrder = nextOrder;
       const tabList = panel.querySelector(".mwi-view-tabs");
@@ -7660,11 +7971,29 @@ window.MwiGuildCreditVersion = "1.1.47";
     }
 
     function updatePanelOrderButtons(panel) {
-      const index = state.panelOrder.indexOf(state.activeView);
+      const visibleOrder = visiblePanelOrder();
+      const index = visibleOrder.indexOf(state.activeView);
       const previous = panel.querySelector('[data-role="move-active-view"][data-direction="-1"]');
       const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
       if (previous) previous.disabled = index <= 0;
-      if (next) next.disabled = index < 0 || index >= state.panelOrder.length - 1;
+      if (next) next.disabled = index < 0 || index >= visibleOrder.length - 1;
+    }
+
+    function syncPanelViewVisibility(panel) {
+      for (const candidate of PANEL_VIEWS) {
+        const enabled = panelViewEnabled(candidate);
+        const item = panel.querySelector(`.mwi-view-tab-item[data-sort-key="${candidate}"]`);
+        const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
+        const content = panel.querySelector(`[data-role="${candidate}-view"]`);
+        if (item) item.hidden = !enabled;
+        if (!enabled && tab) {
+          tab.setAttribute("aria-selected", "false");
+          tab.setAttribute("tabindex", "-1");
+          tab.classList.remove("mwi-view-tab-active");
+        }
+        if (!enabled && content) content.hidden = true;
+      }
+      updatePanelOrderButtons(panel);
     }
 
     function findConstructionControl(panel, target) {
@@ -7729,6 +8058,7 @@ window.MwiGuildCreditVersion = "1.1.47";
 
     function setPanelView(panel, view) {
       const selectedView = normalizePanelView(view);
+      if (!panelViewEnabled(selectedView)) return false;
       for (const candidate of PANEL_VIEWS) {
         const content = panel.querySelector(`[data-role="${candidate}-view"]`);
         const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
@@ -7742,11 +8072,68 @@ window.MwiGuildCreditVersion = "1.1.47";
       }
       panel.dataset.activeView = selectedView;
       state.activeView = selectedView;
-      persistPluginUiState();
+      const persisted = persistPluginUiState();
       updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else refreshPanel(panel);
+      return persisted;
+    }
+
+    function setSettingsStatus(panel, key) {
+      const status = panel.querySelector('[data-role="settings-status"]');
+      if (status) {
+        status.textContent = key ? t(key) : "";
+        status.dataset.error = String(key === "settingsSaveFailed");
+      }
+    }
+
+    function setSettingsOpen(panel, open, { restoreFocus = false } = {}) {
+      state.settingsOpen = Boolean(open);
+      const trigger = panel.querySelector('[data-role="toggle-settings"]');
+      const settings = panel.querySelector('[data-role="settings-panel"]');
+      if (settings) settings.hidden = !state.settingsOpen;
+      if (trigger) {
+        trigger.setAttribute("aria-expanded", String(state.settingsOpen));
+        const label = t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings");
+        trigger.setAttribute("aria-label", label);
+        trigger.setAttribute("title", label);
+      }
+      if (state.settingsOpen) {
+        const refreshedSettings = refreshSettings(panel);
+        const firstControl =
+          refreshedSettings &&
+          (refreshedSettings.querySelector('[data-role="settings-shrine-autofill"]') ||
+            refreshedSettings.querySelector('[data-role="settings-show-construction"]') ||
+            refreshedSettings.querySelector('[data-role="settings-close"]'));
+        if (firstControl) {
+          try {
+            firstControl.focus({ preventScroll: true });
+          } catch (_) {
+            firstControl.focus();
+          }
+          if (typeof firstControl.scrollIntoView === "function")
+            firstControl.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+      if (restoreFocus && trigger) trigger.focus();
+    }
+
+    function setConstructionViewVisibility(panel, visible) {
+      state.showConstructionView = Boolean(visible);
+      if (!state.showConstructionView && state.activeView === "construction") {
+        setPanelView(panel, nearestVisiblePanelView("construction"));
+      }
+      syncPanelViewVisibility(panel);
+      const persisted = persistPluginUiState();
+      setSettingsStatus(
+        panel,
+        persisted === false
+          ? "settingsSaveFailed"
+          : state.showConstructionView
+            ? "constructionViewShown"
+            : "constructionViewHidden"
+      );
     }
 
     function updatePriceReferenceButtons(panel) {
@@ -7758,6 +8145,9 @@ window.MwiGuildCreditVersion = "1.1.47";
     }
 
     function createPanel() {
+      const savedActiveView = state.activeView;
+      normalizedPanelOrder();
+      if (!panelViewEnabled(state.activeView)) state.activeView = nearestVisiblePanelView(state.activeView);
       const panel = document.createElement("section");
       panel.id = "mwi-credit-optimizer";
       panel.dataset.activeView = state.activeView;
@@ -7770,7 +8160,9 @@ window.MwiGuildCreditVersion = "1.1.47";
         <div class="mwi-view-tabs-shell">
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
           <div class="mwi-view-order-actions" role="group" aria-label="${escapeHtml(t("panelViewOrder"))}"><button class="mwi-icon-button mwi-icon-left" data-role="move-active-view" data-direction="-1" type="button" aria-label="${escapeHtml(t("moveViewLeft"))}" title="${escapeHtml(t("moveViewLeft"))}"></button><button class="mwi-icon-button mwi-icon-right" data-role="move-active-view" data-direction="1" type="button" aria-label="${escapeHtml(t("moveViewRight"))}" title="${escapeHtml(t("moveViewRight"))}"></button></div>
+          <button class="mwi-icon-button mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}"><span aria-hidden="true">&#9881;</span></button>
         </div>
+        ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
           <div class="mwi-controls">
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
@@ -7783,7 +8175,7 @@ window.MwiGuildCreditVersion = "1.1.47";
         <div id="mwi-view-panel-upgrade" data-role="upgrade-view" role="tabpanel" aria-labelledby="mwi-view-tab-upgrade"${state.activeView === "upgrade" ? "" : " hidden"}>
           <section class="mwi-upgrade-planner" aria-label="${escapeHtml(t("guildShrineBatchPlan"))}">
             <div class="mwi-upgrade-preset">
-              <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status">${escapeHtml(t("shrineLevelsReading"))}</small></div>
+              <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status" role="status" aria-live="polite">${escapeHtml(t("shrineLevelsReading"))}</small></div>
               <div class="mwi-upgrade-preset-buttons"><button data-role="set-guild-shrine-target" data-domain="life" type="button">${escapeHtml(t("setGuildLifeTarget"))}</button><button data-role="set-guild-shrine-target" data-domain="combat" type="button">${escapeHtml(t("setGuildCombatTarget"))}</button></div>
             </div>
             <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
@@ -7810,6 +8202,33 @@ window.MwiGuildCreditVersion = "1.1.47";
         else event.target.value = String(state.targetCredit);
         persistPluginUiState();
         refreshPanel(panel);
+      });
+      const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
+      const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
+      settingsTrigger.addEventListener("click", () => setSettingsOpen(panel, !state.settingsOpen));
+      settingsPanel.querySelector('[data-role="settings-close"]').addEventListener("click", () => {
+        setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      settingsPanel.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !state.settingsOpen) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      settingsPanel.addEventListener("change", (event) => {
+        if (event.target.matches('[data-role="settings-shrine-autofill"]')) {
+          const guildBuffHrid = event.target.dataset.guildBuffHrid;
+          if (!guildBuffEntries().some((entry) => entry.hrid === guildBuffHrid)) return;
+          if (event.target.checked) state.guildShrineAutofillExcludedBuffHrids.delete(guildBuffHrid);
+          else state.guildShrineAutofillExcludedBuffHrids.add(guildBuffHrid);
+          const persisted = persistPluginUiState();
+          setSettingsStatus(panel, persisted === false ? "settingsSaveFailed" : "settingsSaved");
+          if (state.activeView === "upgrade") refreshGuildUpgrade(panel);
+          return;
+        }
+        if (event.target.matches('[data-role="settings-show-construction"]')) {
+          setConstructionViewVisibility(panel, event.target.checked);
+        }
       });
       panel.querySelector(".mwi-price-reference").addEventListener("click", (event) => {
         const button = event.target.closest('[data-role="price-reference"]');
@@ -7861,13 +8280,13 @@ window.MwiGuildCreditVersion = "1.1.47";
       panel.querySelector(".mwi-view-order-actions").addEventListener("click", (event) => {
         const button = event.target.closest('[data-role="move-active-view"]');
         if (!button) return;
-        const index = state.panelOrder.indexOf(state.activeView);
+        const index = visiblePanelOrder().indexOf(state.activeView);
         reorderPanelView(panel, state.activeView, index + Number(button.dataset.direction));
       });
       updatePanelOrderButtons(panel);
       panel.querySelector(".mwi-view-tabs").addEventListener("keydown", (event) => {
         if (event.altKey) return;
-        const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab"));
+        const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab-item:not([hidden]) .mwi-view-tab"));
         const current = event.target.closest(".mwi-view-tab");
         const index = tabs.indexOf(current);
         if (index < 0) return;
@@ -8183,8 +8602,8 @@ window.MwiGuildCreditVersion = "1.1.47";
       const tabSortable = sortableApi.createPointerSortable({
         root: panel,
         containerSelector: ".mwi-view-tabs",
-        itemSelector: ".mwi-view-tab-item",
-        handleSelector: ".mwi-view-tab-item",
+        itemSelector: ".mwi-view-tab-item:not([hidden])",
+        handleSelector: ".mwi-view-tab-item:not([hidden])",
         axis: "x",
         onCommit: ({ key, toIndex }) => reorderPanelView(panel, key, toIndex)
       });
@@ -8201,6 +8620,7 @@ window.MwiGuildCreditVersion = "1.1.47";
       });
       panel.__mwiSortableControllers = [tabSortable, constructionSortable];
       sortableControllers.push(tabSortable, constructionSortable);
+      if (state.activeView !== savedActiveView) persistPluginUiState();
       checkPluginUpdate(panel);
       return panel;
     }
@@ -8366,6 +8786,7 @@ window.MwiGuildCreditVersion = "1.1.47";
   const stylesApi = window.MwiGuildCreditStyles;
   const constructionViewApi = window.MwiGuildCreditConstructionView;
   const upgradeViewApi = window.MwiGuildCreditUpgradeView;
+  const settingsViewApi = window.MwiGuildCreditSettingsView;
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
@@ -8388,6 +8809,7 @@ window.MwiGuildCreditVersion = "1.1.47";
     !stylesApi ||
     !constructionViewApi ||
     !upgradeViewApi ||
+    !settingsViewApi ||
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
@@ -8456,6 +8878,9 @@ window.MwiGuildCreditVersion = "1.1.47";
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
+    guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
+    showConstructionView: savedUiState.showConstructionView,
+    settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,
     shrineGuideFrame: null,
@@ -8570,6 +8995,7 @@ window.MwiGuildCreditVersion = "1.1.47";
       else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
         refreshGuildConstruction(state.panel);
       else scheduleShrineGuide();
+      if (state.panel && state.panel.isConnected && state.settingsOpen) refreshSettings(state.panel);
     },
     delay: 120,
     setTimer: window.setTimeout.bind(window),
@@ -8605,7 +9031,7 @@ window.MwiGuildCreditVersion = "1.1.47";
   }
 
   function persistPluginUiState() {
-    pluginStorage.persistPluginUiState(state);
+    return pluginStorage.persistPluginUiState(state);
   }
 
   function persistLiveMarketData() {
@@ -8904,6 +9330,7 @@ window.MwiGuildCreditVersion = "1.1.47";
   });
   const {
     guildBuffEntries,
+    guildBuffLabel,
     itemNameForMaterial,
     currentGuildBuffLevel,
     shrineLevelValue,
@@ -8919,6 +9346,17 @@ window.MwiGuildCreditVersion = "1.1.47";
     setGuildTokenBudget,
     refreshGuildUpgrade
   } = upgradeView;
+
+  const settingsView = settingsViewApi.createSettingsView({
+    state,
+    t,
+    ui,
+    escapeHtml,
+    guildBuffEntries,
+    guildBuffLabel,
+    updateRenderedMarkup
+  });
+  const { renderSettingsMarkup, refreshSettings } = settingsView;
 
   const constructionView = constructionViewApi.createConstructionView({
     state,
@@ -9005,6 +9443,8 @@ window.MwiGuildCreditVersion = "1.1.47";
     refreshGuildUpgrade,
     refreshGuildConstruction,
     refreshGuildExchangeAdvisor: (...args) => refreshGuildExchangeAdvisor(...args),
+    renderSettingsMarkup,
+    refreshSettings,
     renderGuildTokenCreditPlanToggle,
     renderGuildTokenBudgetControl,
     updateGuildTokenCreditPlanButton,
@@ -9211,6 +9651,7 @@ window.MwiGuildCreditVersion = "1.1.47";
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
+    if (state.settingsOpen) refreshSettings(state.panel);
     if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
     else if (state.panel.dataset.activeView === "construction") refreshGuildConstruction(state.panel);
     else refreshPanel(state.panel);

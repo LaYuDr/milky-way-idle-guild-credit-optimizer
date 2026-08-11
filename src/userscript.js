@@ -18,6 +18,7 @@
   const stylesApi = window.MwiGuildCreditStyles;
   const constructionViewApi = window.MwiGuildCreditConstructionView;
   const upgradeViewApi = window.MwiGuildCreditUpgradeView;
+  const settingsViewApi = window.MwiGuildCreditSettingsView;
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
@@ -40,6 +41,7 @@
     !stylesApi ||
     !constructionViewApi ||
     !upgradeViewApi ||
+    !settingsViewApi ||
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
@@ -108,6 +110,9 @@
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
+    guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
+    showConstructionView: savedUiState.showConstructionView,
+    settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,
     shrineGuideFrame: null,
@@ -222,6 +227,7 @@
       else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
         refreshGuildConstruction(state.panel);
       else scheduleShrineGuide();
+      if (state.panel && state.panel.isConnected && state.settingsOpen) refreshSettings(state.panel);
     },
     delay: 120,
     setTimer: window.setTimeout.bind(window),
@@ -257,7 +263,7 @@
   }
 
   function persistPluginUiState() {
-    pluginStorage.persistPluginUiState(state);
+    return pluginStorage.persistPluginUiState(state);
   }
 
   function persistLiveMarketData() {
@@ -556,6 +562,7 @@
   });
   const {
     guildBuffEntries,
+    guildBuffLabel,
     itemNameForMaterial,
     currentGuildBuffLevel,
     shrineLevelValue,
@@ -571,6 +578,17 @@
     setGuildTokenBudget,
     refreshGuildUpgrade
   } = upgradeView;
+
+  const settingsView = settingsViewApi.createSettingsView({
+    state,
+    t,
+    ui,
+    escapeHtml,
+    guildBuffEntries,
+    guildBuffLabel,
+    updateRenderedMarkup
+  });
+  const { renderSettingsMarkup, refreshSettings } = settingsView;
 
   const constructionView = constructionViewApi.createConstructionView({
     state,
@@ -657,6 +675,8 @@
     refreshGuildUpgrade,
     refreshGuildConstruction,
     refreshGuildExchangeAdvisor: (...args) => refreshGuildExchangeAdvisor(...args),
+    renderSettingsMarkup,
+    refreshSettings,
     renderGuildTokenCreditPlanToggle,
     renderGuildTokenBudgetControl,
     updateGuildTokenCreditPlanButton,
@@ -863,6 +883,7 @@
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
+    if (state.settingsOpen) refreshSettings(state.panel);
     if (state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
     else if (state.panel.dataset.activeView === "construction") refreshGuildConstruction(state.panel);
     else refreshPanel(state.panel);

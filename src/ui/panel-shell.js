@@ -25,6 +25,8 @@
       refreshGuildUpgrade,
       refreshGuildConstruction,
       refreshGuildExchangeAdvisor,
+      renderSettingsMarkup,
+      refreshSettings,
       renderGuildTokenCreditPlanToggle,
       renderGuildTokenBudgetControl,
       updateGuildTokenCreditPlanButton,
@@ -66,19 +68,43 @@
       construction: "guildConstruction"
     };
 
-    function renderPanelTabs() {
+    function panelViewEnabled(view) {
+      return view !== "construction" || state.showConstructionView !== false;
+    }
+
+    function normalizedPanelOrder() {
       state.panelOrder = sortableApi.normalizeOrder(state.panelOrder, PANEL_VIEWS, DEFAULT_PANEL_ORDER);
-      return state.panelOrder
+      return state.panelOrder;
+    }
+
+    function visiblePanelOrder() {
+      return normalizedPanelOrder().filter(panelViewEnabled);
+    }
+
+    function nearestVisiblePanelView(view) {
+      const order = normalizedPanelOrder();
+      const index = order.indexOf(view);
+      for (let distance = 1; distance < order.length; distance += 1) {
+        const after = order[index + distance];
+        if (after && panelViewEnabled(after)) return after;
+        const before = order[index - distance];
+        if (before && panelViewEnabled(before)) return before;
+      }
+      return visiblePanelOrder()[0] || "credit";
+    }
+
+    function renderPanelTabs() {
+      return normalizedPanelOrder()
         .map(
           (view) =>
-            `<span class="mwi-view-tab-item" data-sort-key="${view}"><button id="mwi-view-tab-${view}" class="mwi-view-tab${state.activeView === view ? " mwi-view-tab-active" : ""}" data-role="view-${view}" role="tab" aria-controls="mwi-view-panel-${view}" aria-selected="${String(state.activeView === view)}" tabindex="${state.activeView === view ? "0" : "-1"}" type="button">${escapeHtml(t(panelViewLabels[view]))}</button></span>`
+            `<span class="mwi-view-tab-item" data-sort-key="${view}"${panelViewEnabled(view) ? "" : " hidden"}><button id="mwi-view-tab-${view}" class="mwi-view-tab${state.activeView === view ? " mwi-view-tab-active" : ""}" data-role="view-${view}" role="tab" aria-controls="mwi-view-panel-${view}" aria-selected="${String(state.activeView === view)}" tabindex="${state.activeView === view ? "0" : "-1"}" type="button">${escapeHtml(t(panelViewLabels[view]))}</button></span>`
         )
         .join("");
     }
 
     function reorderPanelView(panel, view, targetIndex) {
-      const fromIndex = state.panelOrder.indexOf(view);
-      const nextOrder = sortableApi.reorderByIndex(state.panelOrder, fromIndex, targetIndex);
+      const visibleOrder = visiblePanelOrder();
+      const nextOrder = sortableApi.reorderVisibleByIndex(state.panelOrder, visibleOrder, view, targetIndex);
       if (nextOrder.every((candidate, index) => candidate === state.panelOrder[index])) return false;
       state.panelOrder = nextOrder;
       const tabList = panel.querySelector(".mwi-view-tabs");
@@ -92,11 +118,29 @@
     }
 
     function updatePanelOrderButtons(panel) {
-      const index = state.panelOrder.indexOf(state.activeView);
+      const visibleOrder = visiblePanelOrder();
+      const index = visibleOrder.indexOf(state.activeView);
       const previous = panel.querySelector('[data-role="move-active-view"][data-direction="-1"]');
       const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
       if (previous) previous.disabled = index <= 0;
-      if (next) next.disabled = index < 0 || index >= state.panelOrder.length - 1;
+      if (next) next.disabled = index < 0 || index >= visibleOrder.length - 1;
+    }
+
+    function syncPanelViewVisibility(panel) {
+      for (const candidate of PANEL_VIEWS) {
+        const enabled = panelViewEnabled(candidate);
+        const item = panel.querySelector(`.mwi-view-tab-item[data-sort-key="${candidate}"]`);
+        const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
+        const content = panel.querySelector(`[data-role="${candidate}-view"]`);
+        if (item) item.hidden = !enabled;
+        if (!enabled && tab) {
+          tab.setAttribute("aria-selected", "false");
+          tab.setAttribute("tabindex", "-1");
+          tab.classList.remove("mwi-view-tab-active");
+        }
+        if (!enabled && content) content.hidden = true;
+      }
+      updatePanelOrderButtons(panel);
     }
 
     function findConstructionControl(panel, target) {
@@ -161,6 +205,7 @@
 
     function setPanelView(panel, view) {
       const selectedView = normalizePanelView(view);
+      if (!panelViewEnabled(selectedView)) return false;
       for (const candidate of PANEL_VIEWS) {
         const content = panel.querySelector(`[data-role="${candidate}-view"]`);
         const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
@@ -174,11 +219,68 @@
       }
       panel.dataset.activeView = selectedView;
       state.activeView = selectedView;
-      persistPluginUiState();
+      const persisted = persistPluginUiState();
       updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else refreshPanel(panel);
+      return persisted;
+    }
+
+    function setSettingsStatus(panel, key) {
+      const status = panel.querySelector('[data-role="settings-status"]');
+      if (status) {
+        status.textContent = key ? t(key) : "";
+        status.dataset.error = String(key === "settingsSaveFailed");
+      }
+    }
+
+    function setSettingsOpen(panel, open, { restoreFocus = false } = {}) {
+      state.settingsOpen = Boolean(open);
+      const trigger = panel.querySelector('[data-role="toggle-settings"]');
+      const settings = panel.querySelector('[data-role="settings-panel"]');
+      if (settings) settings.hidden = !state.settingsOpen;
+      if (trigger) {
+        trigger.setAttribute("aria-expanded", String(state.settingsOpen));
+        const label = t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings");
+        trigger.setAttribute("aria-label", label);
+        trigger.setAttribute("title", label);
+      }
+      if (state.settingsOpen) {
+        const refreshedSettings = refreshSettings(panel);
+        const firstControl =
+          refreshedSettings &&
+          (refreshedSettings.querySelector('[data-role="settings-shrine-autofill"]') ||
+            refreshedSettings.querySelector('[data-role="settings-show-construction"]') ||
+            refreshedSettings.querySelector('[data-role="settings-close"]'));
+        if (firstControl) {
+          try {
+            firstControl.focus({ preventScroll: true });
+          } catch (_) {
+            firstControl.focus();
+          }
+          if (typeof firstControl.scrollIntoView === "function")
+            firstControl.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+      if (restoreFocus && trigger) trigger.focus();
+    }
+
+    function setConstructionViewVisibility(panel, visible) {
+      state.showConstructionView = Boolean(visible);
+      if (!state.showConstructionView && state.activeView === "construction") {
+        setPanelView(panel, nearestVisiblePanelView("construction"));
+      }
+      syncPanelViewVisibility(panel);
+      const persisted = persistPluginUiState();
+      setSettingsStatus(
+        panel,
+        persisted === false
+          ? "settingsSaveFailed"
+          : state.showConstructionView
+            ? "constructionViewShown"
+            : "constructionViewHidden"
+      );
     }
 
     function updatePriceReferenceButtons(panel) {
@@ -190,6 +292,9 @@
     }
 
     function createPanel() {
+      const savedActiveView = state.activeView;
+      normalizedPanelOrder();
+      if (!panelViewEnabled(state.activeView)) state.activeView = nearestVisiblePanelView(state.activeView);
       const panel = document.createElement("section");
       panel.id = "mwi-credit-optimizer";
       panel.dataset.activeView = state.activeView;
@@ -202,7 +307,9 @@
         <div class="mwi-view-tabs-shell">
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
           <div class="mwi-view-order-actions" role="group" aria-label="${escapeHtml(t("panelViewOrder"))}"><button class="mwi-icon-button mwi-icon-left" data-role="move-active-view" data-direction="-1" type="button" aria-label="${escapeHtml(t("moveViewLeft"))}" title="${escapeHtml(t("moveViewLeft"))}"></button><button class="mwi-icon-button mwi-icon-right" data-role="move-active-view" data-direction="1" type="button" aria-label="${escapeHtml(t("moveViewRight"))}" title="${escapeHtml(t("moveViewRight"))}"></button></div>
+          <button class="mwi-icon-button mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}"><span aria-hidden="true">&#9881;</span></button>
         </div>
+        ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
           <div class="mwi-controls">
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
@@ -215,7 +322,7 @@
         <div id="mwi-view-panel-upgrade" data-role="upgrade-view" role="tabpanel" aria-labelledby="mwi-view-tab-upgrade"${state.activeView === "upgrade" ? "" : " hidden"}>
           <section class="mwi-upgrade-planner" aria-label="${escapeHtml(t("guildShrineBatchPlan"))}">
             <div class="mwi-upgrade-preset">
-              <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status">${escapeHtml(t("shrineLevelsReading"))}</small></div>
+              <div class="mwi-upgrade-preset-copy"><strong>${escapeHtml(t("guildShrineBatchPlan"))}</strong><small data-role="guild-shrine-target-status" role="status" aria-live="polite">${escapeHtml(t("shrineLevelsReading"))}</small></div>
               <div class="mwi-upgrade-preset-buttons"><button data-role="set-guild-shrine-target" data-domain="life" type="button">${escapeHtml(t("setGuildLifeTarget"))}</button><button data-role="set-guild-shrine-target" data-domain="combat" type="button">${escapeHtml(t("setGuildCombatTarget"))}</button></div>
             </div>
             <div class="mwi-upgrade-plan-list" data-role="upgrade-plan-list"></div>
@@ -242,6 +349,33 @@
         else event.target.value = String(state.targetCredit);
         persistPluginUiState();
         refreshPanel(panel);
+      });
+      const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
+      const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
+      settingsTrigger.addEventListener("click", () => setSettingsOpen(panel, !state.settingsOpen));
+      settingsPanel.querySelector('[data-role="settings-close"]').addEventListener("click", () => {
+        setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      settingsPanel.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !state.settingsOpen) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      settingsPanel.addEventListener("change", (event) => {
+        if (event.target.matches('[data-role="settings-shrine-autofill"]')) {
+          const guildBuffHrid = event.target.dataset.guildBuffHrid;
+          if (!guildBuffEntries().some((entry) => entry.hrid === guildBuffHrid)) return;
+          if (event.target.checked) state.guildShrineAutofillExcludedBuffHrids.delete(guildBuffHrid);
+          else state.guildShrineAutofillExcludedBuffHrids.add(guildBuffHrid);
+          const persisted = persistPluginUiState();
+          setSettingsStatus(panel, persisted === false ? "settingsSaveFailed" : "settingsSaved");
+          if (state.activeView === "upgrade") refreshGuildUpgrade(panel);
+          return;
+        }
+        if (event.target.matches('[data-role="settings-show-construction"]')) {
+          setConstructionViewVisibility(panel, event.target.checked);
+        }
       });
       panel.querySelector(".mwi-price-reference").addEventListener("click", (event) => {
         const button = event.target.closest('[data-role="price-reference"]');
@@ -293,13 +427,13 @@
       panel.querySelector(".mwi-view-order-actions").addEventListener("click", (event) => {
         const button = event.target.closest('[data-role="move-active-view"]');
         if (!button) return;
-        const index = state.panelOrder.indexOf(state.activeView);
+        const index = visiblePanelOrder().indexOf(state.activeView);
         reorderPanelView(panel, state.activeView, index + Number(button.dataset.direction));
       });
       updatePanelOrderButtons(panel);
       panel.querySelector(".mwi-view-tabs").addEventListener("keydown", (event) => {
         if (event.altKey) return;
-        const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab"));
+        const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab-item:not([hidden]) .mwi-view-tab"));
         const current = event.target.closest(".mwi-view-tab");
         const index = tabs.indexOf(current);
         if (index < 0) return;
@@ -615,8 +749,8 @@
       const tabSortable = sortableApi.createPointerSortable({
         root: panel,
         containerSelector: ".mwi-view-tabs",
-        itemSelector: ".mwi-view-tab-item",
-        handleSelector: ".mwi-view-tab-item",
+        itemSelector: ".mwi-view-tab-item:not([hidden])",
+        handleSelector: ".mwi-view-tab-item:not([hidden])",
         axis: "x",
         onCommit: ({ key, toIndex }) => reorderPanelView(panel, key, toIndex)
       });
@@ -633,6 +767,7 @@
       });
       panel.__mwiSortableControllers = [tabSortable, constructionSortable];
       sortableControllers.push(tabSortable, constructionSortable);
+      if (state.activeView !== savedActiveView) persistPluginUiState();
       checkPluginUpdate(panel);
       return panel;
     }

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.48] - 2026-08-11
+
+### Changed
+
+- Added persistent settings for excluding individual life or combat shrine buffs from batch fill, hiding the Guild Construction view without deleting plans, and preserving accessible focus and responsive tab ordering.
+
 ## [1.1.47] - 2026-08-11
 
 ### Fixed

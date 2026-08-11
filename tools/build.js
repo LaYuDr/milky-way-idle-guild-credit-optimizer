@@ -91,6 +91,7 @@ const SOURCE_FILES = [
   "src/ui/styles.js",
   "src/ui/construction-view.js",
   "src/ui/upgrade-view.js",
+  "src/ui/settings-view.js",
   "src/ui/shrine-guide-ui.js",
   "src/ui/exchange-advisor.js",
   "src/ui/panel-shell.js",

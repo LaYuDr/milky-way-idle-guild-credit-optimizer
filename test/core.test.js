@@ -733,6 +733,36 @@ test("版本号比较能识别可用更新", () => {
   assert.equal(core.compareVersions("0.5.0", "0.4.25"), 1);
 });
 
+test("神龛一键填充只替换同域未排除计划", () => {
+  const lifeIncluded = { hrid: "/guild_buffs/force_life", detail: { isCombat: false } };
+  const lifeExcluded = { hrid: "/guild_buffs/spirit_life", detail: { isCombat: false } };
+  const combatIncluded = { hrid: "/guild_buffs/force_combat", detail: { isCombat: true } };
+  const entries = [lifeIncluded, lifeExcluded, combatIncluded];
+  const lifeIncludedPlan = { id: "replace-life", guildBuffHrid: lifeIncluded.hrid };
+  const lifeExcludedPlan = { id: "keep-excluded", guildBuffHrid: lifeExcluded.hrid };
+  const combatPlan = { id: "keep-other-domain", guildBuffHrid: combatIncluded.hrid };
+  const unknownPlan = { id: "keep-unknown", guildBuffHrid: "/guild_buffs/removed_from_game" };
+
+  const result = core.selectGuildShrineAutofillScope({
+    entries,
+    plans: [lifeIncludedPlan, lifeExcludedPlan, combatPlan, unknownPlan],
+    domain: "life",
+    excludedGuildBuffHrids: new Set([lifeExcluded.hrid])
+  });
+
+  assert.deepEqual(result.eligibleEntries, [lifeIncluded]);
+  assert.deepEqual(result.preservedPlans, [lifeExcludedPlan, combatPlan, unknownPlan]);
+});
+
+test("神龛一键填充的未知域不删除任何旧计划", () => {
+  const entry = { hrid: "/guild_buffs/force_life", detail: { isCombat: false } };
+  const plans = [{ id: "keep", guildBuffHrid: entry.hrid }];
+  assert.deepEqual(core.selectGuildShrineAutofillScope({ entries: [entry], plans, domain: "unknown" }), {
+    eligibleEntries: [],
+    preservedPlans: plans
+  });
+});
+
 test("神龛增益从起始等级到目标等级逐级累计信用点", () => {
   const result = core.aggregateGuildBuffLevelCosts(
     [
@@ -1648,7 +1678,7 @@ test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
   );
 });
 
-test("三个内部页签会持久化并恢复最后打开的视图", () => {
+test("内部页签会持久化并恢复最后打开的可见视图", () => {
   const source = projectRuntimeSource();
   assert.match(source, /PANEL_VIEWS: \["credit", "upgrade", "construction"\]/);
   assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction"\]/);
@@ -1656,12 +1686,14 @@ test("三个内部页签会持久化并恢复最后打开的视图", () => {
   assert.match(source, /activeView: normalizePanelView\(stored\.activeView, config\.PANEL_VIEWS\)/);
   assert.match(source, /activeView: state\.activeView/);
   assert.match(source, /panelOrder: normalizePanelOrder\(state\.panelOrder/);
-  assert.match(source, /state\.activeView = selectedView;\s*persistPluginUiState\(\);/);
+  assert.match(source, /state\.activeView = selectedView;\s*const persisted = persistPluginUiState\(\);/);
   assert.match(source, /panel\.dataset\.activeView = state\.activeView/);
   assert.match(source, /data-role="credit-view"[\s\S]{0,150}state\.activeView === "credit"/);
   assert.match(source, /data-role="upgrade-view"[\s\S]{0,150}state\.activeView === "upgrade"/);
   assert.match(source, /data-role="construction-view"[\s\S]{0,150}state\.activeView === "construction"/);
   assert.match(source, /activeView === "construction"\) refreshGuildConstruction/);
+  assert.match(source, /showConstructionView: stored\.showConstructionView !== false/);
+  assert.match(source, /\.mwi-view-tab-item:not\(\[hidden\]\)/);
   assert.match(source, /createPointerSortable/);
 });
 

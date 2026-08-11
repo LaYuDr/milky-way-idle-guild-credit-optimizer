@@ -5,6 +5,22 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
+
+  function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
+    const values =
+      Array.isArray(value) || (value && typeof value !== "string" && typeof value[Symbol.iterator] === "function")
+        ? Array.from(value)
+        : [];
+    return Array.from(
+      new Set(
+        values.filter(
+          (guildBuffHrid) => typeof guildBuffHrid === "string" && GUILD_BUFF_HRID_PATTERN.test(guildBuffHrid)
+        )
+      )
+    );
+  }
+
   function normalizePanelView(view, panelViews) {
     return panelViews.includes(view) ? view : "credit";
   }
@@ -46,6 +62,8 @@
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
+        guildShrineAutofillExcludedBuffHrids: [],
+        showConstructionView: true,
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -93,6 +111,10 @@
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
+          guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
+            stored.guildShrineAutofillExcludedBuffHrids
+          ),
+          showConstructionView: stored.showConstructionView !== false,
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -170,32 +192,38 @@
     }
 
     function persistPluginUiState(state) {
-      const upgradePlans = state.upgradePlans.map((plan) => ({
-        guildBuffHrid: plan.guildBuffHrid,
-        startLevel: plan.startLevel,
-        targetLevel: plan.targetLevel
-      }));
       try {
-        storage &&
-          storage.setItem(
-            config.UI_STATE_STORAGE_KEY,
-            JSON.stringify({
-              collapsedCreditSections: Array.from(state.collapsedCreditSections),
-              guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
-              guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
-              autoGuildTokenBudget: state.autoGuildTokenBudget,
-              shrineGuideEnabled: state.shrineGuideEnabled,
-              activeView: state.activeView,
-              panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
-              useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
-                state.guildTokenCreditHrids.has(hrid)
-              ),
-              targetCredit: state.targetCredit,
-              upgradePlans
-            })
-          );
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const upgradePlans = state.upgradePlans.map((plan) => ({
+          guildBuffHrid: plan.guildBuffHrid,
+          startLevel: plan.startLevel,
+          targetLevel: plan.targetLevel
+        }));
+        storage.setItem(
+          config.UI_STATE_STORAGE_KEY,
+          JSON.stringify({
+            collapsedCreditSections: Array.from(state.collapsedCreditSections),
+            guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
+            guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
+            autoGuildTokenBudget: state.autoGuildTokenBudget,
+            shrineGuideEnabled: state.shrineGuideEnabled,
+            guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
+              state.guildShrineAutofillExcludedBuffHrids
+            ),
+            showConstructionView: state.showConstructionView !== false,
+            activeView: state.activeView,
+            panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
+            useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
+              state.guildTokenCreditHrids.has(hrid)
+            ),
+            targetCredit: state.targetCredit,
+            upgradePlans
+          })
+        );
+        return true;
       } catch (_) {
         // Keep the current page state when browser storage is unavailable.
+        return false;
       }
     }
 
@@ -252,5 +280,10 @@
     };
   }
 
-  return { normalizePanelView, normalizePanelOrder, createPluginStorage };
+  return {
+    normalizePanelView,
+    normalizePanelOrder,
+    normalizeGuildShrineAutofillExcludedBuffHrids,
+    createPluginStorage
+  };
 });

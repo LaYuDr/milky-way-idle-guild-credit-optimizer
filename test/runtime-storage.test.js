@@ -43,6 +43,8 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildTokenCreditHrids: [],
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
+    guildShrineAutofillExcludedBuffHrids: [],
+    showConstructionView: true,
     activeView: "credit",
     panelOrder: ["upgrade", "credit", "construction"],
     targetCredit: 1,
@@ -62,6 +64,58 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   assert.equal(migrated.activeView, "construction");
   assert.deepEqual(migrated.panelOrder, ["upgrade", "credit", "construction"]);
   assert.equal(migrated.targetCredit, 200);
+  assert.deepEqual(migrated.guildShrineAutofillExcludedBuffHrids, []);
+  assert.equal(migrated.showConstructionView, true);
+});
+
+test("神龛填充排除项只保留合法 HRID 并与建设页可见性持久化", () => {
+  const storage = memoryStorage({
+    [config.UI_STATE_STORAGE_KEY]: JSON.stringify({
+      guildShrineAutofillExcludedBuffHrids: [
+        "/guild_buffs/spirit_life",
+        "/guild_buffs/spirit_life",
+        "/guild_buffs/combat/path-2.valid",
+        "/items/not_a_guild_buff",
+        "/guild_buffs/contains space",
+        42
+      ],
+      showConstructionView: false
+    })
+  });
+  const pluginStorage = createStorage(storage);
+  const loaded = pluginStorage.loadSavedPluginUiState();
+  assert.deepEqual(loaded.guildShrineAutofillExcludedBuffHrids, [
+    "/guild_buffs/spirit_life",
+    "/guild_buffs/combat/path-2.valid"
+  ]);
+  assert.equal(loaded.showConstructionView, false);
+
+  loaded.guildShrineAutofillExcludedBuffHrids = new Set([
+    "/guild_buffs/force_combat",
+    "/guild_buffs/force_combat",
+    "invalid"
+  ]);
+  loaded.showConstructionView = false;
+  assert.equal(
+    pluginStorage.persistPluginUiState({
+      ...loaded,
+      collapsedCreditSections: new Set(),
+      guildTokenCreditHrids: new Set()
+    }),
+    true
+  );
+  const persisted = JSON.parse(storage.value(config.UI_STATE_STORAGE_KEY));
+  assert.deepEqual(persisted.guildShrineAutofillExcludedBuffHrids, ["/guild_buffs/force_combat"]);
+  assert.equal(persisted.showConstructionView, false);
+});
+
+test("建设页可见性仅在明确为 false 时关闭", () => {
+  for (const showConstructionView of [undefined, null, 0, "false", true]) {
+    const loaded = createStorage(
+      memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ showConstructionView }) })
+    ).loadSavedPluginUiState();
+    assert.equal(loaded.showConstructionView, true);
+  }
 });
 
 test("页签顺序忽略重复和未知项并在保存时补齐缺项", () => {
@@ -120,6 +174,8 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
     guildTokenCreditHrids: new Set(["/items/green_guild_credit"]),
     autoGuildTokenBudget: 10,
     shrineGuideEnabled: true,
+    guildShrineAutofillExcludedBuffHrids: [],
+    showConstructionView: true,
     activeView: "upgrade",
     panelOrder: ["construction", "upgrade", "credit"],
     targetCredit: 100,
@@ -129,6 +185,8 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
   assert.equal(ui.activeView, "upgrade");
   assert.deepEqual(ui.panelOrder, ["construction", "upgrade", "credit"]);
   assert.deepEqual(ui.guildTokenCreditHrids, ["/items/green_guild_credit"]);
+  assert.deepEqual(ui.guildShrineAutofillExcludedBuffHrids, []);
+  assert.equal(ui.showConstructionView, true);
 
   const liveData = Object.create(null);
   marketDataApi.applyLiveMarketUpdate(
@@ -141,4 +199,33 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
   assert.equal(restored.valid, true);
   assert.equal(restored.revision, 7);
   assert.equal(restored.liveData["/items/beast_hide"].levels["0"].a, 42);
+});
+
+test("UI 持久化会返回写入成功或失败", () => {
+  const state = {
+    collapsedCreditSections: new Set(),
+    guildTokenValuesCollapsed: false,
+    guildTokenCreditHrids: new Set(),
+    autoGuildTokenBudget: null,
+    shrineGuideEnabled: false,
+    guildShrineAutofillExcludedBuffHrids: [],
+    showConstructionView: true,
+    activeView: "credit",
+    panelOrder: ["upgrade", "credit", "construction"],
+    targetCredit: 1,
+    upgradePlans: []
+  };
+  assert.equal(createStorage(memoryStorage()).persistPluginUiState(state), true);
+  assert.equal(createStorage(null).persistPluginUiState(state), false);
+  assert.equal(
+    createStorage({
+      getItem() {
+        return null;
+      },
+      setItem() {
+        throw new Error("quota exceeded");
+      }
+    }).persistPluginUiState(state),
+    false
+  );
 });

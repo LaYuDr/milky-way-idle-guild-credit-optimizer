@@ -296,6 +296,37 @@
     return 0;
   }
 
+  function selectGuildShrineAutofillScope(options = {}) {
+    const entries = Array.isArray(options.entries) ? options.entries : [];
+    const plans = Array.isArray(options.plans) ? options.plans : [];
+    const domain = options.domain === "combat" ? "combat" : options.domain === "life" ? "life" : null;
+    if (!domain) return { eligibleEntries: [], preservedPlans: plans.slice() };
+
+    const excludedSource = options.excludedGuildBuffHrids;
+    const excludedGuildBuffHrids = new Set(
+      excludedSource && typeof excludedSource !== "string" && typeof excludedSource[Symbol.iterator] === "function"
+        ? excludedSource
+        : []
+    );
+    const entriesByHrid = new Map(
+      entries.filter((entry) => entry && typeof entry.hrid === "string").map((entry) => [entry.hrid, entry])
+    );
+    const entryDomain = (entry) => (entry && entry.detail && entry.detail.isCombat === true ? "combat" : "life");
+    const eligibleEntries = entries.filter(
+      (entry) =>
+        entry &&
+        typeof entry.hrid === "string" &&
+        entryDomain(entry) === domain &&
+        !excludedGuildBuffHrids.has(entry.hrid)
+    );
+    const preservedPlans = plans.filter((plan) => {
+      const guildBuffHrid = plan && plan.guildBuffHrid;
+      const entry = entriesByHrid.get(guildBuffHrid);
+      return !entry || entryDomain(entry) !== domain || excludedGuildBuffHrids.has(guildBuffHrid);
+    });
+    return { eligibleEntries, preservedPlans };
+  }
+
   function aggregateGuildBuffLevelCosts(levelCosts, startLevel, targetLevel) {
     const start = Number(startLevel);
     const target = Number(targetLevel);
@@ -759,6 +790,7 @@
     snapshotMarketPrice,
     formatCompactCost,
     compareVersions,
+    selectGuildShrineAutofillScope,
     aggregateGuildBuffLevelCosts,
     aggregateGuildBuffPlans,
     aggregateGuildBuildingLevelCosts,
