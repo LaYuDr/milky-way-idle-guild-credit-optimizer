@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const core = require("../src/core.js");
 const gameStateApi = require("../src/runtime/game-state.js");
 const gameDataApi = require("../src/runtime/game-data.js");
 
@@ -120,6 +121,54 @@ test("本地初始化原始 JSON 会补全局部建筑帧并保留当前会话�
   assert.equal(state.guildBuildingLevelsComplete, true);
   assert.equal(state.guildBuildingLevels["/guild_buildings/guild_hall"].level, 4);
   assert.equal(state.guildBuildingLevels["/guild_buildings/gym"].level, 2);
+});
+
+test("贤者偏好在统一兑换数据入口过滤中英文名称", () => {
+  const state = createState();
+  state.itemDetails = {
+    sage: {
+      itemHrid: "/items/sage_charm",
+      name: "Sage Charm",
+      guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+    },
+    hide: {
+      itemHrid: "/items/beast_hide",
+      name: "Beast Hide",
+      guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 6, creditCount: 1 }]
+    }
+  };
+  state.excludeSageItems = true;
+  const adapter = gameStateApi.createGameStateAdapter(state);
+  const previousWindow = global.window;
+  global.window = {};
+  try {
+    const gameData = gameDataApi.createGameData({
+      state,
+      pageWindow: { localStorage: { getItem: () => null } },
+      document: { getElementById: () => null, body: null },
+      marketDataApi: {},
+      core,
+      ...adapter,
+      persistLiveMarketData() {},
+      scheduleMarketDataRefresh() {},
+      scheduleInventoryDataRefresh() {},
+      scheduleGuildDataRefresh() {},
+      t: (key) => key,
+      resolveItemName: (itemHrid, fallback) => (itemHrid === "/items/sage_charm" ? "贤者护符" : fallback),
+      CREDIT_TYPES: []
+    });
+    assert.deepEqual(
+      gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
+      ["/items/beast_hide"]
+    );
+    state.excludeSageItems = false;
+    assert.deepEqual(
+      gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
+      ["/items/sage_charm", "/items/beast_hide"]
+    );
+  } finally {
+    global.window = previousWindow;
+  }
 });
 
 test("兼容游戏消息中的公会状态字段别名", () => {

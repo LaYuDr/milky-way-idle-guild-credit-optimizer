@@ -122,6 +122,8 @@ test("实时市场订单簿提取最低卖价、最高买价并保留无报价�
     type: "market_item_order_books_updated",
     marketItemOrderBooks: {
       itemHrid: "/items/beast_hide",
+      priceBandMins: { 0: 49, 1: 60 },
+      priceBandMaxs: { 0: 61, 1: 75 },
       orderBooks: {
         0: {
           asks: [
@@ -138,8 +140,26 @@ test("实时市场订单簿提取最低卖价、最高买价并保留无报价�
     }
   });
   assert.equal(update.itemHrid, "/items/beast_hide");
-  assert.deepEqual({ ...update.levels["0"] }, { a: 51, b: 50 });
-  assert.deepEqual({ ...update.levels["1"] }, { a: -1, b: -1 });
+  assert.deepEqual({ ...update.levels["0"] }, { a: 51, b: 50, min: 49, max: 61 });
+  assert.deepEqual({ ...update.levels["1"] }, { a: -1, b: -1, min: 60, max: 75 });
+});
+
+test("右一价格低于官方可交易区间时视为无效报价", () => {
+  const liveData = Object.create(null);
+  marketDataApi.applyLiveMarketUpdate(
+    liveData,
+    { itemHrid: "/items/beast_hide", levels: { 0: { a: 52, b: 48, min: 49, max: 61 } } },
+    { revision: 1, receivedAt: 1000 }
+  );
+  assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "a"), 52);
+  assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "b"), null);
+  assert.deepEqual(marketDataApi.resolveTradableRange(liveData, "/items/beast_hide", 0), { min: 49, max: 61 });
+
+  liveData["/items/beast_hide"].levels["0"].b = 49;
+  assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "b"), 49);
+  delete liveData["/items/beast_hide"].levels["0"].min;
+  liveData["/items/beast_hide"].levels["0"].b = 1;
+  assert.equal(marketDataApi.resolveMarketPrice(null, liveData, "/items/beast_hide", 0, "b"), 1);
 });
 
 test("原生市场 DOM 价格支持完整数值与 K/M/B/T 缩写", () => {
@@ -148,6 +168,19 @@ test("原生市场 DOM 价格支持完整数值与 K/M/B/T 缩写", () => {
   assert.equal(marketDomApi.parseCompactMarketValue("2.35M"), 2350000);
   assert.equal(marketDomApi.parseCompactMarketValue("1.2B"), 1200000000);
   assert.equal(marketDomApi.parseCompactMarketValue("-"), null);
+});
+
+test("原生市场 DOM 可兜底读取当前商品的可交易区间", () => {
+  const documentRef = {
+    querySelectorAll(selector) {
+      assert.equal(selector, '[class*="MarketplacePanel_"]');
+      return [{ textContent: "可交易区间：4730M – 5780M" }];
+    }
+  };
+  assert.deepEqual(marketDomApi.tradableRange(documentRef), {
+    min: 4_730_000_000,
+    max: 5_780_000_000
+  });
 });
 
 test("原生市场 DOM 兜底会识别商品 HRID 并保留完整 ask/bid 深度", () => {
@@ -225,7 +258,7 @@ test("实时市场价格覆盖历史 API，并避免 API 与 WebSocket 并发时
     liveData,
     {
       itemHrid: "/items/beast_hide",
-      levels: { 0: { a: 51, b: 50 } }
+      levels: { 0: { a: 51, b: 50, min: 40 } }
     },
     { revision: 1, receivedAt: 1000 }
   );
@@ -279,7 +312,7 @@ test("实时市场缓存序列化后可在页面重载时恢复", () => {
     liveData,
     {
       itemHrid: "/items/beast_hide",
-      levels: { 0: { a: 51, b: 50 } }
+      levels: { 0: { a: 51, b: 50, min: 49, max: 61 } }
     },
     {
       revision: 7,
@@ -299,6 +332,10 @@ test("实时市场缓存序列化后可在页面重载时恢复", () => {
     { a: Date.parse("2026-07-26T00:00:00Z"), b: Date.parse("2026-07-26T00:00:00Z") }
   );
   assert.equal(marketDataApi.resolveMarketPrice(null, restored.liveData, "/items/beast_hide", 0, "a"), 51);
+  assert.deepEqual(marketDataApi.resolveTradableRange(restored.liveData, "/items/beast_hide", 0), {
+    min: 49,
+    max: 61
+  });
 });
 
 test("再次打开同一商品市场时以新订单簿替换持久缓存", () => {
@@ -340,7 +377,7 @@ test("只返回单边订单簿时仅更新对应报价字段", () => {
     liveData,
     {
       itemHrid: "/items/beast_hide",
-      levels: { 0: { a: 49 } }
+      levels: { 0: { a: 49, min: -1 } }
     },
     { revision: 2, receivedAt: 2000 }
   );
@@ -1342,6 +1379,14 @@ test("支持游戏初始化消息使用的 itemDetailMap 对象结构", () => {
   ]);
 });
 
+test("贤者物品名称筛选兼容中英文且不会误判普通单词", () => {
+  assert.equal(core.isSageItemName("贤者烹饪护符"), true);
+  assert.equal(core.isSageItemName("Sage Cooking Charm"), true);
+  assert.equal(core.isSageItemName("Official Name", "Sage Alchemy Charm"), true);
+  assert.equal(core.isSageItemName("Sausage"), false);
+  assert.equal(core.isSageItemName("宗师强化护符"), false);
+});
+
 test("正式版桥接保留游戏实时神龛等级", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {
@@ -1842,7 +1887,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /PRICE_REFERENCES/);
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
+  assert.match(source, /data-role="exclude-sage-items"/);
+  assert.match(source, /state\.excludeSageItems && core\.isSageItemName/);
   assert.match(source, /snapshotOrderBook\(conversion\.itemHrid\)/);
+  assert.match(harnessSource, /searchParams\.get\("marketFilterAudit"\)/);
   assert.match(source, /conversionCache: new Map\(\)/);
   assert.match(source, /state\.conversionCache\.clear\(\)/);
   assert.match(source, /state\.conversionCache\.get\(creditItemHrid\)/);
@@ -1992,6 +2040,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function updateShrineGuideQuantityHint/);
   assert.match(source, /guideQuantityLabel/);
   assert.match(source, /data-role="quantity-hint-number"/);
+  assert.doesNotMatch(source, /data-role="quantity-hint-unit"/);
   assert.match(source, /detailNode\.hidden = !detail/);
   assert.match(source, /guideQuantityRemaining/);
   assert.match(source, /guideQuantityCurrentExchange/);
@@ -2005,6 +2054,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /maxBatches: Number\.isSafeInteger\(maxBatches\)/);
   assert.match(source, /mutation\.removedNodes/);
   assert.match(source, /prefers-reduced-motion:\s*reduce/);
+  assert.match(source, /input\[data-mwi-shrine-guide="active"\]\{animation:none/);
   assert.match(source, /bridge\.onGuildBuffLevelsUpdated = hydrateBridgeData/);
   assert.match(source, /scheduleGuildDataRefresh\(\)/);
   assert.match(source, /container-type:inline-size/);

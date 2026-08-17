@@ -43,6 +43,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildTokenCreditHrids: [],
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
+    excludeSageItems: false,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",
@@ -66,6 +67,20 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   assert.equal(migrated.targetCredit, 200);
   assert.deepEqual(migrated.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(migrated.showConstructionView, true);
+  assert.equal(migrated.excludeSageItems, false);
+});
+
+test("贤者物品筛选只在明确启用时持久化", () => {
+  for (const excludeSageItems of [undefined, null, 0, "true", false]) {
+    const loaded = createStorage(
+      memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ excludeSageItems }) })
+    ).loadSavedPluginUiState();
+    assert.equal(loaded.excludeSageItems, false);
+  }
+  const loaded = createStorage(
+    memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ excludeSageItems: true }) })
+  ).loadSavedPluginUiState();
+  assert.equal(loaded.excludeSageItems, true);
 });
 
 test("神龛填充排除项只保留合法 HRID 并与建设页可见性持久化", () => {
@@ -174,6 +189,7 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
     guildTokenCreditHrids: new Set(["/items/green_guild_credit"]),
     autoGuildTokenBudget: 10,
     shrineGuideEnabled: true,
+    excludeSageItems: true,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "upgrade",
@@ -187,6 +203,7 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
   assert.deepEqual(ui.guildTokenCreditHrids, ["/items/green_guild_credit"]);
   assert.deepEqual(ui.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(ui.showConstructionView, true);
+  assert.equal(ui.excludeSageItems, true);
 
   const liveData = Object.create(null);
   marketDataApi.applyLiveMarketUpdate(
@@ -208,6 +225,7 @@ test("UI 持久化会返回写入成功或失败", () => {
     guildTokenCreditHrids: new Set(),
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
+    excludeSageItems: false,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",

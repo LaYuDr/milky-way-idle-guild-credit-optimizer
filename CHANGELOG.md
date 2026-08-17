@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.52] - 2026-08-17
+
+### Changed
+
+- Improved the exchange quantity guide, ignored highest bids below the official tradable range, and added a persisted Sage-item filter.
+
 ## [1.1.51] - 2026-08-17
 
 ### Changed

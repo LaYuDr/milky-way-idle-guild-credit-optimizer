@@ -777,6 +777,10 @@
     );
   }
 
+  function isSageItemName(...names) {
+    return names.some((name) => /贤者|\bsage\b/i.test(String(name || "")));
+  }
+
   return {
     normalizeAsks,
     quoteAsks,
@@ -798,6 +802,7 @@
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,
+    isSageItemName,
     guildTokenBudgetPercentage,
     snapGuildTokenBudget
   };

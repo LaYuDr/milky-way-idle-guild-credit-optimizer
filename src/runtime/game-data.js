@@ -425,10 +425,11 @@
         conversions = core.conversionsFromItemDetails(state.itemDetails, creditItemHrid);
         state.conversionCache.set(creditItemHrid, conversions);
       }
-      return conversions.map((conversion) => ({
-        ...conversion,
-        itemName: resolveItemName(conversion.itemHrid, conversion.itemName)
-      }));
+      return conversions.flatMap((conversion) => {
+        const itemName = resolveItemName(conversion.itemHrid, conversion.itemName);
+        if (state.excludeSageItems && core.isSageItemName(itemName, conversion.itemName)) return [];
+        return [{ ...conversion, itemName }];
+      });
     }
 
     function creditConversionGroups() {

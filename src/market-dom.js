@@ -71,6 +71,21 @@
     };
   }
 
+  function tradableRange(documentRef) {
+    if (!documentRef || typeof documentRef.querySelectorAll !== "function") return { min: null, max: null };
+    for (const node of Array.from(documentRef.querySelectorAll('[class*="MarketplacePanel_"]'))) {
+      const text = String(node.textContent || "").replace(/,/g, "");
+      const match = text.match(
+        /(?:可交易区间|Tradable\s+Range)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?[KMBT]?)\s*(?:-|–|—|~|至|到)\s*([0-9]+(?:\.[0-9]+)?[KMBT]?)/i
+      );
+      if (!match) continue;
+      const min = parseCompactMarketValue(match[1]);
+      const max = parseCompactMarketValue(match[2]);
+      if (Number.isFinite(min) && min > 0 && Number.isFinite(max) && max >= min) return { min, max };
+    }
+    return { min: null, max: null };
+  }
+
   function readMarketDomSnapshot(documentRef) {
     if (!documentRef || typeof documentRef.querySelector !== "function") return null;
     const identity = currentMarketIdentity(documentRef);
@@ -79,8 +94,13 @@
     const snapshot = {
       ...identity,
       asks: null,
-      bids: null
+      bids: null,
+      priceBandMin: null,
+      priceBandMax: null
     };
+    const range = tradableRange(documentRef);
+    snapshot.priceBandMin = range.min;
+    snapshot.priceBandMax = range.max;
     for (const table of Array.from(
       booksContainer.querySelectorAll('table[class*="MarketplacePanel_orderBookTable"]')
     )) {
@@ -100,6 +120,8 @@
     };
     if (Array.isArray(snapshot.asks)) book.asks = snapshot.asks;
     if (Array.isArray(snapshot.bids)) book.bids = snapshot.bids;
+    if (Number.isFinite(snapshot.priceBandMin) && snapshot.priceBandMin > 0) book.priceBandMin = snapshot.priceBandMin;
+    if (Number.isFinite(snapshot.priceBandMax) && snapshot.priceBandMax > 0) book.priceBandMax = snapshot.priceBandMax;
     return {
       type: "market_item_order_books_updated",
       marketItemOrderBooks: book
@@ -108,6 +130,7 @@
 
   return Object.freeze({
     parseCompactMarketValue,
+    tradableRange,
     readMarketDomSnapshot,
     createMarketMessage
   });

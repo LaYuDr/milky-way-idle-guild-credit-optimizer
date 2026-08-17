@@ -111,7 +111,7 @@
         hint.setAttribute("role", "status");
         hint.setAttribute("aria-live", "polite");
         hint.innerHTML =
-          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><span class="mwi-guide-quantity-value"><strong data-role="quantity-hint-number"></strong><span data-role="quantity-hint-unit"></span></span><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
+          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><strong class="mwi-guide-quantity-value" data-role="quantity-hint-number"></strong><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
       }
       if (hint.previousElementSibling !== quantityRow || hint.parentElement !== quantityRow.parentElement)
         quantityRow.insertAdjacentElement("afterend", hint);
@@ -136,7 +136,6 @@
       const suggestedBatches = formatNumber(step.suggestedBatches);
       setGuideText(hint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
       setGuideText(hint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
-      setGuideText(hint.querySelector('[data-role="quantity-hint-unit"]'), t("guideQuantityUnit"));
       const limited = step.suggestedBatches < step.batches;
       const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
       const detail =
@@ -150,7 +149,8 @@
             : "";
       detailNode.hidden = !detail;
       setGuideText(detailNode, detail);
-      hint.setAttribute("aria-label", t("guideQuantityRemaining", { count: remainingBatches }));
+      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
+      hint.setAttribute("aria-label", detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity);
     }
 
     function markShrineGuideNode(node, role, color) {

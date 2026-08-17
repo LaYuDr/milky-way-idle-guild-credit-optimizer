@@ -160,6 +160,7 @@
     const layoutAudit = searchParams.get("layoutAudit") === "1";
     const stabilityAudit = searchParams.get("stabilityAudit") === "1";
     const creditAudit = searchParams.get("creditAudit") === "1";
+    const marketFilterAudit = searchParams.get("marketFilterAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
     const settingsAudit = searchParams.get("settingsAudit") === "1";
@@ -173,6 +174,7 @@
       (surplusPlan ||
         layoutAudit ||
         creditAudit ||
+        marketFilterAudit ||
         constructionAudit ||
         constructionSnapshotAudit ||
         settingsAudit ||
@@ -351,6 +353,16 @@
           name: "Beast Hide",
           guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 4, creditCount: 1 }]
         },
+        "/items/sage_market_charm": {
+          itemHrid: "/items/sage_market_charm",
+          name: "Sage Market Charm",
+          guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+        },
+        "/items/below_range_material": {
+          itemHrid: "/items/below_range_material",
+          name: "Below Range Material",
+          guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+        },
         "/items/purple_plan_material": {
           itemHrid: "/items/purple_plan_material",
           name: "Purple Plan Material",
@@ -444,6 +456,30 @@
             { itemHrid: "/items/brown_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 0 }
           ]
     };
+    if (marketFilterAudit) {
+      window.__mwiGuildCreditBridge.marketObserverActive = true;
+      window.__mwiGuildCreditBridge.marketOrderBookRevision = 3;
+      window.__mwiGuildCreditBridge.marketOrderBooks = {
+        beast_hide: {
+          revision: 1,
+          receivedAt: Date.now(),
+          update: { itemHrid: "/items/beast_hide", levels: { 0: { a: 55, b: 50, min: 40, max: 65 } } }
+        },
+        sage_market_charm: {
+          revision: 2,
+          receivedAt: Date.now(),
+          update: { itemHrid: "/items/sage_market_charm", levels: { 0: { a: 60, b: 50, min: 40, max: 70 } } }
+        },
+        below_range_material: {
+          revision: 3,
+          receivedAt: Date.now(),
+          update: { itemHrid: "/items/below_range_material", levels: { 0: { a: 20, b: 1, min: 10, max: 25 } } }
+        }
+      };
+    } else {
+      delete window.__mwiGuildCreditBridge.itemDetails["/items/sage_market_charm"];
+      delete window.__mwiGuildCreditBridge.itemDetails["/items/below_range_material"];
+    }
     if (constructionSnapshotAudit) {
       const completeGuildBuildingSnapshot = {
         guildBuildingMap: window.__mwiGuildCreditBridge.guildBuildingMap
@@ -806,6 +842,66 @@
     };
 
     window.__mwiCreditLayoutAuditReady = creditAudit ? prepareCreditAudit() : Promise.resolve(null);
+
+    const prepareMarketFilterAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      panel.querySelector('[data-role="view-credit"]')?.click();
+      const rightPrice = await waitFor(() =>
+        panel.querySelector('[data-role="price-reference"][data-price-reference="b"]')
+      );
+      rightPrice.click();
+      const greenRows = () =>
+        Array.from(
+          panel.querySelectorAll('[data-credit-item-hrid="/items/green_guild_credit"] .mwi-item-name'),
+          (element) => normalizedText(element)
+        );
+      await waitFor(() => greenRows().includes("Sage Market Charm"));
+      const rowsBeforeFilter = greenRows();
+      const checkbox = panel.querySelector('[data-role="exclude-sage-items"]');
+      checkbox.click();
+      await waitFor(() => !greenRows().includes("Sage Market Charm"));
+      const storedEnabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+      const rowsWithFilter = greenRows();
+      checkbox.click();
+      await waitFor(() => greenRows().includes("Sage Market Charm"));
+      const storedDisabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+      const controls = panel.querySelector(".mwi-controls");
+      const report = {
+        rowsBeforeFilter,
+        rowsWithFilter,
+        checks: {
+          rightPriceSelected: rightPrice.dataset.active === "true",
+          belowRangeBidIgnored: !rowsBeforeFilter.includes("Below Range Material"),
+          sageInitiallyIncluded: rowsBeforeFilter.includes("Sage Market Charm"),
+          sageExcludedWhenChecked: !rowsWithFilter.includes("Sage Market Charm"),
+          preferencePersistedEnabled: storedEnabled.excludeSageItems === true,
+          preferencePersistedDisabled: storedDisabled.excludeSageItems === false,
+          checkboxAccessible: normalizedText(checkbox.closest("label")).length > 0,
+          panelHasNoHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
+          controlsHaveNoHorizontalOverflow: controls.scrollWidth <= controls.clientWidth + 1
+        }
+      };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.marketFilterAuditFailed = "false";
+      document.body.dataset.marketFilterAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiMarketFilterAuditReady = marketFilterAudit
+      ? prepareMarketFilterAudit().catch((error) => {
+          const report = {
+            error: { name: error.name, message: error.message, stack: error.stack },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.marketFilterAuditFailed = "true";
+          document.body.dataset.marketFilterAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
 
     window.__mwiCollectConstructionAudit = () => {
       const root = document.getElementById("mwi-credit-optimizer");
@@ -1368,7 +1464,11 @@
           quantityHint.previousElementSibling === quantityInput.closest('[class*="GuildPanel_quantityInputs"]'),
         hintLabel: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-label"]')),
         remainingBatches,
-        hintUnit: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-unit"]')),
+        hintHasUnit: Boolean(quantityHint.querySelector('[data-role="quantity-hint-unit"]')),
+        hintBackground: getComputedStyle(quantityHint).backgroundColor,
+        hintBorderWidth: getComputedStyle(quantityHint).borderWidth,
+        hintDetailPosition: getComputedStyle(hintDetailNode).position,
+        quantityAnimation: getComputedStyle(quantityInput).animationName,
         hintDetail,
         hintDetailHidden: hintDetailNode.hidden,
         hintDetailNumbers,
@@ -1393,8 +1493,16 @@
             setQuantity.hintPresent &&
             setQuantity.quantityDescribedBy.split(/\s+/).includes("mwi-shrine-guide-quantity-hint") &&
             setQuantity.hintFollowsTargetInput &&
-            Boolean(setQuantity.hintLabel) &&
-            Boolean(setQuantity.hintUnit),
+            setQuantity.hintLabel ===
+              (document.documentElement.lang.toLowerCase().startsWith("zh")
+                ? "完成当前规划应填写"
+                : "Enter for the current plan") &&
+            !setQuantity.hintHasUnit,
+          quantityHintUsesQuietPresentation:
+            setQuantity.hintBackground === "rgba(0, 0, 0, 0)" &&
+            /^0(?:px)?(?:\s+0(?:px)?){0,3}$/.test(setQuantity.hintBorderWidth) &&
+            setQuantity.hintDetailPosition === "absolute" &&
+            setQuantity.quantityAnimation === "none",
           onlyTargetReceiveInputHighlighted:
             setQuantity.quantityGuideRole === "active" &&
             setQuantity.paymentGuideRole === "" &&

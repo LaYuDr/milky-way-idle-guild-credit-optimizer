@@ -293,9 +293,13 @@ Token the modal's selected item and requires the guide to enter
 `set_quantity`: the updated native modal exposes separate text inputs for
 "You pay" and "You receive". Only the target "You receive" input may be active
 or linked to the inline status hint through `aria-describedby`; the payment
-input must remain unmarked. The remaining `300` batches match the `300`
-required tokens at one token per batch, and the inline detail reports the same
-`300`-batch current exchange. The separate exchange advisor must be hidden. After
+input must remain unmarked. The quiet two-line hint reads "完成当前规划应填写"
+followed by the dynamic number without a visible unit, uses no card background
+or border, and disables the pulsing animation on the target input. Any batch/token
+detail remains available to assistive technology without adding a third visible
+line. The remaining `300` batches match the `300` required tokens at one token
+per batch, and the accessible detail reports the same `300`-batch current exchange.
+The separate exchange advisor must be hidden. After
 `document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 
@@ -304,6 +308,30 @@ await window.__mwiTokenGuideAuditReady;
 ```
 
 Every value in `checks` must be `true`.
+
+To verify highest-bid price-band validation and the persisted Sage-item filter,
+open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?marketFilterAudit=1&resetState=1&sidebarWidth=420
+```
+
+The fixture supplies three Green Credit conversions: a normal item, a Sage
+item with a valid highest bid, and an ordinary item whose highest bid is below
+the official `priceBandMins[0]`. The audit selects the highest-bid reference
+and requires the below-range item to remain absent. It then enables and
+disables the inline Sage checkbox, requiring the Sage row to disappear and
+return immediately and the Boolean preference to round-trip through plugin UI
+storage. After `document.body.dataset.marketFilterAuditReady` becomes `"true"`,
+inspect `#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiMarketFilterAuditReady;
+```
+
+Require every value in `checks` to be `true`, including zero horizontal
+overflow for the panel and control row. Repeat at `320`, `420`, `610`, and
+`900` pixels in Chinese, then at `320` and `610` with `locale=en`.
 
 ## Local workbench
 

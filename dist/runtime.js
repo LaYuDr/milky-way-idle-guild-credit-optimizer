@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.51";
+window.MwiGuildCreditVersion = "1.1.52";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -9,8 +9,8 @@ window.MwiGuildCreditVersion = "1.1.51";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 2;
-  const SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS = new Set([1, 2]);
+  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 3;
+  const SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS = new Set([1, 2, 3]);
   const MAX_CACHED_ITEMS = 2000;
   const MAX_LEVELS_PER_ITEM = 101;
 
@@ -35,6 +35,25 @@ window.MwiGuildCreditVersion = "1.1.51";
   function normalizeCachedPrice(value) {
     const price = Number(value);
     return Number.isFinite(price) && (price > 0 || price === -1) ? price : null;
+  }
+
+  function normalizeTradablePrice(value) {
+    const price = Number(value);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  }
+
+  function levelValue(values, level) {
+    if (!values || typeof values !== "object") return undefined;
+    return values[level] ?? values[String(level)];
+  }
+
+  function hasLevelValue(values, level) {
+    return Boolean(
+      values &&
+      typeof values === "object" &&
+      (Object.prototype.hasOwnProperty.call(values, level) ||
+        Object.prototype.hasOwnProperty.call(values, String(level)))
+    );
   }
 
   function metadataFieldValue(levelMap, level, field, fallback) {
@@ -159,6 +178,14 @@ window.MwiGuildCreditVersion = "1.1.51";
       const quote = Object.create(null);
       if (Object.prototype.hasOwnProperty.call(rawBook, "asks")) quote.a = edgePrice(rawBook.asks, true);
       if (Object.prototype.hasOwnProperty.call(rawBook, "bids")) quote.b = edgePrice(rawBook.bids, false);
+      const hasMin =
+        Object.prototype.hasOwnProperty.call(rawBook, "priceBandMin") || hasLevelValue(source.priceBandMins, level);
+      const hasMax =
+        Object.prototype.hasOwnProperty.call(rawBook, "priceBandMax") || hasLevelValue(source.priceBandMaxs, level);
+      const min = normalizeTradablePrice(rawBook.priceBandMin ?? levelValue(source.priceBandMins, level));
+      const max = normalizeTradablePrice(rawBook.priceBandMax ?? levelValue(source.priceBandMaxs, level));
+      if (hasMin) quote.min = min ?? -1;
+      if (hasMax) quote.max = max ?? -1;
       if (Object.keys(quote).length) levels[String(level)] = quote;
     }
     return Object.keys(levels).length ? { itemHrid, levels } : null;
@@ -211,6 +238,12 @@ window.MwiGuildCreditVersion = "1.1.51";
         fieldTimes[field] = receivedAt;
         fieldSnapshotTimestamps[field] = snapshotTimestamp;
         fieldConflictDeferrals[field] = false;
+      }
+      for (const field of ["min", "max"]) {
+        if (!Object.prototype.hasOwnProperty.call(quote, field)) continue;
+        const price = normalizeTradablePrice(quote[field]);
+        if (price === null) delete mergedQuote[field];
+        else mergedQuote[field] = price;
       }
       levels[level] = mergedQuote;
       revisionByLevel[level] = fieldRevisions;
@@ -401,6 +434,11 @@ window.MwiGuildCreditVersion = "1.1.51";
             metadataFieldValue(entry.snapshotConflictDeferredByLevel, levelKey, field, false) === true;
           revision = Math.max(revision, levelRevision);
         }
+        for (const field of ["min", "max"]) {
+          if (!Object.prototype.hasOwnProperty.call(rawQuote, field)) continue;
+          const price = normalizeTradablePrice(rawQuote[field]);
+          if (price !== null) quote[field] = price;
+        }
         if (!Object.keys(quote).length) continue;
         const levelKey = String(level);
         levels[levelKey] = quote;
@@ -413,14 +451,24 @@ window.MwiGuildCreditVersion = "1.1.51";
       if (!Object.keys(levels).length) continue;
       const revisions = Object.values(revisionByLevel).flatMap((value) => Object.values(value));
       const receivedTimes = Object.values(receivedAtByLevel).flatMap((value) => Object.values(value));
+      const entryRevision = Number(entry.revision);
+      const entryReceivedAt = Number(entry.receivedAt);
       liveData[itemHrid] = {
         levels,
         revisionByLevel,
         receivedAtByLevel,
         snapshotTimestampByLevel,
         snapshotConflictDeferredByLevel,
-        revision: Math.max(...revisions),
-        receivedAt: Math.max(...receivedTimes)
+        revision: revisions.length
+          ? Math.max(...revisions)
+          : Number.isSafeInteger(entryRevision) && entryRevision > 0
+            ? entryRevision
+            : 0,
+        receivedAt: receivedTimes.length
+          ? Math.max(...receivedTimes)
+          : Number.isFinite(entryReceivedAt) && entryReceivedAt > 0
+            ? entryReceivedAt
+            : 0
       };
       itemCount += 1;
     }
@@ -449,14 +497,32 @@ window.MwiGuildCreditVersion = "1.1.51";
     if (!itemHrid || level === null || (field !== "a" && field !== "b")) return null;
     const liveQuote =
       liveData && liveData[itemHrid] && liveData[itemHrid].levels && liveData[itemHrid].levels[String(level)];
+    const tradableRange = resolveTradableRange(liveData, itemHrid, level);
     if (liveQuote && Object.prototype.hasOwnProperty.call(liveQuote, field)) {
       const livePrice = Number(liveQuote[field]);
-      return Number.isFinite(livePrice) && livePrice > 0 ? livePrice : null;
+      if (!Number.isFinite(livePrice) || livePrice <= 0) return null;
+      return field === "b" && tradableRange.min !== null && livePrice < tradableRange.min ? null : livePrice;
     }
     const snapshotQuote =
       snapshot && snapshot.marketData && snapshot.marketData[itemHrid] && snapshot.marketData[itemHrid][String(level)];
     const snapshotPrice = Number(snapshotQuote && snapshotQuote[field]);
-    return Number.isFinite(snapshotPrice) && snapshotPrice > 0 ? snapshotPrice : null;
+    if (!Number.isFinite(snapshotPrice) || snapshotPrice <= 0) return null;
+    return field === "b" && tradableRange.min !== null && snapshotPrice < tradableRange.min ? null : snapshotPrice;
+  }
+
+  function resolveTradableRange(liveData, itemHrid, enhancementLevel) {
+    const level = normalizeEnhancementLevel(enhancementLevel);
+    const quote =
+      itemHrid &&
+      level !== null &&
+      liveData &&
+      liveData[itemHrid] &&
+      liveData[itemHrid].levels &&
+      liveData[itemHrid].levels[String(level)];
+    return {
+      min: normalizeTradablePrice(quote && quote.min),
+      max: normalizeTradablePrice(quote && quote.max)
+    };
   }
 
   return {
@@ -470,7 +536,8 @@ window.MwiGuildCreditVersion = "1.1.51";
     expireLiveMarketData,
     restoreLiveMarketData,
     serializeLiveMarketData,
-    resolveMarketPrice
+    resolveMarketPrice,
+    resolveTradableRange
   };
 });
 
@@ -549,6 +616,21 @@ window.MwiGuildCreditVersion = "1.1.51";
     };
   }
 
+  function tradableRange(documentRef) {
+    if (!documentRef || typeof documentRef.querySelectorAll !== "function") return { min: null, max: null };
+    for (const node of Array.from(documentRef.querySelectorAll('[class*="MarketplacePanel_"]'))) {
+      const text = String(node.textContent || "").replace(/,/g, "");
+      const match = text.match(
+        /(?:可交易区间|Tradable\s+Range)\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?[KMBT]?)\s*(?:-|–|—|~|至|到)\s*([0-9]+(?:\.[0-9]+)?[KMBT]?)/i
+      );
+      if (!match) continue;
+      const min = parseCompactMarketValue(match[1]);
+      const max = parseCompactMarketValue(match[2]);
+      if (Number.isFinite(min) && min > 0 && Number.isFinite(max) && max >= min) return { min, max };
+    }
+    return { min: null, max: null };
+  }
+
   function readMarketDomSnapshot(documentRef) {
     if (!documentRef || typeof documentRef.querySelector !== "function") return null;
     const identity = currentMarketIdentity(documentRef);
@@ -557,8 +639,13 @@ window.MwiGuildCreditVersion = "1.1.51";
     const snapshot = {
       ...identity,
       asks: null,
-      bids: null
+      bids: null,
+      priceBandMin: null,
+      priceBandMax: null
     };
+    const range = tradableRange(documentRef);
+    snapshot.priceBandMin = range.min;
+    snapshot.priceBandMax = range.max;
     for (const table of Array.from(
       booksContainer.querySelectorAll('table[class*="MarketplacePanel_orderBookTable"]')
     )) {
@@ -578,6 +665,8 @@ window.MwiGuildCreditVersion = "1.1.51";
     };
     if (Array.isArray(snapshot.asks)) book.asks = snapshot.asks;
     if (Array.isArray(snapshot.bids)) book.bids = snapshot.bids;
+    if (Number.isFinite(snapshot.priceBandMin) && snapshot.priceBandMin > 0) book.priceBandMin = snapshot.priceBandMin;
+    if (Number.isFinite(snapshot.priceBandMax) && snapshot.priceBandMax > 0) book.priceBandMax = snapshot.priceBandMax;
     return {
       type: "market_item_order_books_updated",
       marketItemOrderBooks: book
@@ -586,6 +675,7 @@ window.MwiGuildCreditVersion = "1.1.51";
 
   return Object.freeze({
     parseCompactMarketValue,
+    tradableRange,
     readMarketDomSnapshot,
     createMarketMessage
   });
@@ -1707,7 +1797,7 @@ window.MwiGuildCreditVersion = "1.1.51";
       priceReferenceA: "左一",
       priceReferenceATitle: "左一：最低出售价，可立即买入",
       priceReferenceB: "右一",
-      priceReferenceBTitle: "右一：最高收购价，仅作理论参考",
+      priceReferenceBTitle: "右一：最高收购价；低于可交易区间的报价会忽略",
       marketItem: "在市场中查看{item}",
       updateChecking: "当前版本 v{current} · 最新版本：检查中...",
       updateAvailable: "当前版本 v{current} · 最新版本 v{latest} · 发现新版本",
@@ -1927,6 +2017,8 @@ window.MwiGuildCreditVersion = "1.1.51";
       marketReference: "市场价格参考",
       priceReference: "价格参考",
       refreshEstimate: "刷新市场估算",
+      excludeSageItems: "屏蔽贤者物品",
+      excludeSageItemsHint: "名称含“贤者”的物品不参与性价比比较",
       waitingExchangeRules: "等待游戏兑换数据...",
       guildShrineBatchPlan: "按当前公会神龛等级批量规划",
       setGuildLifeTarget: "填充生活等级",
@@ -1953,9 +2045,8 @@ window.MwiGuildCreditVersion = "1.1.51";
       guideSetQuantity: "下一步：输入 {count} 批",
       guideSetQuantityHint: "预计消耗 {items} 个{item}，获得 {credits} 点。",
       guideSetQuantityLimitHint: "总共还需 {remaining} 批；单次最多可填 {max} 批。",
-      guideQuantityLabel: "完成当前规划还需",
-      guideQuantityUnit: "批",
-      guideQuantityRemaining: "完成当前规划还需 {count} 批",
+      guideQuantityLabel: "完成当前规划应填写",
+      guideQuantityRemaining: "完成当前规划应填写 {count}",
       guideQuantityCurrentExchange: "本次填写 {count} 批",
       guideTokenQuantityDetail: "本次填写 {batches} 批，将使用 {items} 枚公会代币",
       guideUseGuildTokens: "下一步：使用 {count} 枚公会代币",
@@ -2009,7 +2100,7 @@ window.MwiGuildCreditVersion = "1.1.51";
       priceReferenceA: "Lowest ask",
       priceReferenceATitle: "Lowest ask: the current price to buy immediately",
       priceReferenceB: "Highest bid",
-      priceReferenceBTitle: "Highest bid: a theoretical reference only",
+      priceReferenceBTitle: "Highest bid: quotes below the tradable range are ignored",
       marketItem: "View {item} in Marketplace",
       updateChecking: "Current v{current} · Latest: checking...",
       updateAvailable: "Current v{current} · Latest v{latest} · Update available",
@@ -2235,6 +2326,8 @@ window.MwiGuildCreditVersion = "1.1.51";
       marketReference: "Market price reference",
       priceReference: "Price reference",
       refreshEstimate: "Refresh market estimate",
+      excludeSageItems: "Exclude Sage items",
+      excludeSageItemsHint: "Items with “Sage” in the name are excluded from value comparisons",
       waitingExchangeRules: "Waiting for game exchange data...",
       guildShrineBatchPlan: "Batch plan by current guild shrine levels",
       setGuildLifeTarget: "Fill Life levels",
@@ -2261,9 +2354,8 @@ window.MwiGuildCreditVersion = "1.1.51";
       guideSetQuantity: "Next: enter {count} batches",
       guideSetQuantityHint: "Uses about {items} {item} and yields {credits} credits.",
       guideSetQuantityLimitHint: "{remaining} batches remain in total; this exchange allows up to {max}.",
-      guideQuantityLabel: "Remaining for this plan",
-      guideQuantityUnit: "batches",
-      guideQuantityRemaining: "The current plan needs {count} more batches",
+      guideQuantityLabel: "Enter for the current plan",
+      guideQuantityRemaining: "Enter {count} for the current plan",
       guideQuantityCurrentExchange: "Enter {count} batches this time",
       guideTokenQuantityDetail: "Enter {batches} batches to use {items} guild tokens this time",
       guideUseGuildTokens: "Next: use {count} guild tokens",
@@ -3154,6 +3246,10 @@ window.MwiGuildCreditVersion = "1.1.51";
     );
   }
 
+  function isSageItemName(...names) {
+    return names.some((name) => /贤者|\bsage\b/i.test(String(name || "")));
+  }
+
   return {
     normalizeAsks,
     quoteAsks,
@@ -3175,6 +3271,7 @@ window.MwiGuildCreditVersion = "1.1.51";
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,
+    isSageItemName,
     guildTokenBudgetPercentage,
     snapGuildTokenBudget
   };
@@ -3462,6 +3559,7 @@ window.MwiGuildCreditVersion = "1.1.51";
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
+        excludeSageItems: false,
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: true,
         activeView: "credit",
@@ -3511,6 +3609,7 @@ window.MwiGuildCreditVersion = "1.1.51";
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
+          excludeSageItems: stored.excludeSageItems === true,
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
@@ -3607,6 +3706,7 @@ window.MwiGuildCreditVersion = "1.1.51";
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
             shrineGuideEnabled: state.shrineGuideEnabled,
+            excludeSageItems: state.excludeSageItems === true,
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
@@ -4411,10 +4511,11 @@ window.MwiGuildCreditVersion = "1.1.51";
         conversions = core.conversionsFromItemDetails(state.itemDetails, creditItemHrid);
         state.conversionCache.set(creditItemHrid, conversions);
       }
-      return conversions.map((conversion) => ({
-        ...conversion,
-        itemName: resolveItemName(conversion.itemHrid, conversion.itemName)
-      }));
+      return conversions.flatMap((conversion) => {
+        const itemName = resolveItemName(conversion.itemHrid, conversion.itemName);
+        if (state.excludeSageItems && core.isSageItemName(itemName, conversion.itemName)) return [];
+        return [{ ...conversion, itemName }];
+      });
     }
 
     function creditConversionGroups() {
@@ -4878,6 +4979,7 @@ window.MwiGuildCreditVersion = "1.1.51";
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
+        #mwi-credit-optimizer label.mwi-inline-filter{display:flex;align-items:center;align-self:end;gap:6px;min-height:30px;padding:5px 8px;border:1px solid #5b5d7b;border-radius:4px;background:#292a46;color:#d8d8e8;font-size:12px;line-height:1.2;white-space:nowrap;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter input{width:15px;height:15px;margin:0;accent-color:#43c4ad;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter:focus-within{outline:2px solid #65e3ca;outline-offset:2px}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
@@ -5377,12 +5479,11 @@ window.MwiGuildCreditVersion = "1.1.51";
       [data-mwi-shrine-guide="goal"]{outline-style:dashed!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent)!important}
       [data-mwi-shrine-guide="pending"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 16%,transparent)!important}
       [data-mwi-shrine-guide="active"]{animation:mwi-shrine-guide-pulse 1.45s ease-in-out infinite}
-      #${quantityHintId}{--mwi-guide-color:#63e6c8;position:relative;z-index:auto;display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:3px 7px;box-sizing:border-box;width:fit-content;max-width:calc(100% - 20px);margin:6px auto 1px;padding:5px 8px;border:1px solid color-mix(in srgb,var(--mwi-guide-color) 32%,#596078);border-left:3px solid var(--mwi-guide-color);border-radius:5px;background:color-mix(in srgb,var(--mwi-guide-color) 8%,#1b1d2c);color:#f4f5ff;box-shadow:none;font:11px/1.3 system-ui,-apple-system,"Microsoft YaHei",sans-serif;pointer-events:none}
+      input[data-mwi-shrine-guide="active"]{animation:none;filter:none!important;outline-width:1px!important;outline-offset:1px!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)!important}
+      #${quantityHintId}{--mwi-guide-color:#63e6c8;position:relative;z-index:auto;display:grid;justify-items:center;gap:1px;box-sizing:border-box;width:max-content;max-width:calc(100% - 20px);margin:5px auto 1px;padding:0;border:0;background:transparent;color:#f4f5ff;box-shadow:none;font:11px/1.25 system-ui,-apple-system,"Microsoft YaHei",sans-serif;text-align:center;pointer-events:none}
       #${quantityHintId} .mwi-guide-quantity-label{color:#c7cae4;white-space:nowrap}
-      #${quantityHintId} .mwi-guide-quantity-value{display:inline-flex;align-items:baseline;gap:3px;color:var(--mwi-guide-color);white-space:nowrap}
-      #${quantityHintId} .mwi-guide-quantity-value strong{font-size:13px;line-height:1.1;font-variant-numeric:tabular-nums}
-      #${quantityHintId} .mwi-guide-quantity-value span{font-size:10px;font-weight:600}
-      #${quantityHintId} .mwi-guide-quantity-detail{flex-basis:100%;color:#aeb3cf;font-size:10px;text-align:center;white-space:nowrap}
+      #${quantityHintId} .mwi-guide-quantity-value{color:var(--mwi-guide-color);font-size:14px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+      #${quantityHintId} .mwi-guide-quantity-detail{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
       #${quantityHintId} .mwi-guide-quantity-detail[hidden]{display:none}
       @keyframes mwi-shrine-guide-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 12px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)}50%{filter:brightness(1.08);box-shadow:0 0 0 6px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent),0 0 23px color-mix(in srgb,var(--mwi-guide-color) 38%,transparent)}}
       @media (prefers-reduced-motion:reduce){[data-mwi-shrine-guide="active"]{animation:none}}
@@ -7133,7 +7234,7 @@ window.MwiGuildCreditVersion = "1.1.51";
         hint.setAttribute("role", "status");
         hint.setAttribute("aria-live", "polite");
         hint.innerHTML =
-          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><span class="mwi-guide-quantity-value"><strong data-role="quantity-hint-number"></strong><span data-role="quantity-hint-unit"></span></span><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
+          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><strong class="mwi-guide-quantity-value" data-role="quantity-hint-number"></strong><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
       }
       if (hint.previousElementSibling !== quantityRow || hint.parentElement !== quantityRow.parentElement)
         quantityRow.insertAdjacentElement("afterend", hint);
@@ -7158,7 +7259,6 @@ window.MwiGuildCreditVersion = "1.1.51";
       const suggestedBatches = formatNumber(step.suggestedBatches);
       setGuideText(hint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
       setGuideText(hint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
-      setGuideText(hint.querySelector('[data-role="quantity-hint-unit"]'), t("guideQuantityUnit"));
       const limited = step.suggestedBatches < step.batches;
       const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
       const detail =
@@ -7172,7 +7272,8 @@ window.MwiGuildCreditVersion = "1.1.51";
             : "";
       detailNode.hidden = !detail;
       setGuideText(detailNode, detail);
-      hint.setAttribute("aria-label", t("guideQuantityRemaining", { count: remainingBatches }));
+      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
+      hint.setAttribute("aria-label", detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity);
     }
 
     function markShrineGuideNode(node, role, color) {
@@ -8345,6 +8446,7 @@ window.MwiGuildCreditVersion = "1.1.51";
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
             <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
             <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
+            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeSageItemsHint"))}"><input data-role="exclude-sage-items" type="checkbox"${state.excludeSageItems ? " checked" : ""}><span>${escapeHtml(t("excludeSageItems"))}</span></label>
           </div>
           <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
           <div data-role="results"></div>
@@ -8379,6 +8481,13 @@ window.MwiGuildCreditVersion = "1.1.51";
         else event.target.value = String(state.targetCredit);
         persistPluginUiState();
         refreshPanel(panel);
+      });
+      panel.querySelector('[data-role="exclude-sage-items"]').addEventListener("change", (event) => {
+        state.excludeSageItems = event.target.checked;
+        persistPluginUiState();
+        refreshPanel(panel);
+        refreshGuildUpgrade(panel);
+        refreshGuildExchangeAdvisor(true);
       });
       const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
       const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
@@ -9096,6 +9205,7 @@ window.MwiGuildCreditVersion = "1.1.51";
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
+    excludeSageItems: savedUiState.excludeSageItems,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     settingsOpen: false,

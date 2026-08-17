@@ -5,8 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 2;
-  const SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS = new Set([1, 2]);
+  const LIVE_MARKET_CACHE_SCHEMA_VERSION = 3;
+  const SUPPORTED_LIVE_MARKET_CACHE_SCHEMA_VERSIONS = new Set([1, 2, 3]);
   const MAX_CACHED_ITEMS = 2000;
   const MAX_LEVELS_PER_ITEM = 101;
 
@@ -31,6 +31,25 @@
   function normalizeCachedPrice(value) {
     const price = Number(value);
     return Number.isFinite(price) && (price > 0 || price === -1) ? price : null;
+  }
+
+  function normalizeTradablePrice(value) {
+    const price = Number(value);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  }
+
+  function levelValue(values, level) {
+    if (!values || typeof values !== "object") return undefined;
+    return values[level] ?? values[String(level)];
+  }
+
+  function hasLevelValue(values, level) {
+    return Boolean(
+      values &&
+      typeof values === "object" &&
+      (Object.prototype.hasOwnProperty.call(values, level) ||
+        Object.prototype.hasOwnProperty.call(values, String(level)))
+    );
   }
 
   function metadataFieldValue(levelMap, level, field, fallback) {
@@ -155,6 +174,14 @@
       const quote = Object.create(null);
       if (Object.prototype.hasOwnProperty.call(rawBook, "asks")) quote.a = edgePrice(rawBook.asks, true);
       if (Object.prototype.hasOwnProperty.call(rawBook, "bids")) quote.b = edgePrice(rawBook.bids, false);
+      const hasMin =
+        Object.prototype.hasOwnProperty.call(rawBook, "priceBandMin") || hasLevelValue(source.priceBandMins, level);
+      const hasMax =
+        Object.prototype.hasOwnProperty.call(rawBook, "priceBandMax") || hasLevelValue(source.priceBandMaxs, level);
+      const min = normalizeTradablePrice(rawBook.priceBandMin ?? levelValue(source.priceBandMins, level));
+      const max = normalizeTradablePrice(rawBook.priceBandMax ?? levelValue(source.priceBandMaxs, level));
+      if (hasMin) quote.min = min ?? -1;
+      if (hasMax) quote.max = max ?? -1;
       if (Object.keys(quote).length) levels[String(level)] = quote;
     }
     return Object.keys(levels).length ? { itemHrid, levels } : null;
@@ -207,6 +234,12 @@
         fieldTimes[field] = receivedAt;
         fieldSnapshotTimestamps[field] = snapshotTimestamp;
         fieldConflictDeferrals[field] = false;
+      }
+      for (const field of ["min", "max"]) {
+        if (!Object.prototype.hasOwnProperty.call(quote, field)) continue;
+        const price = normalizeTradablePrice(quote[field]);
+        if (price === null) delete mergedQuote[field];
+        else mergedQuote[field] = price;
       }
       levels[level] = mergedQuote;
       revisionByLevel[level] = fieldRevisions;
@@ -397,6 +430,11 @@
             metadataFieldValue(entry.snapshotConflictDeferredByLevel, levelKey, field, false) === true;
           revision = Math.max(revision, levelRevision);
         }
+        for (const field of ["min", "max"]) {
+          if (!Object.prototype.hasOwnProperty.call(rawQuote, field)) continue;
+          const price = normalizeTradablePrice(rawQuote[field]);
+          if (price !== null) quote[field] = price;
+        }
         if (!Object.keys(quote).length) continue;
         const levelKey = String(level);
         levels[levelKey] = quote;
@@ -409,14 +447,24 @@
       if (!Object.keys(levels).length) continue;
       const revisions = Object.values(revisionByLevel).flatMap((value) => Object.values(value));
       const receivedTimes = Object.values(receivedAtByLevel).flatMap((value) => Object.values(value));
+      const entryRevision = Number(entry.revision);
+      const entryReceivedAt = Number(entry.receivedAt);
       liveData[itemHrid] = {
         levels,
         revisionByLevel,
         receivedAtByLevel,
         snapshotTimestampByLevel,
         snapshotConflictDeferredByLevel,
-        revision: Math.max(...revisions),
-        receivedAt: Math.max(...receivedTimes)
+        revision: revisions.length
+          ? Math.max(...revisions)
+          : Number.isSafeInteger(entryRevision) && entryRevision > 0
+            ? entryRevision
+            : 0,
+        receivedAt: receivedTimes.length
+          ? Math.max(...receivedTimes)
+          : Number.isFinite(entryReceivedAt) && entryReceivedAt > 0
+            ? entryReceivedAt
+            : 0
       };
       itemCount += 1;
     }
@@ -445,14 +493,32 @@
     if (!itemHrid || level === null || (field !== "a" && field !== "b")) return null;
     const liveQuote =
       liveData && liveData[itemHrid] && liveData[itemHrid].levels && liveData[itemHrid].levels[String(level)];
+    const tradableRange = resolveTradableRange(liveData, itemHrid, level);
     if (liveQuote && Object.prototype.hasOwnProperty.call(liveQuote, field)) {
       const livePrice = Number(liveQuote[field]);
-      return Number.isFinite(livePrice) && livePrice > 0 ? livePrice : null;
+      if (!Number.isFinite(livePrice) || livePrice <= 0) return null;
+      return field === "b" && tradableRange.min !== null && livePrice < tradableRange.min ? null : livePrice;
     }
     const snapshotQuote =
       snapshot && snapshot.marketData && snapshot.marketData[itemHrid] && snapshot.marketData[itemHrid][String(level)];
     const snapshotPrice = Number(snapshotQuote && snapshotQuote[field]);
-    return Number.isFinite(snapshotPrice) && snapshotPrice > 0 ? snapshotPrice : null;
+    if (!Number.isFinite(snapshotPrice) || snapshotPrice <= 0) return null;
+    return field === "b" && tradableRange.min !== null && snapshotPrice < tradableRange.min ? null : snapshotPrice;
+  }
+
+  function resolveTradableRange(liveData, itemHrid, enhancementLevel) {
+    const level = normalizeEnhancementLevel(enhancementLevel);
+    const quote =
+      itemHrid &&
+      level !== null &&
+      liveData &&
+      liveData[itemHrid] &&
+      liveData[itemHrid].levels &&
+      liveData[itemHrid].levels[String(level)];
+    return {
+      min: normalizeTradablePrice(quote && quote.min),
+      max: normalizeTradablePrice(quote && quote.max)
+    };
   }
 
   return {
@@ -466,6 +532,7 @@
     expireLiveMarketData,
     restoreLiveMarketData,
     serializeLiveMarketData,
-    resolveMarketPrice
+    resolveMarketPrice,
+    resolveTradableRange
   };
 });
