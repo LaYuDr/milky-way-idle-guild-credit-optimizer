@@ -61,11 +61,12 @@
       const input = modal && modal.quantityInput;
       const surface = modal && modal.element;
       if (!input || !surface || !surface.contains(input)) return null;
+      const targetQuantityGroup = input.closest && input.closest('[class*="GuildPanel_quantityInputs"]');
+      if (targetQuantityGroup && surface.contains(targetQuantityGroup)) return targetQuantityGroup;
       let fallback = input.parentElement;
       let candidate = fallback;
       for (let depth = 0; candidate && candidate !== surface && depth < 4; depth += 1) {
-        if (candidate.querySelectorAll('input[type="number"]').length === 1 && candidate.querySelector("button"))
-          return candidate;
+        if (candidate.querySelectorAll("input").length === 1 && candidate.querySelector("button")) return candidate;
         candidate = candidate.parentElement;
       }
       return fallback && fallback !== surface ? fallback : input.parentElement;
@@ -85,9 +86,7 @@
         Math.min((document.documentElement.clientHeight || window.innerHeight) - 1, rect.top + rect.height / 2)
       );
       const topNode = document.elementFromPoint(x, y);
-      return (
-        topNode === input || Boolean(topNode && topNode.closest && topNode.closest('input[type="number"]') === input)
-      );
+      return topNode === input || Boolean(topNode && topNode.closest && topNode.closest("input") === input);
     }
 
     function updateShrineGuideQuantityHint(modal, step, color) {

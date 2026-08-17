@@ -35,6 +35,15 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   const normalBuild = runBuild(root, false);
   assert.equal(normalBuild.status, 0, normalBuild.stderr);
   assert.equal(fs.existsSync(path.join(root, "releases")), false);
+  const currentBundle = fs.readFileSync(
+    path.join(root, "dist", "milky-way-idle-guild-credit-optimizer.user.js"),
+    "utf8"
+  );
+  assert.match(currentBundle, /^\/\/ @name:en\s+Milky Way Idle Guild Assistant$/m);
+  assert.match(
+    currentBundle,
+    /^\/\/ @description:en\s+Read-only guild planning helper for credit exchanges, shrine upgrades, and construction;/m
+  );
 
   const firstReleaseBuild = runBuild(root, true);
   assert.equal(firstReleaseBuild.status, 0, firstReleaseBuild.stderr);

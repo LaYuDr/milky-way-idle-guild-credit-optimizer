@@ -94,7 +94,18 @@
           <use href="/assets/items_sprite.svg#green_guild_credit"></use>
         </svg>
       </div>
-      <input id="test-exchange-count" type="number" min="1" max="200" value="1" aria-label="兑换数量" />
+      <div class="GuildPanel_inputContainer__test">
+        <div class="GuildPanel_label__test">你支付</div>
+        <div class="GuildPanel_quantityInputs__test">
+          <input id="test-exchange-payment" type="text" value="300" aria-label="你支付" />
+        </div>
+      </div>
+      <div class="GuildPanel_inputContainer__test">
+        <div class="GuildPanel_label__test">你获得</div>
+        <div class="GuildPanel_quantityInputs__test">
+          <input id="test-exchange-count" type="text" value="3000" aria-label="你获得" />
+        </div>
+      </div>
     </div>
   </div>
   <div class="test-sidebar-wrapper" id="test-sidebar-wrapper" data-sidebar-layout="wide">
@@ -1322,6 +1333,7 @@
 
       nativeModal.insertBefore(tokenItem, materialItem);
       tokenItem.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      const paymentInput = document.getElementById("test-exchange-payment");
       const quantityInput = document.getElementById("test-exchange-count");
       const quantityHint = await waitFor(() => {
         const hint = document.getElementById("mwi-shrine-guide-quantity-hint");
@@ -1349,7 +1361,11 @@
         selectedItem: nativeModal.querySelector(".Item_item__test")?.dataset.testExchangeItem || "",
         quantityGuideRole: quantityInput.getAttribute("data-mwi-shrine-guide") || "",
         quantityDescribedBy: quantityInput.getAttribute("aria-describedby") || "",
+        paymentGuideRole: paymentInput.getAttribute("data-mwi-shrine-guide") || "",
+        paymentDescribedBy: paymentInput.getAttribute("aria-describedby") || "",
         hintPresent: Boolean(quantityHint),
+        hintFollowsTargetInput:
+          quantityHint.previousElementSibling === quantityInput.closest('[class*="GuildPanel_quantityInputs"]'),
         hintLabel: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-label"]')),
         remainingBatches,
         hintUnit: normalizedText(quantityHint.querySelector('[data-role="quantity-hint-unit"]')),
@@ -1376,16 +1392,21 @@
           inlineHintDescribesQuantityInput:
             setQuantity.hintPresent &&
             setQuantity.quantityDescribedBy.split(/\s+/).includes("mwi-shrine-guide-quantity-hint") &&
+            setQuantity.hintFollowsTargetInput &&
             Boolean(setQuantity.hintLabel) &&
             Boolean(setQuantity.hintUnit),
+          onlyTargetReceiveInputHighlighted:
+            setQuantity.quantityGuideRole === "active" &&
+            setQuantity.paymentGuideRole === "" &&
+            setQuantity.paymentDescribedBy === "",
           batchesMatchRequiredGuildTokens:
             setQuantity.remainingBatches === 300 && setQuantity.remainingBatches === chooseToken.requiredTokens,
           currentExchangeDistinguishesBatchesAndTokens:
-            setQuantity.routeTitle.includes("200") &&
+            setQuantity.routeTitle.includes("300") &&
             !setQuantity.hintDetailHidden &&
             setQuantity.hintDetailNumbers.length >= 2 &&
-            setQuantity.hintDetailNumbers[0] === 200 &&
-            setQuantity.hintDetailNumbers[1] === 200,
+            setQuantity.hintDetailNumbers[0] === 300 &&
+            setQuantity.hintDetailNumbers[1] === 300,
           exchangeAdvisorHiddenForGuildTokens: setQuantity.advisorHidden
         }
       };

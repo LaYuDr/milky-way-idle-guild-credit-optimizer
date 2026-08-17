@@ -55,12 +55,14 @@ const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
 if (!versionMatch) throw new Error(`Invalid package version: ${version}`);
 const header = `// ==UserScript==
 // @name         银河奶牛公会信用点性价比
+// @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
 // @version      ${version}
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
 // @description  公会信用点兑换与神龛升级的只读计算辅助；不会自动交易、兑换或升级，也不会上传账号数据。
+// @description:en Read-only guild planning helper for credit exchanges, shrine upgrades, and construction; does not automate buying, selling, exchanging, or upgrading, and does not upload account data.
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
 // @grant        GM_addElement

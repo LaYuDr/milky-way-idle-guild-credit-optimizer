@@ -5,6 +5,61 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function guildExchangeQuantityInputs(element) {
+    if (!element || typeof element.querySelectorAll !== "function") return { paymentInput: null, quantityInput: null };
+    const containers = Array.from(element.querySelectorAll('[class*="GuildPanel_inputContainer"]'));
+    const fields = containers
+      .map((container) => {
+        const input = container.querySelector("input");
+        const label = container.querySelector('[class*="GuildPanel_label"]');
+        return {
+          input,
+          label: String((label && label.textContent) || "")
+            .replaceAll("\n", " ")
+            .trim()
+        };
+      })
+      .filter((field) => field.input);
+    if (fields.length) {
+      const targetField = fields.find((field) => /你获得|\byou\s+(?:receive|get)\b/i.test(field.label));
+      const paymentField = fields.find((field) => /你支付|\byou\s+pay\b/i.test(field.label));
+      return {
+        paymentInput: (paymentField && paymentField.input) || (fields.length > 1 ? fields[0].input : null),
+        quantityInput: (targetField && targetField.input) || fields[fields.length - 1].input
+      };
+    }
+    const legacyInput =
+      element.querySelector('input[type="number"]') ||
+      element.querySelector('input[inputmode="numeric"]') ||
+      element.querySelector('input[type="text"]');
+    return { paymentInput: null, quantityInput: legacyInput || null };
+  }
+
+  function guildExchangeBatches(modalData, conversion) {
+    const itemCount = Number(conversion && conversion.itemCount);
+    const creditCount = Number(conversion && conversion.creditCount);
+    const paymentQuantity = Number(modalData && modalData.paymentQuantity);
+    const targetQuantity = Number(modalData && modalData.targetQuantity);
+    if (
+      Number.isSafeInteger(paymentQuantity) &&
+      paymentQuantity > 0 &&
+      Number.isSafeInteger(itemCount) &&
+      itemCount > 0 &&
+      paymentQuantity % itemCount === 0
+    )
+      return paymentQuantity / itemCount;
+    if (
+      Number.isSafeInteger(targetQuantity) &&
+      targetQuantity > 0 &&
+      Number.isSafeInteger(creditCount) &&
+      creditCount > 0 &&
+      targetQuantity % creditCount === 0
+    )
+      return targetQuantity / creditCount;
+    const fallback = Number(modalData && modalData.batches);
+    return Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 1;
+  }
+
   function createExchangeAdvisor(dependencies) {
     const {
       state,
@@ -64,8 +119,9 @@
           .filter((item) => item.itemHrid);
         const credit = icons.find((item) => CREDIT_TYPES.some(([hrid]) => hrid === item.itemHrid));
         const selected = icons.find((item) => !CREDIT_TYPES.some(([hrid]) => hrid === item.itemHrid));
-        const quantityInput = element.querySelector('input[type="number"]');
-        const batches = Number(quantityInput && quantityInput.value);
+        const { paymentInput, quantityInput } = guildExchangeQuantityInputs(element);
+        const paymentQuantity = Number(paymentInput && paymentInput.value);
+        const targetQuantity = Number(quantityInput && quantityInput.value);
         const maxBatches = Number(quantityInput && quantityInput.max);
         if (!credit) continue;
         return {
@@ -74,9 +130,12 @@
           creditItemHrid: credit.itemHrid,
           selectedItemHrid: (selected && selected.itemHrid) || null,
           selectedEnhancementLevel: (selected && selected.enhancementLevel) || 0,
+          paymentInput,
+          paymentQuantity: Number.isSafeInteger(paymentQuantity) && paymentQuantity > 0 ? paymentQuantity : null,
           quantityInput,
+          targetQuantity: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : null,
           maxBatches: Number.isSafeInteger(maxBatches) && maxBatches > 0 ? maxBatches : null,
-          batches: Number.isSafeInteger(batches) && batches > 0 ? batches : 1
+          batches: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : 1
         };
       }
       return null;
@@ -314,7 +373,7 @@
           );
           replacement = core.estimateSaleReplacement({
             selectedConversion,
-            batches: modalData.batches,
+            batches: guildExchangeBatches(modalData, selectedConversion),
             sellPrice,
             sellerTaxRate: SELLER_TAX_RATE,
             conversions,
@@ -448,5 +507,5 @@
     };
   }
 
-  return { createExchangeAdvisor };
+  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches };
 });

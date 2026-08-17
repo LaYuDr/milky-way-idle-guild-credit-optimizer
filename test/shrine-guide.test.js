@@ -29,6 +29,82 @@ function derive(overrides = {}) {
   });
 }
 
+function exchangeInputFixture(labels) {
+  const paymentInput = { value: "12" };
+  const quantityInput = { value: "30" };
+  const fields = [
+    {
+      querySelector(selector) {
+        if (selector === "input") return paymentInput;
+        if (selector.includes("GuildPanel_label")) return { textContent: labels[0] };
+        return null;
+      }
+    },
+    {
+      querySelector(selector) {
+        if (selector === "input") return quantityInput;
+        if (selector.includes("GuildPanel_label")) return { textContent: labels[1] };
+        return null;
+      }
+    }
+  ];
+  return {
+    paymentInput,
+    quantityInput,
+    element: {
+      querySelectorAll(selector) {
+        return selector.includes("GuildPanel_inputContainer") ? fields : [];
+      },
+      querySelector() {
+        return null;
+      }
+    }
+  };
+}
+
+test("双数量框按你支付和你获得语义只选择目标获得输入框", () => {
+  for (const labels of [
+    ["你支付(上限:12)", "你获得"],
+    ["You pay (max: 12)", "You receive"]
+  ]) {
+    const fixture = exchangeInputFixture(labels);
+    const result = exchangeAdvisorApi.guildExchangeQuantityInputs(fixture.element);
+    assert.equal(result.paymentInput, fixture.paymentInput);
+    assert.equal(result.quantityInput, fixture.quantityInput);
+  }
+});
+
+test("无法读取新版语义容器时仍兼容旧版单数量框", () => {
+  const legacyInput = { value: "7" };
+  const result = exchangeAdvisorApi.guildExchangeQuantityInputs({
+    querySelectorAll() {
+      return [];
+    },
+    querySelector(selector) {
+      return selector === 'input[type="number"]' ? legacyInput : null;
+    }
+  });
+  assert.equal(result.paymentInput, null);
+  assert.equal(result.quantityInput, legacyInput);
+});
+
+test("新版双数量框的兑换批数优先按支付数量和兑换比例换算", () => {
+  assert.equal(
+    exchangeAdvisorApi.guildExchangeBatches(
+      { paymentQuantity: 12, targetQuantity: 30, batches: 30 },
+      { itemCount: 4, creditCount: 10 }
+    ),
+    3
+  );
+  assert.equal(
+    exchangeAdvisorApi.guildExchangeBatches(
+      { paymentQuantity: null, targetQuantity: 30, batches: 30 },
+      { itemCount: 4, creditCount: 10 }
+    ),
+    3
+  );
+});
+
 test("关闭指引时不派生任何操作", () => {
   const result = derive({ enabled: false });
   assert.equal(result.status, "inactive");

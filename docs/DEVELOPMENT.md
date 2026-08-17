@@ -290,11 +290,12 @@ credits and enables the shrine guide. It first requires the native Guild Token
 item to carry the active guide highlight while the guide reports the
 `use_guild_token` state and a requirement of `300` tokens. It then makes Guild
 Token the modal's selected item and requires the guide to enter
-`set_quantity`: the native quantity input is active, an inline status hint is
-linked through `aria-describedby`, the remaining `300` batches match the `300`
-required tokens at one token per batch, and the inline detail distinguishes the
-current modal limit of `200` batches from the `200` tokens used in that
-exchange. The separate exchange advisor must be hidden. After
+`set_quantity`: the updated native modal exposes separate text inputs for
+"You pay" and "You receive". Only the target "You receive" input may be active
+or linked to the inline status hint through `aria-describedby`; the payment
+input must remain unmarked. The remaining `300` batches match the `300`
+required tokens at one token per batch, and the inline detail reports the same
+`300`-batch current exchange. The separate exchange advisor must be hidden. After
 `document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 
