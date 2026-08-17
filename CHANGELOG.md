@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.51] - 2026-08-17
+
+### Changed
+
+- 适配游戏新版双数量输入框，仅在右侧目标获得字段显示神龛高亮指引，并补充英文 Userscript 元数据与相应回归测试。
+
 ## [1.1.50] - 2026-08-12
 
 ### Changed
