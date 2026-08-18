@@ -777,10 +777,11 @@
     );
   }
 
-  function isUltraHighPriceItemName(...names) {
-    return names.some((name) =>
-      /贤者|(?:大师|宗师).*护符|\bsage\b|\b(?:master|grandmaster)\b.*\bcharm\b/i.test(String(name || ""))
-    );
+  function isUnitPriceWithinLimit(unitPrice, maxUnitPrice) {
+    const limit = Number(maxUnitPrice);
+    if (!Number.isSafeInteger(limit) || limit <= 0) return true;
+    const price = Number(unitPrice);
+    return !Number.isFinite(price) || price <= 0 || price <= limit;
   }
 
   return {
@@ -804,7 +805,7 @@
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,
-    isUltraHighPriceItemName,
+    isUnitPriceWithinLimit,
     guildTokenBudgetPercentage,
     snapGuildTokenBudget
   };

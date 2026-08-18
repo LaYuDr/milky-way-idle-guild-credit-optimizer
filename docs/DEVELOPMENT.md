@@ -321,19 +321,20 @@ Token the modal's selected item and requires the guide to enter
 "You pay" and "You receive". Only the target "You receive" input may be active
 or linked through `aria-describedby`; the payment input must remain unmarked.
 The light-DOM description remains visually hidden next to the target input so
-the ARIA reference does not cross a shadow boundary. Its visible two-line mirror
-is a separate strip in the positioned advisor stack, below the recommendation
-card when that card is available. It reads "完成当前规划应填写" followed by the
-dynamic remaining-batch number without a visible unit and disables the pulsing
-animation on the target input.
+the ARIA reference does not cross a shadow boundary. Its visible mirror is a
+separate, selectable-text strip in the positioned advisor stack, below the
+recommendation card when that card is available. It reads
+"完成当前规划需要「公会代币」300个，获得「绿色公会信用点」3,000个", allows
+long localized names and quantities to wrap, and disables the pulsing animation
+on the target input.
 
 The fixture owns only `125` of the `300` required Guild Tokens. Selecting the
 token must fire one input update, prefill "You receive" with `1,250` Green Guild
-Credits (`125` complete batches at `1 -> 10`), and leave the remaining total at
-`300` batches in the strip. The hidden accessible detail reports `125` batches
-and `125` tokens for the current exchange. The market recommendation card must
-remain hidden for Guild Tokens while the advisor stack and quantity strip remain
-visible. After
+Credits (`125` complete batches at `1 -> 10`), while the strip keeps the full
+plan requirement of `300` tokens and `3,000` credits. The hidden accessible
+detail reports `125` batches and `125` tokens for the current exchange. The
+market recommendation card must remain hidden for Guild Tokens while the
+advisor stack and quantity strip remain visible. After
 `document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 
@@ -343,21 +344,22 @@ await window.__mwiTokenGuideAuditReady;
 
 Every value in `checks` must be `true`.
 
-To verify highest-bid price-band validation and the persisted ultra-high-price
-item filter, open:
+To verify highest-bid price-band validation and the persisted unit-price limit,
+open:
 
 ```text
 http://127.0.0.1:4173/test-harness.html?marketFilterAudit=1&resetState=1&sidebarWidth=420
 ```
 
-The fixture supplies a normal Green Credit conversion, valid Sage, Master
-Charm, and Grandmaster Charm conversions, and an ordinary item whose highest
-bid is below the official `priceBandMins[0]`. The audit selects the highest-bid
-reference and requires the below-range item to remain absent. It then enables
-and disables the inline ultra-high-price filter, requiring all three expensive
-categories to disappear and return immediately and the Boolean preference to
-round-trip through plugin UI storage. It also requires the checkbox mark to
-remain `15px` square and its enclosing control to match the target input,
+The fixture supplies Green Credit conversions at 50M, 55M, 60M, and 70M, plus
+an ordinary item whose highest bid is below the official `priceBandMins[0]`.
+The audit selects the highest-bid reference and requires the below-range item
+to remain absent. It then enters a 55M unit-price limit, requiring the 60M and
+70M items to disappear while the item priced exactly at 55M remains. An
+invalid negative value must preserve the active filter and expose an inline
+accessible error; clearing the field must restore all valid items. The coin
+value and cleared `null` state must round-trip through plugin UI storage. The
+compact number input's enclosing control must match the target input,
 price-reference group, and refresh button height. After
 `document.body.dataset.marketFilterAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:

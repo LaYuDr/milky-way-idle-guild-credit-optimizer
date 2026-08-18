@@ -500,27 +500,42 @@
         beast_hide: {
           revision: 1,
           receivedAt: Date.now(),
-          update: { itemHrid: "/items/beast_hide", levels: { 0: { a: 55, b: 50, min: 40, max: 65 } } }
+          update: {
+            itemHrid: "/items/beast_hide",
+            levels: { 0: { a: 55_000_000, b: 50_000_000, min: 40_000_000, max: 65_000_000 } }
+          }
         },
         sage_market_charm: {
           revision: 2,
           receivedAt: Date.now(),
-          update: { itemHrid: "/items/sage_market_charm", levels: { 0: { a: 60, b: 50, min: 40, max: 70 } } }
+          update: {
+            itemHrid: "/items/sage_market_charm",
+            levels: { 0: { a: 75_000_000, b: 70_000_000, min: 40_000_000, max: 80_000_000 } }
+          }
         },
         master_market_charm: {
           revision: 3,
           receivedAt: Date.now(),
-          update: { itemHrid: "/items/master_market_charm", levels: { 0: { a: 61, b: 51, min: 40, max: 70 } } }
+          update: {
+            itemHrid: "/items/master_market_charm",
+            levels: { 0: { a: 60_000_000, b: 55_000_000, min: 40_000_000, max: 70_000_000 } }
+          }
         },
         grandmaster_market_charm: {
           revision: 4,
           receivedAt: Date.now(),
-          update: { itemHrid: "/items/grandmaster_market_charm", levels: { 0: { a: 62, b: 52, min: 40, max: 70 } } }
+          update: {
+            itemHrid: "/items/grandmaster_market_charm",
+            levels: { 0: { a: 65_000_000, b: 60_000_000, min: 40_000_000, max: 70_000_000 } }
+          }
         },
         below_range_material: {
           revision: 5,
           receivedAt: Date.now(),
-          update: { itemHrid: "/items/below_range_material", levels: { 0: { a: 20, b: 1, min: 10, max: 25 } } }
+          update: {
+            itemHrid: "/items/below_range_material",
+            levels: { 0: { a: 20_000_000, b: 1_000_000, min: 10_000_000, max: 25_000_000 } }
+          }
         }
       };
     } else {
@@ -1011,27 +1026,41 @@
         );
       await waitFor(() => greenRows().includes("Grandmaster Enhancing Charm"));
       const rowsBeforeFilter = greenRows();
-      const checkbox = panel.querySelector('[data-role="exclude-ultra-high-price-items"]');
-      const checkboxLabel = checkbox.closest("label");
+      const priceLimitInput = panel.querySelector('[data-role="max-item-unit-price-millions"]');
+      const priceLimitLabel = priceLimitInput.closest("label");
       const controlHeights = [
         panel.querySelector('[data-role="target"]'),
         panel.querySelector(".mwi-price-reference"),
         panel.querySelector('[data-role="refresh"]'),
-        checkboxLabel
+        priceLimitLabel
       ].map((element) => elementRect(element).height);
-      checkbox.click();
-      await waitFor(() => !greenRows().includes("Grandmaster Enhancing Charm"));
-      const storedEnabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
-      const rowsWithFilter = greenRows();
-      checkbox.click();
+      priceLimitInput.value = "55";
+      priceLimitInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(
+        () => !greenRows().includes("Sage Market Charm") && !greenRows().includes("Grandmaster Enhancing Charm")
+      );
+      const storedLimited = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+      const rowsWithLimit = greenRows();
+      priceLimitInput.value = "-1";
+      priceLimitInput.dispatchEvent(new Event("change", { bubbles: true }));
+      const validationError = panel.querySelector('[data-role="max-item-unit-price-error"]');
+      const rowsAfterInvalid = greenRows();
+      const invalidInputPreserved =
+        !validationError.hidden &&
+        priceLimitInput.getAttribute("aria-invalid") === "true" &&
+        priceLimitInput.value === "-1" &&
+        JSON.stringify(rowsAfterInvalid) === JSON.stringify(rowsWithLimit);
+      priceLimitInput.value = "";
+      priceLimitInput.dispatchEvent(new Event("change", { bubbles: true }));
       await waitFor(() => greenRows().includes("Grandmaster Enhancing Charm"));
-      const storedDisabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+      const storedCleared = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
       const controls = panel.querySelector(".mwi-controls");
       const report = {
         rowsBeforeFilter,
-        rowsWithFilter,
+        rowsWithLimit,
+        rowsAfterInvalid,
         controlHeights,
-        checkboxSize: elementRect(checkbox),
+        priceLimitInput: elementRect(priceLimitInput),
         checks: {
           rightPriceSelected: rightPrice.dataset.active === "true",
           belowRangeBidIgnored: !rowsBeforeFilter.includes("Below Range Material"),
@@ -1039,17 +1068,21 @@
           masterCharmsInitiallyIncluded:
             rowsBeforeFilter.includes("Master Milking Charm") &&
             rowsBeforeFilter.includes("Grandmaster Enhancing Charm"),
-          highPriceItemsExcludedWhenChecked:
-            !rowsWithFilter.includes("Sage Market Charm") &&
-            !rowsWithFilter.includes("Master Milking Charm") &&
-            !rowsWithFilter.includes("Grandmaster Enhancing Charm"),
-          preferencePersistedEnabled: storedEnabled.excludeUltraHighPriceItems === true,
-          preferencePersistedDisabled: storedDisabled.excludeUltraHighPriceItems === false,
-          checkboxAccessible:
-            normalizedText(checkboxLabel) === (english ? "Exclude ultra-high-price items" : "屏蔽超高价格物品"),
+          pricesAboveLimitExcluded:
+            !rowsWithLimit.includes("Sage Market Charm") &&
+            rowsWithLimit.includes("Master Milking Charm") &&
+            !rowsWithLimit.includes("Grandmaster Enhancing Charm"),
+          thresholdPersistedInCoins: storedLimited.maxConversionItemUnitPrice === 55_000_000,
+          invalidInputPreservesFilter: invalidInputPreserved,
+          clearedThresholdPersisted: storedCleared.maxConversionItemUnitPrice === null,
+          priceLimitAccessible:
+            priceLimitInput.getAttribute("aria-label") ===
+            (english
+              ? "Exclude conversion items priced over this many million gold"
+              : "屏蔽单价超过多少 M 金币的兑换物品"),
           controlsHaveMatchingHeight: Math.max(...controlHeights) - Math.min(...controlHeights) <= 1,
-          checkboxMarkIsCompact:
-            Math.abs(elementRect(checkbox).width - 15) <= 1 && Math.abs(elementRect(checkbox).height - 15) <= 1,
+          priceInputIsCompact:
+            Math.abs(elementRect(priceLimitInput).width - 68) <= 1 && elementRect(priceLimitInput).height <= 31,
           panelHasNoHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
           controlsHaveNoHorizontalOverflow: controls.scrollWidth <= controls.clientWidth + 1
         }
@@ -1634,9 +1667,11 @@
         const card = advisorCard();
         return card && card.hidden ? card : null;
       });
-      const remainingBatches = Number(
-        normalizedText(quantityHint.visual.querySelector('[data-role="quantity-hint-number"]')).replace(/[^\d]/g, "")
-      );
+      const visibleAdvisorSurface = await waitFor(() => {
+        const surface = advisorSurface();
+        return surface && !surface.hidden ? surface : null;
+      });
+      const hintSummary = normalizedText(quantityHint.visual.querySelector('[data-role="quantity-hint-summary"]'));
       const hintDetailNode = quantityHint.visual.querySelector('[data-role="quantity-hint-detail"]');
       const hintDetail = normalizedText(hintDetailNode);
       const hintDetailNumbers = Array.from(hintDetail.matchAll(/\d[\d,]*/g), (match) =>
@@ -1655,13 +1690,14 @@
           quantityHint.semantic.previousElementSibling ===
           quantityInput.closest('[class*="GuildPanel_quantityInputs"]'),
         visualHintSharesAdvisorSurface: quantityHint.visual.parentElement === advisorSurface(),
-        hintLabel: normalizedText(quantityHint.visual.querySelector('[data-role="quantity-hint-label"]')),
-        remainingBatches,
+        hintSummary,
         hintHasUnit: Boolean(quantityHint.visual.querySelector('[data-role="quantity-hint-unit"]')),
         hintBackground: getComputedStyle(quantityHint.visual).backgroundColor,
         hintBorderWidth: getComputedStyle(quantityHint.visual).borderWidth,
         semanticHintClipPath: getComputedStyle(quantityHint.semantic).clipPath,
         hintDetailPosition: getComputedStyle(hintDetailNode).position,
+        hintPointerEvents: getComputedStyle(quantityHint.visual).pointerEvents,
+        hintUserSelect: getComputedStyle(quantityHint.visual).userSelect,
         quantityAnimation: getComputedStyle(quantityInput).animationName,
         quantityValue: Number(quantityInput.value),
         paymentValue: Number(paymentInput.value),
@@ -1670,7 +1706,7 @@
         hintDetailHidden: hintDetailNode.hidden,
         hintDetailNumbers,
         advisorHidden: hiddenAdvisor.hidden,
-        advisorSurfaceVisible: !advisorSurface().hidden
+        advisorSurfaceVisible: !visibleAdvisorSurface.hidden
       };
       const report = {
         chooseToken,
@@ -1692,23 +1728,25 @@
             setQuantity.quantityDescribedBy.split(/\s+/).includes("mwi-shrine-guide-quantity-hint") &&
             setQuantity.semanticHintFollowsTargetInput &&
             setQuantity.visualHintSharesAdvisorSurface &&
-            setQuantity.hintLabel ===
+            setQuantity.hintSummary ===
               (document.documentElement.lang.toLowerCase().startsWith("zh")
-                ? "完成当前规划应填写"
-                : "Enter for the current plan") &&
+                ? "完成当前规划需要「公会代币」300个，获得「绿色公会信用点」3,000个"
+                : "To complete the current plan, you need “Guild Token” × 300 and receive “Green Guild Credit” × 3,000.") &&
             !setQuantity.hintHasUnit,
           quantityHintUsesQuietPresentation:
             setQuantity.hintBackground === "rgb(23, 25, 39)" &&
             setQuantity.hintBorderWidth === "1px" &&
             setQuantity.semanticHintClipPath !== "none" &&
             setQuantity.hintDetailPosition === "absolute" &&
+            setQuantity.hintPointerEvents === "auto" &&
+            setQuantity.hintUserSelect === "text" &&
             setQuantity.quantityAnimation === "none",
           onlyTargetReceiveInputHighlighted:
             setQuantity.quantityGuideRole === "active" &&
             setQuantity.paymentGuideRole === "" &&
             setQuantity.paymentDescribedBy === "",
-          plannedBatchesRemainVisible:
-            setQuantity.remainingBatches === 300 && setQuantity.remainingBatches === chooseToken.requiredTokens,
+          plannedRequirementRemainsVisible:
+            setQuantity.hintSummary.includes("300") && setQuantity.hintSummary.includes("3,000"),
           inventoryCappedQuantityAutofillsOnce:
             setQuantity.quantityValue === 1250 &&
             setQuantity.paymentValue === 125 &&

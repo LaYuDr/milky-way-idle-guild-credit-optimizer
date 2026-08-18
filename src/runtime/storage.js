@@ -62,7 +62,7 @@
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
-        excludeUltraHighPriceItems: false,
+        maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: true,
         activeView: "credit",
@@ -106,13 +106,21 @@
             : Number.isSafeInteger(autoGuildTokenBudgetValue) && autoGuildTokenBudgetValue >= 0
               ? autoGuildTokenBudgetValue
               : null;
+        const maxConversionItemUnitPriceValue = Number(stored.maxConversionItemUnitPrice);
+        const maxConversionItemUnitPrice =
+          stored.maxConversionItemUnitPrice !== null &&
+          stored.maxConversionItemUnitPrice !== undefined &&
+          Number.isSafeInteger(maxConversionItemUnitPriceValue) &&
+          maxConversionItemUnitPriceValue > 0
+            ? maxConversionItemUnitPriceValue
+            : null;
         return {
           collapsedCreditSections,
           guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
-          excludeUltraHighPriceItems: stored.excludeUltraHighPriceItems === true || stored.excludeSageItems === true,
+          maxConversionItemUnitPrice,
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
@@ -209,7 +217,10 @@
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
             shrineGuideEnabled: state.shrineGuideEnabled,
-            excludeUltraHighPriceItems: state.excludeUltraHighPriceItems === true,
+            maxConversionItemUnitPrice:
+              Number.isSafeInteger(state.maxConversionItemUnitPrice) && state.maxConversionItemUnitPrice > 0
+                ? state.maxConversionItemUnitPrice
+                : null,
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),

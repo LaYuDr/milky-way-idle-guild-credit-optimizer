@@ -173,7 +173,6 @@
       );
       describedBy.add(SHRINE_GUIDE_QUANTITY_HINT_ID);
       input.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
-      const remainingBatches = formatNumber(step.batches);
       const suggestedBatches = formatNumber(step.suggestedBatches);
       const limited = step.suggestedBatches < step.batches;
       const detail =
@@ -185,8 +184,13 @@
           : limited
             ? t("guideQuantityCurrentExchange", { count: suggestedBatches })
             : "";
-      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
-      const accessibleText = detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity;
+      const planSummary = t("guideQuantityPlanSummary", {
+        item: itemNameForMaterial(step.recommendedItemHrid),
+        items: formatNumber(step.requiredItems),
+        credit: itemNameForMaterial(step.creditItemHrid),
+        credits: formatNumber(step.actualCredits)
+      });
+      const accessibleText = detail ? `${planSummary} ${detail}` : planSummary;
       setGuideText(hint, accessibleText);
       hint.setAttribute("aria-label", accessibleText);
 
@@ -194,8 +198,7 @@
       const visualHint = advisorUi && advisorUi.quantityHint;
       if (!visualHint) return;
       advisorUi.surface.style.setProperty("--credit", color || "#63e6c8");
-      setGuideText(visualHint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
-      setGuideText(visualHint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
+      setGuideText(visualHint.querySelector('[data-role="quantity-hint-summary"]'), planSummary);
       const detailNode = visualHint.querySelector('[data-role="quantity-hint-detail"]');
       detailNode.hidden = !detail;
       setGuideText(detailNode, detail);

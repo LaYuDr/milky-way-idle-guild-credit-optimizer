@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.57] - 2026-08-18
+
+### Changed
+
+- 将硬编码的高价物品名称屏蔽改为可持久化的单件市场价上限，并完善兑换数量指引文案与布局。
+
 ## [1.1.56] - 2026-08-18
 
 ### Changed

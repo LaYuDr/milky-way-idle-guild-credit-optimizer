@@ -414,7 +414,7 @@
       return snapshotPrice(itemHrid, "b", enhancementLevel);
     }
 
-    function allConversions(creditItemHrid) {
+    function allConversions(creditItemHrid, options = {}) {
       // Prefer data captured from this game session. The persisted init payload is
       // only a fallback, so a previous game version cannot misclassify conversions.
       hydrateBridgeData();
@@ -427,16 +427,25 @@
       }
       return conversions.flatMap((conversion) => {
         const itemName = resolveItemName(conversion.itemHrid, conversion.itemName);
-        if (state.excludeUltraHighPriceItems && core.isUltraHighPriceItemName(itemName, conversion.itemName)) return [];
+        if (
+          options.applyPriceLimit !== false &&
+          Number.isSafeInteger(state.maxConversionItemUnitPrice) &&
+          state.maxConversionItemUnitPrice > 0 &&
+          !core.isUnitPriceWithinLimit(
+            snapshotPrice(conversion.itemHrid, state.priceReference),
+            state.maxConversionItemUnitPrice
+          )
+        )
+          return [];
         return [{ ...conversion, itemName }];
       });
     }
 
-    function creditConversionGroups() {
+    function creditConversionGroups(options) {
       return CREDIT_TYPES.map(([creditItemHrid, color]) => ({
         creditItemHrid,
         color,
-        conversions: allConversions(creditItemHrid)
+        conversions: allConversions(creditItemHrid, options)
       }));
     }
 

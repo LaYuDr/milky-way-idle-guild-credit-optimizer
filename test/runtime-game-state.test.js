@@ -123,7 +123,7 @@ test("本地初始化原始 JSON 会补全局部建筑帧并保留当前会话�
   assert.equal(state.guildBuildingLevels["/guild_buildings/gym"].level, 2);
 });
 
-test("超高价格偏好在统一兑换数据入口过滤贤者与大师护符", () => {
+test("单件价格上限在统一兑换数据入口按当前价格参考过滤", () => {
   const state = createState();
   state.itemDetails = {
     sage: {
@@ -147,7 +147,8 @@ test("超高价格偏好在统一兑换数据入口过滤贤者与大师护符",
       guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 6, creditCount: 1 }]
     }
   };
-  state.excludeUltraHighPriceItems = true;
+  state.priceReference = "b";
+  state.maxConversionItemUnitPrice = 60_000_000;
   const adapter = gameStateApi.createGameStateAdapter(state);
   const previousWindow = global.window;
   global.window = {};
@@ -156,7 +157,17 @@ test("超高价格偏好在统一兑换数据入口过滤贤者与大师护符",
       state,
       pageWindow: { localStorage: { getItem: () => null } },
       document: { getElementById: () => null, body: null },
-      marketDataApi: {},
+      marketDataApi: {
+        resolveMarketPrice(_snapshot, _liveData, itemHrid, _level, reference) {
+          assert.equal(reference, "b");
+          return {
+            "/items/sage_charm": 70_000_000,
+            "/items/master_charm": 50_000_000,
+            "/items/grandmaster_charm": 60_000_000,
+            "/items/beast_hide": 1_000_000
+          }[itemHrid];
+        }
+      },
       core,
       ...adapter,
       persistLiveMarketData() {},
@@ -169,9 +180,9 @@ test("超高价格偏好在统一兑换数据入口过滤贤者与大师护符",
     });
     assert.deepEqual(
       gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
-      ["/items/beast_hide"]
+      ["/items/master_charm", "/items/grandmaster_charm", "/items/beast_hide"]
     );
-    state.excludeUltraHighPriceItems = false;
+    state.maxConversionItemUnitPrice = null;
     assert.deepEqual(
       gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
       ["/items/sage_charm", "/items/master_charm", "/items/grandmaster_charm", "/items/beast_hide"]

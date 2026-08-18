@@ -160,7 +160,7 @@
       const host = document.createElement("div");
       host.id = GUILD_EXCHANGE_ADVISOR_HOST_ID;
       const shadow = host.attachShadow({ mode: "open" });
-      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><div class="advisor-stack" data-role="advisor-stack" hidden><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside><aside class="guide-quantity" data-role="quantity-guide" aria-hidden="true" hidden><span class="guide-quantity-label" data-role="quantity-hint-label"></span><strong class="guide-quantity-value" data-role="quantity-hint-number"></strong><small class="guide-quantity-detail" data-role="quantity-hint-detail" hidden></small></aside></div>`;
+      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><div class="advisor-stack" data-role="advisor-stack" hidden><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside><aside class="guide-quantity" data-role="quantity-guide" aria-hidden="true" hidden><span class="guide-quantity-summary" data-role="quantity-hint-summary"></span><small class="guide-quantity-detail" data-role="quantity-hint-detail" hidden></small></aside></div>`;
       document.body.append(host);
       state.exchangeAdvisorUi = {
         host,

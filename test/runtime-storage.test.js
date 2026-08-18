@@ -43,7 +43,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildTokenCreditHrids: [],
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
-    excludeUltraHighPriceItems: false,
+    maxConversionItemUnitPrice: null,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",
@@ -67,24 +67,24 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   assert.equal(migrated.targetCredit, 200);
   assert.deepEqual(migrated.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(migrated.showConstructionView, true);
-  assert.equal(migrated.excludeUltraHighPriceItems, false);
+  assert.equal(migrated.maxConversionItemUnitPrice, null);
 });
 
-test("超高价格物品筛选迁移旧字段且只在明确启用时持久化", () => {
-  for (const excludeUltraHighPriceItems of [undefined, null, 0, "true", false]) {
+test("单件价格上限只接受正安全整数且不会臆测旧布尔偏好的金额", () => {
+  for (const maxConversionItemUnitPrice of [undefined, null, 0, -1, "true", Number.MAX_SAFE_INTEGER + 1]) {
     const loaded = createStorage(
-      memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ excludeUltraHighPriceItems }) })
+      memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ maxConversionItemUnitPrice }) })
     ).loadSavedPluginUiState();
-    assert.equal(loaded.excludeUltraHighPriceItems, false);
+    assert.equal(loaded.maxConversionItemUnitPrice, null);
   }
   const loaded = createStorage(
+    memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ maxConversionItemUnitPrice: 50_000_000 }) })
+  ).loadSavedPluginUiState();
+  assert.equal(loaded.maxConversionItemUnitPrice, 50_000_000);
+  const legacy = createStorage(
     memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ excludeUltraHighPriceItems: true }) })
   ).loadSavedPluginUiState();
-  assert.equal(loaded.excludeUltraHighPriceItems, true);
-  const migrated = createStorage(
-    memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ excludeSageItems: true }) })
-  ).loadSavedPluginUiState();
-  assert.equal(migrated.excludeUltraHighPriceItems, true);
+  assert.equal(legacy.maxConversionItemUnitPrice, null);
 });
 
 test("神龛填充排除项只保留合法 HRID 并与建设页可见性持久化", () => {
@@ -193,7 +193,7 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
     guildTokenCreditHrids: new Set(["/items/green_guild_credit"]),
     autoGuildTokenBudget: 10,
     shrineGuideEnabled: true,
-    excludeUltraHighPriceItems: true,
+    maxConversionItemUnitPrice: 50_000_000,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "upgrade",
@@ -207,7 +207,8 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
   assert.deepEqual(ui.guildTokenCreditHrids, ["/items/green_guild_credit"]);
   assert.deepEqual(ui.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(ui.showConstructionView, true);
-  assert.equal(ui.excludeUltraHighPriceItems, true);
+  assert.equal(ui.maxConversionItemUnitPrice, 50_000_000);
+  assert.equal(Object.prototype.hasOwnProperty.call(ui, "excludeUltraHighPriceItems"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(ui, "excludeSageItems"), false);
 
   const liveData = Object.create(null);
@@ -230,7 +231,7 @@ test("UI 持久化会返回写入成功或失败", () => {
     guildTokenCreditHrids: new Set(),
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
-    excludeUltraHighPriceItems: false,
+    maxConversionItemUnitPrice: null,
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",

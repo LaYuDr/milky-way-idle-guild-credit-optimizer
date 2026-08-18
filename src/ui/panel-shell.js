@@ -291,6 +291,48 @@
       }
     }
 
+    function maxItemUnitPriceMillionsValue() {
+      return Number.isSafeInteger(state.maxConversionItemUnitPrice) && state.maxConversionItemUnitPrice > 0
+        ? String(state.maxConversionItemUnitPrice / 1_000_000)
+        : "";
+    }
+
+    function setMaxItemUnitPriceError(panel, key = "") {
+      const input = panel.querySelector('[data-role="max-item-unit-price-millions"]');
+      const error = panel.querySelector('[data-role="max-item-unit-price-error"]');
+      if (!input || !error) return;
+      const hasError = Boolean(key);
+      input.setAttribute("aria-invalid", String(hasError));
+      error.hidden = !hasError;
+      error.textContent = hasError ? t(key) : "";
+    }
+
+    function parseMaxItemUnitPrice(input) {
+      const rawValue = String(input.value || "").trim();
+      if (!rawValue) return { valid: true, value: null };
+      const millions = Number(rawValue);
+      const coins = Math.round(millions * 1_000_000);
+      return !Number.isFinite(millions) || millions <= 0 || !Number.isSafeInteger(coins) || coins <= 0
+        ? { valid: false, value: null }
+        : { valid: true, value: coins };
+    }
+
+    function applyMaxItemUnitPrice(panel, input) {
+      const parsed = parseMaxItemUnitPrice(input);
+      if (!parsed.valid) {
+        setMaxItemUnitPriceError(panel, "maxItemUnitPriceInvalid");
+        return false;
+      }
+      const nextValue = parsed.value;
+      state.maxConversionItemUnitPrice = nextValue;
+      const persisted = persistPluginUiState();
+      setMaxItemUnitPriceError(panel, persisted === false ? "maxItemUnitPriceSaveFailed" : "");
+      refreshPanel(panel);
+      refreshGuildUpgrade(panel);
+      refreshGuildExchangeAdvisor(true);
+      return true;
+    }
+
     function createPanel() {
       const savedActiveView = state.activeView;
       normalizedPanelOrder();
@@ -315,7 +357,10 @@
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
             <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
             <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
-            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeUltraHighPriceItemsHint"))}"><input data-role="exclude-ultra-high-price-items" type="checkbox"${state.excludeUltraHighPriceItems ? " checked" : ""}><span>${escapeHtml(t("excludeUltraHighPriceItems"))}</span></label>
+            <div class="mwi-price-limit-control">
+              <label class="mwi-price-limit" title="${escapeHtml(t("maxItemUnitPriceHint"))}"><span>${escapeHtml(t("maxItemUnitPricePrefix"))}</span><input data-role="max-item-unit-price-millions" type="number" min="0.1" step="0.1" inputmode="decimal" value="${escapeHtml(maxItemUnitPriceMillionsValue())}" placeholder="${escapeHtml(t("maxItemUnitPricePlaceholder"))}" aria-label="${escapeHtml(t("maxItemUnitPriceInput"))}" aria-describedby="mwi-max-item-unit-price-error" aria-invalid="false"><span>${escapeHtml(t("maxItemUnitPriceSuffix"))}</span></label>
+              <small id="mwi-max-item-unit-price-error" class="mwi-price-limit-error" data-role="max-item-unit-price-error" role="status" aria-live="polite" hidden></small>
+            </div>
           </div>
           <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
           <div data-role="results"></div>
@@ -351,12 +396,18 @@
         persistPluginUiState();
         refreshPanel(panel);
       });
-      panel.querySelector('[data-role="exclude-ultra-high-price-items"]').addEventListener("change", (event) => {
-        state.excludeUltraHighPriceItems = event.target.checked;
-        persistPluginUiState();
-        refreshPanel(panel);
-        refreshGuildUpgrade(panel);
-        refreshGuildExchangeAdvisor(true);
+      const maxItemUnitPriceInput = panel.querySelector('[data-role="max-item-unit-price-millions"]');
+      maxItemUnitPriceInput.addEventListener("input", (event) => {
+        setMaxItemUnitPriceError(panel, parseMaxItemUnitPrice(event.target).valid ? "" : "maxItemUnitPriceInvalid");
+      });
+      maxItemUnitPriceInput.addEventListener("change", (event) => {
+        applyMaxItemUnitPrice(panel, event.target);
+      });
+      maxItemUnitPriceInput.addEventListener("blur", (event) => {
+        const inputValue = String(event.target.value || "").trim();
+        if (inputValue === maxItemUnitPriceMillionsValue() && event.target.getAttribute("aria-invalid") !== "true")
+          return;
+        applyMaxItemUnitPrice(panel, event.target);
       });
       const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
       const settingsPanel = panel.querySelector('[data-role="settings-panel"]');

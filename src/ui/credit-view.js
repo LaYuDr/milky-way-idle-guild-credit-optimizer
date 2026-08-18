@@ -25,14 +25,20 @@
       refreshOfficialItemNameCatalog
     } = dependencies;
 
-    function renderCreditSection(creditItemHrid, color, ranked) {
+    function renderCreditSection(creditItemHrid, color, ranked, priceLimited) {
       const available = ranked.filter((row) => row.status === "ok").slice(0, 5);
       const creditName = itemNameForMaterial(creditItemHrid);
       const icon = iconMarkup(creditItemHrid, creditName);
       const collapsed = state.collapsedCreditSections.has(creditItemHrid);
       const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
       if (!available.length) {
-        return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><div class="mwi-empty">${escapeHtml(t("noMarketEstimate"))}</div></div></section>`;
+        const emptyMessage =
+          priceLimited && state.maxConversionItemUnitPrice
+            ? t("noMarketEstimateWithinPriceLimit", {
+                limit: formatNumber(state.maxConversionItemUnitPrice / 1_000_000, 2)
+              })
+            : t("noMarketEstimate");
+        return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><div class="mwi-empty">${escapeHtml(emptyMessage)}</div></div></section>`;
       }
       return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><thead><tr><th>${escapeHtml(t("item"))}</th><th>${escapeHtml(t("exchange"))}</th><th>${escapeHtml(t("perCredit"))}</th><th>${escapeHtml(t("targetCost"))}</th></tr></thead><tbody>${available.map((row) => `<tr><td title="${escapeHtml(row.itemName)}"><span class="mwi-item">${marketItemIconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td>${escapeHtml(t("exchangeRate", { items: itemQuantity(row.itemCount), credits: creditQuantity(row.creditCount) }))}</td><td class="mwi-cost">${formatNumber(row.costPerCredit, 2)}</td><td>${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
     }
@@ -72,8 +78,8 @@
       status.hidden = false;
       results.replaceChildren();
 
-      const creditGroups = creditConversionGroups();
-      const conversionCount = creditGroups.reduce((total, group) => total + group.conversions.length, 0);
+      const unfilteredCreditGroups = creditConversionGroups({ applyPriceLimit: false });
+      const conversionCount = unfilteredCreditGroups.reduce((total, group) => total + group.conversions.length, 0);
       if (!conversionCount) {
         status.textContent = t("noExchangeRules");
         button.disabled = false;
@@ -84,6 +90,10 @@
 
       try {
         await loadSnapshot(Boolean(forceSnapshot));
+        const creditGroups = creditConversionGroups();
+        const unfilteredConversionCounts = new Map(
+          unfilteredCreditGroups.map((group) => [group.creditItemHrid, group.conversions.length])
+        );
         const rankedGroups = creditGroups.map((group) => {
           const books = Object.fromEntries(
             group.conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)])
@@ -91,6 +101,7 @@
           const tokenRule = GUILD_TOKEN_CREDIT_CONVERSIONS.find((rule) => rule.creditItemHrid === group.creditItemHrid);
           return {
             ...group,
+            priceLimited: group.conversions.length < (unfilteredConversionCounts.get(group.creditItemHrid) || 0),
             ranked: core.rankConversions(group.conversions, books, target),
             tokenRanked: core.rankConversions(group.conversions, books, tokenRule.creditCount)
           };
@@ -101,7 +112,7 @@
         );
         status.textContent = "";
         status.hidden = true;
-        results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked)).join("")}</div>`;
+        results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked, group.priceLimited)).join("")}</div>`;
         button.disabled = false;
         finishRefresh(panel);
       } catch (error) {

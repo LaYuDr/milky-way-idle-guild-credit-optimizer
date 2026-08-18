@@ -111,7 +111,7 @@
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
-    excludeUltraHighPriceItems: savedUiState.excludeUltraHighPriceItems,
+    maxConversionItemUnitPrice: savedUiState.maxConversionItemUnitPrice,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     settingsOpen: false,

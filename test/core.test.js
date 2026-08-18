@@ -50,6 +50,15 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.itemName("/items/guild_token"), "Guild Token");
   assert.equal(localizer.itemName("/items/beast_hide"), "");
   assert.equal(
+    localizer.t("guideQuantityPlanSummary", {
+      item: "Guild Token",
+      items: "300",
+      credit: "Green Guild Credit",
+      credits: "3,000"
+    }),
+    "To complete the current plan, you need “Guild Token” × 300 and receive “Green Guild Credit” × 3,000."
+  );
+  assert.equal(
     localizer.t("noAffordableReplacement", { gold: "4,312 gold" }),
     "Selling this quantity yields 4,312 gold after tax, which is not enough to buy an alternative exchange item."
   );
@@ -70,6 +79,15 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.itemName("/items/green_guild_credit"), "绿色公会信用点");
   assert.equal(localizer.itemName("/items/guild_token"), "公会代币");
   assert.equal(localizer.itemName("/items/beast_hide"), "");
+  assert.equal(
+    localizer.t("guideQuantityPlanSummary", {
+      item: "公会代币",
+      items: "300",
+      credit: "绿色公会信用点",
+      credits: "3,000"
+    }),
+    "完成当前规划需要「公会代币」300个，获得「绿色公会信用点」3,000个"
+  );
 });
 
 test("语言候选只接受受支持的字符串，并优先使用可见界面语言", () => {
@@ -1526,17 +1544,13 @@ test("支持游戏初始化消息使用的 itemDetailMap 对象结构", () => {
   ]);
 });
 
-test("超高价格物品筛选覆盖贤者与大师护符且不会误判普通物品", () => {
-  assert.equal(core.isUltraHighPriceItemName("贤者烹饪护符"), true);
-  assert.equal(core.isUltraHighPriceItemName("大师挤奶护符"), true);
-  assert.equal(core.isUltraHighPriceItemName("宗师强化护符"), true);
-  assert.equal(core.isUltraHighPriceItemName("Sage Cooking Charm"), true);
-  assert.equal(core.isUltraHighPriceItemName("Master Milking Charm"), true);
-  assert.equal(core.isUltraHighPriceItemName("Grandmaster Enhancing Charm"), true);
-  assert.equal(core.isUltraHighPriceItemName("Official Name", "Sage Alchemy Charm"), true);
-  assert.equal(core.isUltraHighPriceItemName("Sausage"), false);
-  assert.equal(core.isUltraHighPriceItemName("大师药水"), false);
-  assert.equal(core.isUltraHighPriceItemName("Grandmaster Cape"), false);
+test("单件价格阈值严格屏蔽超过上限的有效市场价格", () => {
+  assert.equal(core.isUnitPriceWithinLimit(50_000_000, 50_000_000), true);
+  assert.equal(core.isUnitPriceWithinLimit(50_000_001, 50_000_000), false);
+  assert.equal(core.isUnitPriceWithinLimit(null, 50_000_000), true);
+  assert.equal(core.isUnitPriceWithinLimit(Number.NaN, 50_000_000), true);
+  assert.equal(core.isUnitPriceWithinLimit(100_000_000, null), true);
+  assert.equal(core.isUnitPriceWithinLimit(100_000_000, -1), true);
 });
 
 test("正式版桥接保留游戏实时神龛等级", () => {
@@ -2039,8 +2053,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /PRICE_REFERENCES/);
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
-  assert.match(source, /data-role="exclude-ultra-high-price-items"/);
-  assert.match(source, /state\.excludeUltraHighPriceItems && core\.isUltraHighPriceItemName/);
+  assert.match(source, /data-role="max-item-unit-price-millions"/);
+  assert.match(source, /core\.isUnitPriceWithinLimit/);
   assert.match(source, /snapshotOrderBook\(conversion\.itemHrid\)/);
   assert.match(harnessSource, /searchParams\.get\("marketFilterAudit"\)/);
   assert.match(source, /conversionCache: new Map\(\)/);
@@ -2199,11 +2213,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /function prefillShrineGuideQuantityInput/);
   assert.match(source, /shrineGuideAutofillQuantity/);
   assert.match(source, /setNativeInputValue/);
-  assert.match(source, /guideQuantityLabel/);
-  assert.match(source, /data-role="quantity-hint-number"/);
+  assert.match(source, /guideQuantityPlanSummary/);
+  assert.match(source, /data-role="quantity-hint-summary"/);
   assert.doesNotMatch(source, /data-role="quantity-hint-unit"/);
   assert.match(source, /detailNode\.hidden = !detail/);
-  assert.match(source, /guideQuantityRemaining/);
   assert.match(source, /guideQuantityCurrentExchange/);
   assert.match(source, /function shrineGuideQuantityRow/);
   assert.match(source, /quantityRow\.insertAdjacentElement\("afterend", hint\)/);
