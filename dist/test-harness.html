@@ -1091,18 +1091,39 @@
         );
       await waitFor(() => greenRows().includes("Grandmaster Enhancing Charm"));
       const rowsBeforeFilter = greenRows();
+      const targetInput = panel.querySelector('[data-role="target"]');
+      const targetStepper = targetInput.closest(".mwi-number-stepper");
+      const targetIncrease = targetStepper.querySelector('[data-role="number-step"][data-direction="1"]');
+      const targetDecrease = targetStepper.querySelector('[data-role="number-step"][data-direction="-1"]');
       const priceLimitInput = panel.querySelector('[data-role="max-item-unit-price-millions"]');
-      const priceLimitLabel = priceLimitInput.closest("label");
+      const priceLimitControl = priceLimitInput.closest(".mwi-price-limit");
+      const priceStepper = priceLimitInput.closest(".mwi-number-stepper");
+      const priceIncrease = priceStepper.querySelector('[data-role="number-step"][data-direction="1"]');
+      const priceDecrease = priceStepper.querySelector('[data-role="number-step"][data-direction="-1"]');
       const controlHeights = [
-        panel.querySelector('[data-role="target"]'),
+        targetStepper,
         panel.querySelector(".mwi-price-reference"),
         panel.querySelector('[data-role="refresh"]'),
-        priceLimitLabel
+        priceLimitControl
       ].map((element) => elementRect(element).height);
+      targetInput.value = "100";
+      targetIncrease.click();
+      const targetAfterIncrease = targetInput.value;
+      targetDecrease.click();
+      const targetAfterDecrease = targetInput.value;
+      targetInput.value = "1";
+      targetDecrease.click();
+      const targetAtMinimum = targetInput.value;
+      targetInput.value = "100";
+      priceLimitInput.value = "";
+      priceDecrease.click();
+      const priceAfterEmptyDecrease = priceLimitInput.value;
+      priceIncrease.click();
+      const priceAfterEmptyIncrease = priceLimitInput.value;
       priceLimitInput.value = "100";
-      priceLimitInput.stepUp();
+      priceIncrease.click();
       const valueAfterStepUp = priceLimitInput.value;
-      priceLimitInput.stepDown();
+      priceDecrease.click();
       const valueAfterStepDown = priceLimitInput.value;
       priceLimitInput.value = "55";
       priceLimitInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1131,6 +1152,8 @@
         rowsAfterInvalid,
         controlHeights,
         priceLimitInput: elementRect(priceLimitInput),
+        targetStepper: elementRect(targetStepper),
+        priceStepper: elementRect(priceStepper),
         checks: {
           rightPriceSelected: rightPrice.dataset.active === "true",
           belowRangeBidIgnored: !rowsBeforeFilter.includes("Below Range Material"),
@@ -1150,9 +1173,28 @@
             (english
               ? "Exclude conversion items priced over this many million gold"
               : "屏蔽单价超过多少 M 金币的兑换物品"),
+          customSteppersAccessible:
+            targetIncrease.getAttribute("aria-label") ===
+              (english ? "Increase target credits by 100" : "增加 100 目标信用点") &&
+            targetDecrease.getAttribute("aria-label") ===
+              (english ? "Decrease target credits by 100" : "减少 100 目标信用点") &&
+            priceIncrease.getAttribute("aria-label") ===
+              (english ? "Increase the price limit by 10M" : "增加 10M 屏蔽单价上限") &&
+            priceDecrease.getAttribute("aria-label") ===
+              (english ? "Decrease the price limit by 10M" : "减少 10M 屏蔽单价上限"),
           controlsHaveMatchingHeight: Math.max(...controlHeights) - Math.min(...controlHeights) <= 1,
           priceInputIsCompact:
-            Math.abs(elementRect(priceLimitInput).width - 68) <= 1 && elementRect(priceLimitInput).height <= 31,
+            Math.abs(elementRect(priceLimitInput).width - 68) <= 1 && elementRect(priceLimitInput).height <= 39,
+          stepperButtonsAreLarger: [targetIncrease, targetDecrease, priceIncrease, priceDecrease].every(
+            (button) => elementRect(button).width >= 33 && elementRect(button).height >= 18
+          ),
+          targetInputUsesHundredCreditSteps:
+            targetInput.min === "1" &&
+            targetInput.step === "100" &&
+            targetAfterIncrease === "200" &&
+            targetAfterDecrease === "100" &&
+            targetAtMinimum === "1",
+          emptyPriceLimitUsesSafeSteps: priceAfterEmptyDecrease === "" && priceAfterEmptyIncrease === "10",
           priceInputUsesTenMillionSteps:
             priceLimitInput.min === "10" &&
             priceLimitInput.step === "10" &&

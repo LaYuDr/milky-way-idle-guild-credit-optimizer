@@ -2053,6 +2053,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /PRICE_REFERENCES/);
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
+  assert.match(source, /data-role="target" type="number" min="1" step="100"/);
+  assert.match(source, /data-role="number-step" data-input-role="target" data-direction="1"/);
+  assert.match(source, /data-role="number-step" data-input-role="max-item-unit-price-millions" data-direction="-1"/);
   assert.match(source, /data-role="max-item-unit-price-millions"/);
   assert.match(source, /data-role="max-item-unit-price-millions" type="number" min="10" step="10"/);
   assert.match(source, /core\.isUnitPriceWithinLimit/);

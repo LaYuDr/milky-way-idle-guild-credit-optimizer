@@ -377,10 +377,13 @@ to remain absent. It then enters a 55M unit-price limit, requiring the 60M and
 invalid negative value must preserve the active filter and expose an inline
 accessible error; clearing the field must restore all valid items. The coin
 value and cleared `null` state must round-trip through plugin UI storage. The
-compact number input's enclosing control must match the target input,
-price-reference group, and refresh button height. Its native spinner and
-keyboard arrow controls use a `10M` step, so `100` increments to `110` and
-decrements back to `100`. After
+compact number input's enclosing control must match the target-credit stepper,
+price-reference group, and refresh button height. Both numeric fields use the
+shared enlarged custom stepper with accessible increase and decrease buttons.
+The target-credit buttons change `100` to `200` and back to `100`, while the
+price-limit buttons use a `10M` step, changing `100` to `110` and back to
+`100`. The underlying number inputs retain matching `step` attributes for
+keyboard arrow controls. After
 `document.body.dataset.marketFilterAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 
