@@ -231,8 +231,8 @@
       marketReference: "市场价格参考",
       priceReference: "价格参考",
       refreshEstimate: "刷新市场估算",
-      excludeSageItems: "屏蔽贤者物品",
-      excludeSageItemsHint: "名称含“贤者”的物品不参与性价比比较",
+      excludeUltraHighPriceItems: "屏蔽超高价格物品",
+      excludeUltraHighPriceItemsHint: "贤者物品、大师护符和宗师护符不参与性价比比较",
       waitingExchangeRules: "等待游戏兑换数据...",
       guildShrineBatchPlan: "按当前公会神龛等级批量规划",
       setGuildLifeTarget: "填充生活等级",
@@ -540,8 +540,9 @@
       marketReference: "Market price reference",
       priceReference: "Price reference",
       refreshEstimate: "Refresh market estimate",
-      excludeSageItems: "Exclude Sage items",
-      excludeSageItemsHint: "Items with “Sage” in the name are excluded from value comparisons",
+      excludeUltraHighPriceItems: "Exclude ultra-high-price items",
+      excludeUltraHighPriceItemsHint:
+        "Sage items, Master Charms, and Grandmaster Charms are excluded from value comparisons",
       waitingExchangeRules: "Waiting for game exchange data...",
       guildShrineBatchPlan: "Batch plan by current guild shrine levels",
       setGuildLifeTarget: "Fill Life levels",
@@ -622,6 +623,31 @@
     }
   };
 
+  const ITEM_NAMES = {
+    "zh-CN": {
+      "/items/guild_token": "公会代币",
+      "/items/green_guild_credit": "绿色公会信用点",
+      "/items/brown_guild_credit": "棕色公会信用点",
+      "/items/white_guild_credit": "白色公会信用点",
+      "/items/blue_guild_credit": "蓝色公会信用点",
+      "/items/purple_guild_credit": "紫色公会信用点",
+      "/items/red_guild_credit": "红色公会信用点",
+      "/items/silver_guild_credit": "银色公会信用点",
+      "/items/gold_guild_credit": "金色公会信用点"
+    },
+    en: {
+      "/items/guild_token": "Guild Token",
+      "/items/green_guild_credit": "Green Guild Credit",
+      "/items/brown_guild_credit": "Brown Guild Credit",
+      "/items/white_guild_credit": "White Guild Credit",
+      "/items/blue_guild_credit": "Blue Guild Credit",
+      "/items/purple_guild_credit": "Purple Guild Credit",
+      "/items/red_guild_credit": "Red Guild Credit",
+      "/items/silver_guild_credit": "Silver Guild Credit",
+      "/items/gold_guild_credit": "Gold Guild Credit"
+    }
+  };
+
   function supportedLocale(locale) {
     if (typeof locale !== "string") return null;
     const candidate = locale.trim().toLowerCase().replaceAll("_", "-");
@@ -673,8 +699,11 @@
             : "items";
       return t(key, { count: formatted, unit });
     }
-    return { locale: normalizedLocale, t, number, quantity };
+    function itemName(itemHrid) {
+      return ITEM_NAMES[normalizedLocale][itemHrid] || "";
+    }
+    return { locale: normalizedLocale, t, number, quantity, itemName };
   }
 
-  return { STRINGS, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
+  return { STRINGS, ITEM_NAMES, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
 });

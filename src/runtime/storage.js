@@ -62,7 +62,7 @@
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
-        excludeSageItems: false,
+        excludeUltraHighPriceItems: false,
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: true,
         activeView: "credit",
@@ -112,7 +112,7 @@
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
-          excludeSageItems: stored.excludeSageItems === true,
+          excludeUltraHighPriceItems: stored.excludeUltraHighPriceItems === true || stored.excludeSageItems === true,
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
@@ -209,7 +209,7 @@
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
             shrineGuideEnabled: state.shrineGuideEnabled,
-            excludeSageItems: state.excludeSageItems === true,
+            excludeUltraHighPriceItems: state.excludeUltraHighPriceItems === true,
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),

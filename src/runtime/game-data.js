@@ -427,7 +427,7 @@
       }
       return conversions.flatMap((conversion) => {
         const itemName = resolveItemName(conversion.itemHrid, conversion.itemName);
-        if (state.excludeSageItems && core.isSageItemName(itemName, conversion.itemName)) return [];
+        if (state.excludeUltraHighPriceItems && core.isUltraHighPriceItemName(itemName, conversion.itemName)) return [];
         return [{ ...conversion, itemName }];
       });
     }

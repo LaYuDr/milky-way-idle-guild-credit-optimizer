@@ -309,21 +309,24 @@ await window.__mwiTokenGuideAuditReady;
 
 Every value in `checks` must be `true`.
 
-To verify highest-bid price-band validation and the persisted Sage-item filter,
-open:
+To verify highest-bid price-band validation and the persisted ultra-high-price
+item filter, open:
 
 ```text
 http://127.0.0.1:4173/test-harness.html?marketFilterAudit=1&resetState=1&sidebarWidth=420
 ```
 
-The fixture supplies three Green Credit conversions: a normal item, a Sage
-item with a valid highest bid, and an ordinary item whose highest bid is below
-the official `priceBandMins[0]`. The audit selects the highest-bid reference
-and requires the below-range item to remain absent. It then enables and
-disables the inline Sage checkbox, requiring the Sage row to disappear and
-return immediately and the Boolean preference to round-trip through plugin UI
-storage. After `document.body.dataset.marketFilterAuditReady` becomes `"true"`,
-inspect `#layout-audit-output` or evaluate:
+The fixture supplies a normal Green Credit conversion, valid Sage, Master
+Charm, and Grandmaster Charm conversions, and an ordinary item whose highest
+bid is below the official `priceBandMins[0]`. The audit selects the highest-bid
+reference and requires the below-range item to remain absent. It then enables
+and disables the inline ultra-high-price filter, requiring all three expensive
+categories to disappear and return immediately and the Boolean preference to
+round-trip through plugin UI storage. It also requires the checkbox mark to
+remain `15px` square and its enclosing control to match the target input,
+price-reference group, and refresh button height. After
+`document.body.dataset.marketFilterAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
 
 ```js
 await window.__mwiMarketFilterAuditReady;

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.52";
+window.MwiGuildCreditVersion = "1.1.53";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2017,8 +2017,8 @@ window.MwiGuildCreditVersion = "1.1.52";
       marketReference: "市场价格参考",
       priceReference: "价格参考",
       refreshEstimate: "刷新市场估算",
-      excludeSageItems: "屏蔽贤者物品",
-      excludeSageItemsHint: "名称含“贤者”的物品不参与性价比比较",
+      excludeUltraHighPriceItems: "屏蔽超高价格物品",
+      excludeUltraHighPriceItemsHint: "贤者物品、大师护符和宗师护符不参与性价比比较",
       waitingExchangeRules: "等待游戏兑换数据...",
       guildShrineBatchPlan: "按当前公会神龛等级批量规划",
       setGuildLifeTarget: "填充生活等级",
@@ -2326,8 +2326,9 @@ window.MwiGuildCreditVersion = "1.1.52";
       marketReference: "Market price reference",
       priceReference: "Price reference",
       refreshEstimate: "Refresh market estimate",
-      excludeSageItems: "Exclude Sage items",
-      excludeSageItemsHint: "Items with “Sage” in the name are excluded from value comparisons",
+      excludeUltraHighPriceItems: "Exclude ultra-high-price items",
+      excludeUltraHighPriceItemsHint:
+        "Sage items, Master Charms, and Grandmaster Charms are excluded from value comparisons",
       waitingExchangeRules: "Waiting for game exchange data...",
       guildShrineBatchPlan: "Batch plan by current guild shrine levels",
       setGuildLifeTarget: "Fill Life levels",
@@ -2408,6 +2409,31 @@ window.MwiGuildCreditVersion = "1.1.52";
     }
   };
 
+  const ITEM_NAMES = {
+    "zh-CN": {
+      "/items/guild_token": "公会代币",
+      "/items/green_guild_credit": "绿色公会信用点",
+      "/items/brown_guild_credit": "棕色公会信用点",
+      "/items/white_guild_credit": "白色公会信用点",
+      "/items/blue_guild_credit": "蓝色公会信用点",
+      "/items/purple_guild_credit": "紫色公会信用点",
+      "/items/red_guild_credit": "红色公会信用点",
+      "/items/silver_guild_credit": "银色公会信用点",
+      "/items/gold_guild_credit": "金色公会信用点"
+    },
+    en: {
+      "/items/guild_token": "Guild Token",
+      "/items/green_guild_credit": "Green Guild Credit",
+      "/items/brown_guild_credit": "Brown Guild Credit",
+      "/items/white_guild_credit": "White Guild Credit",
+      "/items/blue_guild_credit": "Blue Guild Credit",
+      "/items/purple_guild_credit": "Purple Guild Credit",
+      "/items/red_guild_credit": "Red Guild Credit",
+      "/items/silver_guild_credit": "Silver Guild Credit",
+      "/items/gold_guild_credit": "Gold Guild Credit"
+    }
+  };
+
   function supportedLocale(locale) {
     if (typeof locale !== "string") return null;
     const candidate = locale.trim().toLowerCase().replaceAll("_", "-");
@@ -2459,10 +2485,13 @@ window.MwiGuildCreditVersion = "1.1.52";
             : "items";
       return t(key, { count: formatted, unit });
     }
-    return { locale: normalizedLocale, t, number, quantity };
+    function itemName(itemHrid) {
+      return ITEM_NAMES[normalizedLocale][itemHrid] || "";
+    }
+    return { locale: normalizedLocale, t, number, quantity, itemName };
   }
 
-  return { STRINGS, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
+  return { STRINGS, ITEM_NAMES, supportedLocale, resolveLocaleCandidates, normalizeLocale, createLocalizer };
 });
 
 
@@ -3246,8 +3275,10 @@ window.MwiGuildCreditVersion = "1.1.52";
     );
   }
 
-  function isSageItemName(...names) {
-    return names.some((name) => /贤者|\bsage\b/i.test(String(name || "")));
+  function isUltraHighPriceItemName(...names) {
+    return names.some((name) =>
+      /贤者|(?:大师|宗师).*护符|\bsage\b|\b(?:master|grandmaster)\b.*\bcharm\b/i.test(String(name || ""))
+    );
   }
 
   return {
@@ -3271,7 +3302,7 @@ window.MwiGuildCreditVersion = "1.1.52";
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,
-    isSageItemName,
+    isUltraHighPriceItemName,
     guildTokenBudgetPercentage,
     snapGuildTokenBudget
   };
@@ -3559,7 +3590,7 @@ window.MwiGuildCreditVersion = "1.1.52";
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
-        excludeSageItems: false,
+        excludeUltraHighPriceItems: false,
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: true,
         activeView: "credit",
@@ -3609,7 +3640,7 @@ window.MwiGuildCreditVersion = "1.1.52";
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
-          excludeSageItems: stored.excludeSageItems === true,
+          excludeUltraHighPriceItems: stored.excludeUltraHighPriceItems === true || stored.excludeSageItems === true,
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
@@ -3706,7 +3737,7 @@ window.MwiGuildCreditVersion = "1.1.52";
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
             shrineGuideEnabled: state.shrineGuideEnabled,
-            excludeSageItems: state.excludeSageItems === true,
+            excludeUltraHighPriceItems: state.excludeUltraHighPriceItems === true,
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
@@ -4513,7 +4544,7 @@ window.MwiGuildCreditVersion = "1.1.52";
       }
       return conversions.flatMap((conversion) => {
         const itemName = resolveItemName(conversion.itemHrid, conversion.itemName);
-        if (state.excludeSageItems && core.isSageItemName(itemName, conversion.itemName)) return [];
+        if (state.excludeUltraHighPriceItems && core.isUltraHighPriceItemName(itemName, conversion.itemName)) return [];
         return [{ ...conversion, itemName }];
       });
     }
@@ -4978,8 +5009,9 @@ window.MwiGuildCreditVersion = "1.1.52";
         #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
-        #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;align-items:center;gap:0;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:5px 9px}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
-        #mwi-credit-optimizer label.mwi-inline-filter{display:flex;align-items:center;align-self:end;gap:6px;min-height:30px;padding:5px 8px;border:1px solid #5b5d7b;border-radius:4px;background:#292a46;color:#d8d8e8;font-size:12px;line-height:1.2;white-space:nowrap;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter input{width:15px;height:15px;margin:0;accent-color:#43c4ad;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter:focus-within{outline:2px solid #65e3ca;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap} #mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-price-reference{display:flex;flex:0 0 auto;align-items:center;gap:0;height:32px;min-height:32px;border:1px solid #5b5d7b;border-radius:4px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{height:30px;min-height:30px;border-radius:0;background:#353653;color:#c9cbeb;padding:0 9px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}
+        #mwi-credit-optimizer label.mwi-inline-filter{display:flex;align-items:center;align-self:end;gap:6px;height:32px;min-height:32px;padding:0 8px;border:1px solid #5b5d7b;border-radius:4px;background:#292a46;color:#d8d8e8;font-size:12px;line-height:1.2;white-space:nowrap;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad;cursor:pointer}#mwi-credit-optimizer .mwi-inline-filter:focus-within{outline:2px solid #65e3ca;outline-offset:2px}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-price-reference-label{padding-inline:4px}#mwi-credit-optimizer .mwi-price-reference button{padding-inline:5px}}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
         #mwi-credit-optimizer button{min-height:32px;border:0;border-radius:4px;padding:5px 12px;background:#43c4ad;color:#10201f;font-weight:700;cursor:pointer}
         #mwi-credit-optimizer button:disabled{opacity:.55;cursor:wait} #mwi-credit-optimizer .mwi-status{margin:10px 0;color:#c9cbeb}
@@ -8446,7 +8478,7 @@ window.MwiGuildCreditVersion = "1.1.52";
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
             <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
             <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
-            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeSageItemsHint"))}"><input data-role="exclude-sage-items" type="checkbox"${state.excludeSageItems ? " checked" : ""}><span>${escapeHtml(t("excludeSageItems"))}</span></label>
+            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeUltraHighPriceItemsHint"))}"><input data-role="exclude-ultra-high-price-items" type="checkbox"${state.excludeUltraHighPriceItems ? " checked" : ""}><span>${escapeHtml(t("excludeUltraHighPriceItems"))}</span></label>
           </div>
           <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
           <div data-role="results"></div>
@@ -8482,8 +8514,8 @@ window.MwiGuildCreditVersion = "1.1.52";
         persistPluginUiState();
         refreshPanel(panel);
       });
-      panel.querySelector('[data-role="exclude-sage-items"]').addEventListener("change", (event) => {
-        state.excludeSageItems = event.target.checked;
+      panel.querySelector('[data-role="exclude-ultra-high-price-items"]').addEventListener("change", (event) => {
+        state.excludeUltraHighPriceItems = event.target.checked;
         persistPluginUiState();
         refreshPanel(panel);
         refreshGuildUpgrade(panel);
@@ -9205,7 +9237,7 @@ window.MwiGuildCreditVersion = "1.1.52";
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
-    excludeSageItems: savedUiState.excludeSageItems,
+    excludeUltraHighPriceItems: savedUiState.excludeUltraHighPriceItems,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     settingsOpen: false,
@@ -9423,12 +9455,17 @@ window.MwiGuildCreditVersion = "1.1.52";
     return itemNameCatalog.refreshIfDue({ force: force === true }).changed;
   }
 
-  // This is the sole item-name resolver used by the UI. It never translates
-  // names itself: zh-CN comes from the official game catalog or cached catalog,
-  // and any unresolved item remains the game's original English name.
+  // This is the sole item-name resolver used by the UI. Official game names
+  // remain authoritative; stable guild currencies have a bundled localized
+  // fallback for environments where the game's i18n catalog is unavailable.
   function resolveItemName(itemHrid, englishFallback) {
     refreshOfficialItemNameCatalog();
-    return itemNameCatalog.resolveItemName({ itemHrid, englishFallback, locale: currentGameLocale() });
+    const localizer = ui();
+    return itemNameCatalog.resolveItemName({
+      itemHrid,
+      englishFallback: localizer.itemName(itemHrid) || englishFallback,
+      locale: localizer.locale
+    });
   }
 
   // The game persists initClientData with LZString.compressToUTF16. Reading it

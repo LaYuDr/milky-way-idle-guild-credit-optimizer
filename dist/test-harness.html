@@ -358,6 +358,16 @@
           name: "Sage Market Charm",
           guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
         },
+        "/items/master_market_charm": {
+          itemHrid: "/items/master_market_charm",
+          name: "Master Milking Charm",
+          guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+        },
+        "/items/grandmaster_market_charm": {
+          itemHrid: "/items/grandmaster_market_charm",
+          name: "Grandmaster Enhancing Charm",
+          guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+        },
         "/items/below_range_material": {
           itemHrid: "/items/below_range_material",
           name: "Below Range Material",
@@ -458,7 +468,7 @@
     };
     if (marketFilterAudit) {
       window.__mwiGuildCreditBridge.marketObserverActive = true;
-      window.__mwiGuildCreditBridge.marketOrderBookRevision = 3;
+      window.__mwiGuildCreditBridge.marketOrderBookRevision = 5;
       window.__mwiGuildCreditBridge.marketOrderBooks = {
         beast_hide: {
           revision: 1,
@@ -470,14 +480,26 @@
           receivedAt: Date.now(),
           update: { itemHrid: "/items/sage_market_charm", levels: { 0: { a: 60, b: 50, min: 40, max: 70 } } }
         },
-        below_range_material: {
+        master_market_charm: {
           revision: 3,
+          receivedAt: Date.now(),
+          update: { itemHrid: "/items/master_market_charm", levels: { 0: { a: 61, b: 51, min: 40, max: 70 } } }
+        },
+        grandmaster_market_charm: {
+          revision: 4,
+          receivedAt: Date.now(),
+          update: { itemHrid: "/items/grandmaster_market_charm", levels: { 0: { a: 62, b: 52, min: 40, max: 70 } } }
+        },
+        below_range_material: {
+          revision: 5,
           receivedAt: Date.now(),
           update: { itemHrid: "/items/below_range_material", levels: { 0: { a: 20, b: 1, min: 10, max: 25 } } }
         }
       };
     } else {
       delete window.__mwiGuildCreditBridge.itemDetails["/items/sage_market_charm"];
+      delete window.__mwiGuildCreditBridge.itemDetails["/items/master_market_charm"];
+      delete window.__mwiGuildCreditBridge.itemDetails["/items/grandmaster_market_charm"];
       delete window.__mwiGuildCreditBridge.itemDetails["/items/below_range_material"];
     }
     if (constructionSnapshotAudit) {
@@ -858,28 +880,47 @@
           panel.querySelectorAll('[data-credit-item-hrid="/items/green_guild_credit"] .mwi-item-name'),
           (element) => normalizedText(element)
         );
-      await waitFor(() => greenRows().includes("Sage Market Charm"));
+      await waitFor(() => greenRows().includes("Grandmaster Enhancing Charm"));
       const rowsBeforeFilter = greenRows();
-      const checkbox = panel.querySelector('[data-role="exclude-sage-items"]');
+      const checkbox = panel.querySelector('[data-role="exclude-ultra-high-price-items"]');
+      const checkboxLabel = checkbox.closest("label");
+      const controlHeights = [
+        panel.querySelector('[data-role="target"]'),
+        panel.querySelector(".mwi-price-reference"),
+        panel.querySelector('[data-role="refresh"]'),
+        checkboxLabel
+      ].map((element) => elementRect(element).height);
       checkbox.click();
-      await waitFor(() => !greenRows().includes("Sage Market Charm"));
+      await waitFor(() => !greenRows().includes("Grandmaster Enhancing Charm"));
       const storedEnabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
       const rowsWithFilter = greenRows();
       checkbox.click();
-      await waitFor(() => greenRows().includes("Sage Market Charm"));
+      await waitFor(() => greenRows().includes("Grandmaster Enhancing Charm"));
       const storedDisabled = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
       const controls = panel.querySelector(".mwi-controls");
       const report = {
         rowsBeforeFilter,
         rowsWithFilter,
+        controlHeights,
+        checkboxSize: elementRect(checkbox),
         checks: {
           rightPriceSelected: rightPrice.dataset.active === "true",
           belowRangeBidIgnored: !rowsBeforeFilter.includes("Below Range Material"),
           sageInitiallyIncluded: rowsBeforeFilter.includes("Sage Market Charm"),
-          sageExcludedWhenChecked: !rowsWithFilter.includes("Sage Market Charm"),
-          preferencePersistedEnabled: storedEnabled.excludeSageItems === true,
-          preferencePersistedDisabled: storedDisabled.excludeSageItems === false,
-          checkboxAccessible: normalizedText(checkbox.closest("label")).length > 0,
+          masterCharmsInitiallyIncluded:
+            rowsBeforeFilter.includes("Master Milking Charm") &&
+            rowsBeforeFilter.includes("Grandmaster Enhancing Charm"),
+          highPriceItemsExcludedWhenChecked:
+            !rowsWithFilter.includes("Sage Market Charm") &&
+            !rowsWithFilter.includes("Master Milking Charm") &&
+            !rowsWithFilter.includes("Grandmaster Enhancing Charm"),
+          preferencePersistedEnabled: storedEnabled.excludeUltraHighPriceItems === true,
+          preferencePersistedDisabled: storedDisabled.excludeUltraHighPriceItems === false,
+          checkboxAccessible:
+            normalizedText(checkboxLabel) === (english ? "Exclude ultra-high-price items" : "屏蔽超高价格物品"),
+          controlsHaveMatchingHeight: Math.max(...controlHeights) - Math.min(...controlHeights) <= 1,
+          checkboxMarkIsCompact:
+            Math.abs(elementRect(checkbox).width - 15) <= 1 && Math.abs(elementRect(checkbox).height - 15) <= 1,
           panelHasNoHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
           controlsHaveNoHorizontalOverflow: controls.scrollWidth <= controls.clientWidth + 1
         }

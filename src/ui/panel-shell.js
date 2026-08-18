@@ -315,7 +315,7 @@
             <label>${escapeHtml(t("targetCredits"))}<input data-role="target" type="number" min="1" step="1" value="${state.targetCredit}"></label>
             <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
             <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
-            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeSageItemsHint"))}"><input data-role="exclude-sage-items" type="checkbox"${state.excludeSageItems ? " checked" : ""}><span>${escapeHtml(t("excludeSageItems"))}</span></label>
+            <label class="mwi-inline-filter" title="${escapeHtml(t("excludeUltraHighPriceItemsHint"))}"><input data-role="exclude-ultra-high-price-items" type="checkbox"${state.excludeUltraHighPriceItems ? " checked" : ""}><span>${escapeHtml(t("excludeUltraHighPriceItems"))}</span></label>
           </div>
           <div class="mwi-status" data-role="status">${escapeHtml(t("waitingExchangeRules"))}</div>
           <div data-role="results"></div>
@@ -351,8 +351,8 @@
         persistPluginUiState();
         refreshPanel(panel);
       });
-      panel.querySelector('[data-role="exclude-sage-items"]').addEventListener("change", (event) => {
-        state.excludeSageItems = event.target.checked;
+      panel.querySelector('[data-role="exclude-ultra-high-price-items"]').addEventListener("change", (event) => {
+        state.excludeUltraHighPriceItems = event.target.checked;
         persistPluginUiState();
         refreshPanel(panel);
         refreshGuildUpgrade(panel);

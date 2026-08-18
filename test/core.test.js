@@ -46,6 +46,9 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.quantity("itemQuantity", 2), "2 items");
   assert.equal(localizer.quantity("creditQuantity", 2), "2 credits");
   assert.equal(localizer.number(1234567), "1,234,567");
+  assert.equal(localizer.itemName("/items/green_guild_credit"), "Green Guild Credit");
+  assert.equal(localizer.itemName("/items/guild_token"), "Guild Token");
+  assert.equal(localizer.itemName("/items/beast_hide"), "");
   assert.equal(
     localizer.t("noAffordableReplacement", { gold: "4,312 gold" }),
     "Selling this quantity yields 4,312 gold after tax, which is not enough to buy an alternative exchange item."
@@ -64,6 +67,9 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   );
   assert.equal(localizer.quantity("itemQuantity", 4), "4 个");
   assert.equal(localizer.quantity("creditQuantity", 1), "1 点");
+  assert.equal(localizer.itemName("/items/green_guild_credit"), "绿色公会信用点");
+  assert.equal(localizer.itemName("/items/guild_token"), "公会代币");
+  assert.equal(localizer.itemName("/items/beast_hide"), "");
 });
 
 test("语言候选只接受受支持的字符串，并优先使用可见界面语言", () => {
@@ -1210,6 +1216,24 @@ test("官方 i18n 名称目录优先于旧词典或规则翻译", () => {
   );
 });
 
+test("官方名称目录优先于内置公会货币回退名称", () => {
+  const itemNames = { green_guild_credit: "官方绿色信用点" };
+  const catalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: { i18next: { resources: { "zh-CN": { translation: { itemNames } } } } },
+    storage: { getItem: () => null, setItem: () => {} },
+    minimumEntries: 1
+  });
+  catalog.refresh();
+  assert.equal(
+    catalog.resolveItemName({
+      itemHrid: "/items/green_guild_credit",
+      englishFallback: localizationApi.createLocalizer("zh-CN").itemName("/items/green_guild_credit"),
+      locale: "zh-CN"
+    }),
+    "官方绿色信用点"
+  );
+});
+
 test("官方名称目录在官方资源暂不可读时使用缓存，否则诚实回退英文", () => {
   const storageValues = new Map();
   const storage = {
@@ -1379,12 +1403,17 @@ test("支持游戏初始化消息使用的 itemDetailMap 对象结构", () => {
   ]);
 });
 
-test("贤者物品名称筛选兼容中英文且不会误判普通单词", () => {
-  assert.equal(core.isSageItemName("贤者烹饪护符"), true);
-  assert.equal(core.isSageItemName("Sage Cooking Charm"), true);
-  assert.equal(core.isSageItemName("Official Name", "Sage Alchemy Charm"), true);
-  assert.equal(core.isSageItemName("Sausage"), false);
-  assert.equal(core.isSageItemName("宗师强化护符"), false);
+test("超高价格物品筛选覆盖贤者与大师护符且不会误判普通物品", () => {
+  assert.equal(core.isUltraHighPriceItemName("贤者烹饪护符"), true);
+  assert.equal(core.isUltraHighPriceItemName("大师挤奶护符"), true);
+  assert.equal(core.isUltraHighPriceItemName("宗师强化护符"), true);
+  assert.equal(core.isUltraHighPriceItemName("Sage Cooking Charm"), true);
+  assert.equal(core.isUltraHighPriceItemName("Master Milking Charm"), true);
+  assert.equal(core.isUltraHighPriceItemName("Grandmaster Enhancing Charm"), true);
+  assert.equal(core.isUltraHighPriceItemName("Official Name", "Sage Alchemy Charm"), true);
+  assert.equal(core.isUltraHighPriceItemName("Sausage"), false);
+  assert.equal(core.isUltraHighPriceItemName("大师药水"), false);
+  assert.equal(core.isUltraHighPriceItemName("Grandmaster Cape"), false);
 });
 
 test("正式版桥接保留游戏实时神龛等级", () => {
@@ -1887,8 +1916,8 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /PRICE_REFERENCES/);
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
-  assert.match(source, /data-role="exclude-sage-items"/);
-  assert.match(source, /state\.excludeSageItems && core\.isSageItemName/);
+  assert.match(source, /data-role="exclude-ultra-high-price-items"/);
+  assert.match(source, /state\.excludeUltraHighPriceItems && core\.isUltraHighPriceItemName/);
   assert.match(source, /snapshotOrderBook\(conversion\.itemHrid\)/);
   assert.match(harnessSource, /searchParams\.get\("marketFilterAudit"\)/);
   assert.match(source, /conversionCache: new Map\(\)/);

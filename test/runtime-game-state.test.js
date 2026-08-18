@@ -123,12 +123,22 @@ test("本地初始化原始 JSON 会补全局部建筑帧并保留当前会话�
   assert.equal(state.guildBuildingLevels["/guild_buildings/gym"].level, 2);
 });
 
-test("贤者偏好在统一兑换数据入口过滤中英文名称", () => {
+test("超高价格偏好在统一兑换数据入口过滤贤者与大师护符", () => {
   const state = createState();
   state.itemDetails = {
     sage: {
       itemHrid: "/items/sage_charm",
       name: "Sage Charm",
+      guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+    },
+    master: {
+      itemHrid: "/items/master_charm",
+      name: "Master Milking Charm",
+      guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
+    },
+    grandmaster: {
+      itemHrid: "/items/grandmaster_charm",
+      name: "Grandmaster Enhancing Charm",
       guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 1, creditCount: 100 }]
     },
     hide: {
@@ -137,7 +147,7 @@ test("贤者偏好在统一兑换数据入口过滤中英文名称", () => {
       guildCreditConversions: [{ creditItemHrid: "/items/green_guild_credit", itemCount: 6, creditCount: 1 }]
     }
   };
-  state.excludeSageItems = true;
+  state.excludeUltraHighPriceItems = true;
   const adapter = gameStateApi.createGameStateAdapter(state);
   const previousWindow = global.window;
   global.window = {};
@@ -161,10 +171,10 @@ test("贤者偏好在统一兑换数据入口过滤中英文名称", () => {
       gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
       ["/items/beast_hide"]
     );
-    state.excludeSageItems = false;
+    state.excludeUltraHighPriceItems = false;
     assert.deepEqual(
       gameData.allConversions("/items/green_guild_credit").map((conversion) => conversion.itemHrid),
-      ["/items/sage_charm", "/items/beast_hide"]
+      ["/items/sage_charm", "/items/master_charm", "/items/grandmaster_charm", "/items/beast_hide"]
     );
   } finally {
     global.window = previousWindow;

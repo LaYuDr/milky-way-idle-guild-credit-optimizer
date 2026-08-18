@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.53] - 2026-08-18
+
+### Changed
+
+- 将‘屏蔽贤者物品’升级为‘屏蔽超高价格物品’，统一工具栏控件高度，并同时排除贤者物品、大师护符和宗师护符；兼容旧设置。
+
 ## [1.1.52] - 2026-08-17
 
 ### Changed

@@ -777,8 +777,10 @@
     );
   }
 
-  function isSageItemName(...names) {
-    return names.some((name) => /贤者|\bsage\b/i.test(String(name || "")));
+  function isUltraHighPriceItemName(...names) {
+    return names.some((name) =>
+      /贤者|(?:大师|宗师).*护符|\bsage\b|\b(?:master|grandmaster)\b.*\bcharm\b/i.test(String(name || ""))
+    );
   }
 
   return {
@@ -802,7 +804,7 @@
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,
-    isSageItemName,
+    isUltraHighPriceItemName,
     guildTokenBudgetPercentage,
     snapGuildTokenBudget
   };

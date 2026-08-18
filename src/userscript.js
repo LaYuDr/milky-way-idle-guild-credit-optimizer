@@ -112,7 +112,7 @@
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
-    excludeSageItems: savedUiState.excludeSageItems,
+    excludeUltraHighPriceItems: savedUiState.excludeUltraHighPriceItems,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     settingsOpen: false,
@@ -330,12 +330,17 @@
     return itemNameCatalog.refreshIfDue({ force: force === true }).changed;
   }
 
-  // This is the sole item-name resolver used by the UI. It never translates
-  // names itself: zh-CN comes from the official game catalog or cached catalog,
-  // and any unresolved item remains the game's original English name.
+  // This is the sole item-name resolver used by the UI. Official game names
+  // remain authoritative; stable guild currencies have a bundled localized
+  // fallback for environments where the game's i18n catalog is unavailable.
   function resolveItemName(itemHrid, englishFallback) {
     refreshOfficialItemNameCatalog();
-    return itemNameCatalog.resolveItemName({ itemHrid, englishFallback, locale: currentGameLocale() });
+    const localizer = ui();
+    return itemNameCatalog.resolveItemName({
+      itemHrid,
+      englishFallback: localizer.itemName(itemHrid) || englishFallback,
+      locale: localizer.locale
+    });
   }
 
   // The game persists initClientData with LZString.compressToUTF16. Reading it
