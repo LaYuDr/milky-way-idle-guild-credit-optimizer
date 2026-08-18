@@ -1100,12 +1100,55 @@
       const priceStepper = priceLimitInput.closest(".mwi-number-stepper");
       const priceIncrease = priceStepper.querySelector('[data-role="number-step"][data-direction="1"]');
       const priceDecrease = priceStepper.querySelector('[data-role="number-step"][data-direction="-1"]');
+      const dispatchPointerStep = (button, type, pointerId) =>
+        button.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            button: 0,
+            isPrimary: true,
+            pointerId,
+            pointerType: "mouse"
+          })
+        );
+      const finishPointerStep = (button, pointerId, type = "pointerup") => {
+        dispatchPointerStep(button, type, pointerId);
+        if (type === "pointerup") button.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      };
+      const waitForRepeat = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
       const controlHeights = [
         targetStepper,
         panel.querySelector(".mwi-price-reference"),
         panel.querySelector('[data-role="refresh"]'),
         priceLimitControl
       ].map((element) => elementRect(element).height);
+      targetInput.value = "100";
+      dispatchPointerStep(targetIncrease, "pointerdown", 11);
+      finishPointerStep(targetIncrease, 11);
+      const targetAfterShortPointerPress = targetInput.value;
+      targetInput.value = "100";
+      dispatchPointerStep(targetIncrease, "pointerdown", 12);
+      await waitForRepeat(680);
+      const targetLongPressValue = Number(targetInput.value);
+      const targetPressedDuringHold = targetIncrease.dataset.pressed === "true";
+      finishPointerStep(targetIncrease, 12);
+      const targetValueAtRelease = targetInput.value;
+      await waitForRepeat(220);
+      const targetValueAfterRelease = targetInput.value;
+      const targetReleasedVisualState = targetIncrease.dataset.pressed !== "true";
+      targetInput.value = "100";
+      dispatchPointerStep(targetIncrease, "pointerdown", 13);
+      finishPointerStep(targetIncrease, 13, "pointercancel");
+      const targetValueAtCancel = targetInput.value;
+      await waitForRepeat(600);
+      const targetValueAfterCancel = targetInput.value;
+      priceLimitInput.value = "500";
+      dispatchPointerStep(priceDecrease, "pointerdown", 14);
+      await waitForRepeat(680);
+      const priceLongPressValue = Number(priceLimitInput.value);
+      finishPointerStep(priceDecrease, 14);
+      const priceValueAtRelease = priceLimitInput.value;
+      await waitForRepeat(220);
+      const priceValueAfterRelease = priceLimitInput.value;
       targetInput.value = "100";
       targetIncrease.click();
       const targetAfterIncrease = targetInput.value;
@@ -1154,6 +1197,17 @@
         priceLimitInput: elementRect(priceLimitInput),
         targetStepper: elementRect(targetStepper),
         priceStepper: elementRect(priceStepper),
+        numberStepperInteraction: {
+          targetAfterShortPointerPress,
+          targetLongPressValue,
+          targetValueAtRelease,
+          targetValueAfterRelease,
+          targetValueAtCancel,
+          targetValueAfterCancel,
+          priceLongPressValue,
+          priceValueAtRelease,
+          priceValueAfterRelease
+        },
         checks: {
           rightPriceSelected: rightPrice.dataset.active === "true",
           belowRangeBidIgnored: !rowsBeforeFilter.includes("Below Range Material"),
@@ -1188,6 +1242,17 @@
           stepperButtonsAreLarger: [targetIncrease, targetDecrease, priceIncrease, priceDecrease].every(
             (button) => elementRect(button).width >= 33 && elementRect(button).height >= 18
           ),
+          shortPointerPressStepsOnce: targetAfterShortPointerPress === "200",
+          heldIncreaseRepeatsUntilRelease:
+            targetLongPressValue >= 300 &&
+            targetValueAtRelease === String(targetLongPressValue) &&
+            targetValueAfterRelease === targetValueAtRelease,
+          heldDecreaseRepeatsUntilRelease:
+            priceLongPressValue <= 480 &&
+            priceValueAtRelease === String(priceLongPressValue) &&
+            priceValueAfterRelease === priceValueAtRelease,
+          pointerCancelStopsRepeating: targetValueAtCancel === "200" && targetValueAfterCancel === targetValueAtCancel,
+          heldStepperExposesPressedState: targetPressedDuringHold && targetReleasedVisualState,
           targetInputUsesHundredCreditSteps:
             targetInput.min === "1" &&
             targetInput.step === "100" &&

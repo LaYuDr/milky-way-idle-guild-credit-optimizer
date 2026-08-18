@@ -382,7 +382,10 @@ price-reference group, and refresh button height. Both numeric fields use the
 shared enlarged custom stepper with accessible increase and decrease buttons.
 The target-credit buttons change `100` to `200` and back to `100`, while the
 price-limit buttons use a `10M` step, changing `100` to `110` and back to
-`100`. The underlying number inputs retain matching `step` attributes for
+`100`. A short pointer press must apply exactly one step. Holding either button
+must begin repeating after the initial delay, keep its pressed state visible,
+stop immediately on pointer release or cancellation, and commit the final value
+only once. The underlying number inputs retain matching `step` attributes for
 keyboard arrow controls. After
 `document.body.dataset.marketFilterAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:

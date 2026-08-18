@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.61";
+window.MwiGuildCreditVersion = "1.1.62";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -5305,7 +5305,7 @@ window.MwiGuildCreditVersion = "1.1.61";
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-number-field{display:grid;gap:4px;min-width:0}#mwi-credit-optimizer .mwi-number-field>label{display:block}#mwi-credit-optimizer .mwi-price-reference{display:flex;flex:0 0 auto;align-items:center;gap:0;height:40px;min-height:40px;border:1px solid #5b5d7b;border-radius:6px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{height:38px;min-height:38px;border-radius:0;background:#353653;color:#c9cbeb;padding:0 9px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}#mwi-credit-optimizer .mwi-controls>[data-role="refresh"]{min-height:40px}
-        #mwi-credit-optimizer .mwi-number-stepper{display:flex;align-items:stretch;height:40px;min-height:40px;overflow:hidden;border:1px solid #7778b4;border-radius:6px;background:#f4f5ff;box-shadow:inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper:focus-within{border-color:#65e3ca;outline:2px solid #65e3ca;outline-offset:2px;box-shadow:0 0 0 4px #77f3d026,inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper input{height:38px;min-height:38px;margin:0;border:0;border-radius:0;background:#f4f5ff;color:#1f2030;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-number-stepper input:focus-visible{outline:0;box-shadow:none}#mwi-credit-optimizer .mwi-target-credit-stepper input{width:112px}#mwi-credit-optimizer .mwi-price-limit-stepper input{flex:0 0 68px;width:68px;min-width:68px;padding:4px 7px}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]{-moz-appearance:textfield;appearance:textfield}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-inner-spin-button,#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-outer-spin-button{margin:0;-webkit-appearance:none}#mwi-credit-optimizer .mwi-stepper-buttons{display:grid;flex:0 0 34px;width:34px;min-width:34px;grid-template-rows:repeat(2,minmax(0,1fr));border-left:1px solid #7778b4;background:#373a58}#mwi-credit-optimizer button.mwi-stepper-button{display:grid;place-items:center;width:100%;min-width:0;height:19px;min-height:19px!important;margin:0;padding:0!important;border:0!important;border-radius:0!important;background:#3b3e5e!important;color:#f4f5ff!important;line-height:1}#mwi-credit-optimizer button.mwi-stepper-button+button{border-top:1px solid #62658a!important}#mwi-credit-optimizer button.mwi-stepper-button:hover{background:#4a4e71!important;color:#fff!important}#mwi-credit-optimizer button.mwi-stepper-button:active{background:#245149!important;color:#bff8eb!important}#mwi-credit-optimizer button.mwi-stepper-button:focus-visible{z-index:5;outline:2px solid #77f3d0!important;outline-offset:-2px;box-shadow:none!important}#mwi-credit-optimizer .mwi-stepper-button svg{display:block;width:16px;height:10px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+        #mwi-credit-optimizer .mwi-number-stepper{display:flex;align-items:stretch;height:40px;min-height:40px;overflow:hidden;border:1px solid #7778b4;border-radius:6px;background:#f4f5ff;box-shadow:inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper:focus-within{border-color:#65e3ca;outline:2px solid #65e3ca;outline-offset:2px;box-shadow:0 0 0 4px #77f3d026,inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper input{height:38px;min-height:38px;margin:0;border:0;border-radius:0;background:#f4f5ff;color:#1f2030;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-number-stepper input:focus-visible{outline:0;box-shadow:none}#mwi-credit-optimizer .mwi-target-credit-stepper input{width:112px}#mwi-credit-optimizer .mwi-price-limit-stepper input{flex:0 0 68px;width:68px;min-width:68px;padding:4px 7px}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]{-moz-appearance:textfield;appearance:textfield}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-inner-spin-button,#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-outer-spin-button{margin:0;-webkit-appearance:none}#mwi-credit-optimizer .mwi-stepper-buttons{display:grid;flex:0 0 34px;width:34px;min-width:34px;grid-template-rows:repeat(2,minmax(0,1fr));border-left:1px solid #7778b4;background:#373a58}#mwi-credit-optimizer button.mwi-stepper-button{display:grid;place-items:center;width:100%;min-width:0;height:19px;min-height:19px!important;margin:0;padding:0!important;border:0!important;border-radius:0!important;background:#3b3e5e!important;color:#f4f5ff!important;line-height:1;touch-action:none;user-select:none}#mwi-credit-optimizer button.mwi-stepper-button+button{border-top:1px solid #62658a!important}#mwi-credit-optimizer button.mwi-stepper-button:hover{background:#4a4e71!important;color:#fff!important}#mwi-credit-optimizer button.mwi-stepper-button:active,#mwi-credit-optimizer button.mwi-stepper-button[data-pressed="true"]{background:#245149!important;color:#bff8eb!important}#mwi-credit-optimizer button.mwi-stepper-button:focus-visible{z-index:5;outline:2px solid #77f3d0!important;outline-offset:-2px;box-shadow:none!important}#mwi-credit-optimizer .mwi-stepper-button svg{display:block;width:16px;height:10px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
         #mwi-credit-optimizer .mwi-price-limit-control{align-self:end;min-width:0}#mwi-credit-optimizer .mwi-price-limit{display:flex;align-items:center;height:40px;min-height:40px;max-width:100%;border:1px solid #5b5d7b;border-radius:6px;background:#292a46;color:#d8d8e8;font-size:11px;line-height:1.2;white-space:nowrap}#mwi-credit-optimizer .mwi-price-limit>span:not(.mwi-number-stepper){padding-inline:7px}#mwi-credit-optimizer .mwi-price-limit>span:last-child{padding-inline-start:5px}#mwi-credit-optimizer .mwi-price-limit .mwi-number-stepper{height:38px;min-height:38px;border-width:0 1px;border-radius:0;box-shadow:none}#mwi-credit-optimizer .mwi-price-limit .mwi-number-stepper:focus-within{outline:0;box-shadow:none}#mwi-credit-optimizer .mwi-price-limit input{height:38px;min-height:38px;margin:0;border:0;border-radius:0;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-price-limit input::placeholder{color:#686b83;opacity:1}#mwi-credit-optimizer .mwi-price-limit:focus-within{border-color:#65e3ca;outline:2px solid #65e3ca;outline-offset:2px;box-shadow:0 0 0 4px #77f3d026}#mwi-credit-optimizer .mwi-price-limit-error{display:block;width:100%;max-width:260px;margin-top:4px;padding:4px 6px;border:1px solid #8f4f5b;border-radius:4px;background:#3d2730;color:#ffbdc3;font-size:10px;line-height:1.35;white-space:normal}#mwi-credit-optimizer .mwi-price-limit-error[hidden]{display:none!important}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-price-reference-label{padding-inline:4px}#mwi-credit-optimizer .mwi-price-reference button{padding-inline:5px}}
         #mwi-credit-optimizer input,#mwi-credit-optimizer select{width:112px;min-height:32px;border:1px solid #7778b4;border-radius:4px;padding:4px 8px;background:#f1f2ff;color:#1f2030;font:inherit}
@@ -8529,6 +8529,9 @@ window.MwiGuildCreditVersion = "1.1.61";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const NUMBER_STEP_REPEAT_DELAY_MS = 450;
+  const NUMBER_STEP_REPEAT_INTERVAL_MS = 90;
+
   function createPanelShell(dependencies) {
     const {
       state,
@@ -8585,6 +8588,7 @@ window.MwiGuildCreditVersion = "1.1.61";
       openMarketplaceForItem
     } = dependencies;
     const sortableControllers = [];
+    const numberStepperCleanups = [];
 
     const panelViewLabels = {
       upgrade: "shrineUpgrade",
@@ -8857,33 +8861,132 @@ window.MwiGuildCreditVersion = "1.1.61";
       return true;
     }
 
-    function adjustNumberInput(panel, button) {
+    function numberInputForStepButton(panel, button) {
       const inputRole = button.dataset.inputRole;
-      if (inputRole !== "target" && inputRole !== "max-item-unit-price-millions") return;
-      const input = panel.querySelector(`[data-role="${inputRole}"]`);
+      return inputRole === "target" || inputRole === "max-item-unit-price-millions"
+        ? panel.querySelector(`[data-role="${inputRole}"]`)
+        : null;
+    }
+
+    function dispatchNumberInputChange(input) {
+      const EventConstructor = input.ownerDocument.defaultView.Event;
+      input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+    }
+
+    function adjustNumberInput(panel, button, { commit = true } = {}) {
+      const input = numberInputForStepButton(panel, button);
       const direction = Number(button.dataset.direction);
       const step = Number(input && input.step);
-      if (!input || (direction !== -1 && direction !== 1) || !Number.isFinite(step) || step <= 0) return;
+      if (!input || (direction !== -1 && direction !== 1) || !Number.isFinite(step) || step <= 0) return false;
 
       const rawValue = String(input.value || "").trim();
       const min = input.min === "" ? null : Number(input.min);
       const max = input.max === "" ? null : Number(input.max);
       if (!rawValue) {
-        if (direction < 0) return;
+        if (direction < 0) return false;
         input.value = String(min !== null && Number.isFinite(min) ? min : step);
       } else {
         const current = Number(rawValue);
-        if (!Number.isFinite(current)) return;
+        if (!Number.isFinite(current)) return false;
         let next = current + direction * step;
         if (min !== null && Number.isFinite(min)) next = Math.max(min, next);
         if (max !== null && Number.isFinite(max)) next = Math.min(max, next);
-        if (next === current) return;
+        if (next === current) return false;
         input.value = String(next);
       }
 
       const EventConstructor = input.ownerDocument.defaultView.Event;
       input.dispatchEvent(new EventConstructor("input", { bubbles: true }));
-      input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+      if (commit) dispatchNumberInputChange(input);
+      return true;
+    }
+
+    function bindNumberStepperControls(panel) {
+      const controls = panel.querySelector(".mwi-controls");
+      const view = document.defaultView;
+      let activeButton = null;
+      let activeInput = null;
+      let activePointerId = null;
+      let adjusted = false;
+      let repeatDelayTimer = null;
+      let repeatIntervalTimer = null;
+
+      function clearRepeatTimers() {
+        if (repeatDelayTimer !== null) view.clearTimeout(repeatDelayTimer);
+        if (repeatIntervalTimer !== null) view.clearInterval(repeatIntervalTimer);
+        repeatDelayTimer = null;
+        repeatIntervalTimer = null;
+      }
+
+      function finishNumberStep(event = null, { commit = true } = {}) {
+        if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
+        clearRepeatTimers();
+        const input = activeInput;
+        const shouldCommit = commit && adjusted && input;
+        if (activeButton) delete activeButton.dataset.pressed;
+        activeButton = null;
+        activeInput = null;
+        activePointerId = null;
+        adjusted = false;
+        if (shouldCommit) dispatchNumberInputChange(input);
+      }
+
+      function finishPointerStep(event) {
+        if (!activeButton || (activePointerId !== null && event.pointerId !== activePointerId)) return;
+        finishNumberStep(event);
+      }
+
+      function finishBlurredStep() {
+        finishNumberStep();
+      }
+
+      controls.addEventListener("pointerdown", (event) => {
+        const button = event.target.closest('[data-role="number-step"]');
+        if (!button || button.disabled || event.button !== 0 || event.isPrimary === false) return;
+        finishNumberStep();
+        event.preventDefault();
+        activeButton = button;
+        activeInput = numberInputForStepButton(panel, button);
+        activePointerId = event.pointerId;
+        button.dataset.pressed = "true";
+        try {
+          button.focus({ preventScroll: true });
+        } catch (_) {
+          button.focus();
+        }
+        try {
+          button.setPointerCapture(event.pointerId);
+        } catch (_) {
+          // Synthetic events and older browsers can reject pointer capture; local listeners still handle release.
+        }
+        adjusted = adjustNumberInput(panel, button, { commit: false });
+        repeatDelayTimer = view.setTimeout(() => {
+          repeatDelayTimer = null;
+          repeatIntervalTimer = view.setInterval(() => {
+            adjusted = adjustNumberInput(panel, button, { commit: false }) || adjusted;
+          }, NUMBER_STEP_REPEAT_INTERVAL_MS);
+        }, NUMBER_STEP_REPEAT_DELAY_MS);
+      });
+
+      controls.addEventListener("lostpointercapture", finishPointerStep);
+      controls.addEventListener("contextmenu", (event) => {
+        if (event.target.closest('[data-role="number-step"]')) event.preventDefault();
+      });
+      controls.addEventListener("click", (event) => {
+        const button = event.target.closest('[data-role="number-step"]');
+        if (!button || event.detail !== 0) return;
+        adjustNumberInput(panel, button);
+      });
+      view.addEventListener("pointerup", finishPointerStep, true);
+      view.addEventListener("pointercancel", finishPointerStep, true);
+      view.addEventListener("blur", finishBlurredStep);
+
+      return () => {
+        finishNumberStep();
+        view.removeEventListener("pointerup", finishPointerStep, true);
+        view.removeEventListener("pointercancel", finishPointerStep, true);
+        view.removeEventListener("blur", finishBlurredStep);
+      };
     }
 
     function createPanel() {
@@ -8942,10 +9045,9 @@ window.MwiGuildCreditVersion = "1.1.61";
         </div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
       panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
-      panel.querySelector(".mwi-controls").addEventListener("click", (event) => {
-        const button = event.target.closest('[data-role="number-step"]');
-        if (button) adjustNumberInput(panel, button);
-      });
+      const numberStepperCleanup = bindNumberStepperControls(panel);
+      panel.__mwiNumberStepperCleanup = numberStepperCleanup;
+      numberStepperCleanups.push(numberStepperCleanup);
       panel.querySelector('[data-role="target"]').addEventListener("change", (event) => {
         const target = Number(event.target.value);
         if (Number.isSafeInteger(target) && target > 0) state.targetCredit = target;
@@ -9388,6 +9490,13 @@ window.MwiGuildCreditVersion = "1.1.61";
     }
 
     function destroyPanel(panel) {
+      const numberStepperCleanup = panel && panel.__mwiNumberStepperCleanup;
+      if (numberStepperCleanup) {
+        const cleanupIndex = numberStepperCleanups.indexOf(numberStepperCleanup);
+        if (cleanupIndex >= 0) numberStepperCleanups.splice(cleanupIndex, 1);
+        numberStepperCleanup();
+        delete panel.__mwiNumberStepperCleanup;
+      }
       const controllers = Array.isArray(panel && panel.__mwiSortableControllers) ? panel.__mwiSortableControllers : [];
       for (const controller of controllers) {
         const index = sortableControllers.indexOf(controller);
@@ -9427,6 +9536,7 @@ window.MwiGuildCreditVersion = "1.1.61";
     }
 
     function dispose() {
+      for (const cleanup of numberStepperCleanups.splice(0)) cleanup();
       for (const controller of sortableControllers.splice(0)) controller.destroy();
     }
 

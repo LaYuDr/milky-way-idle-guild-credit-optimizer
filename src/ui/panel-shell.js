@@ -5,6 +5,9 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  const NUMBER_STEP_REPEAT_DELAY_MS = 450;
+  const NUMBER_STEP_REPEAT_INTERVAL_MS = 90;
+
   function createPanelShell(dependencies) {
     const {
       state,
@@ -61,6 +64,7 @@
       openMarketplaceForItem
     } = dependencies;
     const sortableControllers = [];
+    const numberStepperCleanups = [];
 
     const panelViewLabels = {
       upgrade: "shrineUpgrade",
@@ -333,33 +337,132 @@
       return true;
     }
 
-    function adjustNumberInput(panel, button) {
+    function numberInputForStepButton(panel, button) {
       const inputRole = button.dataset.inputRole;
-      if (inputRole !== "target" && inputRole !== "max-item-unit-price-millions") return;
-      const input = panel.querySelector(`[data-role="${inputRole}"]`);
+      return inputRole === "target" || inputRole === "max-item-unit-price-millions"
+        ? panel.querySelector(`[data-role="${inputRole}"]`)
+        : null;
+    }
+
+    function dispatchNumberInputChange(input) {
+      const EventConstructor = input.ownerDocument.defaultView.Event;
+      input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+    }
+
+    function adjustNumberInput(panel, button, { commit = true } = {}) {
+      const input = numberInputForStepButton(panel, button);
       const direction = Number(button.dataset.direction);
       const step = Number(input && input.step);
-      if (!input || (direction !== -1 && direction !== 1) || !Number.isFinite(step) || step <= 0) return;
+      if (!input || (direction !== -1 && direction !== 1) || !Number.isFinite(step) || step <= 0) return false;
 
       const rawValue = String(input.value || "").trim();
       const min = input.min === "" ? null : Number(input.min);
       const max = input.max === "" ? null : Number(input.max);
       if (!rawValue) {
-        if (direction < 0) return;
+        if (direction < 0) return false;
         input.value = String(min !== null && Number.isFinite(min) ? min : step);
       } else {
         const current = Number(rawValue);
-        if (!Number.isFinite(current)) return;
+        if (!Number.isFinite(current)) return false;
         let next = current + direction * step;
         if (min !== null && Number.isFinite(min)) next = Math.max(min, next);
         if (max !== null && Number.isFinite(max)) next = Math.min(max, next);
-        if (next === current) return;
+        if (next === current) return false;
         input.value = String(next);
       }
 
       const EventConstructor = input.ownerDocument.defaultView.Event;
       input.dispatchEvent(new EventConstructor("input", { bubbles: true }));
-      input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+      if (commit) dispatchNumberInputChange(input);
+      return true;
+    }
+
+    function bindNumberStepperControls(panel) {
+      const controls = panel.querySelector(".mwi-controls");
+      const view = document.defaultView;
+      let activeButton = null;
+      let activeInput = null;
+      let activePointerId = null;
+      let adjusted = false;
+      let repeatDelayTimer = null;
+      let repeatIntervalTimer = null;
+
+      function clearRepeatTimers() {
+        if (repeatDelayTimer !== null) view.clearTimeout(repeatDelayTimer);
+        if (repeatIntervalTimer !== null) view.clearInterval(repeatIntervalTimer);
+        repeatDelayTimer = null;
+        repeatIntervalTimer = null;
+      }
+
+      function finishNumberStep(event = null, { commit = true } = {}) {
+        if (event && activePointerId !== null && event.pointerId !== activePointerId) return;
+        clearRepeatTimers();
+        const input = activeInput;
+        const shouldCommit = commit && adjusted && input;
+        if (activeButton) delete activeButton.dataset.pressed;
+        activeButton = null;
+        activeInput = null;
+        activePointerId = null;
+        adjusted = false;
+        if (shouldCommit) dispatchNumberInputChange(input);
+      }
+
+      function finishPointerStep(event) {
+        if (!activeButton || (activePointerId !== null && event.pointerId !== activePointerId)) return;
+        finishNumberStep(event);
+      }
+
+      function finishBlurredStep() {
+        finishNumberStep();
+      }
+
+      controls.addEventListener("pointerdown", (event) => {
+        const button = event.target.closest('[data-role="number-step"]');
+        if (!button || button.disabled || event.button !== 0 || event.isPrimary === false) return;
+        finishNumberStep();
+        event.preventDefault();
+        activeButton = button;
+        activeInput = numberInputForStepButton(panel, button);
+        activePointerId = event.pointerId;
+        button.dataset.pressed = "true";
+        try {
+          button.focus({ preventScroll: true });
+        } catch (_) {
+          button.focus();
+        }
+        try {
+          button.setPointerCapture(event.pointerId);
+        } catch (_) {
+          // Synthetic events and older browsers can reject pointer capture; local listeners still handle release.
+        }
+        adjusted = adjustNumberInput(panel, button, { commit: false });
+        repeatDelayTimer = view.setTimeout(() => {
+          repeatDelayTimer = null;
+          repeatIntervalTimer = view.setInterval(() => {
+            adjusted = adjustNumberInput(panel, button, { commit: false }) || adjusted;
+          }, NUMBER_STEP_REPEAT_INTERVAL_MS);
+        }, NUMBER_STEP_REPEAT_DELAY_MS);
+      });
+
+      controls.addEventListener("lostpointercapture", finishPointerStep);
+      controls.addEventListener("contextmenu", (event) => {
+        if (event.target.closest('[data-role="number-step"]')) event.preventDefault();
+      });
+      controls.addEventListener("click", (event) => {
+        const button = event.target.closest('[data-role="number-step"]');
+        if (!button || event.detail !== 0) return;
+        adjustNumberInput(panel, button);
+      });
+      view.addEventListener("pointerup", finishPointerStep, true);
+      view.addEventListener("pointercancel", finishPointerStep, true);
+      view.addEventListener("blur", finishBlurredStep);
+
+      return () => {
+        finishNumberStep();
+        view.removeEventListener("pointerup", finishPointerStep, true);
+        view.removeEventListener("pointercancel", finishPointerStep, true);
+        view.removeEventListener("blur", finishBlurredStep);
+      };
     }
 
     function createPanel() {
@@ -418,10 +521,9 @@
         </div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
       panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
-      panel.querySelector(".mwi-controls").addEventListener("click", (event) => {
-        const button = event.target.closest('[data-role="number-step"]');
-        if (button) adjustNumberInput(panel, button);
-      });
+      const numberStepperCleanup = bindNumberStepperControls(panel);
+      panel.__mwiNumberStepperCleanup = numberStepperCleanup;
+      numberStepperCleanups.push(numberStepperCleanup);
       panel.querySelector('[data-role="target"]').addEventListener("change", (event) => {
         const target = Number(event.target.value);
         if (Number.isSafeInteger(target) && target > 0) state.targetCredit = target;
@@ -864,6 +966,13 @@
     }
 
     function destroyPanel(panel) {
+      const numberStepperCleanup = panel && panel.__mwiNumberStepperCleanup;
+      if (numberStepperCleanup) {
+        const cleanupIndex = numberStepperCleanups.indexOf(numberStepperCleanup);
+        if (cleanupIndex >= 0) numberStepperCleanups.splice(cleanupIndex, 1);
+        numberStepperCleanup();
+        delete panel.__mwiNumberStepperCleanup;
+      }
       const controllers = Array.isArray(panel && panel.__mwiSortableControllers) ? panel.__mwiSortableControllers : [];
       for (const controller of controllers) {
         const index = sortableControllers.indexOf(controller);
@@ -903,6 +1012,7 @@
     }
 
     function dispose() {
+      for (const cleanup of numberStepperCleanups.splice(0)) cleanup();
       for (const controller of sortableControllers.splice(0)) controller.destroy();
     }
 
