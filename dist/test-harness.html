@@ -1011,13 +1011,26 @@
         const firstRow = rows[0] || null;
         const targetCells = rows.map((row) => row.cells[3]).filter(Boolean);
         const rowHeights = rows.map((row) => row.getBoundingClientRect().height);
+        const table = section.querySelector("table");
+        const firstItemLink = firstRow?.querySelector(".mwi-market-item-link") || null;
         const rect = section.getBoundingClientRect();
+        const bodyRect = body?.getBoundingClientRect() || null;
         return {
           width: rect.width,
           left: rect.left,
           mode: !expanded ? "collapsed" : !firstRow ? "empty" : getComputedStyle(firstRow).display,
           rowHeights,
-          contentFits: Boolean(body) && body.scrollWidth <= body.clientWidth + 1,
+          standardDensity:
+            !firstRow ||
+            (getComputedStyle(table).fontSize === "11px" &&
+              getComputedStyle(firstRow.cells[0]).padding === "5px 6px" &&
+              (!firstItemLink || Math.abs(firstItemLink.getBoundingClientRect().width - 24) <= 1)),
+          scrollContained:
+            Boolean(bodyRect) &&
+            bodyRect.left >= rect.left - 1 &&
+            bodyRect.right <= rect.right + 1 &&
+            getComputedStyle(body).overflowX === "auto",
+          tableWidth: table?.getBoundingClientRect().width || 0,
           cellsFit: rows.every((row) =>
             Array.from(row.cells).every(
               (cell) => cell.scrollWidth <= cell.clientWidth + 1 && cell.scrollHeight <= cell.clientHeight + 1
@@ -1025,8 +1038,7 @@
           ),
           cellsHaveLabels: rows.every((row) => Array.from(row.cells).every((cell) => cell.dataset.label)),
           targetCostsFit: targetCells.every((cell) => {
-            const cellRect = cell.getBoundingClientRect();
-            return cell.scrollWidth <= cell.clientWidth + 1 && cellRect.right <= rect.right + 1;
+            return cell.scrollWidth <= cell.clientWidth + 1;
           })
         };
       });
@@ -1045,13 +1057,11 @@
         allCreditRowsKeepTableFlow: cards.every(
           (card) => card.mode === "collapsed" || card.mode === "empty" || card.mode === "table-row"
         ),
-        threeColumnRowsStayDense:
-          columnLefts.length !== 3 ||
-          cards.every(
-            (card) =>
-              card.mode === "collapsed" || card.mode === "empty" || card.rowHeights.every((height) => height <= 42)
-          ),
-        allCreditContentFitsCards: cards.every((card) => card.contentFits),
+        everyCreditCardUsesStandardDensity: cards.every((card) => card.standardDensity),
+        everyCreditBodyContainsItsScroller: cards.every((card) => card.scrollContained),
+        everyPopulatedTableKeepsStandardMinimumWidth: cards.every(
+          (card) => card.mode === "collapsed" || card.mode === "empty" || card.tableWidth >= 359
+        ),
         everyCreditCellFits: cards.every((card) => card.cellsFit),
         everyCellKeepsItsResponsiveLabel: cards.every((card) => card.cellsHaveLabels),
         everyTargetCostFitsItsCard: cards.every((card) => card.targetCostsFit)

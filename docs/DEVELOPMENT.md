@@ -193,13 +193,14 @@ http://127.0.0.1:4173/test-harness.html?creditAudit=1&resetState=1&sidebarWidth=
 
 Repeat `creditAudit=1` at the same eleven widths and require every value in
 `checks` to be `true`. Credit rows must preserve the standard four-column table
-flow at every width. Cards at `390px` or narrower use denser column proportions,
-padding, type, and icons rather than stacking each item into two visual rows. At
-`300px` or narrower the same table receives a second density reduction, while
-item names may wrap inside their own cell so information remains complete. The
-audit rejects rows taller than `42px` in the three-column layout, clipped cells,
-clipped target cost, or horizontal overflow. Repeat the `1200` case with
-`locale=en` to cover longer labels.
+flow, `11px` table type, `24px` item icons, and standard cell padding at every
+width. Credit cards use a `360px` minimum multi-column track so the grid reduces
+its column count before compressing card contents. If the whole plugin is
+narrower than that minimum, the table keeps its standard `360px` content width
+inside a contained horizontal scroller instead of shrinking or clipping. The
+audit rejects compact-density overrides, clipped cells, clipped target cost, or
+scroll content escaping its card. Repeat the `1200` case with `locale=en` to
+cover longer labels.
 
 For the construction view, use:
 
