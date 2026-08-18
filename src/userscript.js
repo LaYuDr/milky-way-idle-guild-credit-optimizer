@@ -107,7 +107,6 @@
     sidebarIntegrationObserver: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
-    suppressUpgradePlanAutofill: false,
     upgradePresetNotice: "",
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.55] - 2026-08-18
+
+### Changed
+
+- 取消空神龛计划的隐式默认填充；清空、删除最后一项或失效计划被移除后，刷新页面仍保持为空，并提供明确的中英文空状态引导。
+
 ## [1.1.54] - 2026-08-18
 
 ### Changed

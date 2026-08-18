@@ -2085,6 +2085,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(harnessSource, /__mwiCollectLayoutAudit/);
   assert.match(harnessSource, /runPlanStabilityAudit/);
   assert.match(harnessSource, /sameFirstPlan: list\.querySelector\("\.mwi-upgrade-plan"\) === firstPlan/);
+  assert.match(harnessSource, /searchParams\.get\("upgradeEmptyAudit"\)/);
+  assert.match(harnessSource, /refreshKeepsPlanListEmpty/);
+  assert.match(harnessSource, /explicitAddStillWorks/);
   assert.match(harnessSource, /layout-audit-output/);
   assert.match(harnessSource, /widths: \[320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200\]/);
   assert.match(harnessSource, /breakpoints: \{ compactMax: 400, intermediateMax: 520, summaryMax: 650 \}/);
@@ -2153,11 +2156,14 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /guildTokenCreditConversions: GUILD_TOKEN_CREDIT_CONVERSIONS/);
   assert.match(source, /guildTokenCreditPlanSummary/);
   assert.match(source, /function clearGuildUpgradePlans\(\)/);
-  assert.match(source, /state\.suppressUpgradePlanAutofill = true/);
   assert.match(source, /clearGuildUpgradePlans\(\);\s*persistPluginUiState\(\);\s*refreshGuildUpgrade\(panel\);/);
   assert.match(source, /function removeGuildUpgradePlan\(planId\)/);
   assert.match(source, /const removedLastPlan = state\.upgradePlans\.length === 0/);
-  assert.match(source, /state\.suppressUpgradePlanAutofill = removedLastPlan/);
+  assert.match(source, /function ensureGuildUpgradePlans\(entries\)/);
+  assert.doesNotMatch(source, /suppressUpgradePlanAutofill/);
+  assert.doesNotMatch(source, /if \(!state\.upgradePlans\.length[^\n]+addGuildUpgradePlan/);
+  assert.match(source, /hasAvailableUpgrade \? t\("noUpgradePlans"\) : t\("allBuffsMaxed"\)/);
+  assert.match(source, /hasAvailableUpgrade \? t\("noUpgradePlansHint"\) : t\("noUpgradeMaterials"\)/);
   assert.match(source, /if \(!removeGuildUpgradePlan\(row\.dataset\.planId\)\) return/);
   assert.match(source, /data-role="plan-start"/);
   assert.match(source, /data-role="plan-target"/);

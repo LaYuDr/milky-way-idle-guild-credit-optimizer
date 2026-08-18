@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.54";
+window.MwiGuildCreditVersion = "1.1.55";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2073,6 +2073,8 @@ window.MwiGuildCreditVersion = "1.1.54";
       optimalExchangeUnavailable: "最优兑换：暂无可用市场价格",
       requiredThisTime: "本次所需",
       noGuildRules: "未读取到神龛升级规则。请刷新游戏页面后重新打开公会。",
+      noUpgradePlans: "当前没有神龛升级计划。",
+      noUpgradePlansHint: "点击“添加神龛”，或使用上方按钮按当前公会等级填充。",
       allBuffsMaxed: "当前所有神龛增益均已满级。",
       noUpgradeMaterials: "当前没有需要计算的神龛升级材料。",
       missingLevelCost: "缺少 {level} 级升级成本数据。",
@@ -2377,6 +2379,8 @@ window.MwiGuildCreditVersion = "1.1.54";
       optimalExchangeUnavailable: "Best exchange: no usable market price",
       requiredThisTime: "Needed now",
       noGuildRules: "Shrine upgrade rules are unavailable. Refresh the game, then reopen the guild.",
+      noUpgradePlans: "There are no shrine upgrade plans yet.",
+      noUpgradePlansHint: "Select Add shrine, or use a batch-fill button above to create plans.",
       allBuffsMaxed: "All shrine buffs are already at their maximum level.",
       noUpgradeMaterials: "There are no shrine upgrade materials to calculate.",
       missingLevelCost: "Missing upgrade cost data for level {level}.",
@@ -6685,7 +6689,6 @@ window.MwiGuildCreditVersion = "1.1.54";
         })
         .filter(Boolean);
       state.upgradePlans = [...preservedPlans, ...planned];
-      state.suppressUpgradePlanAutofill = true;
       const targetDomain = combat ? t("domainCombat") : t("domainLife");
       state.upgradePresetNotice = planned.length
         ? t("guildTargetApplied", { domain: targetDomain, count: formatNumber(planned.length) })
@@ -6721,16 +6724,12 @@ window.MwiGuildCreditVersion = "1.1.54";
         startLevel,
         targetLevel: startLevel + 1
       });
-      state.suppressUpgradePlanAutofill = false;
       state.upgradePresetNotice = "";
       return true;
     }
 
     function clearGuildUpgradePlans() {
       state.upgradePlans = [];
-      // Keep the cleared state visible instead of immediately restoring the
-      // default plan during the next refresh.
-      state.suppressUpgradePlanAutofill = true;
       state.upgradePresetNotice = t("plansCleared");
     }
 
@@ -6739,16 +6738,12 @@ window.MwiGuildCreditVersion = "1.1.54";
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== planId);
       if (state.upgradePlans.length === previousLength) return false;
       const removedLastPlan = state.upgradePlans.length === 0;
-      // Removing plans one by one must be able to reach the same empty state as
-      // the dedicated clear button instead of immediately adding a default row.
-      state.suppressUpgradePlanAutofill = removedLastPlan;
       state.upgradePresetNotice = removedLastPlan ? t("plansCleared") : "";
       return true;
     }
 
     function ensureGuildUpgradePlans(entries) {
       state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
-      if (!state.upgradePlans.length && !state.suppressUpgradePlanAutofill) addGuildUpgradePlan(entries);
       persistPluginUiState();
     }
 
@@ -7107,13 +7102,15 @@ window.MwiGuildCreditVersion = "1.1.54";
       ensureGuildUpgradePlans(entries);
       renderGuildUpgradePlans(panel, entries);
       if (!state.upgradePlans.length) {
+        const hasAvailableUpgrade = entries.some((entry) => currentGuildBuffLevel(entry) < entry.maxLevel);
+        const emptyStatus =
+          state.upgradePresetNotice || (hasAvailableUpgrade ? t("noUpgradePlans") : t("allBuffsMaxed"));
+        const emptyMessage =
+          state.upgradePresetNotice || (hasAvailableUpgrade ? t("noUpgradePlansHint") : t("noUpgradeMaterials"));
         setShrineGuideContext({ plans: [], estimate: { rows: [] }, creditMaterialPlans: {} });
         updateGuildTokenBudgetControl(panel, null, Array.isArray(state.characterItems));
-        status.textContent = state.upgradePresetNotice || t("allBuffsMaxed");
-        updateRenderedMarkup(
-          results,
-          `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || t("noUpgradeMaterials"))}</div>`
-        );
+        status.textContent = emptyStatus;
+        updateRenderedMarkup(results, `<div class="mwi-empty">${escapeHtml(emptyMessage)}</div>`);
         return;
       }
 
@@ -7233,6 +7230,7 @@ window.MwiGuildCreditVersion = "1.1.54";
       applyGuildShrineTargets,
       updateGuildShrineTargetActions,
       addGuildUpgradePlan,
+      ensureGuildUpgradePlans,
       clearGuildUpgradePlans,
       removeGuildUpgradePlan,
       guildTokenCreditSelectionState,
@@ -9113,7 +9111,6 @@ window.MwiGuildCreditVersion = "1.1.54";
         } else if (event.target.matches('[data-role="plan-target"]')) {
           plan.targetLevel = Number(event.target.value);
         }
-        state.suppressUpgradePlanAutofill = false;
         state.upgradePresetNotice = "";
         persistPluginUiState();
         refreshGuildUpgrade(panel);
@@ -9441,7 +9438,6 @@ window.MwiGuildCreditVersion = "1.1.54";
     sidebarIntegrationObserver: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
-    suppressUpgradePlanAutofill: false,
     upgradePresetNotice: "",
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,

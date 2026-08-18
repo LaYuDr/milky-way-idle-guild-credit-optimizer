@@ -39,7 +39,6 @@ function createFixture() {
       { id: "keep-spirit-combat", guildBuffHrid: "/guild_buffs/spirit_combat", startLevel: 0, targetLevel: 1 }
     ],
     nextUpgradePlanId: 10,
-    suppressUpgradePlanAutofill: false,
     upgradePresetNotice: ""
   };
   const t = (key, values = {}) => `${key}${values.domain ? `:${values.domain}` : ""}`;
@@ -107,8 +106,28 @@ test("一键填充只替换未排除的同域计划并保留排除项与另一�
     ]
   );
   assert.equal(state.nextUpgradePlanId, 11);
-  assert.equal(state.suppressUpgradePlanAutofill, true);
   assert.match(state.upgradePresetNotice, /^guildTargetApplied:/);
+});
+
+test("空计划在刷新校验后保持为空且不会隐式添加默认神龛", () => {
+  const { entries, state, view } = createFixture();
+  state.upgradePlans = [];
+
+  view.ensureGuildUpgradePlans(entries);
+
+  assert.deepEqual(state.upgradePlans, []);
+  assert.equal(state.nextUpgradePlanId, 10);
+});
+
+test("失效计划被移除后保持空状态，显式添加仍可创建一项", () => {
+  const { entries, state, view } = createFixture();
+  state.upgradePlans = [{ id: "missing", guildBuffHrid: "/guild_buffs/removed", startLevel: 0, targetLevel: 1 }];
+
+  view.ensureGuildUpgradePlans(entries);
+  assert.deepEqual(state.upgradePlans, []);
+  assert.equal(view.addGuildUpgradePlan(entries), true);
+  assert.equal(state.upgradePlans.length, 1);
+  assert.equal(state.upgradePlans[0].id, "plan-10");
 });
 
 test("当前领域全部排除时保持计划与编号不变并返回明确状态", () => {

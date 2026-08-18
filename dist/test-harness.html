@@ -161,13 +161,17 @@
     const stabilityAudit = searchParams.get("stabilityAudit") === "1";
     const creditAudit = searchParams.get("creditAudit") === "1";
     const marketFilterAudit = searchParams.get("marketFilterAudit") === "1";
+    const upgradeEmptyAudit = searchParams.get("upgradeEmptyAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
     const settingsAudit = searchParams.get("settingsAudit") === "1";
     const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
     const sidebarResizeAudit = searchParams.get("sidebarResizeAudit") === "1";
     const sidebarStartupAudit = searchParams.get("sidebarStartupAudit") === "1";
-    if (layoutAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
+    const upgradeEmptyAuditStageKey = "mwi-upgrade-empty-audit-stage-v1";
+    const upgradeEmptyAuditEvidenceKey = "mwi-upgrade-empty-audit-evidence-v1";
+    const upgradeEmptyAuditStage = upgradeEmptyAudit ? sessionStorage.getItem(upgradeEmptyAuditStageKey) : "";
+    if (layoutAudit || upgradeEmptyAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
       document.body.dataset.layoutAudit = "true";
     if (sidebarResizeAudit) document.body.dataset.sidebarResizeAudit = "true";
     if (
@@ -175,16 +179,28 @@
         layoutAudit ||
         creditAudit ||
         marketFilterAudit ||
+        upgradeEmptyAudit ||
         constructionAudit ||
         constructionSnapshotAudit ||
         settingsAudit ||
         localeRaceAudit ||
         sidebarResizeAudit ||
         sidebarStartupAudit) &&
-      searchParams.get("resetState") === "1"
+      searchParams.get("resetState") === "1" &&
+      upgradeEmptyAuditStage !== "reloaded"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
       localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
+    }
+    if (upgradeEmptyAudit && searchParams.get("resetState") === "1" && upgradeEmptyAuditStage !== "reloaded") {
+      localStorage.setItem(
+        "mwi-guild-credit-ui-state-v1",
+        JSON.stringify({
+          activeView: "upgrade",
+          panelOrder: ["upgrade", "credit", "construction"],
+          upgradePlans: [{ guildBuffHrid: "/guild_buffs/tempo_life", startLevel: 0, targetLevel: 1 }]
+        })
+      );
     }
     if (settingsAudit && searchParams.get("resetState") === "1") {
       localStorage.setItem(
@@ -848,6 +864,101 @@
     };
 
     window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
+
+    const prepareUpgradeEmptyAudit = async () => {
+      document.getElementById("test-exchange-modal")?.remove();
+      const creditTab = await waitFor(() => document.querySelector('[data-mwi-credit-tab="true"]'));
+      creditTab.click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      const upgradeTab = await waitFor(() => panel.querySelector('[data-role="view-upgrade"]'));
+      upgradeTab.click();
+      const list = await waitFor(() => panel.querySelector('[data-role="upgrade-plan-list"]'));
+      const storedUiState = () => JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+
+      if (sessionStorage.getItem(upgradeEmptyAuditStageKey) !== "reloaded") {
+        await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 1);
+        const initialPlanCount = list.querySelectorAll(".mwi-upgrade-plan").length;
+        panel.querySelector('[data-role="clear-upgrade-plans"]').click();
+        await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 0);
+        const storedAfterClear = storedUiState();
+        sessionStorage.setItem(
+          upgradeEmptyAuditEvidenceKey,
+          JSON.stringify({
+            initialPlanCount,
+            clearedPlanCount: list.querySelectorAll(".mwi-upgrade-plan").length,
+            storedEmptyAfterClear:
+              Array.isArray(storedAfterClear.upgradePlans) && storedAfterClear.upgradePlans.length === 0
+          })
+        );
+        sessionStorage.setItem(upgradeEmptyAuditStageKey, "reloaded");
+        location.reload();
+        return new Promise(() => {});
+      }
+
+      const evidence = JSON.parse(sessionStorage.getItem(upgradeEmptyAuditEvidenceKey) || "{}");
+      const emptyCopy = await waitFor(() => {
+        if (list.querySelectorAll(".mwi-upgrade-plan").length) return null;
+        const status = panel.querySelector('[data-role="upgrade-status"]')?.textContent || "";
+        const message = panel.querySelector(".mwi-empty")?.textContent || "";
+        return status && message ? { status, message } : null;
+      });
+      const planCountAfterReload = list.querySelectorAll(".mwi-upgrade-plan").length;
+      const storedAfterReload = storedUiState();
+      const addButton = panel.querySelector('[data-role="add-upgrade-plan"]');
+      addButton.click();
+      await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 1);
+      const explicitAddedPlanCount = list.querySelectorAll(".mwi-upgrade-plan").length;
+      panel.querySelector('[data-role="clear-upgrade-plans"]').click();
+      await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 0);
+      const finalStoredState = storedUiState();
+      const root = document.getElementById("mwi-credit-optimizer");
+      const report = {
+        evidence,
+        emptyCopy,
+        planCountAfterReload,
+        explicitAddedPlanCount,
+        checks: {
+          seededPlanWasVisible: evidence.initialPlanCount === 1,
+          clearReachedEmptyState: evidence.clearedPlanCount === 0,
+          clearPersistedEmptyState: evidence.storedEmptyAfterClear === true,
+          refreshKeepsPlanListEmpty:
+            planCountAfterReload === 0 &&
+            Array.isArray(storedAfterReload.upgradePlans) &&
+            storedAfterReload.upgradePlans.length === 0,
+          emptyStateNamesPlanAndAction:
+            emptyCopy.status === (english ? "There are no shrine upgrade plans yet." : "当前没有神龛升级计划。") &&
+            emptyCopy.message.includes(english ? "Add shrine" : "添加神龛"),
+          explicitAddStillWorks: explicitAddedPlanCount === 1,
+          finalClearRemainsPersisted:
+            Array.isArray(finalStoredState.upgradePlans) && finalStoredState.upgradePlans.length === 0,
+          panelHasNoHorizontalOverflow: root.scrollWidth <= root.clientWidth + 1
+        }
+      };
+      sessionStorage.removeItem(upgradeEmptyAuditStageKey);
+      sessionStorage.removeItem(upgradeEmptyAuditEvidenceKey);
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      document.body.dataset.upgradeEmptyAuditFailed = "false";
+      document.body.dataset.upgradeEmptyAuditReady = "true";
+      return report;
+    };
+
+    window.__mwiUpgradeEmptyAuditReady = upgradeEmptyAudit
+      ? prepareUpgradeEmptyAudit().catch((error) => {
+          const report = {
+            failed: true,
+            error: {
+              name: String(error?.name || "Error"),
+              message: String(error?.message || error || "Unknown upgrade empty-state audit error"),
+              stack: String(error?.stack || "")
+            },
+            checks: { auditCompleted: false }
+          };
+          document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+          document.body.dataset.upgradeEmptyAuditFailed = "true";
+          document.body.dataset.upgradeEmptyAuditReady = "true";
+          return report;
+        })
+      : Promise.resolve(null);
 
     const prepareCreditAudit = async () => {
       document.getElementById("test-exchange-modal")?.remove();

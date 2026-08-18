@@ -280,7 +280,6 @@
         })
         .filter(Boolean);
       state.upgradePlans = [...preservedPlans, ...planned];
-      state.suppressUpgradePlanAutofill = true;
       const targetDomain = combat ? t("domainCombat") : t("domainLife");
       state.upgradePresetNotice = planned.length
         ? t("guildTargetApplied", { domain: targetDomain, count: formatNumber(planned.length) })
@@ -316,16 +315,12 @@
         startLevel,
         targetLevel: startLevel + 1
       });
-      state.suppressUpgradePlanAutofill = false;
       state.upgradePresetNotice = "";
       return true;
     }
 
     function clearGuildUpgradePlans() {
       state.upgradePlans = [];
-      // Keep the cleared state visible instead of immediately restoring the
-      // default plan during the next refresh.
-      state.suppressUpgradePlanAutofill = true;
       state.upgradePresetNotice = t("plansCleared");
     }
 
@@ -334,16 +329,12 @@
       state.upgradePlans = state.upgradePlans.filter((plan) => plan.id !== planId);
       if (state.upgradePlans.length === previousLength) return false;
       const removedLastPlan = state.upgradePlans.length === 0;
-      // Removing plans one by one must be able to reach the same empty state as
-      // the dedicated clear button instead of immediately adding a default row.
-      state.suppressUpgradePlanAutofill = removedLastPlan;
       state.upgradePresetNotice = removedLastPlan ? t("plansCleared") : "";
       return true;
     }
 
     function ensureGuildUpgradePlans(entries) {
       state.upgradePlans = state.upgradePlans.map((plan) => normalizeUpgradePlan(plan, entries)).filter(Boolean);
-      if (!state.upgradePlans.length && !state.suppressUpgradePlanAutofill) addGuildUpgradePlan(entries);
       persistPluginUiState();
     }
 
@@ -702,13 +693,15 @@
       ensureGuildUpgradePlans(entries);
       renderGuildUpgradePlans(panel, entries);
       if (!state.upgradePlans.length) {
+        const hasAvailableUpgrade = entries.some((entry) => currentGuildBuffLevel(entry) < entry.maxLevel);
+        const emptyStatus =
+          state.upgradePresetNotice || (hasAvailableUpgrade ? t("noUpgradePlans") : t("allBuffsMaxed"));
+        const emptyMessage =
+          state.upgradePresetNotice || (hasAvailableUpgrade ? t("noUpgradePlansHint") : t("noUpgradeMaterials"));
         setShrineGuideContext({ plans: [], estimate: { rows: [] }, creditMaterialPlans: {} });
         updateGuildTokenBudgetControl(panel, null, Array.isArray(state.characterItems));
-        status.textContent = state.upgradePresetNotice || t("allBuffsMaxed");
-        updateRenderedMarkup(
-          results,
-          `<div class="mwi-empty">${escapeHtml(state.upgradePresetNotice || t("noUpgradeMaterials"))}</div>`
-        );
+        status.textContent = emptyStatus;
+        updateRenderedMarkup(results, `<div class="mwi-empty">${escapeHtml(emptyMessage)}</div>`);
         return;
       }
 
@@ -828,6 +821,7 @@
       applyGuildShrineTargets,
       updateGuildShrineTargetActions,
       addGuildUpgradePlan,
+      ensureGuildUpgradePlans,
       clearGuildUpgradePlans,
       removeGuildUpgradePlan,
       guildTokenCreditSelectionState,

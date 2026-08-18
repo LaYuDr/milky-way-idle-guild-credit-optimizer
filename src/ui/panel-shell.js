@@ -741,7 +741,6 @@
         } else if (event.target.matches('[data-role="plan-target"]')) {
           plan.targetLevel = Number(event.target.value);
         }
-        state.suppressUpgradePlanAutofill = false;
         state.upgradePresetNotice = "";
         persistPluginUiState();
         refreshGuildUpgrade(panel);

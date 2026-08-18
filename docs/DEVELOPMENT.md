@@ -146,6 +146,33 @@ to be `true`. Run this audit independently at sidebar widths `320`, `420`,
 `610`, and `900`; at every width the gutter contract, hit testing, drag delta,
 post-drag reachability, and root overflow checks must all pass.
 
+### Shrine-plan empty-state refresh audit
+
+To verify that an intentionally empty shrine plan remains empty after a real
+page reload, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?upgradeEmptyAudit=1&resetState=1&sidebarWidth=420
+```
+
+The audit seeds one plan, clears it through the live UI, confirms the empty
+array was persisted, reloads the page, and resumes automatically from
+`sessionStorage`. It requires the planner to remain empty after reload, checks
+that the empty-state copy names both the shrine plan and the explicit Add
+shrine action, verifies that Add shrine still creates one row, and clears the
+row again before completing. After
+`document.body.dataset.upgradeEmptyAuditReady` becomes `"true"`, inspect
+`#layout-audit-output` or evaluate:
+
+```js
+await window.__mwiUpgradeEmptyAuditReady;
+```
+
+Require every value in `checks` to be `true`. Run the audit at `320`, `420`,
+`610`, and `900` pixels in Chinese, then at `320` and `610` with `locale=en`.
+Each URL must be opened as a fresh navigation so the deliberate reload can
+complete its two-stage contract.
+
 ### Responsive layout matrix
 
 For responsive layout auditing, open:
