@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.54] - 2026-08-18
+
+### Changed
+
+- Improved Chinese item-name localization by merging official runtime sources, Webpack locale resources, visible game UI names, and cached fallbacks.
+
 ## [1.1.53] - 2026-08-18
 
 ### Changed

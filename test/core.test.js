@@ -1216,6 +1216,129 @@ test("官方 i18n 名称目录优先于旧词典或规则翻译", () => {
   );
 });
 
+test("官方 i18n 名称目录接受并合并分散的部分名称表", () => {
+  const extracted = itemNameCatalogApi.extractOfficialItemNameCatalog([
+    { resources: { "zh-CN": { translation: { itemNames: { beast_hide: "野兽皮" } } } } },
+    { store: { data: { "zh-Hans": { itemNames: { "/items/cheese": "奶酪" } } } } }
+  ]);
+  assert.equal(extracted.valid, true);
+  assert.equal(extracted.entryCount, 2);
+  assert.equal(extracted.names["/items/beast_hide"], "野兽皮");
+  assert.equal(extracted.names["/items/cheese"], "奶酪");
+});
+
+test("Webpack 官方简体中文模块可提供完整物品名称目录", () => {
+  function localeMapFactory() {
+    return { "./zh/index.js": [42, 1], "./zh-TW/index.js": [43, 2] };
+  }
+  function simplifiedChineseFactory(module) {
+    module.exports = {
+      itemNames: { "/items/beast_hide": "Webpack 野兽皮" },
+      actionNames: { "/actions/milking": "挤奶" },
+      monsterNames: { "/monsters/cow": "奶牛" },
+      abilityNames: { "/abilities/quick_shot": "快速射击" }
+    };
+  }
+  function traditionalChineseFactory(module) {
+    module.exports = {
+      itemNames: { "/items/beast_hide": "Webpack 野獸皮" },
+      actionNames: { "/actions/milking": "擠奶" },
+      monsterNames: { "/monsters/cow": "乳牛" },
+      abilityNames: { "/abilities/quick_shot": "快速射擊" }
+    };
+  }
+  const extracted = itemNameCatalogApi.extractWebpackItemNameCatalog({
+    webpackChunkGame: [[[1], { 1: localeMapFactory, 42: simplifiedChineseFactory, 43: traditionalChineseFactory }]]
+  });
+  assert.equal(extracted.valid, true);
+  assert.equal(extracted.source, "webpack-locale");
+  assert.equal(extracted.names["/items/beast_hide"], "Webpack 野兽皮");
+});
+
+test("可见游戏图标可被动补充中文物品名称并排除插件自身图标", () => {
+  const icon = (name, href, pluginOwned = false) => {
+    const svg = {
+      getAttribute: (attribute) => (attribute === "aria-label" ? name : null),
+      closest: (selector) => (selector.includes("mwi-credit") && pluginOwned ? {} : null)
+    };
+    return {
+      closest: () => svg,
+      getAttribute: (attribute) => (attribute === "href" ? href : null)
+    };
+  };
+  const extracted = itemNameCatalogApi.extractVisibleItemNameCatalog({
+    querySelectorAll: () => [
+      icon("野兽皮", "/static/items_sprite.svg#beast_hide"),
+      icon("Cheese", "/static/items_sprite.svg#cheese"),
+      icon("插件中文名", "/static/items_sprite.svg#green_guild_credit", true),
+      icon("错误图标", "/static/misc_sprite.svg#house")
+    ]
+  });
+  assert.equal(extracted.valid, true);
+  assert.deepEqual({ ...extracted.names }, { "/items/beast_hide": "野兽皮" });
+});
+
+test("实时官方名称增量覆盖旧缓存且保留当前资源未包含的名称", () => {
+  const storageValues = new Map([
+    [
+      itemNameCatalogApi.STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        names: { "/items/legacy_item": "缓存旧物品", "/items/beast_hide": "缓存野兽皮" }
+      })
+    ]
+  ]);
+  const catalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: {
+      i18next: {
+        resources: {
+          "zh-CN": {
+            translation: { itemNames: { "/items/beast_hide": "实时野兽皮", "/items/cheese": "实时奶酪" } }
+          }
+        }
+      }
+    },
+    storage: {
+      getItem: (key) => storageValues.get(key) || null,
+      setItem: (key, value) => storageValues.set(key, value)
+    }
+  });
+  catalog.refresh();
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/legacy_item", englishFallback: "Legacy Item", locale: "zh-CN" }),
+    "缓存旧物品"
+  );
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/beast_hide", englishFallback: "Beast Hide", locale: "zh-CN" }),
+    "实时野兽皮"
+  );
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/cheese", englishFallback: "Cheese", locale: "zh-CN" }),
+    "实时奶酪"
+  );
+});
+
+test("已就绪目录仍会按需重试当前缺失的中文物品名称", () => {
+  const itemNames = { beast_hide: "野兽皮" };
+  const catalog = itemNameCatalogApi.createItemNameCatalog({
+    pageWindow: { i18next: { resources: { "zh-CN": { translation: { itemNames } } } } },
+    storage: { getItem: () => null, setItem: () => {} }
+  });
+  const initial = catalog.refreshIfDue({ force: true, now: 1000 });
+  assert.equal(initial.ready, true);
+  itemNames.cheese = "稍后加载的奶酪";
+  const genericRefresh = catalog.refreshIfDue({ now: 4000 });
+  assert.equal(genericRefresh.attempted, false);
+  const demandedRefresh = catalog.refreshIfDue({ now: 4000, requiredItemHrids: ["/items/cheese"] });
+  assert.equal(demandedRefresh.attempted, true);
+  assert.equal(demandedRefresh.changed, true);
+  assert.equal(demandedRefresh.ready, true);
+  assert.equal(
+    catalog.resolveItemName({ itemHrid: "/items/cheese", englishFallback: "Cheese", locale: "zh-CN" }),
+    "稍后加载的奶酪"
+  );
+});
+
 test("官方名称目录优先于内置公会货币回退名称", () => {
   const itemNames = { green_guild_credit: "官方绿色信用点" };
   const catalog = itemNameCatalogApi.createItemNameCatalog({

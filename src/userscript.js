@@ -326,16 +326,19 @@
     return localizationApi.resolveLocaleCandidates(candidates, "zh-CN");
   }
 
-  function refreshOfficialItemNameCatalog(force) {
-    return itemNameCatalog.refreshIfDue({ force: force === true }).changed;
+  function refreshOfficialItemNameCatalog(force, requiredItemHrids) {
+    return itemNameCatalog.refreshIfDue({
+      force: force === true,
+      requiredItemHrids: Array.isArray(requiredItemHrids) ? requiredItemHrids : []
+    }).changed;
   }
 
   // This is the sole item-name resolver used by the UI. Official game names
   // remain authoritative; stable guild currencies have a bundled localized
   // fallback for environments where the game's i18n catalog is unavailable.
   function resolveItemName(itemHrid, englishFallback) {
-    refreshOfficialItemNameCatalog();
     const localizer = ui();
+    if (localizer.locale === "zh-CN") refreshOfficialItemNameCatalog(false, [itemHrid]);
     return itemNameCatalog.resolveItemName({
       itemHrid,
       englishFallback: localizer.itemName(itemHrid) || englishFallback,
