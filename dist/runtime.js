@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.55";
+window.MwiGuildCreditVersion = "1.1.56";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3535,6 +3535,12 @@ window.MwiGuildCreditVersion = "1.1.55";
     return Number.isSafeInteger(number) && number > 0 ? number : null;
   }
 
+  function nonNegativeInteger(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isSafeInteger(number) && number >= 0 ? number : null;
+  }
+
   function nonNegativeNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? number : 0;
@@ -3554,6 +3560,17 @@ window.MwiGuildCreditVersion = "1.1.55";
       targetLevel,
       complete: currentLevel >= targetLevel
     };
+  }
+
+  function inventoryCountForItem(characterItems, itemHrid) {
+    if (!Array.isArray(characterItems) || !itemHrid) return null;
+    let total = 0;
+    for (const item of characterItems) {
+      if (!item || item.itemHrid !== itemHrid || item.itemLocationHrid !== "/item_locations/inventory") continue;
+      const count = nonNegativeInteger(item.count);
+      if (count !== null) total += count;
+    }
+    return total;
   }
 
   function normalizeCreditStep(row, materialPlan) {
@@ -3647,9 +3664,25 @@ window.MwiGuildCreditVersion = "1.1.55";
     const modal = settings.modal && typeof settings.modal === "object" ? settings.modal : null;
     const matchedCredit =
       (modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid)) || null;
-    const modalMaxBatches = positiveInteger(modal && modal.maxBatches);
+    const legacyModalMaxBatches = nonNegativeInteger(modal && modal.maxBatches);
+    const modalMaxTargetQuantity = nonNegativeInteger(modal && modal.maxTargetQuantity);
+    const inputMaxBatches =
+      matchedCredit && modalMaxTargetQuantity !== null && matchedCredit.creditCount > 0
+        ? Math.floor(modalMaxTargetQuantity / matchedCredit.creditCount)
+        : null;
+    const ownedItems = matchedCredit
+      ? inventoryCountForItem(settings.characterItems, matchedCredit.recommendedItemHrid)
+      : null;
+    const inventoryMaxBatches =
+      matchedCredit && ownedItems !== null && matchedCredit.itemCount > 0
+        ? Math.floor(ownedItems / matchedCredit.itemCount)
+        : null;
+    const availableBatchLimits = [legacyModalMaxBatches, inputMaxBatches, inventoryMaxBatches].filter(
+      (value) => value !== null
+    );
+    const modalMaxBatches = availableBatchLimits.length ? Math.min(...availableBatchLimits) : null;
     const suggestedBatches = matchedCredit
-      ? Math.min(matchedCredit.batches, modalMaxBatches || matchedCredit.batches)
+      ? Math.min(matchedCredit.batches, modalMaxBatches === null ? matchedCredit.batches : modalMaxBatches)
       : 0;
     const activeCredit = matchedCredit
       ? {
@@ -3673,7 +3706,7 @@ window.MwiGuildCreditVersion = "1.1.55";
     return { ...result, status: "upgrade_shrine" };
   }
 
-  return { deriveShrineGuide };
+  return { deriveShrineGuide, inventoryCountForItem };
 });
 
 
@@ -5725,11 +5758,7 @@ window.MwiGuildCreditVersion = "1.1.55";
       [data-mwi-shrine-guide="pending"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 16%,transparent)!important}
       [data-mwi-shrine-guide="active"]{animation:mwi-shrine-guide-pulse 1.45s ease-in-out infinite}
       input[data-mwi-shrine-guide="active"]{animation:none;filter:none!important;outline-width:1px!important;outline-offset:1px!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)!important}
-      #${quantityHintId}{--mwi-guide-color:#63e6c8;position:relative;z-index:auto;display:grid;justify-items:center;gap:1px;box-sizing:border-box;width:max-content;max-width:calc(100% - 20px);margin:5px auto 1px;padding:0;border:0;background:transparent;color:#f4f5ff;box-shadow:none;font:11px/1.25 system-ui,-apple-system,"Microsoft YaHei",sans-serif;text-align:center;pointer-events:none}
-      #${quantityHintId} .mwi-guide-quantity-label{color:#c7cae4;white-space:nowrap}
-      #${quantityHintId} .mwi-guide-quantity-value{color:var(--mwi-guide-color);font-size:14px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
-      #${quantityHintId} .mwi-guide-quantity-detail{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-      #${quantityHintId} .mwi-guide-quantity-detail[hidden]{display:none}
+      #${quantityHintId}{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}
       @keyframes mwi-shrine-guide-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 0 3px color-mix(in srgb,var(--mwi-guide-color) 20%,transparent),0 0 12px color-mix(in srgb,var(--mwi-guide-color) 22%,transparent)}50%{filter:brightness(1.08);box-shadow:0 0 0 6px color-mix(in srgb,var(--mwi-guide-color) 13%,transparent),0 0 23px color-mix(in srgb,var(--mwi-guide-color) 38%,transparent)}}
       @media (prefers-reduced-motion:reduce){[data-mwi-shrine-guide="active"]{animation:none}}
     `;
@@ -5737,9 +5766,14 @@ window.MwiGuildCreditVersion = "1.1.55";
 
   const GUILD_EXCHANGE_ADVISOR_STYLES = `
     :host{all:initial;color-scheme:dark;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}
-    .advisor{--credit:#4fcdb5;position:fixed;z-index:1065;display:flex;flex-direction:column;width:min(400px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;border:1px solid #414361;border-left:4px solid var(--credit);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.4}
+    .advisor-stack{--credit:#4fcdb5;position:fixed;z-index:1065;display:grid;width:min(400px,calc(100vw - 24px));max-height:calc(100dvh - 24px);grid-template-rows:minmax(0,1fr) auto;gap:8px;pointer-events:none}
+    .advisor{display:flex;min-height:0;flex-direction:column;overflow:auto;border:1px solid #414361;border-left:4px solid var(--credit);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.4;pointer-events:auto}
+    .guide-quantity{display:grid;justify-items:center;gap:2px;padding:9px 12px;border:1px solid #414361;border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 6px 18px rgba(0,0,0,.34);font-size:11px;line-height:1.3;text-align:center;pointer-events:none}
+    .guide-quantity-label{max-width:100%;color:#c7cae4;overflow-wrap:anywhere}
+    .guide-quantity-value{color:var(--credit);font-size:16px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .guide-quantity-detail{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
     .head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}.title{display:grid;gap:2px;font-size:17px;font-weight:700}.credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}.credit::before{width:9px;height:9px;border-radius:2px;background:var(--credit);content:""}.reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}.body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}.options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}.options.single{grid-template-columns:minmax(0,1fr)}.option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}.option.best{border-color:var(--credit);background:#193836}.label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}.item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}.item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cost{margin:8px 0 5px;color:var(--credit);font-size:23px;font-weight:700;line-height:1}.cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}.detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}.detail b{color:#e7e8f6;font-weight:600}.versus{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}.versus span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}.summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}.summary strong{color:var(--credit);font-size:16px}
-    @media (max-width:600px){.advisor{max-height:min(300px,calc(100dvh - 24px))}.options{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}.body{padding:9px}.option{padding:7px}.cost{font-size:20px}}
+    @media (max-width:600px){.advisor-stack{max-height:min(300px,calc(100dvh - 24px))}.options{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}.body{padding:9px}.option{padding:7px}.cost{font-size:20px}}
   `;
 
   return { PANEL_STYLES, shrineGuideStyles, GUILD_EXCHANGE_ADVISOR_STYLES };
@@ -7367,6 +7401,26 @@ window.MwiGuildCreditVersion = "1.1.55";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function shrineGuideAutofillQuantity(step) {
+    const quantity = Number(step && step.suggestedCredits);
+    return Number.isSafeInteger(quantity) && quantity >= 0 ? quantity : null;
+  }
+
+  function setNativeInputValue(input, value) {
+    if (!input) return false;
+    const nextValue = String(value);
+    if (String(input.value) === nextValue) return false;
+    const view = (input.ownerDocument && input.ownerDocument.defaultView) || globalThis;
+    const prototype = view.HTMLInputElement && view.HTMLInputElement.prototype;
+    const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor && descriptor.set) descriptor.set.call(input, nextValue);
+    else input.value = nextValue;
+    const EventConstructor = view.Event || Event;
+    input.dispatchEvent(new EventConstructor("input", { bubbles: true }));
+    input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+    return true;
+  }
+
   function createShrineGuideUi(dependencies) {
     const {
       state,
@@ -7388,6 +7442,8 @@ window.MwiGuildCreditVersion = "1.1.55";
 
     const SHRINE_GUIDE_STYLE_ID = "mwi-shrine-guide-native-style";
     const SHRINE_GUIDE_QUANTITY_HINT_ID = "mwi-shrine-guide-quantity-hint";
+    let autofillInput = null;
+    let autofillSignature = "";
 
     function ensureShrineGuideStyle() {
       if (document.getElementById(SHRINE_GUIDE_STYLE_ID)) return;
@@ -7417,6 +7473,27 @@ window.MwiGuildCreditVersion = "1.1.55";
         else input.removeAttribute("aria-describedby");
       }
       if (hint) hint.remove();
+      const visualHint = state.exchangeAdvisorUi && state.exchangeAdvisorUi.quantityHint;
+      if (visualHint && !visualHint.hidden) {
+        visualHint.hidden = true;
+        scheduleGuildExchangeAdvisor();
+      }
+    }
+
+    function resetShrineGuideAutofill() {
+      autofillInput = null;
+      autofillSignature = "";
+    }
+
+    function prefillShrineGuideQuantityInput(modal, step) {
+      const input = modal && modal.quantityInput;
+      const quantity = shrineGuideAutofillQuantity(step);
+      if (!input || !input.isConnected || quantity === null) return false;
+      const signature = [step.creditItemHrid, step.recommendedItemHrid, quantity].join(":");
+      if (autofillInput === input && autofillSignature === signature) return false;
+      autofillInput = input;
+      autofillSignature = signature;
+      return setNativeInputValue(input, quantity);
     }
 
     function shrineGuideQuantityRow(modal) {
@@ -7459,7 +7536,8 @@ window.MwiGuildCreditVersion = "1.1.55";
         !input.isConnected ||
         !quantityRow ||
         !step ||
-        !step.suggestedBatches ||
+        !Number.isSafeInteger(step.suggestedBatches) ||
+        step.suggestedBatches < 0 ||
         !shrineGuideQuantityInputIsTopmost(modal)
       ) {
         removeShrineGuideQuantityHint();
@@ -7472,8 +7550,6 @@ window.MwiGuildCreditVersion = "1.1.55";
         hint.id = SHRINE_GUIDE_QUANTITY_HINT_ID;
         hint.setAttribute("role", "status");
         hint.setAttribute("aria-live", "polite");
-        hint.innerHTML =
-          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><strong class="mwi-guide-quantity-value" data-role="quantity-hint-number"></strong><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
       }
       if (hint.previousElementSibling !== quantityRow || hint.parentElement !== quantityRow.parentElement)
         quantityRow.insertAdjacentElement("afterend", hint);
@@ -7493,13 +7569,9 @@ window.MwiGuildCreditVersion = "1.1.55";
       );
       describedBy.add(SHRINE_GUIDE_QUANTITY_HINT_ID);
       input.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
-      hint.style.setProperty("--mwi-guide-color", color || "#63e6c8");
       const remainingBatches = formatNumber(step.batches);
       const suggestedBatches = formatNumber(step.suggestedBatches);
-      setGuideText(hint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
-      setGuideText(hint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
       const limited = step.suggestedBatches < step.batches;
-      const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
       const detail =
         step.method === "guild_token"
           ? t("guideTokenQuantityDetail", {
@@ -7509,10 +7581,22 @@ window.MwiGuildCreditVersion = "1.1.55";
           : limited
             ? t("guideQuantityCurrentExchange", { count: suggestedBatches })
             : "";
+      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
+      const accessibleText = detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity;
+      setGuideText(hint, accessibleText);
+      hint.setAttribute("aria-label", accessibleText);
+
+      const advisorUi = state.exchangeAdvisorUi;
+      const visualHint = advisorUi && advisorUi.quantityHint;
+      if (!visualHint) return;
+      advisorUi.surface.style.setProperty("--credit", color || "#63e6c8");
+      setGuideText(visualHint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
+      setGuideText(visualHint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
+      const detailNode = visualHint.querySelector('[data-role="quantity-hint-detail"]');
       detailNode.hidden = !detail;
       setGuideText(detailNode, detail);
-      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
-      hint.setAttribute("aria-label", detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity);
+      visualHint.hidden = false;
+      scheduleGuildExchangeAdvisor();
     }
 
     function markShrineGuideNode(node, role, color) {
@@ -7676,7 +7760,10 @@ window.MwiGuildCreditVersion = "1.1.55";
     function applyShrineGuide(model, modal) {
       clearShrineGuideHighlights();
       updateShrineGuideUi(model);
-      if (!state.shrineGuideEnabled || !model || model.status !== "set_quantity") removeShrineGuideQuantityHint();
+      if (!state.shrineGuideEnabled || !model || model.status !== "set_quantity") {
+        resetShrineGuideAutofill();
+        removeShrineGuideQuantityHint();
+      }
       if (!state.shrineGuideEnabled || !model || ["inactive", "no_plans", "complete"].includes(model.status)) return;
       ensureShrineGuideStyle();
 
@@ -7722,6 +7809,7 @@ window.MwiGuildCreditVersion = "1.1.55";
         }
         if (model.status === "set_quantity" && modal && modal.quantityInput) {
           markShrineGuideNode(modal.quantityInput, "active", color);
+          prefillShrineGuideQuantityInput(modal, step);
           updateShrineGuideQuantityHint(modal, step, color);
         }
       }
@@ -7739,6 +7827,7 @@ window.MwiGuildCreditVersion = "1.1.55";
         estimate: context.estimate || null,
         creditMaterialPlans: context.creditMaterialPlans || {},
         creditOrder: CREDIT_TYPES.map(([itemHrid]) => itemHrid),
+        characterItems: state.characterItems,
         modal
       });
       state.shrineGuideModel = model;
@@ -7849,7 +7938,7 @@ window.MwiGuildCreditVersion = "1.1.55";
     };
   }
 
-  return { createShrineGuideUi };
+  return { createShrineGuideUi, shrineGuideAutofillQuantity, setNativeInputValue };
 });
 
 
@@ -7916,6 +8005,17 @@ window.MwiGuildCreditVersion = "1.1.55";
     return Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 1;
   }
 
+  function inputMaximum(input) {
+    if (!input) return null;
+    const attributeValue = input.getAttribute && input.getAttribute("max");
+    const raw = String(
+      attributeValue === null || attributeValue === undefined ? input.max || "" : attributeValue
+    ).trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+
   function createExchangeAdvisor(dependencies) {
     const {
       state,
@@ -7978,7 +8078,7 @@ window.MwiGuildCreditVersion = "1.1.55";
         const { paymentInput, quantityInput } = guildExchangeQuantityInputs(element);
         const paymentQuantity = Number(paymentInput && paymentInput.value);
         const targetQuantity = Number(quantityInput && quantityInput.value);
-        const maxBatches = Number(quantityInput && quantityInput.max);
+        const maxTargetQuantity = inputMaximum(quantityInput);
         if (!credit) continue;
         return {
           element,
@@ -7990,7 +8090,7 @@ window.MwiGuildCreditVersion = "1.1.55";
           paymentQuantity: Number.isSafeInteger(paymentQuantity) && paymentQuantity > 0 ? paymentQuantity : null,
           quantityInput,
           targetQuantity: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : null,
-          maxBatches: Number.isSafeInteger(maxBatches) && maxBatches > 0 ? maxBatches : null,
+          maxTargetQuantity,
           batches: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : 1
         };
       }
@@ -8005,23 +8105,33 @@ window.MwiGuildCreditVersion = "1.1.55";
       const host = document.createElement("div");
       host.id = GUILD_EXCHANGE_ADVISOR_HOST_ID;
       const shadow = host.attachShadow({ mode: "open" });
-      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside>`;
+      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><div class="advisor-stack" data-role="advisor-stack" hidden><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside><aside class="guide-quantity" data-role="quantity-guide" aria-hidden="true" hidden><span class="guide-quantity-label" data-role="quantity-hint-label"></span><strong class="guide-quantity-value" data-role="quantity-hint-number"></strong><small class="guide-quantity-detail" data-role="quantity-hint-detail" hidden></small></aside></div>`;
       document.body.append(host);
       state.exchangeAdvisorUi = {
         host,
         shadow,
+        surface: shadow.querySelector('[data-role="advisor-stack"]'),
         card: shadow.querySelector('[data-role="advisor"]'),
+        quantityHint: shadow.querySelector('[data-role="quantity-guide"]'),
         signature: "",
         modal: null
       };
       return state.exchangeAdvisorUi;
     }
 
-    function hideGuildExchangeAdvisor() {
+    function hideGuildExchangeAdvisor(modalData) {
       const ui = state.exchangeAdvisorUi;
       if (!ui) return;
       ui.card.hidden = true;
       ui.signature = "";
+      const modal = (modalData && modalData.modal) || null;
+      if (modal && ui.quantityHint && !ui.quantityHint.hidden) {
+        ui.modal = modal;
+        observeActiveGuildExchangeModal(modal);
+        positionGuildExchangeAdvisor(ui, modal);
+        return;
+      }
+      ui.surface.hidden = true;
       ui.modal = null;
       observeActiveGuildExchangeModal(null);
     }
@@ -8057,30 +8167,35 @@ window.MwiGuildCreditVersion = "1.1.55";
     }
 
     function positionGuildExchangeAdvisor(ui, modal) {
-      const card = ui && ui.card;
-      if (!card) return false;
+      const surface = ui && ui.surface;
+      if (!surface) return false;
       if (!modal || !modal.isConnected || !isVisible(modal)) {
-        card.hidden = true;
+        surface.hidden = true;
         return false;
       }
-      const wasHidden = card.hidden;
+      if (ui.card.hidden && ui.quantityHint.hidden) {
+        surface.hidden = true;
+        return false;
+      }
+      const wasHidden = surface.hidden;
       if (wasHidden) {
-        card.style.visibility = "hidden";
-        card.hidden = false;
+        surface.style.visibility = "hidden";
+        surface.hidden = false;
       }
       const modalRect = modal.getBoundingClientRect();
-      const cardRect = card.getBoundingClientRect();
-      if (modalRect.width <= 0 || modalRect.height <= 0 || cardRect.width <= 0 || cardRect.height <= 0) {
-        card.hidden = true;
-        card.style.removeProperty("visibility");
+      const surfaceRect = surface.getBoundingClientRect();
+      if (modalRect.width <= 0 || modalRect.height <= 0 || surfaceRect.width <= 0 || surfaceRect.height <= 0) {
+        surface.hidden = true;
+        surface.style.removeProperty("visibility");
         return false;
       }
-      const position = calculateGuildExchangeAdvisorPosition(modalRect, cardRect);
-      card.dataset.placement = position.placement;
-      card.style.left = `${Math.round(position.left)}px`;
-      card.style.top = `${Math.round(position.top)}px`;
-      card.hidden = false;
-      card.style.removeProperty("visibility");
+      const position = calculateGuildExchangeAdvisorPosition(modalRect, surfaceRect);
+      surface.dataset.placement = position.placement;
+      ui.card.dataset.placement = position.placement;
+      surface.style.left = `${Math.round(position.left)}px`;
+      surface.style.top = `${Math.round(position.top)}px`;
+      surface.hidden = false;
+      surface.style.removeProperty("visibility");
       return true;
     }
 
@@ -8158,10 +8273,11 @@ window.MwiGuildCreditVersion = "1.1.55";
         ui.card.innerHTML = markup;
         ui.signature = markup;
       }
+      ui.card.hidden = false;
       ui.modal = modalData.modal;
       observeActiveGuildExchangeModal(modalData.modal);
       ui.card.setAttribute("aria-label", t("exchangeRecommendation"));
-      ui.card.style.setProperty("--credit", data.color);
+      ui.surface.style.setProperty("--credit", data.color);
       return positionGuildExchangeAdvisor(ui, modalData.modal);
     }
 
@@ -8174,18 +8290,18 @@ window.MwiGuildCreditVersion = "1.1.55";
         return false;
       }
       if (shrineGuideUsesGuildTokensFor(modalData.creditItemHrid)) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
       const conversions = allConversions(modalData.creditItemHrid);
       if (!conversions.length) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
       if (!state.snapshot) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         if (state.exchangeAdvisorSnapshotFailed) return;
         if (!state.exchangeAdvisorLoadInFlight) {
           state.exchangeAdvisorLoadInFlight = true;
@@ -8207,7 +8323,7 @@ window.MwiGuildCreditVersion = "1.1.55";
       );
       let best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
       if (!best) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
@@ -8363,7 +8479,7 @@ window.MwiGuildCreditVersion = "1.1.55";
     };
   }
 
-  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches };
+  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches, inputMaximum };
 });
 
 

@@ -60,6 +60,17 @@
     return Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 1;
   }
 
+  function inputMaximum(input) {
+    if (!input) return null;
+    const attributeValue = input.getAttribute && input.getAttribute("max");
+    const raw = String(
+      attributeValue === null || attributeValue === undefined ? input.max || "" : attributeValue
+    ).trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+
   function createExchangeAdvisor(dependencies) {
     const {
       state,
@@ -122,7 +133,7 @@
         const { paymentInput, quantityInput } = guildExchangeQuantityInputs(element);
         const paymentQuantity = Number(paymentInput && paymentInput.value);
         const targetQuantity = Number(quantityInput && quantityInput.value);
-        const maxBatches = Number(quantityInput && quantityInput.max);
+        const maxTargetQuantity = inputMaximum(quantityInput);
         if (!credit) continue;
         return {
           element,
@@ -134,7 +145,7 @@
           paymentQuantity: Number.isSafeInteger(paymentQuantity) && paymentQuantity > 0 ? paymentQuantity : null,
           quantityInput,
           targetQuantity: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : null,
-          maxBatches: Number.isSafeInteger(maxBatches) && maxBatches > 0 ? maxBatches : null,
+          maxTargetQuantity,
           batches: Number.isSafeInteger(targetQuantity) && targetQuantity > 0 ? targetQuantity : 1
         };
       }
@@ -149,23 +160,33 @@
       const host = document.createElement("div");
       host.id = GUILD_EXCHANGE_ADVISOR_HOST_ID;
       const shadow = host.attachShadow({ mode: "open" });
-      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside>`;
+      shadow.innerHTML = `<style>${stylesApi.GUILD_EXCHANGE_ADVISOR_STYLES}</style><div class="advisor-stack" data-role="advisor-stack" hidden><aside class="advisor" data-role="advisor" aria-live="polite" hidden></aside><aside class="guide-quantity" data-role="quantity-guide" aria-hidden="true" hidden><span class="guide-quantity-label" data-role="quantity-hint-label"></span><strong class="guide-quantity-value" data-role="quantity-hint-number"></strong><small class="guide-quantity-detail" data-role="quantity-hint-detail" hidden></small></aside></div>`;
       document.body.append(host);
       state.exchangeAdvisorUi = {
         host,
         shadow,
+        surface: shadow.querySelector('[data-role="advisor-stack"]'),
         card: shadow.querySelector('[data-role="advisor"]'),
+        quantityHint: shadow.querySelector('[data-role="quantity-guide"]'),
         signature: "",
         modal: null
       };
       return state.exchangeAdvisorUi;
     }
 
-    function hideGuildExchangeAdvisor() {
+    function hideGuildExchangeAdvisor(modalData) {
       const ui = state.exchangeAdvisorUi;
       if (!ui) return;
       ui.card.hidden = true;
       ui.signature = "";
+      const modal = (modalData && modalData.modal) || null;
+      if (modal && ui.quantityHint && !ui.quantityHint.hidden) {
+        ui.modal = modal;
+        observeActiveGuildExchangeModal(modal);
+        positionGuildExchangeAdvisor(ui, modal);
+        return;
+      }
+      ui.surface.hidden = true;
       ui.modal = null;
       observeActiveGuildExchangeModal(null);
     }
@@ -201,30 +222,35 @@
     }
 
     function positionGuildExchangeAdvisor(ui, modal) {
-      const card = ui && ui.card;
-      if (!card) return false;
+      const surface = ui && ui.surface;
+      if (!surface) return false;
       if (!modal || !modal.isConnected || !isVisible(modal)) {
-        card.hidden = true;
+        surface.hidden = true;
         return false;
       }
-      const wasHidden = card.hidden;
+      if (ui.card.hidden && ui.quantityHint.hidden) {
+        surface.hidden = true;
+        return false;
+      }
+      const wasHidden = surface.hidden;
       if (wasHidden) {
-        card.style.visibility = "hidden";
-        card.hidden = false;
+        surface.style.visibility = "hidden";
+        surface.hidden = false;
       }
       const modalRect = modal.getBoundingClientRect();
-      const cardRect = card.getBoundingClientRect();
-      if (modalRect.width <= 0 || modalRect.height <= 0 || cardRect.width <= 0 || cardRect.height <= 0) {
-        card.hidden = true;
-        card.style.removeProperty("visibility");
+      const surfaceRect = surface.getBoundingClientRect();
+      if (modalRect.width <= 0 || modalRect.height <= 0 || surfaceRect.width <= 0 || surfaceRect.height <= 0) {
+        surface.hidden = true;
+        surface.style.removeProperty("visibility");
         return false;
       }
-      const position = calculateGuildExchangeAdvisorPosition(modalRect, cardRect);
-      card.dataset.placement = position.placement;
-      card.style.left = `${Math.round(position.left)}px`;
-      card.style.top = `${Math.round(position.top)}px`;
-      card.hidden = false;
-      card.style.removeProperty("visibility");
+      const position = calculateGuildExchangeAdvisorPosition(modalRect, surfaceRect);
+      surface.dataset.placement = position.placement;
+      ui.card.dataset.placement = position.placement;
+      surface.style.left = `${Math.round(position.left)}px`;
+      surface.style.top = `${Math.round(position.top)}px`;
+      surface.hidden = false;
+      surface.style.removeProperty("visibility");
       return true;
     }
 
@@ -302,10 +328,11 @@
         ui.card.innerHTML = markup;
         ui.signature = markup;
       }
+      ui.card.hidden = false;
       ui.modal = modalData.modal;
       observeActiveGuildExchangeModal(modalData.modal);
       ui.card.setAttribute("aria-label", t("exchangeRecommendation"));
-      ui.card.style.setProperty("--credit", data.color);
+      ui.surface.style.setProperty("--credit", data.color);
       return positionGuildExchangeAdvisor(ui, modalData.modal);
     }
 
@@ -318,18 +345,18 @@
         return false;
       }
       if (shrineGuideUsesGuildTokensFor(modalData.creditItemHrid)) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
       const conversions = allConversions(modalData.creditItemHrid);
       if (!conversions.length) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
       if (!state.snapshot) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         if (state.exchangeAdvisorSnapshotFailed) return;
         if (!state.exchangeAdvisorLoadInFlight) {
           state.exchangeAdvisorLoadInFlight = true;
@@ -351,7 +378,7 @@
       );
       let best = core.rankConversions(conversions, books, 1).find((result) => result.status === "ok");
       if (!best) {
-        hideGuildExchangeAdvisor();
+        hideGuildExchangeAdvisor(modalData);
         return false;
       }
 
@@ -507,5 +534,5 @@
     };
   }
 
-  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches };
+  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches, inputMaximum };
 });

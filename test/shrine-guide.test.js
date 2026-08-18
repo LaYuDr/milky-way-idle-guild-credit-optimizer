@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const guide = require("../src/shrine-guide.js");
 const exchangeAdvisorApi = require("../src/ui/exchange-advisor.js");
+const shrineGuideUiApi = require("../src/ui/shrine-guide-ui.js");
 
 const creditOrder = ["/items/green_guild_credit", "/items/blue_guild_credit"];
 
@@ -103,6 +104,12 @@ test("新版双数量框的兑换批数优先按支付数量和兑换比例换�
     ),
     3
   );
+});
+
+test("原生数量上限区分缺失值与玩家当前为零", () => {
+  assert.equal(exchangeAdvisorApi.inputMaximum({ max: "" }), null);
+  assert.equal(exchangeAdvisorApi.inputMaximum({ max: "0" }), 0);
+  assert.equal(exchangeAdvisorApi.inputMaximum({ max: "1250" }), 1250);
 });
 
 test("关闭指引时不派生任何操作", () => {
@@ -208,6 +215,88 @@ test("剩余批数超过原生单次上限时只提示本次可填写数量", ()
   assert.equal(result.activeCredit.suggestedBatches, 9504);
   assert.equal(result.activeCredit.suggestedItems, 38016);
   assert.equal(result.activeCredit.suggestedCredits, 9504);
+});
+
+test("规划数量按背包库存封顶并折算为目标信用点输入值", () => {
+  const result = derive({
+    estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 20000 }] },
+    creditMaterialPlans: {
+      "/items/green_guild_credit": {
+        itemHrid: "/items/beast_hide",
+        itemCount: 4,
+        creditCount: 10,
+        batches: 2000,
+        requiredItems: 8000,
+        actualCredits: 20000
+      }
+    },
+    characterItems: [{ itemHrid: "/items/beast_hide", itemLocationHrid: "/item_locations/inventory", count: 125 }],
+    modal: {
+      creditItemHrid: "/items/green_guild_credit",
+      selectedItemHrid: "/items/beast_hide",
+      maxTargetQuantity: 500
+    }
+  });
+  assert.equal(result.status, "set_quantity");
+  assert.equal(result.activeCredit.batches, 2000);
+  assert.equal(result.activeCredit.maxBatches, 31);
+  assert.equal(result.activeCredit.suggestedBatches, 31);
+  assert.equal(result.activeCredit.suggestedItems, 124);
+  assert.equal(result.activeCredit.suggestedCredits, 310);
+  assert.equal(shrineGuideUiApi.shrineGuideAutofillQuantity(result.activeCredit), 310);
+});
+
+test("零库存保留为明确上限而不是误当成无限库存", () => {
+  const result = derive({
+    estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 20 }] },
+    creditMaterialPlans: {
+      "/items/green_guild_credit": {
+        itemHrid: "/items/beast_hide",
+        itemCount: 4,
+        creditCount: 1,
+        batches: 20,
+        requiredItems: 80,
+        actualCredits: 20
+      }
+    },
+    characterItems: [],
+    modal: {
+      creditItemHrid: "/items/green_guild_credit",
+      selectedItemHrid: "/items/beast_hide"
+    }
+  });
+  assert.equal(result.activeCredit.maxBatches, 0);
+  assert.equal(result.activeCredit.suggestedBatches, 0);
+  assert.equal(result.activeCredit.suggestedCredits, 0);
+});
+
+test("一次性预填通过原生 setter 触发 input 与 change 且不重复写入", () => {
+  const events = [];
+  class TestInput {
+    constructor() {
+      this._value = "1";
+      this.ownerDocument = { defaultView: { HTMLInputElement: TestInput, Event } };
+    }
+
+    get value() {
+      return this._value;
+    }
+
+    set value(value) {
+      this._value = String(value);
+    }
+
+    dispatchEvent(event) {
+      events.push(event.type);
+      return true;
+    }
+  }
+  const input = new TestInput();
+  assert.equal(shrineGuideUiApi.setNativeInputValue(input, 310), true);
+  assert.equal(input.value, "310");
+  assert.deepEqual(events, ["input", "change"]);
+  assert.equal(shrineGuideUiApi.setNativeInputValue(input, 310), false);
+  assert.deepEqual(events, ["input", "change"]);
 });
 
 test("一种信用点补齐后只保留另一种待处理", () => {

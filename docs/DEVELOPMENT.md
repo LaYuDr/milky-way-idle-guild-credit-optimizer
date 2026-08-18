@@ -319,14 +319,21 @@ item to carry the active guide highlight while the guide reports the
 Token the modal's selected item and requires the guide to enter
 `set_quantity`: the updated native modal exposes separate text inputs for
 "You pay" and "You receive". Only the target "You receive" input may be active
-or linked to the inline status hint through `aria-describedby`; the payment
-input must remain unmarked. The quiet two-line hint reads "完成当前规划应填写"
-followed by the dynamic number without a visible unit, uses no card background
-or border, and disables the pulsing animation on the target input. Any batch/token
-detail remains available to assistive technology without adding a third visible
-line. The remaining `300` batches match the `300` required tokens at one token
-per batch, and the accessible detail reports the same `300`-batch current exchange.
-The separate exchange advisor must be hidden. After
+or linked through `aria-describedby`; the payment input must remain unmarked.
+The light-DOM description remains visually hidden next to the target input so
+the ARIA reference does not cross a shadow boundary. Its visible two-line mirror
+is a separate strip in the positioned advisor stack, below the recommendation
+card when that card is available. It reads "完成当前规划应填写" followed by the
+dynamic remaining-batch number without a visible unit and disables the pulsing
+animation on the target input.
+
+The fixture owns only `125` of the `300` required Guild Tokens. Selecting the
+token must fire one input update, prefill "You receive" with `1,250` Green Guild
+Credits (`125` complete batches at `1 -> 10`), and leave the remaining total at
+`300` batches in the strip. The hidden accessible detail reports `125` batches
+and `125` tokens for the current exchange. The market recommendation card must
+remain hidden for Guild Tokens while the advisor stack and quantity strip remain
+visible. After
 `document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 

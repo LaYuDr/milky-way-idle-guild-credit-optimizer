@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.56] - 2026-08-18
+
+### Changed
+
+- Moved the planned exchange quantity reminder below the recommendation card and added one-time inventory-capped quantity prefilling.
+
 ## [1.1.55] - 2026-08-18
 
 ### Changed

@@ -10,6 +10,12 @@
     return Number.isSafeInteger(number) && number > 0 ? number : null;
   }
 
+  function nonNegativeInteger(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isSafeInteger(number) && number >= 0 ? number : null;
+  }
+
   function nonNegativeNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? number : 0;
@@ -29,6 +35,17 @@
       targetLevel,
       complete: currentLevel >= targetLevel
     };
+  }
+
+  function inventoryCountForItem(characterItems, itemHrid) {
+    if (!Array.isArray(characterItems) || !itemHrid) return null;
+    let total = 0;
+    for (const item of characterItems) {
+      if (!item || item.itemHrid !== itemHrid || item.itemLocationHrid !== "/item_locations/inventory") continue;
+      const count = nonNegativeInteger(item.count);
+      if (count !== null) total += count;
+    }
+    return total;
   }
 
   function normalizeCreditStep(row, materialPlan) {
@@ -122,9 +139,25 @@
     const modal = settings.modal && typeof settings.modal === "object" ? settings.modal : null;
     const matchedCredit =
       (modal && missingCredits.find((step) => step.creditItemHrid === modal.creditItemHrid)) || null;
-    const modalMaxBatches = positiveInteger(modal && modal.maxBatches);
+    const legacyModalMaxBatches = nonNegativeInteger(modal && modal.maxBatches);
+    const modalMaxTargetQuantity = nonNegativeInteger(modal && modal.maxTargetQuantity);
+    const inputMaxBatches =
+      matchedCredit && modalMaxTargetQuantity !== null && matchedCredit.creditCount > 0
+        ? Math.floor(modalMaxTargetQuantity / matchedCredit.creditCount)
+        : null;
+    const ownedItems = matchedCredit
+      ? inventoryCountForItem(settings.characterItems, matchedCredit.recommendedItemHrid)
+      : null;
+    const inventoryMaxBatches =
+      matchedCredit && ownedItems !== null && matchedCredit.itemCount > 0
+        ? Math.floor(ownedItems / matchedCredit.itemCount)
+        : null;
+    const availableBatchLimits = [legacyModalMaxBatches, inputMaxBatches, inventoryMaxBatches].filter(
+      (value) => value !== null
+    );
+    const modalMaxBatches = availableBatchLimits.length ? Math.min(...availableBatchLimits) : null;
     const suggestedBatches = matchedCredit
-      ? Math.min(matchedCredit.batches, modalMaxBatches || matchedCredit.batches)
+      ? Math.min(matchedCredit.batches, modalMaxBatches === null ? matchedCredit.batches : modalMaxBatches)
       : 0;
     const activeCredit = matchedCredit
       ? {
@@ -148,5 +181,5 @@
     return { ...result, status: "upgrade_shrine" };
   }
 
-  return { deriveShrineGuide };
+  return { deriveShrineGuide, inventoryCountForItem };
 });

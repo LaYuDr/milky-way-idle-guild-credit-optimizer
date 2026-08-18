@@ -5,6 +5,26 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function shrineGuideAutofillQuantity(step) {
+    const quantity = Number(step && step.suggestedCredits);
+    return Number.isSafeInteger(quantity) && quantity >= 0 ? quantity : null;
+  }
+
+  function setNativeInputValue(input, value) {
+    if (!input) return false;
+    const nextValue = String(value);
+    if (String(input.value) === nextValue) return false;
+    const view = (input.ownerDocument && input.ownerDocument.defaultView) || globalThis;
+    const prototype = view.HTMLInputElement && view.HTMLInputElement.prototype;
+    const descriptor = prototype && Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor && descriptor.set) descriptor.set.call(input, nextValue);
+    else input.value = nextValue;
+    const EventConstructor = view.Event || Event;
+    input.dispatchEvent(new EventConstructor("input", { bubbles: true }));
+    input.dispatchEvent(new EventConstructor("change", { bubbles: true }));
+    return true;
+  }
+
   function createShrineGuideUi(dependencies) {
     const {
       state,
@@ -26,6 +46,8 @@
 
     const SHRINE_GUIDE_STYLE_ID = "mwi-shrine-guide-native-style";
     const SHRINE_GUIDE_QUANTITY_HINT_ID = "mwi-shrine-guide-quantity-hint";
+    let autofillInput = null;
+    let autofillSignature = "";
 
     function ensureShrineGuideStyle() {
       if (document.getElementById(SHRINE_GUIDE_STYLE_ID)) return;
@@ -55,6 +77,27 @@
         else input.removeAttribute("aria-describedby");
       }
       if (hint) hint.remove();
+      const visualHint = state.exchangeAdvisorUi && state.exchangeAdvisorUi.quantityHint;
+      if (visualHint && !visualHint.hidden) {
+        visualHint.hidden = true;
+        scheduleGuildExchangeAdvisor();
+      }
+    }
+
+    function resetShrineGuideAutofill() {
+      autofillInput = null;
+      autofillSignature = "";
+    }
+
+    function prefillShrineGuideQuantityInput(modal, step) {
+      const input = modal && modal.quantityInput;
+      const quantity = shrineGuideAutofillQuantity(step);
+      if (!input || !input.isConnected || quantity === null) return false;
+      const signature = [step.creditItemHrid, step.recommendedItemHrid, quantity].join(":");
+      if (autofillInput === input && autofillSignature === signature) return false;
+      autofillInput = input;
+      autofillSignature = signature;
+      return setNativeInputValue(input, quantity);
     }
 
     function shrineGuideQuantityRow(modal) {
@@ -97,7 +140,8 @@
         !input.isConnected ||
         !quantityRow ||
         !step ||
-        !step.suggestedBatches ||
+        !Number.isSafeInteger(step.suggestedBatches) ||
+        step.suggestedBatches < 0 ||
         !shrineGuideQuantityInputIsTopmost(modal)
       ) {
         removeShrineGuideQuantityHint();
@@ -110,8 +154,6 @@
         hint.id = SHRINE_GUIDE_QUANTITY_HINT_ID;
         hint.setAttribute("role", "status");
         hint.setAttribute("aria-live", "polite");
-        hint.innerHTML =
-          '<span class="mwi-guide-quantity-label" data-role="quantity-hint-label"></span><strong class="mwi-guide-quantity-value" data-role="quantity-hint-number"></strong><small class="mwi-guide-quantity-detail" data-role="quantity-hint-detail" hidden></small>';
       }
       if (hint.previousElementSibling !== quantityRow || hint.parentElement !== quantityRow.parentElement)
         quantityRow.insertAdjacentElement("afterend", hint);
@@ -131,13 +173,9 @@
       );
       describedBy.add(SHRINE_GUIDE_QUANTITY_HINT_ID);
       input.setAttribute("aria-describedby", Array.from(describedBy).join(" "));
-      hint.style.setProperty("--mwi-guide-color", color || "#63e6c8");
       const remainingBatches = formatNumber(step.batches);
       const suggestedBatches = formatNumber(step.suggestedBatches);
-      setGuideText(hint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
-      setGuideText(hint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
       const limited = step.suggestedBatches < step.batches;
-      const detailNode = hint.querySelector('[data-role="quantity-hint-detail"]');
       const detail =
         step.method === "guild_token"
           ? t("guideTokenQuantityDetail", {
@@ -147,10 +185,22 @@
           : limited
             ? t("guideQuantityCurrentExchange", { count: suggestedBatches })
             : "";
+      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
+      const accessibleText = detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity;
+      setGuideText(hint, accessibleText);
+      hint.setAttribute("aria-label", accessibleText);
+
+      const advisorUi = state.exchangeAdvisorUi;
+      const visualHint = advisorUi && advisorUi.quantityHint;
+      if (!visualHint) return;
+      advisorUi.surface.style.setProperty("--credit", color || "#63e6c8");
+      setGuideText(visualHint.querySelector('[data-role="quantity-hint-label"]'), t("guideQuantityLabel"));
+      setGuideText(visualHint.querySelector('[data-role="quantity-hint-number"]'), remainingBatches);
+      const detailNode = visualHint.querySelector('[data-role="quantity-hint-detail"]');
       detailNode.hidden = !detail;
       setGuideText(detailNode, detail);
-      const accessibleQuantity = t("guideQuantityRemaining", { count: remainingBatches });
-      hint.setAttribute("aria-label", detail ? `${accessibleQuantity}. ${detail}` : accessibleQuantity);
+      visualHint.hidden = false;
+      scheduleGuildExchangeAdvisor();
     }
 
     function markShrineGuideNode(node, role, color) {
@@ -314,7 +364,10 @@
     function applyShrineGuide(model, modal) {
       clearShrineGuideHighlights();
       updateShrineGuideUi(model);
-      if (!state.shrineGuideEnabled || !model || model.status !== "set_quantity") removeShrineGuideQuantityHint();
+      if (!state.shrineGuideEnabled || !model || model.status !== "set_quantity") {
+        resetShrineGuideAutofill();
+        removeShrineGuideQuantityHint();
+      }
       if (!state.shrineGuideEnabled || !model || ["inactive", "no_plans", "complete"].includes(model.status)) return;
       ensureShrineGuideStyle();
 
@@ -360,6 +413,7 @@
         }
         if (model.status === "set_quantity" && modal && modal.quantityInput) {
           markShrineGuideNode(modal.quantityInput, "active", color);
+          prefillShrineGuideQuantityInput(modal, step);
           updateShrineGuideQuantityHint(modal, step, color);
         }
       }
@@ -377,6 +431,7 @@
         estimate: context.estimate || null,
         creditMaterialPlans: context.creditMaterialPlans || {},
         creditOrder: CREDIT_TYPES.map(([itemHrid]) => itemHrid),
+        characterItems: state.characterItems,
         modal
       });
       state.shrineGuideModel = model;
@@ -487,5 +542,5 @@
     };
   }
 
-  return { createShrineGuideUi };
+  return { createShrineGuideUi, shrineGuideAutofillQuantity, setNativeInputValue };
 });

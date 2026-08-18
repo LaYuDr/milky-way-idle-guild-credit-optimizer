@@ -2196,6 +2196,9 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-mwi-shrine-guide/);
   assert.match(source, /SHRINE_GUIDE_QUANTITY_HINT_ID/);
   assert.match(source, /function updateShrineGuideQuantityHint/);
+  assert.match(source, /function prefillShrineGuideQuantityInput/);
+  assert.match(source, /shrineGuideAutofillQuantity/);
+  assert.match(source, /setNativeInputValue/);
   assert.match(source, /guideQuantityLabel/);
   assert.match(source, /data-role="quantity-hint-number"/);
   assert.doesNotMatch(source, /data-role="quantity-hint-unit"/);
@@ -2204,12 +2207,15 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /guideQuantityCurrentExchange/);
   assert.match(source, /function shrineGuideQuantityRow/);
   assert.match(source, /quantityRow\.insertAdjacentElement\("afterend", hint\)/);
+  assert.match(source, /state\.exchangeAdvisorUi && state\.exchangeAdvisorUi\.quantityHint/);
+  assert.match(source, /advisorUi\.surface\.style\.setProperty\("--credit"/);
   assert.match(source, /function shrineGuideQuantityInputIsTopmost/);
   assert.match(source, /document\.elementFromPoint\(x, y\)/);
   assert.doesNotMatch(source, /document\.body\.append\(hint\)/);
   assert.doesNotMatch(source, /SHRINE_GUIDE_QUANTITY_HINT_ID\}\{[^}]*position:fixed/);
   assert.doesNotMatch(source, /quantity-hint-title/);
-  assert.match(source, /maxBatches: Number\.isSafeInteger\(maxBatches\)/);
+  assert.match(source, /maxTargetQuantity/);
+  assert.match(source, /characterItems: state\.characterItems/);
   assert.match(source, /mutation\.removedNodes/);
   assert.match(source, /prefers-reduced-motion:\s*reduce/);
   assert.match(source, /input\[data-mwi-shrine-guide="active"\]\{animation:none/);
@@ -2315,7 +2321,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /document\.addEventListener\("transitionend"/);
   assert.doesNotMatch(source, /window\.setInterval\(refreshGuildExchangeAdvisor, 5000\)/);
   assert.doesNotMatch(source, /卖出税 2%/);
-  assert.match(source, /const cardRect = card\.getBoundingClientRect\(\)/);
+  assert.match(source, /const surfaceRect = surface\.getBoundingClientRect\(\)/);
+  assert.match(source, /data-role="advisor-stack"/);
+  assert.match(source, /data-role="quantity-guide"/);
+  assert.match(source, /grid-template-rows:minmax\(0,1fr\) auto/);
   assert.match(source, /placement: "bottom"/);
   assert.match(source, /max-height:calc\(100dvh - 24px\)/);
   assert.match(source, /alreadyOptimal/);
