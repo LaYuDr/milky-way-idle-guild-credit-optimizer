@@ -474,34 +474,105 @@ test("自动代币预算部分覆盖时先指引代币兑换再回到市场物�
   assert.equal(afterTokenExchange.activeCredit.recommendedItemHrid, "/items/catalytic_tea");
 });
 
-test("兑换建议仅为已开启指引且当前估算选择代币的信用点返回高亮状态", () => {
+test("公会代币规划与数量提示开启时仍显示最优兑换推荐", () => {
+  const creditItemHrid = "/items/green_guild_credit";
+  const creditIcon = { itemHrid: creditItemHrid, getAttribute: () => "Green Guild Credit" };
+  const modal = {
+    isConnected: true,
+    hidden: false,
+    closest: () => modal,
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ left: 100, top: 100, right: 300, bottom: 300, width: 200, height: 200 }),
+    querySelectorAll(selector) {
+      if (selector === 'svg[role="img"][aria-label]') return [creditIcon];
+      return [];
+    },
+    querySelector: () => null
+  };
+  const card = {
+    hidden: true,
+    innerHTML: "",
+    dataset: {},
+    setAttribute() {}
+  };
+  const quantityHint = { hidden: false };
+  const surface = {
+    hidden: true,
+    dataset: {},
+    style: { setProperty() {}, removeProperty() {} },
+    getBoundingClientRect: () => ({ width: 400, height: 300 })
+  };
   const state = {
     shrineGuideEnabled: true,
     shrineGuideContext: {
       estimate: {
         rows: [
           {
-            itemHrid: "/items/green_guild_credit",
+            itemHrid: creditItemHrid,
             missing: 20,
             guildTokenExchange: { requiredGuildTokens: 2 }
-          },
-          {
-            itemHrid: "/items/blue_guild_credit",
-            missing: 20,
-            remainingMissing: 10,
-            autoGuildTokenExchange: { spentGuildTokens: 1 }
           }
         ]
       }
-    }
+    },
+    snapshot: {},
+    priceReference: "ask",
+    exchangeAdvisorUi: { card, quantityHint, surface, signature: "", modal: null },
+    exchangeAdvisorObservedModal: modal
   };
-  const advisor = exchangeAdvisorApi.createExchangeAdvisor({ state });
-  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/green_guild_credit"), true);
-  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/blue_guild_credit"), true);
-  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/red_guild_credit"), false);
-
-  state.shrineGuideEnabled = false;
-  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/green_guild_credit"), false);
+  const previousGetComputedStyle = global.getComputedStyle;
+  global.getComputedStyle = () => ({ display: "block", visibility: "visible", pointerEvents: "auto", opacity: "1" });
+  try {
+    const advisor = exchangeAdvisorApi.createExchangeAdvisor({
+      state,
+      document: { querySelectorAll: () => [modal] },
+      window: { innerWidth: 1200, innerHeight: 800 },
+      pageWindow: {},
+      CREDIT_TYPES: [[creditItemHrid, "#4fcdb5"]],
+      SELLER_TAX_RATE: 0.02,
+      t: (key) => key,
+      escapeHtml: String,
+      formatNumber: String,
+      itemNameForMaterial: () => "Green Guild Credit",
+      itemHridFromIcon: (icon) => icon.itemHrid,
+      enhancementLevelFromIcon: () => 0,
+      itemQuantity: String,
+      creditQuantity: String,
+      iconMarkup: () => "<span></span>",
+      priceReference: () => ({ label: "ask" }),
+      core: {
+        rankConversions: () => [
+          {
+            status: "ok",
+            itemHrid: "/items/catalytic_tea",
+            itemName: "Catalytic Tea",
+            itemCount: 1,
+            creditCount: 4,
+            cost: 100,
+            costPerCredit: 25
+          }
+        ],
+        formatCompactCost: String
+      },
+      snapshotOrderBook: () => ({}),
+      allConversions: () => [
+        {
+          itemHrid: "/items/catalytic_tea",
+          itemName: "Catalytic Tea",
+          itemCount: 1,
+          creditCount: 4
+        }
+      ],
+      exchangeAdvisorFrameTask: { schedule() {} }
+    });
+    assert.equal(advisor.refreshGuildExchangeAdvisor(true), true);
+    assert.equal(card.hidden, false);
+    assert.equal(quantityHint.hidden, false);
+    assert.equal(surface.hidden, false);
+  } finally {
+    if (previousGetComputedStyle === undefined) delete global.getComputedStyle;
+    else global.getComputedStyle = previousGetComputedStyle;
+  }
 });
 
 test("公会代币推荐会进入原生物品高亮，并提供双语代币数量详情", () => {

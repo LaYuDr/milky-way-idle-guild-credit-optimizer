@@ -192,13 +192,14 @@ http://127.0.0.1:4173/test-harness.html?creditAudit=1&resetState=1&sidebarWidth=
 ```
 
 Repeat `creditAudit=1` at the same eleven widths and require every value in
-`checks` to be `true`. Cards at `390px` or narrower must switch their table body
-to the compact stacked presentation: the item occupies the first row, while
-exchange, per-credit cost, and target cost retain visible labels below it. At
-`280px` or narrower, exchange receives its own row so the two numeric values
-remain complete. Wider cards keep the standard table row. The audit also rejects
-any clipped target cost or horizontally overflowing credit-card body. Repeat the
-`1200` case with `locale=en` to cover longer labels.
+`checks` to be `true`. Credit rows must preserve the standard four-column table
+flow at every width. Cards at `390px` or narrower use denser column proportions,
+padding, type, and icons rather than stacking each item into two visual rows. At
+`300px` or narrower the same table receives a second density reduction, while
+item names may wrap inside their own cell so information remains complete. The
+audit rejects rows taller than `42px` in the three-column layout, clipped cells,
+clipped target cost, or horizontal overflow. Repeat the `1200` case with
+`locale=en` to cover longer labels.
 
 For the construction view, use:
 
@@ -349,8 +350,8 @@ token must fire one input update, prefill "You receive" with `1,250` Green Guild
 Credits (`125` complete batches at `1 -> 10`), while the strip keeps the full
 plan requirement of `300` tokens and `3,000` credits. The hidden accessible
 detail reports `125` batches and `125` tokens for the current exchange. The
-market recommendation card must remain hidden for Guild Tokens while the
-advisor stack and quantity strip remain visible. After
+market recommendation card and quantity strip must remain visible together for
+Guild Tokens in the same positioned advisor stack. After
 `document.body.dataset.tokenGuideAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 

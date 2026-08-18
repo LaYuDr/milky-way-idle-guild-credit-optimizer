@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.59] - 2026-08-19
+
+### Changed
+
+- Restored compact single-row credit tables across three-column layouts and kept optimal exchange recommendations visible during guild-token guidance.
+
 ## [1.1.58] - 2026-08-18
 
 ### Changed

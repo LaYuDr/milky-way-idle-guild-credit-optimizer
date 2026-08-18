@@ -2090,9 +2090,17 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /--mwi-entry-gap:10px/);
   assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list/);
   assert.match(source, /\.mwi-credit-section\{[^}]*container-type:inline-size/);
-  assert.match(source, /@container \(max-width:390px\)\{#mwi-credit-optimizer \.mwi-credit-section table/);
-  assert.match(source, /@container \(max-width:280px\)\{#mwi-credit-optimizer \.mwi-credit-section tbody tr/);
-  assert.match(source, /content:attr\(data-label\)/);
+  assert.match(source, /\.mwi-credit-section table\{[^}]*table-layout:fixed/);
+  assert.match(
+    source,
+    /@container \(max-width:390px\)\{#mwi-credit-optimizer \.mwi-credit-section table\{font-size:10px/
+  );
+  assert.match(
+    source,
+    /@container \(max-width:300px\)\{#mwi-credit-optimizer \.mwi-credit-section table\{font-size:9px/
+  );
+  assert.doesNotMatch(source, /content:attr\(data-label\)/);
+  assert.match(source, /class="mwi-credit-item-column"/);
   assert.match(source, /data-label="\$\{targetCostLabel\}"/);
   assert.match(source, /\.mwi-upgrade-plan-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:0\}/);
   assert.match(source, /\.mwi-material-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:7px/);
