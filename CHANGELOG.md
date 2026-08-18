@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.58] - 2026-08-18
+
+### Changed
+
+- Improved guided exchange planning, responsive three-column credit cards, copyable guidance text, and 10M price-limit stepping.
+
 ## [1.1.57] - 2026-08-18
 
 ### Changed

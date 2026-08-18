@@ -443,7 +443,9 @@
       return Boolean(
         state.shrineGuideEnabled === true &&
         Array.isArray(rows) &&
-        rows.some((row) => row && row.itemHrid === creditItemHrid && row.guildTokenExchange)
+        rows.some(
+          (row) => row && row.itemHrid === creditItemHrid && (row.guildTokenExchange || row.autoGuildTokenExchange)
+        )
       );
     }
 

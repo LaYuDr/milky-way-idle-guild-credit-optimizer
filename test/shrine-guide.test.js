@@ -390,6 +390,90 @@ test("公会代币非一比一兑换同时区分总批数、本次批数与代�
   assert.equal(result.activeCredit.suggestedCredits, 40);
 });
 
+test("自动代币预算全额覆盖后仍保留待执行的兑换指引", () => {
+  const base = {
+    estimate: {
+      rows: [
+        {
+          itemHrid: "/items/green_guild_credit",
+          missing: 600,
+          remainingMissing: 0,
+          autoGuildTokenExchange: {
+            batches: 60,
+            guildTokenCount: 1,
+            creditCount: 10,
+            spentGuildTokens: 60,
+            coveredCredits: 600,
+            actualCredits: 600
+          }
+        }
+      ]
+    }
+  };
+  const chooseCredit = derive(base);
+  assert.equal(chooseCredit.status, "choose_credit");
+  assert.equal(chooseCredit.missingCredits[0].method, "guild_token");
+  assert.equal(chooseCredit.missingCredits[0].requiredItems, 60);
+
+  const chooseToken = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
+  });
+  assert.equal(chooseToken.status, "use_guild_token");
+
+  const quantity = derive({
+    ...base,
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: "/items/guild_token" }
+  });
+  assert.equal(quantity.status, "set_quantity");
+  assert.equal(quantity.activeCredit.suggestedBatches, 60);
+  assert.equal(quantity.activeCredit.suggestedItems, 60);
+  assert.equal(quantity.activeCredit.suggestedCredits, 600);
+});
+
+test("自动代币预算部分覆盖时先指引代币兑换再回到市场物品", () => {
+  const materialPlan = {
+    itemHrid: "/items/catalytic_tea",
+    itemCount: 1,
+    creditCount: 4,
+    batches: 688,
+    requiredItems: 688,
+    actualCredits: 2752
+  };
+  const automatic = derive({
+    estimate: {
+      rows: [
+        {
+          itemHrid: "/items/green_guild_credit",
+          missing: 6000,
+          remainingMissing: 2750,
+          autoGuildTokenExchange: {
+            batches: 325,
+            guildTokenCount: 1,
+            creditCount: 10,
+            spentGuildTokens: 325,
+            coveredCredits: 3250,
+            actualCredits: 3250
+          }
+        }
+      ]
+    },
+    creditMaterialPlans: { "/items/green_guild_credit": materialPlan },
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
+  });
+  assert.equal(automatic.status, "use_guild_token");
+  assert.equal(automatic.activeCredit.recommendedItemHrid, "/items/guild_token");
+  assert.equal(automatic.activeCredit.batches, 325);
+
+  const afterTokenExchange = derive({
+    estimate: { rows: [{ itemHrid: "/items/green_guild_credit", missing: 2750, remainingMissing: 2750 }] },
+    creditMaterialPlans: { "/items/green_guild_credit": materialPlan },
+    modal: { creditItemHrid: "/items/green_guild_credit", selectedItemHrid: null }
+  });
+  assert.equal(afterTokenExchange.status, "choose_item");
+  assert.equal(afterTokenExchange.activeCredit.recommendedItemHrid, "/items/catalytic_tea");
+});
+
 test("兑换建议仅为已开启指引且当前估算选择代币的信用点返回高亮状态", () => {
   const state = {
     shrineGuideEnabled: true,
@@ -401,14 +485,19 @@ test("兑换建议仅为已开启指引且当前估算选择代币的信用点�
             missing: 20,
             guildTokenExchange: { requiredGuildTokens: 2 }
           },
-          { itemHrid: "/items/blue_guild_credit", missing: 20 }
+          {
+            itemHrid: "/items/blue_guild_credit",
+            missing: 20,
+            remainingMissing: 10,
+            autoGuildTokenExchange: { spentGuildTokens: 1 }
+          }
         ]
       }
     }
   };
   const advisor = exchangeAdvisorApi.createExchangeAdvisor({ state });
   assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/green_guild_credit"), true);
-  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/blue_guild_credit"), false);
+  assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/blue_guild_credit"), true);
   assert.equal(advisor.shrineGuideUsesGuildTokensFor("/items/red_guild_credit"), false);
 
   state.shrineGuideEnabled = false;

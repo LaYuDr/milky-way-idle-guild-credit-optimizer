@@ -2054,6 +2054,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-price-reference="a"/);
   assert.match(source, /data-price-reference="b"/);
   assert.match(source, /data-role="max-item-unit-price-millions"/);
+  assert.match(source, /data-role="max-item-unit-price-millions" type="number" min="10" step="10"/);
   assert.match(source, /core\.isUnitPriceWithinLimit/);
   assert.match(source, /snapshotOrderBook\(conversion\.itemHrid\)/);
   assert.match(harnessSource, /searchParams\.get\("marketFilterAudit"\)/);
@@ -2088,6 +2089,11 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /--mwi-entry-min-width:300px/);
   assert.match(source, /--mwi-entry-gap:10px/);
   assert.match(source, /\.mwi-credit-grid,#mwi-credit-optimizer \.mwi-token-value-list/);
+  assert.match(source, /\.mwi-credit-section\{[^}]*container-type:inline-size/);
+  assert.match(source, /@container \(max-width:390px\)\{#mwi-credit-optimizer \.mwi-credit-section table/);
+  assert.match(source, /@container \(max-width:280px\)\{#mwi-credit-optimizer \.mwi-credit-section tbody tr/);
+  assert.match(source, /content:attr\(data-label\)/);
+  assert.match(source, /data-label="\$\{targetCostLabel\}"/);
   assert.match(source, /\.mwi-upgrade-plan-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:0\}/);
   assert.match(source, /\.mwi-material-list\{display:grid;grid-template-columns:minmax\(0,1fr\);gap:7px/);
   assert.match(harnessSource, /searchParams\.get\("sidebarWidth"\)/);

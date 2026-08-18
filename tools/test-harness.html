@@ -1002,9 +1002,59 @@
       const creditViewTab = await waitFor(() => panel.querySelector('[data-role="view-credit"]'));
       creditViewTab.click();
       await waitFor(() => panel.querySelectorAll(".mwi-credit-section").length === 8);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const sections = Array.from(panel.querySelectorAll(".mwi-credit-section"));
+      const cards = sections.map((section) => {
+        const body = section.querySelector(".mwi-credit-body");
+        const expanded = Boolean(body && !body.hidden);
+        const rows = Array.from(section.querySelectorAll("tbody tr"));
+        const firstRow = rows[0] || null;
+        const targetCells = rows.map((row) => row.cells[3]).filter(Boolean);
+        const rect = section.getBoundingClientRect();
+        return {
+          width: rect.width,
+          left: rect.left,
+          mode: !expanded
+            ? "collapsed"
+            : !firstRow
+              ? "empty"
+              : getComputedStyle(firstRow).display === "grid"
+                ? "compact"
+                : "table",
+          contentFits: Boolean(body) && body.scrollWidth <= body.clientWidth + 1,
+          cellsHaveLabels: rows.every((row) => Array.from(row.cells).every((cell) => cell.dataset.label)),
+          targetCostsFit: targetCells.every((cell) => {
+            const cellRect = cell.getBoundingClientRect();
+            return cell.scrollWidth <= cell.clientWidth + 1 && cellRect.right <= rect.right + 1;
+          })
+        };
+      });
+      const columnLefts = [];
+      for (const card of cards) {
+        if (!columnLefts.some((left) => Math.abs(left - card.left) <= 1)) columnLefts.push(card.left);
+      }
+      const report = {
+        defaultView,
+        requestedSidebarWidth: sidebarWidth,
+        columnCount: columnLefts.length,
+        cards
+      };
+      report.checks = {
+        allCreditSectionsRendered: cards.length === 8,
+        narrowCardsUseCompactRows: cards.every((card) =>
+          card.mode === "collapsed" || card.mode === "empty" || card.width > 392 ? true : card.mode === "compact"
+        ),
+        wideCardsKeepTableRows: cards.every((card) =>
+          card.mode === "collapsed" || card.mode === "empty" || card.width <= 392 ? true : card.mode === "table"
+        ),
+        allCreditContentFitsCards: cards.every((card) => card.contentFits),
+        everyCellKeepsItsResponsiveLabel: cards.every((card) => card.cellsHaveLabels),
+        everyTargetCostFitsItsCard: cards.every((card) => card.targetCostsFit)
+      };
       document.body.dataset.creditAuditDefaultView = defaultView;
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
       document.body.dataset.creditAuditReady = "true";
-      return { defaultView };
+      return report;
     };
 
     window.__mwiCreditLayoutAuditReady = creditAudit ? prepareCreditAudit() : Promise.resolve(null);
@@ -1034,6 +1084,11 @@
         panel.querySelector('[data-role="refresh"]'),
         priceLimitLabel
       ].map((element) => elementRect(element).height);
+      priceLimitInput.value = "100";
+      priceLimitInput.stepUp();
+      const valueAfterStepUp = priceLimitInput.value;
+      priceLimitInput.stepDown();
+      const valueAfterStepDown = priceLimitInput.value;
       priceLimitInput.value = "55";
       priceLimitInput.dispatchEvent(new Event("change", { bubbles: true }));
       await waitFor(
@@ -1083,6 +1138,11 @@
           controlsHaveMatchingHeight: Math.max(...controlHeights) - Math.min(...controlHeights) <= 1,
           priceInputIsCompact:
             Math.abs(elementRect(priceLimitInput).width - 68) <= 1 && elementRect(priceLimitInput).height <= 31,
+          priceInputUsesTenMillionSteps:
+            priceLimitInput.min === "10" &&
+            priceLimitInput.step === "10" &&
+            valueAfterStepUp === "110" &&
+            valueAfterStepDown === "100",
           panelHasNoHorizontalOverflow: panel.scrollWidth <= panel.clientWidth + 1,
           controlsHaveNoHorizontalOverflow: controls.scrollWidth <= controls.clientWidth + 1
         }

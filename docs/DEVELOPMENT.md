@@ -184,6 +184,22 @@ http://127.0.0.1:4173/test-harness.html?layoutAudit=1&resetState=1&auditPlans=4&
 Run the full contract at sidebar widths `320`, `360`, `420`, `460`, `480`,
 `520`, `560`, `610`, `720`, `900`, and `1200`, then inspect
 `#layout-audit-output` for overflow, boundary overflow, and control overlap.
+
+For the credit comparison card layout, open:
+
+```text
+http://127.0.0.1:4173/test-harness.html?creditAudit=1&resetState=1&sidebarWidth=1200
+```
+
+Repeat `creditAudit=1` at the same eleven widths and require every value in
+`checks` to be `true`. Cards at `390px` or narrower must switch their table body
+to the compact stacked presentation: the item occupies the first row, while
+exchange, per-credit cost, and target cost retain visible labels below it. At
+`280px` or narrower, exchange receives its own row so the two numeric values
+remain complete. Wider cards keep the standard table row. The audit also rejects
+any clipped target cost or horizontally overflowing credit-card body. Repeat the
+`1200` case with `locale=en` to cover longer labels.
+
 For the construction view, use:
 
 ```text
@@ -360,7 +376,9 @@ invalid negative value must preserve the active filter and expose an inline
 accessible error; clearing the field must restore all valid items. The coin
 value and cleared `null` state must round-trip through plugin UI storage. The
 compact number input's enclosing control must match the target input,
-price-reference group, and refresh button height. After
+price-reference group, and refresh button height. Its native spinner and
+keyboard arrow controls use a `10M` step, so `100` increments to `110` and
+decrements back to `100`. After
 `document.body.dataset.marketFilterAuditReady` becomes `"true"`, inspect
 `#layout-audit-output` or evaluate:
 

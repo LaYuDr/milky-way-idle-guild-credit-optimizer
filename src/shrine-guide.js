@@ -49,17 +49,25 @@
   }
 
   function normalizeCreditStep(row, materialPlan) {
+    if (!row || !row.itemHrid) return null;
     const remainingMissing = Math.ceil(nonNegativeNumber(row && (row.remainingMissing ?? row.missing)));
-    if (!row || !row.itemHrid || remainingMissing <= 0) return null;
-    if (row.guildTokenExchange) {
-      const exchange = row.guildTokenExchange;
+    const automaticExchange = row.guildTokenExchange ? null : row.autoGuildTokenExchange;
+    const hasAutomaticExchange = Boolean(
+      automaticExchange &&
+      positiveInteger(automaticExchange.batches) &&
+      positiveInteger(automaticExchange.spentGuildTokens) &&
+      positiveInteger(automaticExchange.actualCredits)
+    );
+    if (remainingMissing <= 0 && !hasAutomaticExchange) return null;
+    if (row.guildTokenExchange || hasAutomaticExchange) {
+      const exchange = row.guildTokenExchange || automaticExchange;
       return {
         creditItemHrid: row.itemHrid,
-        remainingMissing,
+        remainingMissing: hasAutomaticExchange ? Math.ceil(nonNegativeNumber(row.missing)) : remainingMissing,
         method: "guild_token",
         recommendedItemHrid: "/items/guild_token",
         batches: positiveInteger(exchange.batches) || 0,
-        requiredItems: positiveInteger(exchange.requiredGuildTokens) || 0,
+        requiredItems: positiveInteger(exchange.requiredGuildTokens) || positiveInteger(exchange.spentGuildTokens) || 0,
         actualCredits: positiveInteger(exchange.actualCredits) || 0,
         itemCount: positiveInteger(exchange.guildTokenCount) || 0,
         creditCount: positiveInteger(exchange.creditCount) || 0
