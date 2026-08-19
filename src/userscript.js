@@ -55,8 +55,6 @@
   const {
     UPDATE_SCRIPT_URL,
     FALLBACK_INSTALL_URL,
-    MARKETPLACE_SNAPSHOT_PATH,
-    MARKETPLACE_SNAPSHOT_ORIGINS,
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
     PRICE_REFERENCES,
@@ -80,6 +78,8 @@
   const savedUiState = pluginStorage.loadSavedPluginUiState();
   const savedBuildingPlannerState = pluginStorage.loadSavedGuildBuildingPlannerState();
   const savedMarketState = pluginStorage.loadSavedLiveMarketData();
+  const savedMarketSnapshot = pluginStorage.loadSavedMarketSnapshot();
+  const savedMarketplaceRequestState = pluginStorage.loadMarketplaceRequestState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({
     pageWindow,
     document,
@@ -124,8 +124,11 @@
     shrineGuideObservedNodes: new Set(),
     shrineGuideDocumentListenersInstalled: false,
     shrineGuideDocumentHandlers: null,
-    snapshot: null,
-    snapshotTimestamp: 0,
+    snapshot: savedMarketSnapshot.snapshot,
+    snapshotTimestamp: marketDataApi.normalizeMarketTimestamp(savedMarketSnapshot.snapshot?.timestamp),
+    snapshotFetchedAt: savedMarketSnapshot.fetchedAt,
+    marketSnapshotForbiddenUntilByOrigin: savedMarketplaceRequestState.forbiddenUntilByOrigin,
+    marketSnapshotFallbackActive: false,
     marketSnapshotCandidateSignature: "",
     marketSnapshotCandidateTimestamp: 0,
     marketSnapshotCandidateConfirmations: 0,
@@ -365,14 +368,14 @@
     seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom,
     persistLiveMarketData,
+    pluginStorage,
+    config: configApi,
     scheduleMarketDataRefresh,
     scheduleInventoryDataRefresh,
     scheduleGuildDataRefresh,
     resolveItemName,
     CREDIT_TYPES,
-    fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow),
-    MARKETPLACE_SNAPSHOT_PATH,
-    MARKETPLACE_SNAPSHOT_ORIGINS
+    fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow)
   });
   const {
     hydrateLocalInitData,

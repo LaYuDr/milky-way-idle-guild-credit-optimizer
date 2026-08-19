@@ -253,3 +253,58 @@ test("UI 持久化会返回写入成功或失败", () => {
     false
   );
 });
+
+test("市场快照缓存持久化后可在页面重载时恢复", () => {
+  const storage = memoryStorage();
+  const pluginStorage = createStorage(storage);
+  const fetchedAt = Date.parse("2026-08-19T15:00:00Z");
+  const snapshot = {
+    timestamp: "2026-08-19T14:55:00Z",
+    marketData: {
+      "/items/beast_hide": { 0: { a: 51, b: 49, ignored: "value" } },
+      invalid: { 0: { a: 1 } }
+    }
+  };
+
+  assert.equal(pluginStorage.persistMarketSnapshot(snapshot, fetchedAt), true);
+  const restored = pluginStorage.loadSavedMarketSnapshot();
+  assert.equal(restored.fetchedAt, fetchedAt);
+  assert.equal(restored.snapshot.timestamp, Date.parse(snapshot.timestamp));
+  assert.deepEqual({ ...restored.snapshot.marketData["/items/beast_hide"]["0"] }, { a: 51, b: 49 });
+  assert.equal(Object.prototype.hasOwnProperty.call(restored.snapshot.marketData, "invalid"), false);
+});
+
+test("损坏的市场快照缓存不会被当成旧数据使用", () => {
+  for (const value of [
+    "{",
+    JSON.stringify({ schemaVersion: 2, fetchedAt: 1, timestamp: 1, marketData: {} }),
+    JSON.stringify({ schemaVersion: 1, fetchedAt: -1, timestamp: 1, marketData: {} })
+  ]) {
+    const storage = memoryStorage({ [config.MARKETPLACE_SNAPSHOT_STORAGE_KEY]: value });
+    assert.deepEqual(createStorage(storage).loadSavedMarketSnapshot(), { snapshot: null, fetchedAt: 0 });
+  }
+});
+
+test("403 退避状态只保留官方域名和合法时间", () => {
+  const storage = memoryStorage();
+  const pluginStorage = createStorage(storage);
+  const forbiddenUntil = Date.parse("2026-08-19T15:10:00Z");
+  assert.equal(
+    pluginStorage.persistMarketplaceRequestState({
+      forbiddenUntilByOrigin: {
+        "https://www.milkywayidle.com": forbiddenUntil,
+        "https://evil.example": forbiddenUntil,
+        "https://www.milkywayidlecn.com": -1
+      }
+    }),
+    true
+  );
+
+  const restored = pluginStorage.loadMarketplaceRequestState();
+  assert.deepEqual(
+    { ...restored.forbiddenUntilByOrigin },
+    {
+      "https://www.milkywayidle.com": forbiddenUntil
+    }
+  );
+});

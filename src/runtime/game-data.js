@@ -42,12 +42,26 @@
       scheduleMarketDataRefresh,
       scheduleInventoryDataRefresh,
       scheduleGuildDataRefresh,
+      pluginStorage,
+      config,
       resolveItemName,
       CREDIT_TYPES,
       fetchImpl,
-      MARKETPLACE_SNAPSHOT_PATH,
-      MARKETPLACE_SNAPSHOT_ORIGINS
+      now
     } = dependencies;
+    const persistMarketSnapshot =
+      dependencies.persistMarketSnapshot || (pluginStorage && pluginStorage.persistMarketSnapshot);
+    const persistMarketplaceRequestState =
+      dependencies.persistMarketplaceRequestState || (pluginStorage && pluginStorage.persistMarketplaceRequestState);
+    const runtimeConfig = config || dependencies;
+    const {
+      MARKETPLACE_SNAPSHOT_PATH,
+      MARKETPLACE_SNAPSHOT_ORIGINS,
+      MARKETPLACE_SNAPSHOT_MAX_AGE_MS,
+      MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS,
+      MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS
+    } = runtimeConfig;
+    let snapshotLoadPromise = null;
 
     function decompressFromUtf16(compressed) {
       if (compressed == null) return "";
@@ -381,8 +395,67 @@
       return state.marketSnapshotCandidateConfirmations >= 2;
     }
 
-    async function loadSnapshot(force) {
-      if (state.snapshot && !force) return state.snapshot;
+    function currentTime() {
+      const value = Number(typeof now === "function" ? now() : Date.now());
+      return Number.isSafeInteger(value) && value > 0 ? value : Date.now();
+    }
+
+    function snapshotCacheCanSatisfy(force, requestedAt) {
+      if (!state.snapshot) return false;
+      const fetchedAt = Number(state.snapshotFetchedAt);
+      if (!Number.isSafeInteger(fetchedAt) || fetchedAt <= 0 || requestedAt < fetchedAt) return false;
+      const maxAge = Number(force ? MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS : MARKETPLACE_SNAPSHOT_MAX_AGE_MS);
+      return Number.isFinite(maxAge) && maxAge >= 0 && requestedAt - fetchedAt < maxAge;
+    }
+
+    function snapshotOrigin(url) {
+      try {
+        return new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).origin;
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function snapshotSourceLabel(url) {
+      try {
+        return new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).host || url;
+      } catch (_) {
+        return url;
+      }
+    }
+
+    function persistRequestBackoff() {
+      if (typeof persistMarketplaceRequestState !== "function") return;
+      persistMarketplaceRequestState({
+        forbiddenUntilByOrigin: state.marketSnapshotForbiddenUntilByOrigin || Object.create(null)
+      });
+    }
+
+    function setForbiddenBackoff(origin, requestedAt) {
+      if (!origin) return;
+      const duration = Number(MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS);
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (!state.marketSnapshotForbiddenUntilByOrigin) {
+        state.marketSnapshotForbiddenUntilByOrigin = Object.create(null);
+      }
+      state.marketSnapshotForbiddenUntilByOrigin[origin] = requestedAt + duration;
+      persistRequestBackoff();
+    }
+
+    function clearForbiddenBackoff(origin) {
+      if (!origin || !state.marketSnapshotForbiddenUntilByOrigin) return;
+      if (!Object.prototype.hasOwnProperty.call(state.marketSnapshotForbiddenUntilByOrigin, origin)) return;
+      delete state.marketSnapshotForbiddenUntilByOrigin[origin];
+      persistRequestBackoff();
+    }
+
+    function hasActiveForbiddenBackoff(requestedAt) {
+      return Object.values(state.marketSnapshotForbiddenUntilByOrigin || {}).some(
+        (forbiddenUntil) => Number.isSafeInteger(Number(forbiddenUntil)) && Number(forbiddenUntil) > requestedAt
+      );
+    }
+
+    async function requestSnapshot(force, requestedAt) {
       const liveRevisionAtRequestStart = state.marketLiveRevision;
       const request =
         typeof fetchImpl === "function"
@@ -403,27 +476,45 @@
       let marketData;
       let nextTimestamp;
       for (const url of urls) {
+        const origin = snapshotOrigin(url);
+        const forbiddenUntil = Number(
+          state.marketSnapshotForbiddenUntilByOrigin && state.marketSnapshotForbiddenUntilByOrigin[origin]
+        );
+        if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > requestedAt) {
+          failures.push(`${snapshotSourceLabel(url)}: HTTP 403 backoff`);
+          continue;
+        }
+        if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) clearForbiddenBackoff(origin);
         try {
-          const response = await request(url, { cache: "no-store" });
-          if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : "unknown"}`);
+          const response = await request(url, { cache: force ? "reload" : "default" });
+          if (!response || !response.ok) {
+            if (response && response.status === 403) setForbiddenBackoff(origin, requestedAt);
+            throw new Error(`HTTP ${response ? response.status : "unknown"}`);
+          }
+          clearForbiddenBackoff(origin);
           rawSnapshot = await response.json();
           marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
           if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
           nextTimestamp = marketDataApi.normalizeMarketTimestamp(rawSnapshot && rawSnapshot.timestamp);
           if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
+          state.marketSnapshotFallbackActive = false;
+          state.marketSnapshotFallbackError = "";
           break;
         } catch (error) {
-          let source = url;
-          try {
-            source = new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).host || url;
-          } catch (_) {}
-          failures.push(`${source}: ${error && error.message ? error.message : String(error)}`);
+          failures.push(`${snapshotSourceLabel(url)}: ${error && error.message ? error.message : String(error)}`);
           rawSnapshot = null;
           marketData = null;
           nextTimestamp = 0;
         }
       }
-      if (!rawSnapshot || !marketData || nextTimestamp <= 0) throw new Error(failures.join("; "));
+      if (!rawSnapshot || !marketData || nextTimestamp <= 0) {
+        if (state.snapshot) {
+          state.marketSnapshotFallbackActive = true;
+          state.marketSnapshotFallbackError = failures.join("; ");
+          return state.snapshot;
+        }
+        throw new Error(failures.join("; "));
+      }
       const snapshot = { ...rawSnapshot, marketData };
       if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
         return state.snapshot;
@@ -449,8 +540,28 @@
       }
       state.snapshot = snapshot;
       state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
+      state.snapshotFetchedAt = requestedAt;
+      if (typeof persistMarketSnapshot === "function") persistMarketSnapshot(snapshot, requestedAt);
       clearMarketSnapshotCandidate();
       return state.snapshot;
+    }
+
+    async function loadSnapshot(force) {
+      const requestedAt = currentTime();
+      if (snapshotCacheCanSatisfy(Boolean(force), requestedAt)) {
+        if (hasActiveForbiddenBackoff(requestedAt)) {
+          state.marketSnapshotFallbackActive = true;
+          state.marketSnapshotFallbackError = "HTTP 403 backoff";
+        }
+        return state.snapshot;
+      }
+      if (snapshotLoadPromise) return snapshotLoadPromise;
+      snapshotLoadPromise = requestSnapshot(Boolean(force), requestedAt);
+      try {
+        return await snapshotLoadPromise;
+      } finally {
+        snapshotLoadPromise = null;
+      }
     }
 
     function snapshotOrderBook(itemHrid, reference = state.priceReference) {

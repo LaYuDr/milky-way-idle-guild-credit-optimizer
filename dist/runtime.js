@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.64";
+window.MwiGuildCreditVersion = "1.1.65";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2292,6 +2292,8 @@ window.MwiGuildCreditVersion = "1.1.64";
       noExchangeRules: "未读取到兑换规则。请刷新游戏页面后重新打开公会商店。",
       readingRules: "已读取 {count} 条兑换规则，正在读取公开市场快照...",
       snapshotLoadFailed: "市场快照读取失败：{message}",
+      snapshotFallbackUsed: "无法获取新快照，当前显示约 {minutes} 分钟前保存的旧数据；为避免继续触发限制，已暂缓请求。",
+      snapshotFallbackNotice: "新市场数据暂时不可用，当前使用已保存的旧价格。",
       credits: "信用点",
       goldPerCredit: "金币 / 信用",
       singleExchange: "单次兑换",
@@ -2618,6 +2620,9 @@ window.MwiGuildCreditVersion = "1.1.64";
       noExchangeRules: "Exchange rules are unavailable. Refresh the game, then reopen the guild shop.",
       readingRules: "Read {count} exchange rule(s); loading the public market snapshot...",
       snapshotLoadFailed: "Market snapshot failed to load: {message}",
+      snapshotFallbackUsed:
+        "New market data is unavailable. Showing saved data from about {minutes} minute(s) ago; requests are paused to avoid further rate limits.",
+      snapshotFallbackNotice: "New market data is unavailable; saved prices are being used.",
       credits: "credits",
       goldPerCredit: "gold / credit",
       singleExchange: "Direct exchange",
@@ -3782,8 +3787,13 @@ window.MwiGuildCreditVersion = "1.1.64";
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
+    MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
+    MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
     MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
     MARKETPLACE_SNAPSHOT_ORIGINS: ["https://www.milkywayidle.com", "https://www.milkywayidlecn.com"],
+    MARKETPLACE_SNAPSHOT_MAX_AGE_MS: 15 * 60 * 1000,
+    MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS: 60 * 1000,
+    MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS: 10 * 60 * 1000,
     UPDATE_CHECK_TIMEOUT_MS: 8000,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE: false,
     PRICE_REFERENCES: { a: {}, b: {} },
@@ -4073,6 +4083,100 @@ window.MwiGuildCreditVersion = "1.1.64";
       }
     }
 
+    function loadSavedMarketSnapshot() {
+      const fallback = { snapshot: null, fetchedAt: 0 };
+      try {
+        const raw = storage && storage.getItem(config.MARKETPLACE_SNAPSHOT_STORAGE_KEY);
+        if (!raw) return fallback;
+        const stored = JSON.parse(raw);
+        const fetchedAt = Number(stored && stored.fetchedAt);
+        const timestamp = marketDataApi.normalizeMarketTimestamp(stored && stored.timestamp);
+        const marketData = marketDataApi.sanitizeMarketData(stored && stored.marketData);
+        if (
+          !stored ||
+          stored.schemaVersion !== 1 ||
+          !Number.isSafeInteger(fetchedAt) ||
+          fetchedAt <= 0 ||
+          timestamp <= 0 ||
+          !Object.keys(marketData).length
+        )
+          return fallback;
+        return { snapshot: { timestamp, marketData }, fetchedAt };
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function persistMarketSnapshot(snapshot, fetchedAt) {
+      try {
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const timestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+        const marketData = marketDataApi.sanitizeMarketData(snapshot && snapshot.marketData);
+        const normalizedFetchedAt = Number(fetchedAt);
+        if (
+          timestamp <= 0 ||
+          !Object.keys(marketData).length ||
+          !Number.isSafeInteger(normalizedFetchedAt) ||
+          normalizedFetchedAt <= 0
+        )
+          return false;
+        storage.setItem(
+          config.MARKETPLACE_SNAPSHOT_STORAGE_KEY,
+          JSON.stringify({ schemaVersion: 1, fetchedAt: normalizedFetchedAt, timestamp, marketData })
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function loadMarketplaceRequestState() {
+      const forbiddenUntilByOrigin = Object.create(null);
+      try {
+        const raw = storage && storage.getItem(config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY);
+        if (!raw) return { forbiddenUntilByOrigin };
+        const stored = JSON.parse(raw);
+        if (!stored || stored.schemaVersion !== 1 || !stored.forbiddenUntilByOrigin) {
+          return { forbiddenUntilByOrigin };
+        }
+        for (const origin of config.MARKETPLACE_SNAPSHOT_ORIGINS) {
+          const forbiddenUntil = Number(stored.forbiddenUntilByOrigin[origin]);
+          if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) {
+            forbiddenUntilByOrigin[origin] = forbiddenUntil;
+          }
+        }
+      } catch (_) {
+        // Invalid request metadata should never block a new request.
+      }
+      return { forbiddenUntilByOrigin };
+    }
+
+    function persistMarketplaceRequestState(requestState) {
+      try {
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const forbiddenUntilByOrigin = Object.create(null);
+        for (const origin of config.MARKETPLACE_SNAPSHOT_ORIGINS) {
+          const forbiddenUntil = Number(
+            requestState && requestState.forbiddenUntilByOrigin && requestState.forbiddenUntilByOrigin[origin]
+          );
+          if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) {
+            forbiddenUntilByOrigin[origin] = forbiddenUntil;
+          }
+        }
+        if (!Object.keys(forbiddenUntilByOrigin).length) {
+          storage.removeItem(config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY);
+          return true;
+        }
+        storage.setItem(
+          config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY,
+          JSON.stringify({ schemaVersion: 1, forbiddenUntilByOrigin })
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function loadPriceReference() {
       try {
         const saved = storage && storage.getItem(config.PRICE_REFERENCE_STORAGE_KEY);
@@ -4098,6 +4202,10 @@ window.MwiGuildCreditVersion = "1.1.64";
       persistPluginUiState,
       loadSavedLiveMarketData,
       persistLiveMarketData,
+      loadSavedMarketSnapshot,
+      persistMarketSnapshot,
+      loadMarketplaceRequestState,
+      persistMarketplaceRequestState,
       loadPriceReference,
       persistPriceReference
     };
@@ -4451,12 +4559,26 @@ window.MwiGuildCreditVersion = "1.1.64";
       scheduleMarketDataRefresh,
       scheduleInventoryDataRefresh,
       scheduleGuildDataRefresh,
+      pluginStorage,
+      config,
       resolveItemName,
       CREDIT_TYPES,
       fetchImpl,
-      MARKETPLACE_SNAPSHOT_PATH,
-      MARKETPLACE_SNAPSHOT_ORIGINS
+      now
     } = dependencies;
+    const persistMarketSnapshot =
+      dependencies.persistMarketSnapshot || (pluginStorage && pluginStorage.persistMarketSnapshot);
+    const persistMarketplaceRequestState =
+      dependencies.persistMarketplaceRequestState || (pluginStorage && pluginStorage.persistMarketplaceRequestState);
+    const runtimeConfig = config || dependencies;
+    const {
+      MARKETPLACE_SNAPSHOT_PATH,
+      MARKETPLACE_SNAPSHOT_ORIGINS,
+      MARKETPLACE_SNAPSHOT_MAX_AGE_MS,
+      MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS,
+      MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS
+    } = runtimeConfig;
+    let snapshotLoadPromise = null;
 
     function decompressFromUtf16(compressed) {
       if (compressed == null) return "";
@@ -4790,8 +4912,67 @@ window.MwiGuildCreditVersion = "1.1.64";
       return state.marketSnapshotCandidateConfirmations >= 2;
     }
 
-    async function loadSnapshot(force) {
-      if (state.snapshot && !force) return state.snapshot;
+    function currentTime() {
+      const value = Number(typeof now === "function" ? now() : Date.now());
+      return Number.isSafeInteger(value) && value > 0 ? value : Date.now();
+    }
+
+    function snapshotCacheCanSatisfy(force, requestedAt) {
+      if (!state.snapshot) return false;
+      const fetchedAt = Number(state.snapshotFetchedAt);
+      if (!Number.isSafeInteger(fetchedAt) || fetchedAt <= 0 || requestedAt < fetchedAt) return false;
+      const maxAge = Number(force ? MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS : MARKETPLACE_SNAPSHOT_MAX_AGE_MS);
+      return Number.isFinite(maxAge) && maxAge >= 0 && requestedAt - fetchedAt < maxAge;
+    }
+
+    function snapshotOrigin(url) {
+      try {
+        return new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).origin;
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function snapshotSourceLabel(url) {
+      try {
+        return new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).host || url;
+      } catch (_) {
+        return url;
+      }
+    }
+
+    function persistRequestBackoff() {
+      if (typeof persistMarketplaceRequestState !== "function") return;
+      persistMarketplaceRequestState({
+        forbiddenUntilByOrigin: state.marketSnapshotForbiddenUntilByOrigin || Object.create(null)
+      });
+    }
+
+    function setForbiddenBackoff(origin, requestedAt) {
+      if (!origin) return;
+      const duration = Number(MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS);
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (!state.marketSnapshotForbiddenUntilByOrigin) {
+        state.marketSnapshotForbiddenUntilByOrigin = Object.create(null);
+      }
+      state.marketSnapshotForbiddenUntilByOrigin[origin] = requestedAt + duration;
+      persistRequestBackoff();
+    }
+
+    function clearForbiddenBackoff(origin) {
+      if (!origin || !state.marketSnapshotForbiddenUntilByOrigin) return;
+      if (!Object.prototype.hasOwnProperty.call(state.marketSnapshotForbiddenUntilByOrigin, origin)) return;
+      delete state.marketSnapshotForbiddenUntilByOrigin[origin];
+      persistRequestBackoff();
+    }
+
+    function hasActiveForbiddenBackoff(requestedAt) {
+      return Object.values(state.marketSnapshotForbiddenUntilByOrigin || {}).some(
+        (forbiddenUntil) => Number.isSafeInteger(Number(forbiddenUntil)) && Number(forbiddenUntil) > requestedAt
+      );
+    }
+
+    async function requestSnapshot(force, requestedAt) {
       const liveRevisionAtRequestStart = state.marketLiveRevision;
       const request =
         typeof fetchImpl === "function"
@@ -4812,27 +4993,45 @@ window.MwiGuildCreditVersion = "1.1.64";
       let marketData;
       let nextTimestamp;
       for (const url of urls) {
+        const origin = snapshotOrigin(url);
+        const forbiddenUntil = Number(
+          state.marketSnapshotForbiddenUntilByOrigin && state.marketSnapshotForbiddenUntilByOrigin[origin]
+        );
+        if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > requestedAt) {
+          failures.push(`${snapshotSourceLabel(url)}: HTTP 403 backoff`);
+          continue;
+        }
+        if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) clearForbiddenBackoff(origin);
         try {
-          const response = await request(url, { cache: "no-store" });
-          if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : "unknown"}`);
+          const response = await request(url, { cache: force ? "reload" : "default" });
+          if (!response || !response.ok) {
+            if (response && response.status === 403) setForbiddenBackoff(origin, requestedAt);
+            throw new Error(`HTTP ${response ? response.status : "unknown"}`);
+          }
+          clearForbiddenBackoff(origin);
           rawSnapshot = await response.json();
           marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
           if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
           nextTimestamp = marketDataApi.normalizeMarketTimestamp(rawSnapshot && rawSnapshot.timestamp);
           if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
+          state.marketSnapshotFallbackActive = false;
+          state.marketSnapshotFallbackError = "";
           break;
         } catch (error) {
-          let source = url;
-          try {
-            source = new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).host || url;
-          } catch (_) {}
-          failures.push(`${source}: ${error && error.message ? error.message : String(error)}`);
+          failures.push(`${snapshotSourceLabel(url)}: ${error && error.message ? error.message : String(error)}`);
           rawSnapshot = null;
           marketData = null;
           nextTimestamp = 0;
         }
       }
-      if (!rawSnapshot || !marketData || nextTimestamp <= 0) throw new Error(failures.join("; "));
+      if (!rawSnapshot || !marketData || nextTimestamp <= 0) {
+        if (state.snapshot) {
+          state.marketSnapshotFallbackActive = true;
+          state.marketSnapshotFallbackError = failures.join("; ");
+          return state.snapshot;
+        }
+        throw new Error(failures.join("; "));
+      }
       const snapshot = { ...rawSnapshot, marketData };
       if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
         return state.snapshot;
@@ -4858,8 +5057,28 @@ window.MwiGuildCreditVersion = "1.1.64";
       }
       state.snapshot = snapshot;
       state.snapshotTimestamp = nextTimestamp || state.snapshotTimestamp;
+      state.snapshotFetchedAt = requestedAt;
+      if (typeof persistMarketSnapshot === "function") persistMarketSnapshot(snapshot, requestedAt);
       clearMarketSnapshotCandidate();
       return state.snapshot;
+    }
+
+    async function loadSnapshot(force) {
+      const requestedAt = currentTime();
+      if (snapshotCacheCanSatisfy(Boolean(force), requestedAt)) {
+        if (hasActiveForbiddenBackoff(requestedAt)) {
+          state.marketSnapshotFallbackActive = true;
+          state.marketSnapshotFallbackError = "HTTP 403 backoff";
+        }
+        return state.snapshot;
+      }
+      if (snapshotLoadPromise) return snapshotLoadPromise;
+      snapshotLoadPromise = requestSnapshot(Boolean(force), requestedAt);
+      try {
+        return await snapshotLoadPromise;
+      } finally {
+        snapshotLoadPromise = null;
+      }
     }
 
     function snapshotOrderBook(itemHrid, reference = state.priceReference) {
@@ -7350,6 +7569,7 @@ window.MwiGuildCreditVersion = "1.1.64";
       else if (tokenSelection.partiallySelected)
         notices.push(t("guildTokenCreditPlanPartialActive", { count: formatNumber(tokenSelection.selectedCount) }));
       if (snapshotFailed) notices.push(t("snapshotFailed"));
+      else if (needsMarketSnapshot && state.marketSnapshotFallbackActive) notices.push(t("snapshotFallbackNotice"));
       if (!hasInventory) notices.push(t("inventoryUnavailable"));
       status.textContent = notices.join(" ");
       updateRenderedMarkup(
@@ -9782,6 +10002,11 @@ window.MwiGuildCreditVersion = "1.1.64";
         status.textContent = "";
         status.hidden = true;
         results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked, group.priceLimited)).join("")}</div>`;
+        if (state.marketSnapshotFallbackActive) {
+          const ageMinutes = Math.max(1, Math.floor((Date.now() - Number(state.snapshotFetchedAt || 0)) / 60_000));
+          status.textContent = t("snapshotFallbackUsed", { minutes: formatNumber(ageMinutes) });
+          status.hidden = false;
+        }
         button.disabled = false;
         finishRefresh(panel);
       } catch (error) {
@@ -9864,8 +10089,6 @@ window.MwiGuildCreditVersion = "1.1.64";
   const {
     UPDATE_SCRIPT_URL,
     FALLBACK_INSTALL_URL,
-    MARKETPLACE_SNAPSHOT_PATH,
-    MARKETPLACE_SNAPSHOT_ORIGINS,
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
     PRICE_REFERENCES,
@@ -9889,6 +10112,8 @@ window.MwiGuildCreditVersion = "1.1.64";
   const savedUiState = pluginStorage.loadSavedPluginUiState();
   const savedBuildingPlannerState = pluginStorage.loadSavedGuildBuildingPlannerState();
   const savedMarketState = pluginStorage.loadSavedLiveMarketData();
+  const savedMarketSnapshot = pluginStorage.loadSavedMarketSnapshot();
+  const savedMarketplaceRequestState = pluginStorage.loadMarketplaceRequestState();
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({
     pageWindow,
     document,
@@ -9933,8 +10158,11 @@ window.MwiGuildCreditVersion = "1.1.64";
     shrineGuideObservedNodes: new Set(),
     shrineGuideDocumentListenersInstalled: false,
     shrineGuideDocumentHandlers: null,
-    snapshot: null,
-    snapshotTimestamp: 0,
+    snapshot: savedMarketSnapshot.snapshot,
+    snapshotTimestamp: marketDataApi.normalizeMarketTimestamp(savedMarketSnapshot.snapshot?.timestamp),
+    snapshotFetchedAt: savedMarketSnapshot.fetchedAt,
+    marketSnapshotForbiddenUntilByOrigin: savedMarketplaceRequestState.forbiddenUntilByOrigin,
+    marketSnapshotFallbackActive: false,
     marketSnapshotCandidateSignature: "",
     marketSnapshotCandidateTimestamp: 0,
     marketSnapshotCandidateConfirmations: 0,
@@ -10174,14 +10402,14 @@ window.MwiGuildCreditVersion = "1.1.64";
     seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom,
     persistLiveMarketData,
+    pluginStorage,
+    config: configApi,
     scheduleMarketDataRefresh,
     scheduleInventoryDataRefresh,
     scheduleGuildDataRefresh,
     resolveItemName,
     CREDIT_TYPES,
-    fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow),
-    MARKETPLACE_SNAPSHOT_PATH,
-    MARKETPLACE_SNAPSHOT_ORIGINS
+    fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow)
   });
   const {
     hydrateLocalInitData,

@@ -796,6 +796,7 @@
       else if (tokenSelection.partiallySelected)
         notices.push(t("guildTokenCreditPlanPartialActive", { count: formatNumber(tokenSelection.selectedCount) }));
       if (snapshotFailed) notices.push(t("snapshotFailed"));
+      else if (needsMarketSnapshot && state.marketSnapshotFallbackActive) notices.push(t("snapshotFallbackNotice"));
       if (!hasInventory) notices.push(t("inventoryUnavailable"));
       status.textContent = notices.join(" ");
       updateRenderedMarkup(

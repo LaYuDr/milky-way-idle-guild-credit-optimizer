@@ -117,6 +117,11 @@
         status.textContent = "";
         status.hidden = true;
         results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked, group.priceLimited)).join("")}</div>`;
+        if (state.marketSnapshotFallbackActive) {
+          const ageMinutes = Math.max(1, Math.floor((Date.now() - Number(state.snapshotFetchedAt || 0)) / 60_000));
+          status.textContent = t("snapshotFallbackUsed", { minutes: formatNumber(ageMinutes) });
+          status.hidden = false;
+        }
         button.disabled = false;
         finishRefresh(panel);
       } catch (error) {

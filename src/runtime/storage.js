@@ -264,6 +264,100 @@
       }
     }
 
+    function loadSavedMarketSnapshot() {
+      const fallback = { snapshot: null, fetchedAt: 0 };
+      try {
+        const raw = storage && storage.getItem(config.MARKETPLACE_SNAPSHOT_STORAGE_KEY);
+        if (!raw) return fallback;
+        const stored = JSON.parse(raw);
+        const fetchedAt = Number(stored && stored.fetchedAt);
+        const timestamp = marketDataApi.normalizeMarketTimestamp(stored && stored.timestamp);
+        const marketData = marketDataApi.sanitizeMarketData(stored && stored.marketData);
+        if (
+          !stored ||
+          stored.schemaVersion !== 1 ||
+          !Number.isSafeInteger(fetchedAt) ||
+          fetchedAt <= 0 ||
+          timestamp <= 0 ||
+          !Object.keys(marketData).length
+        )
+          return fallback;
+        return { snapshot: { timestamp, marketData }, fetchedAt };
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function persistMarketSnapshot(snapshot, fetchedAt) {
+      try {
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const timestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
+        const marketData = marketDataApi.sanitizeMarketData(snapshot && snapshot.marketData);
+        const normalizedFetchedAt = Number(fetchedAt);
+        if (
+          timestamp <= 0 ||
+          !Object.keys(marketData).length ||
+          !Number.isSafeInteger(normalizedFetchedAt) ||
+          normalizedFetchedAt <= 0
+        )
+          return false;
+        storage.setItem(
+          config.MARKETPLACE_SNAPSHOT_STORAGE_KEY,
+          JSON.stringify({ schemaVersion: 1, fetchedAt: normalizedFetchedAt, timestamp, marketData })
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function loadMarketplaceRequestState() {
+      const forbiddenUntilByOrigin = Object.create(null);
+      try {
+        const raw = storage && storage.getItem(config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY);
+        if (!raw) return { forbiddenUntilByOrigin };
+        const stored = JSON.parse(raw);
+        if (!stored || stored.schemaVersion !== 1 || !stored.forbiddenUntilByOrigin) {
+          return { forbiddenUntilByOrigin };
+        }
+        for (const origin of config.MARKETPLACE_SNAPSHOT_ORIGINS) {
+          const forbiddenUntil = Number(stored.forbiddenUntilByOrigin[origin]);
+          if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) {
+            forbiddenUntilByOrigin[origin] = forbiddenUntil;
+          }
+        }
+      } catch (_) {
+        // Invalid request metadata should never block a new request.
+      }
+      return { forbiddenUntilByOrigin };
+    }
+
+    function persistMarketplaceRequestState(requestState) {
+      try {
+        if (!storage || typeof storage.setItem !== "function") return false;
+        const forbiddenUntilByOrigin = Object.create(null);
+        for (const origin of config.MARKETPLACE_SNAPSHOT_ORIGINS) {
+          const forbiddenUntil = Number(
+            requestState && requestState.forbiddenUntilByOrigin && requestState.forbiddenUntilByOrigin[origin]
+          );
+          if (Number.isSafeInteger(forbiddenUntil) && forbiddenUntil > 0) {
+            forbiddenUntilByOrigin[origin] = forbiddenUntil;
+          }
+        }
+        if (!Object.keys(forbiddenUntilByOrigin).length) {
+          storage.removeItem(config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY);
+          return true;
+        }
+        storage.setItem(
+          config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY,
+          JSON.stringify({ schemaVersion: 1, forbiddenUntilByOrigin })
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function loadPriceReference() {
       try {
         const saved = storage && storage.getItem(config.PRICE_REFERENCE_STORAGE_KEY);
@@ -289,6 +383,10 @@
       persistPluginUiState,
       loadSavedLiveMarketData,
       persistLiveMarketData,
+      loadSavedMarketSnapshot,
+      persistMarketSnapshot,
+      loadMarketplaceRequestState,
+      persistMarketplaceRequestState,
       loadPriceReference,
       persistPriceReference
     };

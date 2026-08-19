@@ -297,6 +297,8 @@
       noExchangeRules: "未读取到兑换规则。请刷新游戏页面后重新打开公会商店。",
       readingRules: "已读取 {count} 条兑换规则，正在读取公开市场快照...",
       snapshotLoadFailed: "市场快照读取失败：{message}",
+      snapshotFallbackUsed: "无法获取新快照，当前显示约 {minutes} 分钟前保存的旧数据；为避免继续触发限制，已暂缓请求。",
+      snapshotFallbackNotice: "新市场数据暂时不可用，当前使用已保存的旧价格。",
       credits: "信用点",
       goldPerCredit: "金币 / 信用",
       singleExchange: "单次兑换",
@@ -623,6 +625,9 @@
       noExchangeRules: "Exchange rules are unavailable. Refresh the game, then reopen the guild shop.",
       readingRules: "Read {count} exchange rule(s); loading the public market snapshot...",
       snapshotLoadFailed: "Market snapshot failed to load: {message}",
+      snapshotFallbackUsed:
+        "New market data is unavailable. Showing saved data from about {minutes} minute(s) ago; requests are paused to avoid further rate limits.",
+      snapshotFallbackNotice: "New market data is unavailable; saved prices are being used.",
       credits: "credits",
       goldPerCredit: "gold / credit",
       singleExchange: "Direct exchange",
