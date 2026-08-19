@@ -50,6 +50,10 @@ test("英文游戏环境使用完整英文 UI 文案与英文数字格式", () =
   assert.equal(localizer.itemName("/items/guild_token"), "Guild Token");
   assert.equal(localizer.itemName("/items/beast_hide"), "");
   assert.equal(
+    localizer.t("advisorReferenceSelected", { tax: "5", reference: "Lowest ask" }),
+    "Sell at highest bid (5% tax) · Buy at Lowest ask"
+  );
+  assert.equal(
     localizer.t("guideQuantityPlanSummary", {
       item: "Guild Token",
       items: "300",
@@ -79,6 +83,7 @@ test("中文游戏环境保留中文 UI 文案与数量格式", () => {
   assert.equal(localizer.itemName("/items/green_guild_credit"), "绿色公会信用点");
   assert.equal(localizer.itemName("/items/guild_token"), "公会代币");
   assert.equal(localizer.itemName("/items/beast_hide"), "");
+  assert.equal(localizer.t("advisorReferenceSelected", { tax: "5", reference: "左一" }), "卖出右一（税 5%）·买入左一");
   assert.equal(
     localizer.t("guideQuantityPlanSummary", {
       item: "公会代币",
@@ -701,16 +706,16 @@ test("卖出后回购优先选择可获得信用点最多的物品", () => {
   assert.equal(best.remainingBudget, 0);
 });
 
-test("卖出估算扣除百分之二市场税", () => {
-  const result = core.calculateSaleProceeds(3, 1450, 0.02);
+test("卖出估算扣除百分之五市场税", () => {
+  const result = core.calculateSaleProceeds(3, 1450, 0.05);
   assert.deepEqual(result, {
     status: "ok",
     quantity: 3,
     sellPrice: 1450,
-    sellerTaxRate: 0.02,
+    sellerTaxRate: 0.05,
     gross: 4350,
-    tax: 87,
-    net: 4263
+    tax: 217,
+    net: 4133
   });
 });
 
@@ -719,7 +724,7 @@ test("出售当前兑换物品后扣税回购，显示可多获得的信用点",
     selectedConversion: { itemHrid: "/items/hammer", itemName: "重锤", itemCount: 1, creditCount: 3 },
     batches: 22,
     sellPrice: 4500,
-    sellerTaxRate: 0.02,
+    sellerTaxRate: 0.05,
     conversions: [
       { itemHrid: "/items/hammer", itemName: "重锤", itemCount: 1, creditCount: 3 },
       { itemHrid: "/items/shield_bash", itemName: "盾击", itemCount: 1, creditCount: 80 }
@@ -732,11 +737,11 @@ test("出售当前兑换物品后扣税回购，显示可多获得的信用点",
   assert.equal(result.status, "ok");
   assert.equal(result.directCredits, 66);
   assert.equal(result.sale.gross, 99000);
-  assert.equal(result.sale.tax, 1980);
-  assert.equal(result.sale.net, 97020);
+  assert.equal(result.sale.tax, 4950);
+  assert.equal(result.sale.net, 94050);
   assert.equal(result.best.itemHrid, "/items/shield_bash");
   assert.equal(result.best.actualCredits, 160);
-  assert.equal(result.best.remainingBudget, 15020);
+  assert.equal(result.best.remainingBudget, 12050);
   assert.equal(result.creditDifference, 94);
 });
 
@@ -745,7 +750,7 @@ test("卖出后回购仍会选择当前物品时标记为已是最优", () => {
     selectedConversion: { itemHrid: "/items/hammer", itemName: "重锤", itemCount: 1, creditCount: 3 },
     batches: 2,
     sellPrice: 4500,
-    sellerTaxRate: 0.02,
+    sellerTaxRate: 0.05,
     conversions: [
       { itemHrid: "/items/hammer", itemName: "重锤", itemCount: 1, creditCount: 3 },
       { itemHrid: "/items/shield_bash", itemName: "盾击", itemCount: 1, creditCount: 1 }
@@ -765,7 +770,7 @@ test("单批售出已有公开收购价但金额不足回购时，不误判为�
     selectedConversion: { itemHrid: "/items/minor_heal", itemName: "Minor Heal", itemCount: 1, creditCount: 3 },
     batches: 1,
     sellPrice: 4400,
-    sellerTaxRate: 0.02,
+    sellerTaxRate: 0.05,
     conversions: [
       { itemHrid: "/items/minor_heal", itemName: "Minor Heal", itemCount: 1, creditCount: 3 },
       { itemHrid: "/items/snake_fang", itemName: "Snake Fang", itemCount: 1, creditCount: 10 }
@@ -777,7 +782,7 @@ test("单批售出已有公开收购价但金额不足回购时，不误判为�
   });
   assert.equal(result.status, "no_affordable_conversion");
   assert.equal(result.sale.status, "ok");
-  assert.equal(result.sale.net, 4312);
+  assert.equal(result.sale.net, 4180);
 });
 
 test("强化装备使用对应强化等级的公开市场价格", () => {
@@ -2328,7 +2333,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /costSummary/);
   assert.match(source, /plan\.requiredItems/);
   assert.match(source, /core\.estimateSaleReplacement/);
-  assert.match(source, /SELLER_TAX_RATE: 0\.02/);
+  assert.match(source, /SELLER_TAX_RATE: 0\.05/);
   assert.match(source, /sellAndBuyMore/);
   assert.match(source, /noSellPrice/);
   assert.doesNotMatch(source, /if \(replacement\.status !== "ok"\) \{\s*hideGuildExchangeAdvisor\(\);/);
@@ -2354,10 +2359,13 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /卖出税 2%/);
   assert.match(source, /const surfaceRect = surface\.getBoundingClientRect\(\)/);
   assert.match(source, /data-role="advisor-stack"/);
+  assert.match(source, /data-role="toggle-advisor"/);
+  assert.match(source, /data-role="advisor-content"/);
+  assert.match(source, /setGuildExchangeAdvisorCollapsed/);
   assert.match(source, /data-role="quantity-guide"/);
   assert.match(source, /grid-template-rows:minmax\(0,1fr\) auto/);
   assert.match(source, /placement: "bottom"/);
-  assert.match(source, /max-height:calc\(100dvh - 24px\)/);
+  assert.match(source, /max-height:min\(calc\(100dvh - 24px\),var\(--advisor-available-height/);
   assert.match(source, /alreadyOptimal/);
   assert.match(source, /option\.best/);
   assert.match(source, /t\("author"\)/);

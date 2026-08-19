@@ -46,7 +46,7 @@
     DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction"],
     CREDIT_TYPES,
     GUILD_TOKEN_CREDIT_CONVERSIONS,
-    SELLER_TAX_RATE: 0.02,
+    SELLER_TAX_RATE: 0.05,
     GUILD_SHRINE_NAME_KEYS: {
       "/guild_shrines/force": "shrineForce",
       "/guild_shrines/tempo": "shrineTempo",

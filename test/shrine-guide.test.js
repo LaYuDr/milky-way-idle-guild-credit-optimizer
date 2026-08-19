@@ -529,7 +529,7 @@ test("公会代币规划与数量提示开启时仍显示最优兑换推荐", ()
       window: { innerWidth: 1200, innerHeight: 800 },
       pageWindow: {},
       CREDIT_TYPES: [[creditItemHrid, "#4fcdb5"]],
-      SELLER_TAX_RATE: 0.02,
+      SELLER_TAX_RATE: 0.05,
       t: (key) => key,
       escapeHtml: String,
       formatNumber: String,

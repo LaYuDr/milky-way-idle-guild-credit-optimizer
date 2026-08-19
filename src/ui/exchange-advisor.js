@@ -71,6 +71,54 @@
     return Number.isSafeInteger(value) && value >= 0 ? value : null;
   }
 
+  function calculateGuildExchangeAdvisorPosition(modalRect, cardRect, viewportWidth, viewportHeight) {
+    const margin = 12;
+    const gap = 12;
+    const width = Math.max(1, cardRect.width);
+    const height = Math.max(1, cardRect.height);
+    const clampLeft = (value) => Math.max(margin, Math.min(value, viewportWidth - width - margin));
+    const clampTop = (value) => Math.max(margin, Math.min(value, viewportHeight - height - margin));
+    const alignedTop = Math.max(margin, modalRect.top);
+    if (modalRect.right + gap + width <= viewportWidth - margin)
+      return { placement: "right", left: modalRect.right + gap, top: alignedTop };
+    if (modalRect.left - gap - width >= margin)
+      return { placement: "left", left: modalRect.left - gap - width, top: alignedTop };
+    if (modalRect.bottom + gap + height <= viewportHeight - margin)
+      return {
+        placement: "bottom",
+        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+        top: modalRect.bottom + gap
+      };
+    if (modalRect.top - gap - height >= margin)
+      return {
+        placement: "top",
+        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+        top: modalRect.top - gap - height
+      };
+    return {
+      placement: "overlay",
+      left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+      top: clampTop(viewportHeight - height - margin)
+    };
+  }
+
+  function setGuildExchangeAdvisorCollapsed(ui, collapsed, labels) {
+    if (!ui || !ui.card || typeof ui.card.querySelector !== "function") return false;
+    const isCollapsed = Boolean(collapsed);
+    const content = ui.card.querySelector('[data-role="advisor-content"]');
+    const toggle = ui.card.querySelector('[data-role="toggle-advisor"]');
+    ui.collapsed = isCollapsed;
+    ui.card.dataset.collapsed = String(isCollapsed);
+    if (content) content.hidden = isCollapsed;
+    if (toggle) {
+      const label = isCollapsed ? labels.expand : labels.collapse;
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.setAttribute("aria-label", label);
+      toggle.title = label;
+    }
+    return true;
+  }
+
   function createExchangeAdvisor(dependencies) {
     const {
       state,
@@ -169,8 +217,20 @@
         card: shadow.querySelector('[data-role="advisor"]'),
         quantityHint: shadow.querySelector('[data-role="quantity-guide"]'),
         signature: "",
-        modal: null
+        modal: null,
+        collapsed: false
       };
+      shadow.addEventListener("click", (event) => {
+        const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
+        const toggle = target && target.closest && target.closest('[data-role="toggle-advisor"]');
+        if (!toggle) return;
+        const ui = state.exchangeAdvisorUi;
+        setGuildExchangeAdvisorCollapsed(ui, !ui.collapsed, {
+          collapse: t("collapseExchangeAdvisor"),
+          expand: t("expandExchangeAdvisor")
+        });
+        if (ui.modal) positionGuildExchangeAdvisor(ui, ui.modal);
+      });
       return state.exchangeAdvisorUi;
     }
 
@@ -189,36 +249,6 @@
       ui.surface.hidden = true;
       ui.modal = null;
       observeActiveGuildExchangeModal(null);
-    }
-
-    function calculateGuildExchangeAdvisorPosition(modalRect, cardRect) {
-      const margin = 12;
-      const gap = 12;
-      const width = Math.max(1, cardRect.width);
-      const height = Math.max(1, cardRect.height);
-      const clampLeft = (value) => Math.max(margin, Math.min(value, window.innerWidth - width - margin));
-      const clampTop = (value) => Math.max(margin, Math.min(value, window.innerHeight - height - margin));
-      if (modalRect.right + gap + width <= window.innerWidth - margin)
-        return { placement: "right", left: modalRect.right + gap, top: clampTop(modalRect.top) };
-      if (modalRect.left - gap - width >= margin)
-        return { placement: "left", left: modalRect.left - gap - width, top: clampTop(modalRect.top) };
-      if (modalRect.bottom + gap + height <= window.innerHeight - margin)
-        return {
-          placement: "bottom",
-          left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-          top: modalRect.bottom + gap
-        };
-      if (modalRect.top - gap - height >= margin)
-        return {
-          placement: "top",
-          left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-          top: modalRect.top - gap - height
-        };
-      return {
-        placement: "overlay",
-        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-        top: clampTop(window.innerHeight - height - margin)
-      };
     }
 
     function positionGuildExchangeAdvisor(ui, modal) {
@@ -244,11 +274,20 @@
         surface.style.removeProperty("visibility");
         return false;
       }
-      const position = calculateGuildExchangeAdvisorPosition(modalRect, surfaceRect);
+      const position = calculateGuildExchangeAdvisorPosition(
+        modalRect,
+        surfaceRect,
+        window.innerWidth,
+        window.innerHeight
+      );
       surface.dataset.placement = position.placement;
       ui.card.dataset.placement = position.placement;
       surface.style.left = `${Math.round(position.left)}px`;
       surface.style.top = `${Math.round(position.top)}px`;
+      surface.style.setProperty(
+        "--advisor-available-height",
+        `${Math.max(1, Math.floor(window.innerHeight - position.top - 12))}px`
+      );
       surface.hidden = false;
       surface.style.removeProperty("visibility");
       return true;
@@ -273,7 +312,11 @@
     function guildExchangeAdvisorMarkup(data) {
       const comparison = Boolean(data.selected && data.replacement);
       const reference = priceReference(state.priceReference).label;
-      const header = `<header class="head"><div class="title"><span>${escapeHtml(t("exchangeRecommendation"))}</span><span class="credit">${escapeHtml(data.creditName)}</span></div><span class="reference">${escapeHtml(data.selected ? t("advisorReferenceSelected", { reference }) : t("advisorReference", { reference }))}</span></header>`;
+      const referenceLabel = data.selected
+        ? t("advisorReferenceSelected", { reference, tax: formatNumber(SELLER_TAX_RATE * 100) })
+        : t("advisorReference", { reference });
+      const collapseLabel = t("collapseExchangeAdvisor");
+      const header = `<header class="head"><div class="title"><span>${escapeHtml(t("exchangeRecommendation"))}</span><span class="credit">${escapeHtml(data.creditName)}</span></div><div class="head-actions"><span class="reference">${escapeHtml(referenceLabel)}</span><button class="advisor-toggle" data-role="toggle-advisor" type="button" aria-controls="mwi-exchange-advisor-content" aria-expanded="true" aria-label="${escapeHtml(collapseLabel)}" title="${escapeHtml(collapseLabel)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></button></div></header>`;
       let summary = t("chooseItem");
       if (data.selectedOptimal) summary = t("alreadyOptimal");
       else if (!data.selected && data.unavailableReason) summary = data.unavailableReason;
@@ -317,7 +360,7 @@
           : null,
         true
       );
-      return `${header}<div class="body"><div class="options${comparison ? "" : " single"}">${selected}${comparison ? '<div class="versus"><span>VS</span></div>' : ""}${best}</div><div class="summary">${summary}</div></div>`;
+      return `${header}<div class="body" id="mwi-exchange-advisor-content" data-role="advisor-content"><div class="options${comparison ? "" : " single"}">${selected}${comparison ? '<div class="versus"><span>VS</span></div>' : ""}${best}</div><div class="summary">${summary}</div></div>`;
     }
 
     function renderGuildExchangeAdvisor(modalData, data, forceRender) {
@@ -328,6 +371,10 @@
         ui.card.innerHTML = markup;
         ui.signature = markup;
       }
+      setGuildExchangeAdvisorCollapsed(ui, ui.collapsed, {
+        collapse: t("collapseExchangeAdvisor"),
+        expand: t("expandExchangeAdvisor")
+      });
       ui.card.hidden = false;
       ui.modal = modalData.modal;
       observeActiveGuildExchangeModal(modalData.modal);
@@ -519,5 +566,12 @@
     };
   }
 
-  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches, inputMaximum };
+  return {
+    createExchangeAdvisor,
+    guildExchangeQuantityInputs,
+    guildExchangeBatches,
+    inputMaximum,
+    calculateGuildExchangeAdvisorPosition,
+    setGuildExchangeAdvisorCollapsed
+  };
 });

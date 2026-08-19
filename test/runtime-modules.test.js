@@ -14,7 +14,7 @@ test("运行时配置集中保留既有信用点、存储键与只读安全边�
   assert.equal(config.GUILD_TOKEN_CREDIT_CONVERSIONS.length, 8);
   assert.equal(config.UI_STATE_STORAGE_KEY, "mwi-guild-credit-ui-state-v1");
   assert.equal(config.MARKET_LIVE_STORAGE_KEY, "mwi-guild-credit-live-market-v1");
-  assert.equal(config.SELLER_TAX_RATE, 0.02);
+  assert.equal(config.SELLER_TAX_RATE, 0.05);
   assert.deepEqual(config.PANEL_VIEWS, ["credit", "upgrade", "construction"]);
   assert.deepEqual(config.DEFAULT_PANEL_ORDER, ["upgrade", "credit", "construction"]);
 });

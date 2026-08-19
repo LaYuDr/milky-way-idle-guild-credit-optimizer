@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.62";
+window.MwiGuildCreditVersion = "1.1.63";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2297,7 +2297,9 @@ window.MwiGuildCreditVersion = "1.1.62";
       singleExchange: "单次兑换",
       marketCost: "市场成本",
       exchangeRecommendation: "兑换最优推荐",
-      advisorReferenceSelected: "卖出右一（税 2%）·买入{reference}",
+      collapseExchangeAdvisor: "收起兑换推荐",
+      expandExchangeAdvisor: "展开兑换推荐",
+      advisorReferenceSelected: "卖出右一（税 {tax}%）·买入{reference}",
       advisorReference: "买入参考{reference}",
       chooseItem: "请选择兑换物品以计算卖出后替代方案。",
       alreadyOptimal: "当前选择已是最优物品，无需卖出再回购。",
@@ -2621,7 +2623,9 @@ window.MwiGuildCreditVersion = "1.1.62";
       singleExchange: "Direct exchange",
       marketCost: "Market cost",
       exchangeRecommendation: "Best exchange recommendation",
-      advisorReferenceSelected: "Sell at highest bid (2% tax) · Buy at {reference}",
+      collapseExchangeAdvisor: "Collapse exchange recommendation",
+      expandExchangeAdvisor: "Expand exchange recommendation",
+      advisorReferenceSelected: "Sell at highest bid ({tax}% tax) · Buy at {reference}",
       advisorReference: "Buy at {reference}",
       chooseItem: "Select an exchange item to compare sell-and-buy-back options.",
       alreadyOptimal: "The current item is already optimal; selling and buying back would not help.",
@@ -3788,7 +3792,7 @@ window.MwiGuildCreditVersion = "1.1.62";
     DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction"],
     CREDIT_TYPES,
     GUILD_TOKEN_CREDIT_CONVERSIONS,
-    SELLER_TAX_RATE: 0.02,
+    SELLER_TAX_RATE: 0.05,
     GUILD_SHRINE_NAME_KEYS: {
       "/guild_shrines/force": "shrineForce",
       "/guild_shrines/tempo": "shrineTempo",
@@ -5816,14 +5820,17 @@ window.MwiGuildCreditVersion = "1.1.62";
 
   const GUILD_EXCHANGE_ADVISOR_STYLES = `
     :host{all:initial;color-scheme:dark;font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif}*,*::before,*::after{box-sizing:border-box}[hidden]{display:none!important}
-    .advisor-stack{--credit:#4fcdb5;position:fixed;z-index:1065;display:grid;width:min(400px,calc(100vw - 24px));max-height:calc(100dvh - 24px);grid-template-rows:minmax(0,1fr) auto;gap:8px;pointer-events:none}
-    .advisor{display:flex;min-height:0;flex-direction:column;overflow:auto;border:1px solid #414361;border-left:4px solid var(--credit);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.4;pointer-events:auto}
+    .advisor-stack{--credit:#4fcdb5;position:fixed;z-index:1065;display:grid;width:min(400px,calc(100vw - 24px));max-height:min(calc(100dvh - 24px),var(--advisor-available-height,100dvh));grid-template-rows:minmax(0,1fr) auto;gap:8px;pointer-events:none}
+    .advisor{display:flex;min-height:0;flex-direction:column;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#626683 #171927;border:1px solid #414361;border-left:4px solid var(--credit);border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:13px;line-height:1.4;pointer-events:auto}
+    .advisor[data-collapsed="true"]{overflow:hidden}.advisor[data-collapsed="true"] .head{border-bottom-color:transparent}.advisor[data-collapsed="true"] .advisor-toggle svg{transform:rotate(0deg)}
     .guide-quantity{display:grid;justify-items:center;gap:2px;padding:10px 12px;border:1px solid #414361;border-radius:7px;background:#171927;color:#f4f5ff;box-shadow:0 6px 18px rgba(0,0,0,.34);font-size:12px;line-height:1.5;text-align:center;pointer-events:auto;cursor:text;user-select:text;-webkit-user-select:text}
     .guide-quantity::selection,.guide-quantity *::selection{background:color-mix(in srgb,var(--credit) 52%,#171927);color:#fff}
     .guide-quantity-summary{max-width:100%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     .guide-quantity-detail{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-    .head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #414361;background:#24263e}.title{display:grid;gap:2px;font-size:17px;font-weight:700}.credit{display:flex;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}.credit::before{width:9px;height:9px;border-radius:2px;background:var(--credit);content:""}.reference{padding-top:3px;color:#bfc2de;font-size:11px;white-space:nowrap}.body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}.options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}.options.single{grid-template-columns:minmax(0,1fr)}.option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}.option.best{border-color:var(--credit);background:#193836}.label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}.item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}.item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cost{margin:8px 0 5px;color:var(--credit);font-size:23px;font-weight:700;line-height:1}.cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}.detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}.detail b{color:#e7e8f6;font-weight:600}.versus{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}.versus span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}.summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}.summary strong{color:var(--credit);font-size:16px}
-    @media (max-width:600px){.advisor-stack{max-height:min(300px,calc(100dvh - 24px))}.options{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}.body{padding:9px}.option{padding:7px}.cost{font-size:20px}}
+    .head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 8px 8px 12px;border-bottom:1px solid #414361;background:#24263e}.title{display:grid;min-width:0;gap:2px;font-size:17px;font-weight:700}.credit{display:flex;min-width:0;align-items:center;gap:5px;color:#c7cae4;font-size:11px;font-weight:500}.credit::before{width:9px;height:9px;flex:0 0 9px;border-radius:2px;background:var(--credit);content:""}.head-actions{display:flex;min-width:0;align-items:center;gap:4px}.reference{min-width:0;overflow:hidden;color:#bfc2de;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.advisor-toggle{display:grid;width:36px;height:36px;flex:0 0 36px;place-items:center;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:#dfe1f7;cursor:pointer}.advisor-toggle:hover{border-color:#555975;background:#30334f}.advisor-toggle:active{background:#1c1e31}.advisor-toggle:focus-visible{outline:2px solid color-mix(in srgb,var(--credit) 82%,white);outline-offset:1px}.advisor-toggle svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg);transition:transform .18s cubic-bezier(.16,1,.3,1)}.body{display:flex;flex:1;min-height:0;flex-direction:column;gap:9px;padding:11px 12px}.options{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:stretch;gap:8px}.options.single{grid-template-columns:minmax(0,1fr)}.option{min-width:0;padding:8px;border:1px solid #414361;border-radius:5px;background:#202139}.option.best{border-color:var(--credit);background:#193836}.label{display:block;margin-bottom:6px;color:#bfc2de;font-size:11px}.item{display:flex;align-items:center;gap:6px;min-width:0;color:#fff;font-size:14px;font-weight:700}.item .mwi-item-icon{width:32px;height:32px;flex:0 0 32px}.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cost{margin:8px 0 5px;color:var(--credit);font-size:23px;font-weight:700;line-height:1}.cost small{margin-left:3px;color:#bfc2de;font-size:11px;font-weight:500}.detail{display:flex;justify-content:space-between;gap:5px;color:#bfc2de;font-size:11px;white-space:nowrap}.detail b{color:#e7e8f6;font-weight:600}.versus{display:grid;place-items:center;color:#aeb1d3;font-size:11px;font-weight:700}.versus span{display:grid;place-items:center;width:28px;height:28px;border:1px solid #58607a;border-radius:50%;background:#151722}.summary{padding:8px;border-top:1px solid #414361;color:#dfe1f7;text-align:center;font-size:12px;font-weight:600}.summary strong{color:var(--credit);font-size:16px}
+    @media (pointer:coarse){.advisor-toggle{width:44px;height:44px;flex-basis:44px}}
+    @media (prefers-reduced-motion:reduce){.advisor-toggle svg{transition:none}}
+    @media (max-width:600px){.advisor-stack{max-height:min(300px,calc(100dvh - 24px),var(--advisor-available-height,100dvh))}.head{padding-block:6px}.options{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}.body{padding:9px}.option{padding:7px}.cost{font-size:20px}}
   `;
 
   return { PANEL_STYLES, shrineGuideStyles, GUILD_EXCHANGE_ADVISOR_STYLES };
@@ -8069,6 +8076,54 @@ window.MwiGuildCreditVersion = "1.1.62";
     return Number.isSafeInteger(value) && value >= 0 ? value : null;
   }
 
+  function calculateGuildExchangeAdvisorPosition(modalRect, cardRect, viewportWidth, viewportHeight) {
+    const margin = 12;
+    const gap = 12;
+    const width = Math.max(1, cardRect.width);
+    const height = Math.max(1, cardRect.height);
+    const clampLeft = (value) => Math.max(margin, Math.min(value, viewportWidth - width - margin));
+    const clampTop = (value) => Math.max(margin, Math.min(value, viewportHeight - height - margin));
+    const alignedTop = Math.max(margin, modalRect.top);
+    if (modalRect.right + gap + width <= viewportWidth - margin)
+      return { placement: "right", left: modalRect.right + gap, top: alignedTop };
+    if (modalRect.left - gap - width >= margin)
+      return { placement: "left", left: modalRect.left - gap - width, top: alignedTop };
+    if (modalRect.bottom + gap + height <= viewportHeight - margin)
+      return {
+        placement: "bottom",
+        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+        top: modalRect.bottom + gap
+      };
+    if (modalRect.top - gap - height >= margin)
+      return {
+        placement: "top",
+        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+        top: modalRect.top - gap - height
+      };
+    return {
+      placement: "overlay",
+      left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
+      top: clampTop(viewportHeight - height - margin)
+    };
+  }
+
+  function setGuildExchangeAdvisorCollapsed(ui, collapsed, labels) {
+    if (!ui || !ui.card || typeof ui.card.querySelector !== "function") return false;
+    const isCollapsed = Boolean(collapsed);
+    const content = ui.card.querySelector('[data-role="advisor-content"]');
+    const toggle = ui.card.querySelector('[data-role="toggle-advisor"]');
+    ui.collapsed = isCollapsed;
+    ui.card.dataset.collapsed = String(isCollapsed);
+    if (content) content.hidden = isCollapsed;
+    if (toggle) {
+      const label = isCollapsed ? labels.expand : labels.collapse;
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.setAttribute("aria-label", label);
+      toggle.title = label;
+    }
+    return true;
+  }
+
   function createExchangeAdvisor(dependencies) {
     const {
       state,
@@ -8167,8 +8222,20 @@ window.MwiGuildCreditVersion = "1.1.62";
         card: shadow.querySelector('[data-role="advisor"]'),
         quantityHint: shadow.querySelector('[data-role="quantity-guide"]'),
         signature: "",
-        modal: null
+        modal: null,
+        collapsed: false
       };
+      shadow.addEventListener("click", (event) => {
+        const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
+        const toggle = target && target.closest && target.closest('[data-role="toggle-advisor"]');
+        if (!toggle) return;
+        const ui = state.exchangeAdvisorUi;
+        setGuildExchangeAdvisorCollapsed(ui, !ui.collapsed, {
+          collapse: t("collapseExchangeAdvisor"),
+          expand: t("expandExchangeAdvisor")
+        });
+        if (ui.modal) positionGuildExchangeAdvisor(ui, ui.modal);
+      });
       return state.exchangeAdvisorUi;
     }
 
@@ -8187,36 +8254,6 @@ window.MwiGuildCreditVersion = "1.1.62";
       ui.surface.hidden = true;
       ui.modal = null;
       observeActiveGuildExchangeModal(null);
-    }
-
-    function calculateGuildExchangeAdvisorPosition(modalRect, cardRect) {
-      const margin = 12;
-      const gap = 12;
-      const width = Math.max(1, cardRect.width);
-      const height = Math.max(1, cardRect.height);
-      const clampLeft = (value) => Math.max(margin, Math.min(value, window.innerWidth - width - margin));
-      const clampTop = (value) => Math.max(margin, Math.min(value, window.innerHeight - height - margin));
-      if (modalRect.right + gap + width <= window.innerWidth - margin)
-        return { placement: "right", left: modalRect.right + gap, top: clampTop(modalRect.top) };
-      if (modalRect.left - gap - width >= margin)
-        return { placement: "left", left: modalRect.left - gap - width, top: clampTop(modalRect.top) };
-      if (modalRect.bottom + gap + height <= window.innerHeight - margin)
-        return {
-          placement: "bottom",
-          left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-          top: modalRect.bottom + gap
-        };
-      if (modalRect.top - gap - height >= margin)
-        return {
-          placement: "top",
-          left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-          top: modalRect.top - gap - height
-        };
-      return {
-        placement: "overlay",
-        left: clampLeft(modalRect.left + (modalRect.width - width) / 2),
-        top: clampTop(window.innerHeight - height - margin)
-      };
     }
 
     function positionGuildExchangeAdvisor(ui, modal) {
@@ -8242,11 +8279,20 @@ window.MwiGuildCreditVersion = "1.1.62";
         surface.style.removeProperty("visibility");
         return false;
       }
-      const position = calculateGuildExchangeAdvisorPosition(modalRect, surfaceRect);
+      const position = calculateGuildExchangeAdvisorPosition(
+        modalRect,
+        surfaceRect,
+        window.innerWidth,
+        window.innerHeight
+      );
       surface.dataset.placement = position.placement;
       ui.card.dataset.placement = position.placement;
       surface.style.left = `${Math.round(position.left)}px`;
       surface.style.top = `${Math.round(position.top)}px`;
+      surface.style.setProperty(
+        "--advisor-available-height",
+        `${Math.max(1, Math.floor(window.innerHeight - position.top - 12))}px`
+      );
       surface.hidden = false;
       surface.style.removeProperty("visibility");
       return true;
@@ -8271,7 +8317,11 @@ window.MwiGuildCreditVersion = "1.1.62";
     function guildExchangeAdvisorMarkup(data) {
       const comparison = Boolean(data.selected && data.replacement);
       const reference = priceReference(state.priceReference).label;
-      const header = `<header class="head"><div class="title"><span>${escapeHtml(t("exchangeRecommendation"))}</span><span class="credit">${escapeHtml(data.creditName)}</span></div><span class="reference">${escapeHtml(data.selected ? t("advisorReferenceSelected", { reference }) : t("advisorReference", { reference }))}</span></header>`;
+      const referenceLabel = data.selected
+        ? t("advisorReferenceSelected", { reference, tax: formatNumber(SELLER_TAX_RATE * 100) })
+        : t("advisorReference", { reference });
+      const collapseLabel = t("collapseExchangeAdvisor");
+      const header = `<header class="head"><div class="title"><span>${escapeHtml(t("exchangeRecommendation"))}</span><span class="credit">${escapeHtml(data.creditName)}</span></div><div class="head-actions"><span class="reference">${escapeHtml(referenceLabel)}</span><button class="advisor-toggle" data-role="toggle-advisor" type="button" aria-controls="mwi-exchange-advisor-content" aria-expanded="true" aria-label="${escapeHtml(collapseLabel)}" title="${escapeHtml(collapseLabel)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></button></div></header>`;
       let summary = t("chooseItem");
       if (data.selectedOptimal) summary = t("alreadyOptimal");
       else if (!data.selected && data.unavailableReason) summary = data.unavailableReason;
@@ -8315,7 +8365,7 @@ window.MwiGuildCreditVersion = "1.1.62";
           : null,
         true
       );
-      return `${header}<div class="body"><div class="options${comparison ? "" : " single"}">${selected}${comparison ? '<div class="versus"><span>VS</span></div>' : ""}${best}</div><div class="summary">${summary}</div></div>`;
+      return `${header}<div class="body" id="mwi-exchange-advisor-content" data-role="advisor-content"><div class="options${comparison ? "" : " single"}">${selected}${comparison ? '<div class="versus"><span>VS</span></div>' : ""}${best}</div><div class="summary">${summary}</div></div>`;
     }
 
     function renderGuildExchangeAdvisor(modalData, data, forceRender) {
@@ -8326,6 +8376,10 @@ window.MwiGuildCreditVersion = "1.1.62";
         ui.card.innerHTML = markup;
         ui.signature = markup;
       }
+      setGuildExchangeAdvisorCollapsed(ui, ui.collapsed, {
+        collapse: t("collapseExchangeAdvisor"),
+        expand: t("expandExchangeAdvisor")
+      });
       ui.card.hidden = false;
       ui.modal = modalData.modal;
       observeActiveGuildExchangeModal(modalData.modal);
@@ -8517,7 +8571,14 @@ window.MwiGuildCreditVersion = "1.1.62";
     };
   }
 
-  return { createExchangeAdvisor, guildExchangeQuantityInputs, guildExchangeBatches, inputMaximum };
+  return {
+    createExchangeAdvisor,
+    guildExchangeQuantityInputs,
+    guildExchangeBatches,
+    inputMaximum,
+    calculateGuildExchangeAdvisorPosition,
+    setGuildExchangeAdvisorCollapsed
+  };
 });
 
 
