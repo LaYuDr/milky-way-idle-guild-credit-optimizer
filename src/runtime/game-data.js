@@ -5,7 +5,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  function marketplaceSnapshotUrls(location, officialOrigins, snapshotPath) {
+  function marketplaceSnapshotUrls(location, snapshotOrigins, snapshotPath) {
     const path =
       typeof snapshotPath === "string" && snapshotPath.startsWith("/") ? snapshotPath : "/game_data/marketplace.json";
     const currentOrigin = String((location && location.origin) || "").replace(/\/$/, "");
@@ -13,7 +13,7 @@
 
     const origins = Array.from(
       new Set(
-        (Array.isArray(officialOrigins) ? officialOrigins : [])
+        (Array.isArray(snapshotOrigins) ? snapshotOrigins : [])
           .map((origin) => String(origin || "").replace(/\/$/, ""))
           .filter(Boolean)
       )

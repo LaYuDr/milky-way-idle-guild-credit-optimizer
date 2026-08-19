@@ -39,7 +39,11 @@
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
     MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
-    MARKETPLACE_SNAPSHOT_ORIGINS: ["https://www.milkywayidle.com", "https://www.milkywayidlecn.com"],
+    MARKETPLACE_SNAPSHOT_ORIGINS: [
+      "https://www.milkywayidle.com",
+      "https://www.milkywayidlecn.com",
+      "https://q7.nainai.eu.org"
+    ],
     MARKETPLACE_SNAPSHOT_MAX_AGE_MS: 15 * 60 * 1000,
     MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS: 60 * 1000,
     MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS: 10 * 60 * 1000,

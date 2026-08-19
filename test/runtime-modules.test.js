@@ -19,7 +19,8 @@ test("运行时配置集中保留既有信用点、存储键与只读安全边�
   assert.equal(config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY, "mwi-guild-credit-market-request-v1");
   assert.deepEqual(config.MARKETPLACE_SNAPSHOT_ORIGINS, [
     "https://www.milkywayidle.com",
-    "https://www.milkywayidlecn.com"
+    "https://www.milkywayidlecn.com",
+    "https://q7.nainai.eu.org"
   ]);
   assert.equal(config.MARKETPLACE_SNAPSHOT_MAX_AGE_MS, 15 * 60 * 1000);
   assert.equal(config.MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS, 60 * 1000);

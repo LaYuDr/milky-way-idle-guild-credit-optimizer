@@ -285,7 +285,7 @@ test("损坏的市场快照缓存不会被当成旧数据使用", () => {
   }
 });
 
-test("403 退避状态只保留官方域名和合法时间", () => {
+test("403 退避状态只保留已配置快照源和合法时间", () => {
   const storage = memoryStorage();
   const pluginStorage = createStorage(storage);
   const forbiddenUntil = Date.parse("2026-08-19T15:10:00Z");
@@ -293,6 +293,7 @@ test("403 退避状态只保留官方域名和合法时间", () => {
     pluginStorage.persistMarketplaceRequestState({
       forbiddenUntilByOrigin: {
         "https://www.milkywayidle.com": forbiddenUntil,
+        "https://q7.nainai.eu.org": forbiddenUntil,
         "https://evil.example": forbiddenUntil,
         "https://www.milkywayidlecn.com": -1
       }
@@ -304,7 +305,8 @@ test("403 退避状态只保留官方域名和合法时间", () => {
   assert.deepEqual(
     { ...restored.forbiddenUntilByOrigin },
     {
-      "https://www.milkywayidle.com": forbiddenUntil
+      "https://www.milkywayidle.com": forbiddenUntil,
+      "https://q7.nainai.eu.org": forbiddenUntil
     }
   );
 });

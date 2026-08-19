@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.65";
+window.MwiGuildCreditVersion = "1.1.66";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3790,7 +3790,11 @@ window.MwiGuildCreditVersion = "1.1.65";
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
     MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
-    MARKETPLACE_SNAPSHOT_ORIGINS: ["https://www.milkywayidle.com", "https://www.milkywayidlecn.com"],
+    MARKETPLACE_SNAPSHOT_ORIGINS: [
+      "https://www.milkywayidle.com",
+      "https://www.milkywayidlecn.com",
+      "https://q7.nainai.eu.org"
+    ],
     MARKETPLACE_SNAPSHOT_MAX_AGE_MS: 15 * 60 * 1000,
     MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS: 60 * 1000,
     MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS: 10 * 60 * 1000,
@@ -4522,7 +4526,7 @@ window.MwiGuildCreditVersion = "1.1.65";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  function marketplaceSnapshotUrls(location, officialOrigins, snapshotPath) {
+  function marketplaceSnapshotUrls(location, snapshotOrigins, snapshotPath) {
     const path =
       typeof snapshotPath === "string" && snapshotPath.startsWith("/") ? snapshotPath : "/game_data/marketplace.json";
     const currentOrigin = String((location && location.origin) || "").replace(/\/$/, "");
@@ -4530,7 +4534,7 @@ window.MwiGuildCreditVersion = "1.1.65";
 
     const origins = Array.from(
       new Set(
-        (Array.isArray(officialOrigins) ? officialOrigins : [])
+        (Array.isArray(snapshotOrigins) ? snapshotOrigins : [])
           .map((origin) => String(origin || "").replace(/\/$/, ""))
           .filter(Boolean)
       )

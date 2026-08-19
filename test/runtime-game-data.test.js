@@ -50,11 +50,11 @@ function createSnapshotLoader(origin, fetchImpl, options = {}) {
   return { state, gameData };
 }
 
-test("市场快照在官方当前域名失败时按顺序回退到另一官方域名", async () => {
+test("市场快照按当前域名、另一官方域名和备用接口顺序回退", async () => {
   const requests = [];
   const { state, gameData } = createSnapshotLoader("https://www.milkywayidlecn.com", async (url) => {
     requests.push(url);
-    if (requests.length === 1) return { ok: false, status: 403 };
+    if (requests.length < 3) return { ok: false, status: 403 };
     return {
       ok: true,
       status: 200,
@@ -69,7 +69,8 @@ test("市场快照在官方当前域名失败时按顺序回退到另一官方�
 
   assert.deepEqual(requests, [
     "https://www.milkywayidlecn.com/game_data/marketplace.json",
-    "https://www.milkywayidle.com/game_data/marketplace.json"
+    "https://www.milkywayidle.com/game_data/marketplace.json",
+    "https://q7.nainai.eu.org/game_data/marketplace.json"
   ]);
   assert.equal(snapshot.marketData["/items/beast_hide"]["0"].a, 51);
   assert.equal(state.snapshot, snapshot);
@@ -86,7 +87,7 @@ test("非官方本地开发站点不会回退到生产域名", () => {
   );
 });
 
-test("所有官方快照源失败时保留各域名的 HTTP 状态", async () => {
+test("所有快照源失败时保留各域名的 HTTP 状态", async () => {
   const { gameData } = createSnapshotLoader("https://www.milkywayidle.com", async () => ({
     ok: false,
     status: 403
@@ -94,7 +95,7 @@ test("所有官方快照源失败时保留各域名的 HTTP 状态", async () =>
 
   await assert.rejects(
     gameData.loadSnapshot(true),
-    /www\.milkywayidle\.com: HTTP 403; www\.milkywayidlecn\.com: HTTP 403/
+    /www\.milkywayidle\.com: HTTP 403; www\.milkywayidlecn\.com: HTTP 403; q7\.nainai\.eu\.org: HTTP 403/
   );
 });
 
@@ -124,7 +125,7 @@ test("新快照被 403 拒绝时返回已保存的旧快照", async () => {
   );
 
   assert.equal(await gameData.loadSnapshot(false), oldSnapshot);
-  assert.equal(requests, 2);
+  assert.equal(requests, 3);
   assert.equal(state.marketSnapshotFallbackActive, true);
   assert.match(state.marketSnapshotFallbackError, /HTTP 403/);
 });
@@ -213,7 +214,7 @@ test("手动刷新在冷却期内复用刚取得的快照", async () => {
   assert.deepEqual(cacheModes, ["default", "reload"]);
 });
 
-test("403 退避期内不重复请求已被拒绝的官方域名", async () => {
+test("403 退避期内不重复请求已被拒绝的快照源", async () => {
   const requestedAt = Date.parse("2026-08-19T15:00:00Z");
   let requests = 0;
   const persisted = [];
@@ -231,6 +232,6 @@ test("403 退避期内不重复请求已被拒绝的官方域名", async () => {
 
   await assert.rejects(gameData.loadSnapshot(false), /HTTP 403/);
   await assert.rejects(gameData.loadSnapshot(false), /HTTP 403 backoff/);
-  assert.equal(requests, 2);
+  assert.equal(requests, 3);
   assert.equal(persisted.length >= 2, true);
 });
