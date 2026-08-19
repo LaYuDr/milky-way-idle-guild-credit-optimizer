@@ -36,6 +36,8 @@
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
+    MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
+    MARKETPLACE_SNAPSHOT_ORIGINS: ["https://www.milkywayidle.com", "https://www.milkywayidlecn.com"],
     UPDATE_CHECK_TIMEOUT_MS: 8000,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE: false,
     PRICE_REFERENCES: { a: {}, b: {} },

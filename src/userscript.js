@@ -55,6 +55,8 @@
   const {
     UPDATE_SCRIPT_URL,
     FALLBACK_INSTALL_URL,
+    MARKETPLACE_SNAPSHOT_PATH,
+    MARKETPLACE_SNAPSHOT_ORIGINS,
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
     PRICE_REFERENCES,
@@ -366,9 +368,11 @@
     scheduleMarketDataRefresh,
     scheduleInventoryDataRefresh,
     scheduleGuildDataRefresh,
-    t,
     resolveItemName,
-    CREDIT_TYPES
+    CREDIT_TYPES,
+    fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow),
+    MARKETPLACE_SNAPSHOT_PATH,
+    MARKETPLACE_SNAPSHOT_ORIGINS
   });
   const {
     hydrateLocalInitData,

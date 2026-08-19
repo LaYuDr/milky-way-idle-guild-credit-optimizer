@@ -5,6 +5,23 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function marketplaceSnapshotUrls(location, officialOrigins, snapshotPath) {
+    const path =
+      typeof snapshotPath === "string" && snapshotPath.startsWith("/") ? snapshotPath : "/game_data/marketplace.json";
+    const currentOrigin = String((location && location.origin) || "").replace(/\/$/, "");
+    if (!currentOrigin) return [path];
+
+    const origins = Array.from(
+      new Set(
+        (Array.isArray(officialOrigins) ? officialOrigins : [])
+          .map((origin) => String(origin || "").replace(/\/$/, ""))
+          .filter(Boolean)
+      )
+    );
+    if (!origins.includes(currentOrigin)) return [`${currentOrigin}${path}`];
+    return [currentOrigin, ...origins.filter((origin) => origin !== currentOrigin)].map((origin) => `${origin}${path}`);
+  }
+
   function createGameData(dependencies) {
     const {
       state,
@@ -25,9 +42,11 @@
       scheduleMarketDataRefresh,
       scheduleInventoryDataRefresh,
       scheduleGuildDataRefresh,
-      t,
       resolveItemName,
-      CREDIT_TYPES
+      CREDIT_TYPES,
+      fetchImpl,
+      MARKETPLACE_SNAPSHOT_PATH,
+      MARKETPLACE_SNAPSHOT_ORIGINS
     } = dependencies;
 
     function decompressFromUtf16(compressed) {
@@ -365,14 +384,47 @@
     async function loadSnapshot(force) {
       if (state.snapshot && !force) return state.snapshot;
       const liveRevisionAtRequestStart = state.marketLiveRevision;
-      const response = await fetch("/game_data/marketplace.json", { cache: "no-store" });
-      if (!response.ok) throw new Error(t("snapshotLoadFailed", { message: response.status }));
-      const rawSnapshot = await response.json();
-      const marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
-      if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
+      const request =
+        typeof fetchImpl === "function"
+          ? fetchImpl
+          : pageWindow && typeof pageWindow.fetch === "function"
+            ? pageWindow.fetch.bind(pageWindow)
+            : typeof fetch === "function"
+              ? fetch
+              : null;
+      if (!request) throw new Error("Fetch API is unavailable.");
+      const urls = marketplaceSnapshotUrls(
+        pageWindow && pageWindow.location,
+        MARKETPLACE_SNAPSHOT_ORIGINS,
+        MARKETPLACE_SNAPSHOT_PATH
+      );
+      const failures = [];
+      let rawSnapshot;
+      let marketData;
+      let nextTimestamp;
+      for (const url of urls) {
+        try {
+          const response = await request(url, { cache: "no-store" });
+          if (!response || !response.ok) throw new Error(`HTTP ${response ? response.status : "unknown"}`);
+          rawSnapshot = await response.json();
+          marketData = marketDataApi.sanitizeMarketData(rawSnapshot && rawSnapshot.marketData);
+          if (!Object.keys(marketData).length) throw new Error("Marketplace payload is empty.");
+          nextTimestamp = marketDataApi.normalizeMarketTimestamp(rawSnapshot && rawSnapshot.timestamp);
+          if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
+          break;
+        } catch (error) {
+          let source = url;
+          try {
+            source = new URL(url, pageWindow && pageWindow.location && pageWindow.location.href).host || url;
+          } catch (_) {}
+          failures.push(`${source}: ${error && error.message ? error.message : String(error)}`);
+          rawSnapshot = null;
+          marketData = null;
+          nextTimestamp = 0;
+        }
+      }
+      if (!rawSnapshot || !marketData || nextTimestamp <= 0) throw new Error(failures.join("; "));
       const snapshot = { ...rawSnapshot, marketData };
-      const nextTimestamp = marketDataApi.normalizeMarketTimestamp(snapshot && snapshot.timestamp);
-      if (nextTimestamp <= 0) throw new Error("Marketplace payload has no valid timestamp.");
       if (state.snapshotTimestamp > 0 && nextTimestamp > 0 && nextTimestamp < state.snapshotTimestamp) {
         return state.snapshot;
       }
@@ -462,5 +514,5 @@
     };
   }
 
-  return { createGameData };
+  return { marketplaceSnapshotUrls, createGameData };
 });
