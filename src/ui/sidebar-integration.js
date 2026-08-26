@@ -10,6 +10,69 @@
     en: ["Inventory", "Equipment", "Skills", "House", "Loadout", "Loadouts", "Harvest", "Gathering"]
   };
   const EXPECTED_LABELS = new Set(Object.values(SIDEBAR_LABELS).flat());
+  const SIDEBAR_ACTIVATION_EVENT = "mwi:sidebar-plugin-activated";
+
+  function createActivationCoordinator(options = {}) {
+    const eventTarget = options.eventTarget;
+    const CustomEventConstructor = options.CustomEvent;
+    const owner = String(options.owner || "").trim();
+    const onDeactivate = typeof options.onDeactivate === "function" ? options.onDeactivate : () => {};
+    let started = false;
+
+    function handleActivation(event) {
+      const activeOwner = typeof event?.detail === "string" ? event.detail : "";
+      if (activeOwner && activeOwner !== owner) onDeactivate(activeOwner);
+    }
+
+    function start() {
+      if (started) return true;
+      if (!owner || typeof eventTarget?.addEventListener !== "function") return false;
+      eventTarget.addEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = true;
+      return true;
+    }
+
+    function announce() {
+      if (!started) start();
+      if (
+        !started ||
+        typeof eventTarget?.dispatchEvent !== "function" ||
+        typeof CustomEventConstructor !== "function"
+      ) {
+        return false;
+      }
+      eventTarget.dispatchEvent(new CustomEventConstructor(SIDEBAR_ACTIVATION_EVENT, { detail: owner }));
+      return true;
+    }
+
+    function destroy() {
+      if (!started) return;
+      eventTarget.removeEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = false;
+    }
+
+    return Object.freeze({ start, announce, destroy });
+  }
+
+  function createDocumentActivationCoordinator(windowRef, owner, onDeactivate) {
+    const coordinator = createActivationCoordinator({
+      eventTarget: windowRef?.document,
+      CustomEvent: windowRef?.CustomEvent,
+      owner,
+      onDeactivate
+    });
+    coordinator.start();
+    return coordinator;
+  }
+
+  function integrationForCustomTab(tab) {
+    const tabBar = tab?.parentElement;
+    const tabsRoot = tabBar?.parentElement?.parentElement?.parentElement;
+    const sidebar = tabsRoot?.parentElement;
+    const panelHost =
+      sidebar && Array.from(sidebar.children || []).find((node) => /tabPanelsContainer/.test(String(node.className)));
+    return tabBar && panelHost ? { tabBar, panelHost } : null;
+  }
 
   function sidebarLocale(labels) {
     const counts = { "zh-CN": 0, en: 0 };
@@ -63,5 +126,13 @@
     return bestIntegration;
   }
 
-  return { SIDEBAR_LABELS, sidebarLocale, findSidebarIntegration };
+  return {
+    SIDEBAR_LABELS,
+    SIDEBAR_ACTIVATION_EVENT,
+    sidebarLocale,
+    findSidebarIntegration,
+    createActivationCoordinator,
+    createDocumentActivationCoordinator,
+    integrationForCustomTab
+  };
 });

@@ -34,7 +34,7 @@
 - 安装脚本：[`dist/milky-way-idle-guild-credit-optimizer.user.js`](dist/milky-way-idle-guild-credit-optimizer.user.js)
 - 建议使用 Tampermonkey 安装。脚本匹配 `www.milkywayidle.com` 和 `www.milkywayidlecn.com` 的 HTTPS 页面。
 
-发布包不依赖本机开发服务。插件内会检查 GitHub 上的最新正式版本；网络异常时只显示“暂时无法读取”，不会阻塞页面使用。
+发布包不依赖本机开发服务。插件内会优先检查 GitHub 上的最新正式版本；主更新源不可用时，会改用上述 Tampermonkey 备用分发链接中的代理脚本源检查版本，并在发现新版本时通过 Tampermonkey 安装页更新。两个更新源均不可用时只显示“暂时无法读取”，不会阻塞页面使用。
 
 ## 数据来源与边界
 

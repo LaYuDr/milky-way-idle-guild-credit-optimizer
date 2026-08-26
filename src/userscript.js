@@ -53,7 +53,7 @@
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const {
-    UPDATE_SCRIPT_URL,
+    UPDATE_SOURCES,
     FALLBACK_INSTALL_URL,
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
@@ -88,7 +88,7 @@
   });
   const updateChecker = releaseInfoApi.createVersionChecker({
     fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow),
-    url: UPDATE_SCRIPT_URL,
+    sources: UPDATE_SOURCES,
     timeoutMs: UPDATE_CHECK_TIMEOUT_MS,
     setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow),
     clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow),
@@ -515,13 +515,13 @@
     if (!status) return;
     status.textContent = t("updateChecking", { current: PLUGIN_VERSION });
     try {
-      const latestVersion = await updateChecker.latestVersion();
+      const { latestVersion, installUrl } = await updateChecker.latestRelease();
       if (core.compareVersions(PLUGIN_VERSION, latestVersion) < 0) {
         status.classList.add("mwi-update-available");
         status.replaceChildren(t("updateAvailable", { current: PLUGIN_VERSION, latest: latestVersion }));
         const updateLink = document.createElement("a");
         updateLink.className = "mwi-update-link";
-        updateLink.href = UPDATE_SCRIPT_URL;
+        updateLink.href = installUrl;
         updateLink.target = "_blank";
         updateLink.rel = "noopener noreferrer";
         updateLink.textContent = t("updateNow");
@@ -805,6 +805,11 @@
     }
     state.hiddenSidebarNodes = [];
   }
+  const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
+    window,
+    "mwi-guild-credit-optimizer",
+    hideCreditPanel
+  );
 
   function activateCreditTabFromPointer(event) {
     const creditTab = state.creditTab;
@@ -812,16 +817,9 @@
     const rawTarget = event.target;
     const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
     if (!target || !creditTab.contains(target)) return false;
-    const tabBar = creditTab.parentElement;
-    const tabsRoot =
-      tabBar &&
-      tabBar.parentElement &&
-      tabBar.parentElement.parentElement &&
-      tabBar.parentElement.parentElement.parentElement;
-    const sidebar = tabsRoot && tabsRoot.parentElement;
-    const panelHost =
-      sidebar && Array.from(sidebar.children).find((node) => /tabPanelsContainer/.test(String(node.className)));
-    if (!tabBar || !panelHost) return false;
+    const integration = sidebarIntegrationApi.integrationForCustomTab(creditTab);
+    if (!integration) return false;
+    const { tabBar, panelHost } = integration;
     event.preventDefault();
     event.stopImmediatePropagation();
     showCreditPanel(panelHost, tabBar);
@@ -830,6 +828,7 @@
 
   function showCreditPanel(panelHost, tabBar) {
     if (!state.panel || !state.panel.isConnected) return;
+    sidebarActivationCoordinator.announce();
     hideCreditPanel();
     state.hiddenSidebarNodes = Array.from(panelHost.children).filter((node) => node !== state.panel);
     for (const node of state.hiddenSidebarNodes) {
@@ -981,6 +980,7 @@
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarIntegrationTask.dispose();
+    sidebarActivationCoordinator.destroy();
     exchangeAdvisorFrameTask.dispose();
     stopSidebarIntegrationObserver();
     window.clearTimeout(state.refreshTimer);

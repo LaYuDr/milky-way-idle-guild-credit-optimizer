@@ -26,6 +26,7 @@ const FIXED_RELEASE_PATHS = new Set([
   "README.md",
   "docs/ARCHITECTURE.md",
   "docs/DEVELOPMENT.md",
+  "docs/NEW_PLUGIN_PROJECT_HANDOFF.md",
   "docs/RELEASING.md",
   "eslint.config.mjs",
   "package.json",

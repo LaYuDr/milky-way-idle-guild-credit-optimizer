@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.66";
+window.MwiGuildCreditVersion = "1.1.67";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1828,7 +1828,12 @@ window.MwiGuildCreditVersion = "1.1.66";
 
   function createVersionChecker(options) {
     const fetchImpl = options && options.fetchImpl;
-    const url = options && options.url;
+    const configuredSources = options && Array.isArray(options.sources) ? options.sources : [];
+    const sources = configuredSources.length
+      ? configuredSources.filter((source) => source && source.url)
+      : options && options.url
+        ? [{ url: options.url, installUrl: options.url }]
+        : [];
     const cacheTtlMs = Number(options && options.cacheTtlMs) || DEFAULT_CACHE_TTL_MS;
     const timeoutMs = Number(options && options.timeoutMs) || DEFAULT_TIMEOUT_MS;
     const setTimer = (options && options.setTimeout) || setTimeout;
@@ -1838,8 +1843,7 @@ window.MwiGuildCreditVersion = "1.1.66";
     let cached = null;
     let request = null;
 
-    async function requestLatestVersion() {
-      if (typeof fetchImpl !== "function" || !url) throw new Error("更新检查不可用");
+    async function requestSource(source) {
       const controller = Controller ? new Controller() : null;
       let timeout = null;
       try {
@@ -1849,30 +1853,55 @@ window.MwiGuildCreditVersion = "1.1.66";
             reject(new Error("更新检查超时"));
           }, timeoutMs);
         });
-        const response = await Promise.race([
-          fetchImpl(url, { cache: "no-store", signal: controller && controller.signal }),
+        const release = await Promise.race([
+          (async () => {
+            const response = await fetchImpl(source.url, {
+              cache: "no-store",
+              signal: controller && controller.signal
+            });
+            if (!response || !response.ok)
+              throw new Error(`更新信息请求失败 (${(response && response.status) || "未知"})`);
+            const latestVersion = parseUserScriptVersion(await response.text());
+            if (!latestVersion) throw new Error("未找到最新版本号");
+            return { latestVersion, installUrl: source.installUrl || source.url };
+          })(),
           timeoutPromise
         ]);
-        if (!response || !response.ok) throw new Error(`更新信息请求失败 (${(response && response.status) || "未知"})`);
-        const latestVersion = parseUserScriptVersion(await response.text());
-        if (!latestVersion) throw new Error("未找到最新版本号");
-        cached = { latestVersion, checkedAt: Date.now() };
-        return latestVersion;
+        return release;
       } finally {
         if (timeout !== null) clearTimer(timeout);
       }
     }
 
-    function latestVersion() {
-      if (cached && Date.now() - cached.checkedAt < cacheTtlMs) return Promise.resolve(cached.latestVersion);
+    async function requestLatestRelease() {
+      if (typeof fetchImpl !== "function" || sources.length === 0) throw new Error("更新检查不可用");
+      let lastError = null;
+      for (const source of sources) {
+        try {
+          const release = await requestSource(source);
+          cached = { release, checkedAt: Date.now() };
+          return release;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("更新检查不可用");
+    }
+
+    function latestRelease() {
+      if (cached && Date.now() - cached.checkedAt < cacheTtlMs) return Promise.resolve(cached.release);
       if (!request)
-        request = requestLatestVersion().finally(() => {
+        request = requestLatestRelease().finally(() => {
           request = null;
         });
       return request;
     }
 
-    return { latestVersion };
+    function latestVersion() {
+      return latestRelease().then((release) => release.latestVersion);
+    }
+
+    return { latestRelease, latestVersion };
   }
 
   return { DEFAULT_CACHE_TTL_MS, DEFAULT_TIMEOUT_MS, parseUserScriptVersion, createVersionChecker };
@@ -3777,12 +3806,19 @@ window.MwiGuildCreditVersion = "1.1.66";
     { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
     { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
   ];
+  const UPDATE_SCRIPT_URL =
+    "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
+  const FALLBACK_UPDATE_SCRIPT_URL =
+    "https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
+  const FALLBACK_INSTALL_URL =
+    "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
 
   return {
-    UPDATE_SCRIPT_URL:
-      "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js",
-    FALLBACK_INSTALL_URL:
-      "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js",
+    UPDATE_SOURCES: [
+      { url: UPDATE_SCRIPT_URL, installUrl: UPDATE_SCRIPT_URL },
+      { url: FALLBACK_UPDATE_SCRIPT_URL, installUrl: FALLBACK_INSTALL_URL }
+    ],
+    FALLBACK_INSTALL_URL,
     PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
@@ -5250,6 +5286,69 @@ window.MwiGuildCreditVersion = "1.1.66";
     en: ["Inventory", "Equipment", "Skills", "House", "Loadout", "Loadouts", "Harvest", "Gathering"]
   };
   const EXPECTED_LABELS = new Set(Object.values(SIDEBAR_LABELS).flat());
+  const SIDEBAR_ACTIVATION_EVENT = "mwi:sidebar-plugin-activated";
+
+  function createActivationCoordinator(options = {}) {
+    const eventTarget = options.eventTarget;
+    const CustomEventConstructor = options.CustomEvent;
+    const owner = String(options.owner || "").trim();
+    const onDeactivate = typeof options.onDeactivate === "function" ? options.onDeactivate : () => {};
+    let started = false;
+
+    function handleActivation(event) {
+      const activeOwner = typeof event?.detail === "string" ? event.detail : "";
+      if (activeOwner && activeOwner !== owner) onDeactivate(activeOwner);
+    }
+
+    function start() {
+      if (started) return true;
+      if (!owner || typeof eventTarget?.addEventListener !== "function") return false;
+      eventTarget.addEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = true;
+      return true;
+    }
+
+    function announce() {
+      if (!started) start();
+      if (
+        !started ||
+        typeof eventTarget?.dispatchEvent !== "function" ||
+        typeof CustomEventConstructor !== "function"
+      ) {
+        return false;
+      }
+      eventTarget.dispatchEvent(new CustomEventConstructor(SIDEBAR_ACTIVATION_EVENT, { detail: owner }));
+      return true;
+    }
+
+    function destroy() {
+      if (!started) return;
+      eventTarget.removeEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = false;
+    }
+
+    return Object.freeze({ start, announce, destroy });
+  }
+
+  function createDocumentActivationCoordinator(windowRef, owner, onDeactivate) {
+    const coordinator = createActivationCoordinator({
+      eventTarget: windowRef?.document,
+      CustomEvent: windowRef?.CustomEvent,
+      owner,
+      onDeactivate
+    });
+    coordinator.start();
+    return coordinator;
+  }
+
+  function integrationForCustomTab(tab) {
+    const tabBar = tab?.parentElement;
+    const tabsRoot = tabBar?.parentElement?.parentElement?.parentElement;
+    const sidebar = tabsRoot?.parentElement;
+    const panelHost =
+      sidebar && Array.from(sidebar.children || []).find((node) => /tabPanelsContainer/.test(String(node.className)));
+    return tabBar && panelHost ? { tabBar, panelHost } : null;
+  }
 
   function sidebarLocale(labels) {
     const counts = { "zh-CN": 0, en: 0 };
@@ -5303,7 +5402,15 @@ window.MwiGuildCreditVersion = "1.1.66";
     return bestIntegration;
   }
 
-  return { SIDEBAR_LABELS, sidebarLocale, findSidebarIntegration };
+  return {
+    SIDEBAR_LABELS,
+    SIDEBAR_ACTIVATION_EVENT,
+    sidebarLocale,
+    findSidebarIntegration,
+    createActivationCoordinator,
+    createDocumentActivationCoordinator,
+    integrationForCustomTab
+  };
 });
 
 
@@ -10091,7 +10198,7 @@ window.MwiGuildCreditVersion = "1.1.66";
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const PLUGIN_VERSION = String(window.MwiGuildCreditVersion || "0.0.0");
   const {
-    UPDATE_SCRIPT_URL,
+    UPDATE_SOURCES,
     FALLBACK_INSTALL_URL,
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
@@ -10126,7 +10233,7 @@ window.MwiGuildCreditVersion = "1.1.66";
   });
   const updateChecker = releaseInfoApi.createVersionChecker({
     fetchImpl: pageWindow.fetch && pageWindow.fetch.bind(pageWindow),
-    url: UPDATE_SCRIPT_URL,
+    sources: UPDATE_SOURCES,
     timeoutMs: UPDATE_CHECK_TIMEOUT_MS,
     setTimeout: pageWindow.setTimeout && pageWindow.setTimeout.bind(pageWindow),
     clearTimeout: pageWindow.clearTimeout && pageWindow.clearTimeout.bind(pageWindow),
@@ -10553,13 +10660,13 @@ window.MwiGuildCreditVersion = "1.1.66";
     if (!status) return;
     status.textContent = t("updateChecking", { current: PLUGIN_VERSION });
     try {
-      const latestVersion = await updateChecker.latestVersion();
+      const { latestVersion, installUrl } = await updateChecker.latestRelease();
       if (core.compareVersions(PLUGIN_VERSION, latestVersion) < 0) {
         status.classList.add("mwi-update-available");
         status.replaceChildren(t("updateAvailable", { current: PLUGIN_VERSION, latest: latestVersion }));
         const updateLink = document.createElement("a");
         updateLink.className = "mwi-update-link";
-        updateLink.href = UPDATE_SCRIPT_URL;
+        updateLink.href = installUrl;
         updateLink.target = "_blank";
         updateLink.rel = "noopener noreferrer";
         updateLink.textContent = t("updateNow");
@@ -10843,6 +10950,11 @@ window.MwiGuildCreditVersion = "1.1.66";
     }
     state.hiddenSidebarNodes = [];
   }
+  const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
+    window,
+    "mwi-guild-credit-optimizer",
+    hideCreditPanel
+  );
 
   function activateCreditTabFromPointer(event) {
     const creditTab = state.creditTab;
@@ -10850,16 +10962,9 @@ window.MwiGuildCreditVersion = "1.1.66";
     const rawTarget = event.target;
     const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
     if (!target || !creditTab.contains(target)) return false;
-    const tabBar = creditTab.parentElement;
-    const tabsRoot =
-      tabBar &&
-      tabBar.parentElement &&
-      tabBar.parentElement.parentElement &&
-      tabBar.parentElement.parentElement.parentElement;
-    const sidebar = tabsRoot && tabsRoot.parentElement;
-    const panelHost =
-      sidebar && Array.from(sidebar.children).find((node) => /tabPanelsContainer/.test(String(node.className)));
-    if (!tabBar || !panelHost) return false;
+    const integration = sidebarIntegrationApi.integrationForCustomTab(creditTab);
+    if (!integration) return false;
+    const { tabBar, panelHost } = integration;
     event.preventDefault();
     event.stopImmediatePropagation();
     showCreditPanel(panelHost, tabBar);
@@ -10868,6 +10973,7 @@ window.MwiGuildCreditVersion = "1.1.66";
 
   function showCreditPanel(panelHost, tabBar) {
     if (!state.panel || !state.panel.isConnected) return;
+    sidebarActivationCoordinator.announce();
     hideCreditPanel();
     state.hiddenSidebarNodes = Array.from(panelHost.children).filter((node) => node !== state.panel);
     for (const node of state.hiddenSidebarNodes) {
@@ -11019,6 +11125,7 @@ window.MwiGuildCreditVersion = "1.1.66";
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarIntegrationTask.dispose();
+    sidebarActivationCoordinator.destroy();
     exchangeAdvisorFrameTask.dispose();
     stopSidebarIntegrationObserver();
     window.clearTimeout(state.refreshTimer);

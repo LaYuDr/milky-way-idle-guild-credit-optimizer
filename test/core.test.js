@@ -558,6 +558,79 @@ test("更新检查复用五分钟内的成功结果", async () => {
   assert.equal(calls, 1);
 });
 
+test("主更新源失败后使用备用源及其安装地址", async () => {
+  const requestedUrls = [];
+  const checker = releaseInfoApi.createVersionChecker({
+    sources: [
+      { url: "https://primary.example/script.user.js", installUrl: "https://primary.example/install" },
+      { url: "https://fallback.example/script.user.js", installUrl: "https://fallback.example/install" }
+    ],
+    fetchImpl: async (url) => {
+      requestedUrls.push(url);
+      if (url.includes("primary")) throw new Error("主更新源不可用");
+      return { ok: true, status: 200, text: async () => "// @version 1.0.2" };
+    }
+  });
+
+  assert.deepEqual(await checker.latestRelease(), {
+    latestVersion: "1.0.2",
+    installUrl: "https://fallback.example/install"
+  });
+  assert.deepEqual(requestedUrls, [
+    "https://primary.example/script.user.js",
+    "https://fallback.example/script.user.js"
+  ]);
+});
+
+test("主更新源成功时不请求备用源", async () => {
+  const requestedUrls = [];
+  const checker = releaseInfoApi.createVersionChecker({
+    sources: [
+      { url: "https://primary.example/script.user.js", installUrl: "https://primary.example/install" },
+      { url: "https://fallback.example/script.user.js", installUrl: "https://fallback.example/install" }
+    ],
+    fetchImpl: async (url) => {
+      requestedUrls.push(url);
+      return { ok: true, status: 200, text: async () => "// @version 1.0.1" };
+    }
+  });
+
+  assert.equal(await checker.latestVersion(), "1.0.1");
+  assert.deepEqual(requestedUrls, ["https://primary.example/script.user.js"]);
+});
+
+test("主更新源超时后继续请求备用源", async () => {
+  const requestedUrls = [];
+  let timeoutCallback;
+  const checker = releaseInfoApi.createVersionChecker({
+    sources: [
+      { url: "https://primary.example/script.user.js" },
+      { url: "https://fallback.example/script.user.js", installUrl: "https://fallback.example/install" }
+    ],
+    fetchImpl: (url) => {
+      requestedUrls.push(url);
+      if (url.includes("primary")) return new Promise(() => {});
+      return Promise.resolve({ ok: true, status: 200, text: async () => "// @version 1.0.2" });
+    },
+    setTimeout: (callback) => {
+      timeoutCallback = callback;
+      return 1;
+    },
+    clearTimeout: () => {}
+  });
+
+  const request = checker.latestRelease();
+  timeoutCallback();
+  assert.deepEqual(await request, {
+    latestVersion: "1.0.2",
+    installUrl: "https://fallback.example/install"
+  });
+  assert.deepEqual(requestedUrls, [
+    "https://primary.example/script.user.js",
+    "https://fallback.example/script.user.js"
+  ]);
+});
+
 test("更新检查在请求长期无响应时超时", async () => {
   let timeoutCallback;
   const checker = releaseInfoApi.createVersionChecker({
@@ -2378,8 +2451,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /updateLatest/);
   assert.match(source, /mwi-update-available/);
   assert.match(source, /raw\.githubusercontent\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
+  assert.match(source, /js\.nainai\.eu\.org\/proxy\/https:\/\/update\.greasyfork\.org\/scripts\/586873/);
   assert.match(source, /UPDATE_CHECK_TIMEOUT_MS: 8000/);
-  assert.match(source, /updateChecker\.latestVersion\(\)/);
+  assert.match(source, /updateChecker\.latestRelease\(\)/);
+  assert.match(source, /updateLink\.href = installUrl/);
   assert.match(source, /releaseInfoApi\.createVersionChecker/);
   assert.match(buildSource, /@author       柆雨/);
   assert.match(buildSource, /@license      MIT/);

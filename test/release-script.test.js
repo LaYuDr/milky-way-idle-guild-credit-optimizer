@@ -17,6 +17,7 @@ test("发布脚本只允许当前版本归档并排除未跟踪工具草稿", as
   assert.equal(release.isAllowedReleasePath("eslint.config.mjs", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath(".prettierignore", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath(".prettierrc.json", "1.1.29"), true);
+  assert.equal(release.isAllowedReleasePath("docs/NEW_PLUGIN_PROJECT_HANDOFF.md", "1.1.29"), true);
   assert.equal(release.releaseArchivePath("1.1.29"), "releases/v1.1/银河奶牛公会信用点性价比-v1.1.29.user.js");
   assert.equal(release.isAllowedReleasePath("releases/v1.1/银河奶牛公会信用点性价比-v1.1.29.user.js", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath("releases/v1.1/银河奶牛公会信用点性价比-v1.1.28.user.js", "1.1.29"), false);
