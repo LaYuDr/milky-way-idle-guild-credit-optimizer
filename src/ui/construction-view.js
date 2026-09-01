@@ -33,9 +33,6 @@
 
     const constructionUi = {
       pickerOpen: state.buildingPlans.length === 0,
-      pendingBuildingHrid: "",
-      pendingStartValue: "",
-      pendingStartErrorKey: "",
       expandedBuildingHrids: new Set(),
       clearUndoPlans: null,
       clearUndoTimer: null
@@ -64,7 +61,7 @@
       });
     }
 
-    function currentGuildBuildingLevel(definition) {
+    function readGuildBuildingLevel(definition) {
       const source = state.guildBuildingLevels;
       if (!source) return null;
       const entries = Array.isArray(source)
@@ -78,13 +75,23 @@
         const level = shrineLevelValue(record);
         if (level !== null) return Math.min(level, definition.maxLevel);
       }
-      return state.guildBuildingLevelsComplete === true ? 0 : null;
+      return null;
+    }
+
+    function currentGuildBuildingLevel(definition) {
+      return readGuildBuildingLevel(definition) ?? 0;
     }
 
     function guildBuildingLevelSnapshot(definitions) {
-      const levels = new Map(definitions.map((definition) => [definition.hrid, currentGuildBuildingLevel(definition)]));
-      const knownCount = Array.from(levels.values()).filter((level) => level !== null).length;
-      return { levels, knownCount, totalCount: definitions.length };
+      const complete = state.guildBuildingLevelsComplete === true;
+      const levels = new Map();
+      const knownHrids = new Set();
+      for (const definition of definitions) {
+        const readLevel = readGuildBuildingLevel(definition);
+        levels.set(definition.hrid, readLevel ?? 0);
+        if (readLevel !== null || complete) knownHrids.add(definition.hrid);
+      }
+      return { levels, knownHrids, knownCount: knownHrids.size, totalCount: definitions.length };
     }
 
     function reconcileGuildBuildingPlans(definitions) {
@@ -100,9 +107,7 @@
           removedCount += 1;
           continue;
         }
-        const liveLevel = currentGuildBuildingLevel(definition);
-        const startLevel =
-          liveLevel === null ? Math.max(0, Math.min(definition.maxLevel, Number(plan.startLevel) || 0)) : liveLevel;
+        const startLevel = currentGuildBuildingLevel(definition);
         const targetLevel = Math.max(0, Math.min(definition.maxLevel, Number(plan.targetLevel) || 0));
         if (targetLevel <= startLevel) {
           changed = true;
@@ -145,53 +150,18 @@
       constructionUi.clearUndoPlans = null;
     }
 
-    function clearPendingGuildBuilding() {
-      constructionUi.pendingBuildingHrid = "";
-      constructionUi.pendingStartValue = "";
-      constructionUi.pendingStartErrorKey = "";
-    }
-
     function setGuildBuildingPickerOpen(open) {
       constructionUi.pickerOpen = Boolean(open);
-      if (!constructionUi.pickerOpen) clearPendingGuildBuilding();
       return constructionUi.pickerOpen;
     }
 
-    function setPendingGuildBuildingStartValue(value) {
-      constructionUi.pendingStartValue = String(value ?? "");
-      constructionUi.pendingStartErrorKey = "";
-    }
-
-    function addGuildBuildingPlan(definitions, buildingHrid, manualStartLevel) {
+    function addGuildBuildingPlan(definitions, buildingHrid) {
       const definition = definitions.find((entry) => entry.hrid === buildingHrid);
       if (!definition) return { status: "not_found", buildingHrid };
       const existing = state.buildingPlans.find((plan) => plan.buildingHrid === buildingHrid);
       if (existing) return { status: "already_planned", buildingHrid, plan: existing };
-      const liveLevel = currentGuildBuildingLevel(definition);
-      let startLevel = liveLevel;
-      if (startLevel === null) {
-        if (manualStartLevel === undefined || manualStartLevel === null) {
-          constructionUi.pickerOpen = true;
-          constructionUi.pendingBuildingHrid = buildingHrid;
-          constructionUi.pendingStartValue = "";
-          constructionUi.pendingStartErrorKey = "";
-          return { status: "requires_start_level", buildingHrid };
-        }
-        if (String(manualStartLevel).trim() === "") {
-          constructionUi.pendingBuildingHrid = buildingHrid;
-          constructionUi.pendingStartValue = String(manualStartLevel);
-          constructionUi.pendingStartErrorKey = "currentBuildingLevelRequired";
-          return { status: "invalid_start_level", buildingHrid };
-        }
-        startLevel = Number(manualStartLevel);
-        constructionUi.pendingStartValue = String(manualStartLevel);
-        if (!Number.isSafeInteger(startLevel) || startLevel < 0 || startLevel > definition.maxLevel) {
-          constructionUi.pendingStartErrorKey = "currentBuildingLevelRange";
-          return { status: "invalid_start_level", buildingHrid };
-        }
-      }
+      const startLevel = currentGuildBuildingLevel(definition);
       if (startLevel >= definition.maxLevel) {
-        constructionUi.pendingStartErrorKey = "buildingMaxLevel";
         return { status: "at_max_level", buildingHrid };
       }
       discardGuildBuildingClearUndo();
@@ -203,7 +173,6 @@
       };
       state.buildingPlans.push(plan);
       state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
-      clearPendingGuildBuilding();
       persistGuildBuildingPlannerState();
       return { status: "added", buildingHrid, plan };
     }
@@ -363,31 +332,18 @@
       </section>`;
     }
 
-    function renderGuildBuildingTile(definition, plan, liveLevel, spriteBaseHref) {
-      const displayLevel = liveLevel === null ? (plan ? plan.startLevel : null) : liveLevel;
-      const currentLabel = displayLevel === null ? "?" : formatNumber(displayLevel);
+    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref) {
+      const currentLabel = formatNumber(liveLevel);
       const label = guildBuildingLabel(definition);
       const searchText =
         `${label} ${constructionCategoryLabel(definition.category)} ${definition.hrid}`.toLocaleLowerCase(ui().locale);
       const accessibleLabel = plan
         ? t("buildingTilePlannedLabel", { building: label, target: formatNumber(plan.targetLevel) })
-        : liveLevel === null
-          ? t("buildingTileUnknownLabel", { building: label })
+        : !levelKnown
+          ? t("buildingTileDefaultZeroLabel", { building: label })
           : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
-      const atMaxLevel = !plan && liveLevel !== null && liveLevel >= definition.maxLevel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(liveLevel !== null)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(liveLevel !== null)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
-    }
-
-    function renderPendingGuildBuilding(definitions) {
-      const definition = definitions.find((entry) => entry.hrid === constructionUi.pendingBuildingHrid);
-      if (!definition) return "";
-      const label = guildBuildingLabel(definition);
-      const errorId = "mwi-pending-building-level-error";
-      const helpId = "mwi-pending-building-level-help";
-      const error = constructionUi.pendingStartErrorKey
-        ? t(constructionUi.pendingStartErrorKey, { max: formatNumber(Math.max(0, definition.maxLevel - 1)) })
-        : "";
-      return `<form class="mwi-building-start-form" data-role="pending-building-start" data-building-hrid="${escapeHtml(definition.hrid)}" novalidate><span class="mwi-building-start-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(t("currentBuildingLevelRequired"))}</small></span><label><span>${escapeHtml(t("currentBuildingLevelLabel", { building: label }))}</span><input data-role="pending-building-start-level" data-building-hrid="${escapeHtml(definition.hrid)}" type="number" min="0" max="${definition.maxLevel - 1}" step="1" inputmode="numeric" aria-describedby="${helpId} ${errorId}"${error ? ' aria-invalid="true"' : ""} value="${escapeHtml(constructionUi.pendingStartValue)}"></label><small id="${helpId}">${escapeHtml(t("currentBuildingLevelHelp", { max: formatNumber(Math.max(0, definition.maxLevel - 1)) }))}</small><small id="${errorId}" class="mwi-field-error"${error ? "" : " hidden"}>${escapeHtml(error)}</small><span class="mwi-building-start-actions"><button type="submit">${escapeHtml(t("addBuildingToPlan"))}</button><button class="mwi-secondary-button" data-role="cancel-pending-building" data-building-hrid="${escapeHtml(definition.hrid)}" type="button">${escapeHtml(t("cancel"))}</button></span></form>`;
+      const atMaxLevel = !plan && liveLevel >= definition.maxLevel;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(levelKnown)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -403,6 +359,7 @@
             definition,
             plansByHrid.get(definition.hrid),
             levels.levels.get(definition.hrid),
+            levels.knownHrids.has(definition.hrid),
             spriteBaseHref
           )
         )
@@ -412,7 +369,7 @@
         known: formatNumber(levels.knownCount),
         total: formatNumber(levels.totalCount)
       });
-      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">＋</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionUi.pickerOpen ? "▴" : "▾"}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}>${renderPendingGuildBuilding(definitions)}<div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(unknownCount ? t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }) : t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
+      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">＋</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionUi.pickerOpen ? "▴" : "▾"}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}><div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(unknownCount ? t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }) : t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
     }
 
     function renderGuildConstructionActions(plan) {
@@ -638,8 +595,6 @@
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
-      setPendingGuildBuildingStartValue,
-      clearPendingGuildBuilding,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,

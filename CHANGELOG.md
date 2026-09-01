@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.68] - 2026-09-02
+
+### Changed
+
+- 公会建筑未读取到等级时统一按 0 级规划，并移除手工起始等级填写流程。
+
 ## [1.1.67] - 2026-08-26
 
 ### Changed

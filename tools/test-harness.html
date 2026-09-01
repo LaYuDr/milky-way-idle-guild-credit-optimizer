@@ -1448,37 +1448,8 @@
 
       const unknownBuildingHrid = "/guild_buildings/builders_hall";
       (await waitFor(() => tileFor(unknownBuildingHrid))).click();
-      await waitFor(() => panel.querySelector('[data-role="pending-building-start-level"]'));
-      audit.unknownPrompt = constructionStateSnapshot(panel);
-
-      let pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
-      pendingInput
-        .closest('[data-role="pending-building-start"]')
-        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await waitFor(
-        () => panel.querySelector('[data-role="pending-building-start-level"]')?.getAttribute("aria-invalid") === "true"
-      );
-      audit.unknownEmpty = constructionStateSnapshot(panel);
-
-      pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
-      pendingInput.value = "21";
-      pendingInput.dispatchEvent(new Event("input", { bubbles: true }));
-      pendingInput
-        .closest('[data-role="pending-building-start"]')
-        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await waitFor(
-        () => panel.querySelector('[data-role="pending-building-start-level"]')?.getAttribute("aria-invalid") === "true"
-      );
-      audit.unknownInvalid = constructionStateSnapshot(panel);
-
-      pendingInput = panel.querySelector('[data-role="pending-building-start-level"]');
-      pendingInput.value = "3";
-      pendingInput.dispatchEvent(new Event("input", { bubbles: true }));
-      pendingInput
-        .closest('[data-role="pending-building-start"]')
-        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await waitFor(() => constructionGroupOrder(panel).includes(unknownBuildingHrid));
-      audit.unknownAdded = constructionStateSnapshot(panel);
+      audit.defaultZeroAdded = constructionStateSnapshot(panel);
       panel.querySelector(`[data-role="remove-building-plan"][data-building-hrid="${unknownBuildingHrid}"]`).click();
       await waitForOrder(expectedOrder);
 
@@ -1596,7 +1567,7 @@
       audit.final = constructionStateSnapshot(panel);
 
       const compactNumber = (value) => String(value || "").replace(/[\s,，]/g, "");
-      const storedUnknownPlan = audit.unknownAdded.storedPlans.find(
+      const storedDefaultZeroPlan = audit.defaultZeroAdded.storedPlans.find(
         (plan) => plan.buildingHrid === unknownBuildingHrid
       );
       audit.checks = {
@@ -1609,18 +1580,12 @@
           audit.knownAdd.groupCount === 1 &&
           audit.knownAdd.focus.role === "building-target" &&
           audit.knownAdd.focus.inViewport,
-        unknownBuildingRequiresLevel:
-          audit.unknownPrompt.groupCount === 3 && audit.unknownPrompt.focus.role === "pending-building-start-level",
-        unknownEmptyLevelRejected:
-          audit.unknownEmpty.groupCount === 3 &&
-          audit.unknownEmpty.pendingStart?.value === "" &&
-          audit.unknownEmpty.pendingStart?.ariaInvalid &&
-          Boolean(audit.unknownEmpty.pendingStart?.error),
-        unknownValidationPreservesInput:
-          audit.unknownInvalid.groupCount === 3 &&
-          audit.unknownInvalid.pendingStart?.value === "21" &&
-          audit.unknownInvalid.pendingStart?.ariaInvalid,
-        unknownManualLevelPersisted: storedUnknownPlan?.startLevel === 3 && storedUnknownPlan?.targetLevel === 4,
+        unreadBuildingDefaultsToZero:
+          audit.defaultZeroAdded.groupCount === 4 &&
+          !audit.defaultZeroAdded.pendingStart &&
+          audit.defaultZeroAdded.focus.role === "building-target" &&
+          storedDefaultZeroPlan?.startLevel === 0 &&
+          storedDefaultZeroPlan?.targetLevel === 1,
         detailsCollapsedByDefault:
           audit.sample.visibleStepCount === 0 &&
           audit.detailsExpanded.visibleStepCount === 2 &&

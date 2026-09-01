@@ -49,8 +49,6 @@
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
-      setPendingGuildBuildingStartValue,
-      clearPendingGuildBuilding,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,
@@ -652,13 +650,6 @@
           refreshGuildConstructionBudgetPreview(panel);
           return;
         }
-        if (event.target.matches('[data-role="pending-building-start-level"]')) {
-          setPendingGuildBuildingStartValue(event.target.value);
-          event.target.removeAttribute("aria-invalid");
-          const error = panel.querySelector("#mwi-pending-building-level-error");
-          if (error) error.hidden = true;
-          return;
-        }
         if (event.target.matches('[data-role="building-search"]')) {
           state.buildingSearch = event.target.value;
           applyGuildBuildingFilters(constructionResults);
@@ -685,21 +676,6 @@
           setGuildBuildingTarget(guildBuildingDefinitions(), buildingHrid, Number(event.target.value));
           refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
         }
-      });
-      constructionResults.addEventListener("submit", (event) => {
-        const form = event.target.closest('[data-role="pending-building-start"]');
-        if (!form) return;
-        event.preventDefault();
-        const input = form.querySelector('[data-role="pending-building-start-level"]');
-        if (!input) return;
-        setPendingGuildBuildingStartValue(input.value);
-        const buildingHrid = form.dataset.buildingHrid;
-        const result = addGuildBuildingPlan(guildBuildingDefinitions(), buildingHrid, input.value);
-        if (result.status === "added") {
-          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
-          return;
-        }
-        refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
       });
       constructionResults.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || !event.target.closest(".mwi-building-picker-body")) return;
@@ -728,19 +704,6 @@
             focusConstructionControl(panel, { role: "building-target", buildingHrid });
             return;
           }
-          if (result.status === "requires_start_level")
-            refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
-          return;
-        }
-        if (button.matches('[data-role="cancel-pending-building"]')) {
-          const buildingHrid = button.dataset.buildingHrid;
-          clearPendingGuildBuilding();
-          const focused = refreshConstructionAndFocus(
-            panel,
-            { role: "building-tile", buildingHrid },
-            { role: "building-search" }
-          );
-          if (!focused) focusConstructionControl(panel, { role: "toggle-building-picker" });
           return;
         }
         if (button.matches('[data-role="building-category"]')) {

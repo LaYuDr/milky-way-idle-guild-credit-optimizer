@@ -210,9 +210,9 @@ http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebar
 
 Repeat the construction audit at the same eleven widths. It also verifies the
 queue-first planning flow against a deterministic `3 / 28` partial-level
-live frame. Missing records remain unknown in this audit by design. The audit
-adds three known-level buildings, rejects and then accepts an unknown
-building's manual current level, checks inline target editing, collapsed step
+live frame. Missing records remain visibly marked as unread, but resolve to
+level `0` for planning. The audit adds three known-level buildings, directly
+adds one unread building as `0 -> 1` without a manual-level prompt, checks inline target editing, collapsed step
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
 search focus, and focus visibility after rerenders. It leaves a reusable final
 sample with 28 visible square catalog tiles, three collapsed building groups in
@@ -227,7 +227,7 @@ await window.__mwiConstructionAuditReady;
 ```
 
 For every width, require zero panel horizontal overflow, no reported element
-overflow or control overlap, 28 game sprite icons, 3 known and 25 unknown
+overflow or control overlap, 28 game sprite icons, 3 read and 25 default-zero
 levels, square tile geometry, and no visible per-level steps in the final
 collapsed sample. Use the reported panel rectangle and computed
 `gridTemplateColumns`; the requested sidebar width is not the plugin's actual
@@ -318,9 +318,10 @@ await window.__mwiConstructionSnapshotAuditReady;
 Require every value in `checks` to be `true`. In particular, the complete
 snapshot must report `28 / 28` known levels, treat all 25 omitted records as
 known level `0`, and add an omitted building directly as `0 -> 1` without
-rendering the manual current-level form. Do not replace the regular
+rendering a manual current-level form. Do not replace the regular
 `constructionAudit=1` width matrix with this audit: the former intentionally
-retains the partial-frame `3 / 28` behavior.
+retains the partial-frame `3 / 28` source-coverage behavior while still using
+level `0` for every unread building.
 
 For the shrine guide's guild-token exchange path, open:
 

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.67";
+window.MwiGuildCreditVersion = "1.1.68";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2168,14 +2168,9 @@ window.MwiGuildCreditVersion = "1.1.67";
       notPlanned: "未计划",
       buildingTileLabel: "{building}，当前 {current} 级，目标 {target}",
       buildingTileAddLabel: "添加 {building}，当前 {current} 级",
-      buildingTileUnknownLabel: "添加 {building}；当前等级未知，需先填写",
+      buildingTileDefaultZeroLabel: "添加 {building}；未读取到等级，按 0 级规划",
       buildingTilePlannedLabel: "定位到 {building} 的施工行，目标 {target} 级",
       buildingTileMaxLabel: "{building} 已满级，不能加入计划",
-      currentBuildingLevelRequired: "当前等级尚未读取，请先填写后再加入计划。",
-      currentBuildingLevelLabel: "{building} 当前等级",
-      currentBuildingLevelHelp: "请输入 0–{max} 的整数。",
-      currentBuildingLevelRange: "当前等级必须是 0–{max} 的整数。",
-      addBuildingToPlan: "加入施工计划",
       cancel: "取消",
       buildingAddedToPlan: "已将 {building} 加入施工计划。",
       buildingRemovedFromPlan: "已将 {building} 移出施工计划。",
@@ -2205,12 +2200,8 @@ window.MwiGuildCreditVersion = "1.1.67";
       expandBuildingSteps: "展开 {building} 的逐级费用",
       collapseBuildingSteps: "收起 {building} 的逐级费用",
       removeBuildingFromPlan: "将 {building} 移出施工计划",
-      buildingLevelsRead: "已读取当前公会建筑等级。",
-      buildingLevelsUnknown: "未读取到当前公会建筑等级；请核对各建筑的起始等级。",
-      buildingLevelsReadCompact: "等级已读取",
-      buildingLevelsUnknownCompact: "等级暂不可用",
       buildingLevelsCoverage: "已读取 {known}/{total}",
-      buildingLevelsPartialHint: "{unknown} 座建筑等级未知；添加前需填写当前等级。",
+      buildingLevelsPartialHint: "{unknown} 座建筑未读取到等级，已按 0 级处理。",
       missingBuildingCost: "{building} 缺少 {level} 级费用，未计入总成本。",
       moreConstructionActions: "更多施工计划操作",
       clearBuildingPlans: "清空施工计划",
@@ -2491,14 +2482,9 @@ window.MwiGuildCreditVersion = "1.1.67";
       notPlanned: "Not planned",
       buildingTileLabel: "{building}, current level {current}, target {target}",
       buildingTileAddLabel: "Add {building}, current level {current}",
-      buildingTileUnknownLabel: "Add {building}; enter its unknown current level first",
+      buildingTileDefaultZeroLabel: "Add {building}; level unavailable, planning from level 0",
       buildingTilePlannedLabel: "Go to {building} in the plan, target level {target}",
       buildingTileMaxLabel: "{building} is at maximum level and cannot be added",
-      currentBuildingLevelRequired: "Its current level is unavailable. Enter it before adding this building.",
-      currentBuildingLevelLabel: "Current level for {building}",
-      currentBuildingLevelHelp: "Enter a whole number from 0 to {max}.",
-      currentBuildingLevelRange: "The current level must be a whole number from 0 to {max}.",
-      addBuildingToPlan: "Add to construction plan",
       cancel: "Cancel",
       buildingAddedToPlan: "{building} added to the construction plan.",
       buildingRemovedFromPlan: "{building} removed from the construction plan.",
@@ -2529,12 +2515,8 @@ window.MwiGuildCreditVersion = "1.1.67";
       expandBuildingSteps: "Expand per-level costs for {building}",
       collapseBuildingSteps: "Collapse per-level costs for {building}",
       removeBuildingFromPlan: "Remove {building} from the construction plan",
-      buildingLevelsRead: "Current guild building levels loaded.",
-      buildingLevelsUnknown: "Current guild building levels are unavailable. Verify each building's starting level.",
-      buildingLevelsReadCompact: "Levels loaded",
-      buildingLevelsUnknownCompact: "Levels unavailable",
       buildingLevelsCoverage: "Levels loaded: {known}/{total}",
-      buildingLevelsPartialHint: "{unknown} building level(s) are unknown. Enter a current level before adding.",
+      buildingLevelsPartialHint: "{unknown} building level(s) are unavailable and default to level 0.",
       missingBuildingCost: "{building} is missing its level {level} cost and is excluded from the total.",
       moreConstructionActions: "More construction plan actions",
       clearBuildingPlans: "Clear construction plan",
@@ -5813,19 +5795,9 @@ window.MwiGuildCreditVersion = "1.1.67";
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{outline:1px solid #77f3d0;outline-offset:-3px}
         #mwi-credit-optimizer .mwi-building-tile:focus-visible{outline:2px solid #fff;outline-offset:1px}
         #mwi-credit-optimizer .mwi-building-icon{width:min(70%,42px);height:min(70%,42px)}
-        #mwi-credit-optimizer .mwi-building-start-form{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,.6fr) auto;align-items:end;gap:5px 8px;padding:8px 9px;border-bottom:1px solid #80663f;background:#332e28}
-        #mwi-credit-optimizer .mwi-building-start-copy{display:grid;align-self:center;gap:2px;min-width:0}
-        #mwi-credit-optimizer .mwi-building-start-copy strong{overflow:hidden;color:#fff;text-overflow:ellipsis;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-building-start-copy small,#mwi-credit-optimizer .mwi-building-start-form>small{color:#c8b78f;font-size:9px;line-height:1.3}
-        #mwi-credit-optimizer .mwi-building-start-form label{min-width:0;font-size:9px}
-        #mwi-credit-optimizer .mwi-building-start-form input{width:100%;min-width:0}
-        #mwi-credit-optimizer .mwi-building-start-form>small{grid-column:2/-1}
-        #mwi-credit-optimizer .mwi-building-start-actions{display:flex;gap:4px}
-        #mwi-credit-optimizer .mwi-building-start-actions button{min-height:32px;padding:4px 8px;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-secondary-button{border:1px solid #555875!important;background:#343650!important;color:#fff!important}
         @container (min-width:720px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(0,1fr);align-items:start}#mwi-credit-optimizer .mwi-construction-layout[data-picker-open="true"]{grid-template-columns:minmax(360px,1.12fr) minmax(300px,.88fr)}#mwi-credit-optimizer .mwi-construction-queue-pane{position:static;top:auto}}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-queue-meta{justify-content:space-between}#mwi-credit-optimizer .mwi-construction-actions{margin-left:auto}}
-        @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:30px 36px minmax(0,1fr) auto;gap:5px;padding-right:6px}#mwi-credit-optimizer .mwi-construction-drag-handle{width:30px;min-width:30px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{min-width:58px}#mwi-credit-optimizer .mwi-construction-target{min-width:96px}#mwi-credit-optimizer .mwi-construction-target select{width:70px}#mwi-credit-optimizer .mwi-building-start-form{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-building-start-form>small{grid-column:1}#mwi-credit-optimizer .mwi-building-start-actions{flex-wrap:wrap}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}}
+        @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:30px 36px minmax(0,1fr) auto;gap:5px;padding-right:6px}#mwi-credit-optimizer .mwi-construction-drag-handle{width:30px;min-width:30px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{min-width:58px}#mwi-credit-optimizer .mwi-construction-target{min-width:96px}#mwi-credit-optimizer .mwi-construction-target select{width:70px}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group,#mwi-credit-optimizer .mwi-building-picker-toggle{transition:none}}
         #mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"]{border-color:#d8a33c!important;background:linear-gradient(135deg,#493f2a,#353147)!important;color:#fff4d4!important;box-shadow:0 0 0 1px #d8a33c33}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"] .mwi-token-credit-plan-indicator{border-color:#ffd17c;background:#ffd17c;color:#332814}#mwi-credit-optimizer .mwi-material-copy{flex:1 1 auto}#mwi-credit-optimizer .mwi-material-exchange-mode{flex:0 0 auto;min-height:26px!important;padding:4px 7px!important;border:1px solid #66698f!important;border-radius:999px!important;background:#353653!important;color:#dfe1f4!important;font-size:10px;line-height:1.1;white-space:nowrap}#mwi-credit-optimizer .mwi-material-exchange-mode:hover{border-color:#77f3d0!important}#mwi-credit-optimizer .mwi-material-exchange-mode[data-active="true"]{border-color:#43c4ad!important;background:#245149!important;color:#dffff7!important;box-shadow:0 0 0 1px #43c4ad22}
         /* Compact shrine planner and aligned result rows. */
@@ -6257,9 +6229,6 @@ window.MwiGuildCreditVersion = "1.1.67";
 
     const constructionUi = {
       pickerOpen: state.buildingPlans.length === 0,
-      pendingBuildingHrid: "",
-      pendingStartValue: "",
-      pendingStartErrorKey: "",
       expandedBuildingHrids: new Set(),
       clearUndoPlans: null,
       clearUndoTimer: null
@@ -6288,7 +6257,7 @@ window.MwiGuildCreditVersion = "1.1.67";
       });
     }
 
-    function currentGuildBuildingLevel(definition) {
+    function readGuildBuildingLevel(definition) {
       const source = state.guildBuildingLevels;
       if (!source) return null;
       const entries = Array.isArray(source)
@@ -6302,13 +6271,23 @@ window.MwiGuildCreditVersion = "1.1.67";
         const level = shrineLevelValue(record);
         if (level !== null) return Math.min(level, definition.maxLevel);
       }
-      return state.guildBuildingLevelsComplete === true ? 0 : null;
+      return null;
+    }
+
+    function currentGuildBuildingLevel(definition) {
+      return readGuildBuildingLevel(definition) ?? 0;
     }
 
     function guildBuildingLevelSnapshot(definitions) {
-      const levels = new Map(definitions.map((definition) => [definition.hrid, currentGuildBuildingLevel(definition)]));
-      const knownCount = Array.from(levels.values()).filter((level) => level !== null).length;
-      return { levels, knownCount, totalCount: definitions.length };
+      const complete = state.guildBuildingLevelsComplete === true;
+      const levels = new Map();
+      const knownHrids = new Set();
+      for (const definition of definitions) {
+        const readLevel = readGuildBuildingLevel(definition);
+        levels.set(definition.hrid, readLevel ?? 0);
+        if (readLevel !== null || complete) knownHrids.add(definition.hrid);
+      }
+      return { levels, knownHrids, knownCount: knownHrids.size, totalCount: definitions.length };
     }
 
     function reconcileGuildBuildingPlans(definitions) {
@@ -6324,9 +6303,7 @@ window.MwiGuildCreditVersion = "1.1.67";
           removedCount += 1;
           continue;
         }
-        const liveLevel = currentGuildBuildingLevel(definition);
-        const startLevel =
-          liveLevel === null ? Math.max(0, Math.min(definition.maxLevel, Number(plan.startLevel) || 0)) : liveLevel;
+        const startLevel = currentGuildBuildingLevel(definition);
         const targetLevel = Math.max(0, Math.min(definition.maxLevel, Number(plan.targetLevel) || 0));
         if (targetLevel <= startLevel) {
           changed = true;
@@ -6369,53 +6346,18 @@ window.MwiGuildCreditVersion = "1.1.67";
       constructionUi.clearUndoPlans = null;
     }
 
-    function clearPendingGuildBuilding() {
-      constructionUi.pendingBuildingHrid = "";
-      constructionUi.pendingStartValue = "";
-      constructionUi.pendingStartErrorKey = "";
-    }
-
     function setGuildBuildingPickerOpen(open) {
       constructionUi.pickerOpen = Boolean(open);
-      if (!constructionUi.pickerOpen) clearPendingGuildBuilding();
       return constructionUi.pickerOpen;
     }
 
-    function setPendingGuildBuildingStartValue(value) {
-      constructionUi.pendingStartValue = String(value ?? "");
-      constructionUi.pendingStartErrorKey = "";
-    }
-
-    function addGuildBuildingPlan(definitions, buildingHrid, manualStartLevel) {
+    function addGuildBuildingPlan(definitions, buildingHrid) {
       const definition = definitions.find((entry) => entry.hrid === buildingHrid);
       if (!definition) return { status: "not_found", buildingHrid };
       const existing = state.buildingPlans.find((plan) => plan.buildingHrid === buildingHrid);
       if (existing) return { status: "already_planned", buildingHrid, plan: existing };
-      const liveLevel = currentGuildBuildingLevel(definition);
-      let startLevel = liveLevel;
-      if (startLevel === null) {
-        if (manualStartLevel === undefined || manualStartLevel === null) {
-          constructionUi.pickerOpen = true;
-          constructionUi.pendingBuildingHrid = buildingHrid;
-          constructionUi.pendingStartValue = "";
-          constructionUi.pendingStartErrorKey = "";
-          return { status: "requires_start_level", buildingHrid };
-        }
-        if (String(manualStartLevel).trim() === "") {
-          constructionUi.pendingBuildingHrid = buildingHrid;
-          constructionUi.pendingStartValue = String(manualStartLevel);
-          constructionUi.pendingStartErrorKey = "currentBuildingLevelRequired";
-          return { status: "invalid_start_level", buildingHrid };
-        }
-        startLevel = Number(manualStartLevel);
-        constructionUi.pendingStartValue = String(manualStartLevel);
-        if (!Number.isSafeInteger(startLevel) || startLevel < 0 || startLevel > definition.maxLevel) {
-          constructionUi.pendingStartErrorKey = "currentBuildingLevelRange";
-          return { status: "invalid_start_level", buildingHrid };
-        }
-      }
+      const startLevel = currentGuildBuildingLevel(definition);
       if (startLevel >= definition.maxLevel) {
-        constructionUi.pendingStartErrorKey = "buildingMaxLevel";
         return { status: "at_max_level", buildingHrid };
       }
       discardGuildBuildingClearUndo();
@@ -6427,7 +6369,6 @@ window.MwiGuildCreditVersion = "1.1.67";
       };
       state.buildingPlans.push(plan);
       state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
-      clearPendingGuildBuilding();
       persistGuildBuildingPlannerState();
       return { status: "added", buildingHrid, plan };
     }
@@ -6587,31 +6528,18 @@ window.MwiGuildCreditVersion = "1.1.67";
       </section>`;
     }
 
-    function renderGuildBuildingTile(definition, plan, liveLevel, spriteBaseHref) {
-      const displayLevel = liveLevel === null ? (plan ? plan.startLevel : null) : liveLevel;
-      const currentLabel = displayLevel === null ? "?" : formatNumber(displayLevel);
+    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref) {
+      const currentLabel = formatNumber(liveLevel);
       const label = guildBuildingLabel(definition);
       const searchText =
         `${label} ${constructionCategoryLabel(definition.category)} ${definition.hrid}`.toLocaleLowerCase(ui().locale);
       const accessibleLabel = plan
         ? t("buildingTilePlannedLabel", { building: label, target: formatNumber(plan.targetLevel) })
-        : liveLevel === null
-          ? t("buildingTileUnknownLabel", { building: label })
+        : !levelKnown
+          ? t("buildingTileDefaultZeroLabel", { building: label })
           : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
-      const atMaxLevel = !plan && liveLevel !== null && liveLevel >= definition.maxLevel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(liveLevel !== null)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(liveLevel !== null)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
-    }
-
-    function renderPendingGuildBuilding(definitions) {
-      const definition = definitions.find((entry) => entry.hrid === constructionUi.pendingBuildingHrid);
-      if (!definition) return "";
-      const label = guildBuildingLabel(definition);
-      const errorId = "mwi-pending-building-level-error";
-      const helpId = "mwi-pending-building-level-help";
-      const error = constructionUi.pendingStartErrorKey
-        ? t(constructionUi.pendingStartErrorKey, { max: formatNumber(Math.max(0, definition.maxLevel - 1)) })
-        : "";
-      return `<form class="mwi-building-start-form" data-role="pending-building-start" data-building-hrid="${escapeHtml(definition.hrid)}" novalidate><span class="mwi-building-start-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(t("currentBuildingLevelRequired"))}</small></span><label><span>${escapeHtml(t("currentBuildingLevelLabel", { building: label }))}</span><input data-role="pending-building-start-level" data-building-hrid="${escapeHtml(definition.hrid)}" type="number" min="0" max="${definition.maxLevel - 1}" step="1" inputmode="numeric" aria-describedby="${helpId} ${errorId}"${error ? ' aria-invalid="true"' : ""} value="${escapeHtml(constructionUi.pendingStartValue)}"></label><small id="${helpId}">${escapeHtml(t("currentBuildingLevelHelp", { max: formatNumber(Math.max(0, definition.maxLevel - 1)) }))}</small><small id="${errorId}" class="mwi-field-error"${error ? "" : " hidden"}>${escapeHtml(error)}</small><span class="mwi-building-start-actions"><button type="submit">${escapeHtml(t("addBuildingToPlan"))}</button><button class="mwi-secondary-button" data-role="cancel-pending-building" data-building-hrid="${escapeHtml(definition.hrid)}" type="button">${escapeHtml(t("cancel"))}</button></span></form>`;
+      const atMaxLevel = !plan && liveLevel >= definition.maxLevel;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(levelKnown)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -6627,6 +6555,7 @@ window.MwiGuildCreditVersion = "1.1.67";
             definition,
             plansByHrid.get(definition.hrid),
             levels.levels.get(definition.hrid),
+            levels.knownHrids.has(definition.hrid),
             spriteBaseHref
           )
         )
@@ -6636,7 +6565,7 @@ window.MwiGuildCreditVersion = "1.1.67";
         known: formatNumber(levels.knownCount),
         total: formatNumber(levels.totalCount)
       });
-      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">＋</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionUi.pickerOpen ? "▴" : "▾"}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}>${renderPendingGuildBuilding(definitions)}<div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(unknownCount ? t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }) : t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
+      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">＋</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionUi.pickerOpen ? "▴" : "▾"}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}><div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4><small>${escapeHtml(unknownCount ? t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }) : t("buildingCatalogHint"))}</small></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
     }
 
     function renderGuildConstructionActions(plan) {
@@ -6862,8 +6791,6 @@ window.MwiGuildCreditVersion = "1.1.67";
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
-      setPendingGuildBuildingStartValue,
-      clearPendingGuildBuilding,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,
@@ -9019,8 +8946,6 @@ window.MwiGuildCreditVersion = "1.1.67";
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
-      setPendingGuildBuildingStartValue,
-      clearPendingGuildBuilding,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,
@@ -9622,13 +9547,6 @@ window.MwiGuildCreditVersion = "1.1.67";
           refreshGuildConstructionBudgetPreview(panel);
           return;
         }
-        if (event.target.matches('[data-role="pending-building-start-level"]')) {
-          setPendingGuildBuildingStartValue(event.target.value);
-          event.target.removeAttribute("aria-invalid");
-          const error = panel.querySelector("#mwi-pending-building-level-error");
-          if (error) error.hidden = true;
-          return;
-        }
         if (event.target.matches('[data-role="building-search"]')) {
           state.buildingSearch = event.target.value;
           applyGuildBuildingFilters(constructionResults);
@@ -9655,21 +9573,6 @@ window.MwiGuildCreditVersion = "1.1.67";
           setGuildBuildingTarget(guildBuildingDefinitions(), buildingHrid, Number(event.target.value));
           refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
         }
-      });
-      constructionResults.addEventListener("submit", (event) => {
-        const form = event.target.closest('[data-role="pending-building-start"]');
-        if (!form) return;
-        event.preventDefault();
-        const input = form.querySelector('[data-role="pending-building-start-level"]');
-        if (!input) return;
-        setPendingGuildBuildingStartValue(input.value);
-        const buildingHrid = form.dataset.buildingHrid;
-        const result = addGuildBuildingPlan(guildBuildingDefinitions(), buildingHrid, input.value);
-        if (result.status === "added") {
-          refreshConstructionAndFocus(panel, { role: "building-target", buildingHrid });
-          return;
-        }
-        refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
       });
       constructionResults.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || !event.target.closest(".mwi-building-picker-body")) return;
@@ -9698,19 +9601,6 @@ window.MwiGuildCreditVersion = "1.1.67";
             focusConstructionControl(panel, { role: "building-target", buildingHrid });
             return;
           }
-          if (result.status === "requires_start_level")
-            refreshConstructionAndFocus(panel, { role: "pending-building-start-level", buildingHrid });
-          return;
-        }
-        if (button.matches('[data-role="cancel-pending-building"]')) {
-          const buildingHrid = button.dataset.buildingHrid;
-          clearPendingGuildBuilding();
-          const focused = refreshConstructionAndFocus(
-            panel,
-            { role: "building-tile", buildingHrid },
-            { role: "building-search" }
-          );
-          if (!focused) focusConstructionControl(panel, { role: "toggle-building-picker" });
           return;
         }
         if (button.matches('[data-role="building-category"]')) {
@@ -10777,8 +10667,6 @@ window.MwiGuildCreditVersion = "1.1.67";
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
     setGuildBuildingPickerOpen,
-    setPendingGuildBuildingStartValue,
-    clearPendingGuildBuilding,
     toggleGuildBuildingSteps,
     clearGuildBuildingPlans,
     undoClearGuildBuildingPlans,
@@ -10851,8 +10739,6 @@ window.MwiGuildCreditVersion = "1.1.67";
     moveGuildBuildingPlan,
     reorderGuildBuildingPlan,
     setGuildBuildingPickerOpen,
-    setPendingGuildBuildingStartValue,
-    clearPendingGuildBuilding,
     toggleGuildBuildingSteps,
     clearGuildBuildingPlans,
     undoClearGuildBuildingPlans,

@@ -128,7 +128,7 @@ test("完整建筑等级快照中缺少的建筑视为 0 级并可直接规划 0
   assert.equal(harness.persistCount(), 1);
 });
 
-test("局部建筑等级帧缺少的建筑仍要求手动填写起始等级", () => {
+test("局部建筑等级帧缺少的建筑按 0 级直接加入计划", () => {
   const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
   const harness = createConstructionHarness({
     guildBuildingLevels: {
@@ -136,13 +136,27 @@ test("局部建筑等级帧缺少的建筑仍要求手动填写起始等级", ()
     },
     guildBuildingLevelsComplete: false
   });
-  assert.equal(harness.view.currentGuildBuildingLevel(hall), null);
-  assert.deepEqual(harness.view.addGuildBuildingPlan([hall], hall.hrid), {
-    status: "requires_start_level",
-    buildingHrid: hall.hrid
+  assert.equal(harness.view.currentGuildBuildingLevel(hall), 0);
+  const result = harness.view.addGuildBuildingPlan([hall], hall.hrid);
+  assert.equal(result.status, "added");
+  assert.deepEqual(result.plan, {
+    id: "building-plan-1",
+    buildingHrid: hall.hrid,
+    startLevel: 0,
+    targetLevel: 1
   });
-  assert.deepEqual(harness.state.buildingPlans, []);
-  assert.equal(harness.persistCount(), 0);
+  assert.equal(harness.persistCount(), 1);
+});
+
+test("完全未读取建筑等级时也按 0 级规划，真实等级到达后优先使用真实值", () => {
+  const hall = data.definitions().find((entry) => entry.hrid === "/guild_buildings/guild_hall");
+  const harness = createConstructionHarness();
+  assert.equal(harness.view.currentGuildBuildingLevel(hall), 0);
+
+  harness.state.guildBuildingLevels = {
+    [hall.hrid]: { guildBuildingHrid: hall.hrid, level: 4 }
+  };
+  assert.equal(harness.view.currentGuildBuildingLevel(hall), 4);
 });
 
 test("施工队列标记预算截止步骤并保留超预算项目", () => {
@@ -292,8 +306,8 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /mwi-building-tile/);
   assert.match(userscript, /mwi-building-picker/);
   assert.match(userscript, /data-role="toggle-building-picker"/);
-  assert.match(userscript, /data-role="pending-building-start"/);
-  assert.match(userscript, /data-role="pending-building-start-level"/);
+  assert.doesNotMatch(userscript, /data-role="pending-building-start"/);
+  assert.doesNotMatch(userscript, /data-role="pending-building-start-level"/);
   assert.match(userscript, /mwi-construction-group/);
   assert.match(userscript, /data-role="building-target"/);
   assert.match(userscript, /data-role="toggle-building-steps"/);
@@ -304,10 +318,6 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /data-known-count=/);
   assert.match(userscript, /data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(userscript, /data-role="undo-clear-building-plans"/);
-  assert.match(
-    userscript,
-    /cancel-pending-building[\s\S]*?building-tile[\s\S]*?building-search[\s\S]*?toggle-building-picker/
-  );
   assert.match(userscript, /function applyGuildBuildingFilters/);
   assert.match(userscript, /function guildBuildingIconMarkup/);
   assert.match(userscript, /misc_sprite/);
@@ -334,12 +344,8 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "constructionQueueDragHint",
     "constructionQueueEmptyTitle",
     "buildingTileAddLabel",
-    "buildingTileUnknownLabel",
+    "buildingTileDefaultZeroLabel",
     "buildingTilePlannedLabel",
-    "currentBuildingLevelRequired",
-    "currentBuildingLevelLabel",
-    "currentBuildingLevelRange",
-    "addBuildingToPlan",
     "constructionGroupBudgetCutoff",
     "constructionPlanRowMeta",
     "buildingTargetLabel",
