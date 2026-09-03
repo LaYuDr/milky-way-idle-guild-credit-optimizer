@@ -157,10 +157,7 @@ http://127.0.0.1:4173/test-harness.html?sidebarTabsAudit=1&resetState=1&sidebarW
 The native tabs use fixed test widths in this fixture. With the pointer over
 the tab row, verify that a vertical wheel gesture scrolls the row horizontally,
 that the page keeps normal wheel behavior at either horizontal boundary, and
-that dragging a tab past another tab changes their DOM order without adding
-sorting controls. Reload without `resetState=1` and require the dragged order
-to be restored. A movement shorter than the drag threshold must remain a normal
-tab click.
+that no extra navigation or sorting controls are added.
 
 ### Shrine-plan empty-state refresh audit
 

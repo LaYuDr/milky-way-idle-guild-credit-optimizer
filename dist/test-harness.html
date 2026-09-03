@@ -196,7 +196,6 @@
       upgradeEmptyAuditStage !== "reloaded"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
-      localStorage.removeItem("mwi-sidebar-tab-order-v1");
       localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
     }
     if (upgradeEmptyAudit && searchParams.get("resetState") === "1" && upgradeEmptyAuditStage !== "reloaded") {

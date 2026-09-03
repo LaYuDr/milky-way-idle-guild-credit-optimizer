@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.0] - 2026-09-03
+
+### Changed
+
+- Removed native sidebar tab drag reordering and its persisted order while retaining wheel-only horizontal overflow scrolling.
+
 ## [1.1.69] - 2026-09-03
 
 ### Changed
