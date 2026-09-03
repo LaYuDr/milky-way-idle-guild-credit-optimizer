@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.1.68";
+window.MwiGuildCreditVersion = "1.1.69";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3803,6 +3803,7 @@ window.MwiGuildCreditVersion = "1.1.68";
     FALLBACK_INSTALL_URL,
     PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
+    SIDEBAR_TAB_ORDER_STORAGE_KEY: "mwi-sidebar-tab-order-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
@@ -5269,6 +5270,147 @@ window.MwiGuildCreditVersion = "1.1.68";
   };
   const EXPECTED_LABELS = new Set(Object.values(SIDEBAR_LABELS).flat());
   const SIDEBAR_ACTIVATION_EVENT = "mwi:sidebar-plugin-activated";
+  const SIDEBAR_WHEEL_SCROLL_ATTRIBUTE = "data-mwi-sidebar-wheel-scroll";
+  const SIDEBAR_DRAG_SORT_ATTRIBUTE = "data-mwi-sidebar-drag-sort";
+
+  function enableSidebarTabWheelScrolling(tabBar) {
+    if (!tabBar || typeof tabBar.addEventListener !== "function") return false;
+    if (tabBar.getAttribute?.(SIDEBAR_WHEEL_SCROLL_ATTRIBUTE) === "true") return true;
+
+    tabBar.setAttribute?.(SIDEBAR_WHEEL_SCROLL_ATTRIBUTE, "true");
+    if (tabBar.style) {
+      tabBar.style.maxWidth = "100%";
+      tabBar.style.minWidth = "0";
+      tabBar.style.overflowX = "auto";
+      tabBar.style.overflowY = "hidden";
+      tabBar.style.overscrollBehaviorInline = "contain";
+      tabBar.style.scrollbarWidth = "none";
+    }
+
+    tabBar.addEventListener(
+      "wheel",
+      (event) => {
+        if (event.ctrlKey) return;
+        const maxScrollLeft = Math.max(0, Number(tabBar.scrollWidth) - Number(tabBar.clientWidth));
+        if (maxScrollLeft <= 0) return;
+
+        let delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (!Number.isFinite(delta) || delta === 0) return;
+        if (event.deltaMode === 1) delta *= 16;
+        else if (event.deltaMode === 2) delta *= Math.max(1, Number(tabBar.clientWidth));
+
+        const currentScrollLeft = Number(tabBar.scrollLeft) || 0;
+        const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, currentScrollLeft + delta));
+        if (nextScrollLeft === currentScrollLeft) return;
+        event.preventDefault();
+        tabBar.scrollLeft = nextScrollLeft;
+      },
+      { passive: false }
+    );
+    return true;
+  }
+
+  function sidebarTabIdentity(tab) {
+    if (!tab) return "";
+    const preferredAttributes = ["data-tab-key", "data-mwi-credit-tab", "id", "aria-controls"];
+    for (const name of preferredAttributes) {
+      const value = String(tab.getAttribute?.(name) || "").trim();
+      if (value) return `${name}:${value}`;
+    }
+    const pluginAttribute = Array.from(tab.attributes || []).find(
+      (attribute) =>
+        /^data-/.test(attribute.name) &&
+        /(?:plugin|tab|key)/.test(attribute.name) &&
+        String(attribute.value || "").trim()
+    );
+    if (pluginAttribute) return `${pluginAttribute.name}:${String(pluginAttribute.value).trim()}`;
+    const label = String(tab.innerText || tab.textContent || "")
+      .replaceAll("\n", "")
+      .trim();
+    return label ? `label:${label}` : "";
+  }
+
+  function loadSidebarTabOrder(storage, storageKey) {
+    if (!storageKey || typeof storage?.getItem !== "function") return [];
+    try {
+      const saved = JSON.parse(storage.getItem(storageKey) || "null");
+      if (!saved || saved.version !== 1 || !Array.isArray(saved.order)) return [];
+      return saved.order.filter((key) => typeof key === "string" && key.length > 0 && key.length <= 300).slice(0, 100);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function restoreSidebarTabOrder(tabBar, storage, storageKey) {
+    const savedOrder = loadSidebarTabOrder(storage, storageKey);
+    if (!savedOrder.length) return false;
+    const currentItems = Array.from(tabBar.children || []);
+    const itemsByKey = new Map();
+    for (const item of currentItems) {
+      const key = sidebarTabIdentity(item);
+      if (!key) continue;
+      if (!itemsByKey.has(key)) itemsByKey.set(key, []);
+      itemsByKey.get(key).push(item);
+    }
+    const orderedItems = [];
+    for (const key of savedOrder) {
+      const matches = itemsByKey.get(key);
+      if (matches?.length) orderedItems.push(matches.shift());
+    }
+    for (const item of currentItems) {
+      if (!orderedItems.includes(item)) orderedItems.push(item);
+    }
+    if (orderedItems.every((item, index) => item === currentItems[index])) return false;
+    for (const item of orderedItems) tabBar.append(item);
+    return true;
+  }
+
+  function persistSidebarTabOrder(tabBar, storage, storageKey) {
+    if (!storageKey || typeof storage?.setItem !== "function") return false;
+    const order = Array.from(tabBar.children || [])
+      .map(sidebarTabIdentity)
+      .filter(Boolean);
+    try {
+      storage.setItem(storageKey, JSON.stringify({ version: 1, order }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function enableSidebarTabDragReordering(tabBar, options = {}) {
+    if (!tabBar || typeof tabBar.addEventListener !== "function") return false;
+    const { storage, storageKey, sortableApi } = options;
+    restoreSidebarTabOrder(tabBar, storage, storageKey);
+    for (const item of Array.from(tabBar.children || [])) item.setAttribute?.("data-mwi-sidebar-sort-item", "true");
+    if (tabBar.getAttribute?.(SIDEBAR_DRAG_SORT_ATTRIBUTE) === "true") return true;
+    if (typeof sortableApi?.createPointerSortable !== "function") return false;
+
+    tabBar.setAttribute?.(SIDEBAR_DRAG_SORT_ATTRIBUTE, "true");
+    sortableApi.createPointerSortable({
+      root: tabBar,
+      containerSelector: `[${SIDEBAR_DRAG_SORT_ATTRIBUTE}="true"]`,
+      itemSelector: '[data-mwi-sidebar-sort-item="true"]',
+      axis: "x",
+      onCommit({ fromIndex, toIndex }) {
+        const items = Array.from(tabBar.children || []);
+        const item = items[fromIndex];
+        if (!item || fromIndex === toIndex) return;
+        const remaining = items.filter((_, index) => index !== fromIndex);
+        const target = remaining[toIndex];
+        if (target) tabBar.insertBefore(item, target);
+        else tabBar.append(item);
+        persistSidebarTabOrder(tabBar, storage, storageKey);
+      }
+    });
+    return true;
+  }
+
+  function enableSidebarTabInteractions(tabBar, options = {}) {
+    const wheelEnabled = enableSidebarTabWheelScrolling(tabBar);
+    const dragEnabled = enableSidebarTabDragReordering(tabBar, options);
+    return wheelEnabled && dragEnabled;
+  }
 
   function createActivationCoordinator(options = {}) {
     const eventTarget = options.eventTarget;
@@ -5389,6 +5531,12 @@ window.MwiGuildCreditVersion = "1.1.68";
     SIDEBAR_ACTIVATION_EVENT,
     sidebarLocale,
     findSidebarIntegration,
+    enableSidebarTabInteractions,
+    enableSidebarTabWheelScrolling,
+    enableSidebarTabDragReordering,
+    sidebarTabIdentity,
+    restoreSidebarTabOrder,
+    persistSidebarTabOrder,
     createActivationCoordinator,
     createDocumentActivationCoordinator,
     integrationForCustomTab
@@ -10093,6 +10241,7 @@ window.MwiGuildCreditVersion = "1.1.68";
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
     PRICE_REFERENCES,
+    SIDEBAR_TAB_ORDER_STORAGE_KEY: tabOrderKey,
     GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES,
     GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE,
     RENDERED_MARKUP_PROPERTY,
@@ -10115,6 +10264,7 @@ window.MwiGuildCreditVersion = "1.1.68";
   const savedMarketState = pluginStorage.loadSavedLiveMarketData();
   const savedMarketSnapshot = pluginStorage.loadSavedMarketSnapshot();
   const savedMarketplaceRequestState = pluginStorage.loadMarketplaceRequestState();
+  const sidebarTabInteractionOptions = { storage: pageWindow.localStorage, storageKey: tabOrderKey, sortableApi };
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({
     pageWindow,
     document,
@@ -10903,6 +11053,7 @@ window.MwiGuildCreditVersion = "1.1.68";
       state.creditTab.parentElement === tabBar
     );
     if (currentIntegrationMatches && !localeChanged) {
+      sidebarIntegrationApi.enableSidebarTabInteractions(tabBar, sidebarTabInteractionOptions);
       if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
       stopSidebarIntegrationObserver();
       return true;
@@ -10940,6 +11091,7 @@ window.MwiGuildCreditVersion = "1.1.68";
     creditTab.addEventListener("pointerdown", activateCreditTab, true);
     creditTab.addEventListener("click", activateCreditTab, true);
     tabBar.append(creditTab);
+    sidebarIntegrationApi.enableSidebarTabInteractions(tabBar, sidebarTabInteractionOptions);
 
     const panel = state.panel || createPanel();
     panel.hidden = true;

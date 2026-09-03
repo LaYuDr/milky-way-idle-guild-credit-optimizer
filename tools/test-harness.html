@@ -71,6 +71,9 @@
     #test-tabs button:first-child {
       background: #5053ad;
     }
+    body[data-sidebar-tabs-audit="true"] #test-tabs button {
+      flex: 0 0 96px;
+    }
     [data-native-content] {
       flex: 1;
       min-height: 0;
@@ -168,12 +171,14 @@
     const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
     const sidebarResizeAudit = searchParams.get("sidebarResizeAudit") === "1";
     const sidebarStartupAudit = searchParams.get("sidebarStartupAudit") === "1";
+    const sidebarTabsAudit = searchParams.get("sidebarTabsAudit") === "1";
     const upgradeEmptyAuditStageKey = "mwi-upgrade-empty-audit-stage-v1";
     const upgradeEmptyAuditEvidenceKey = "mwi-upgrade-empty-audit-evidence-v1";
     const upgradeEmptyAuditStage = upgradeEmptyAudit ? sessionStorage.getItem(upgradeEmptyAuditStageKey) : "";
     if (layoutAudit || upgradeEmptyAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
       document.body.dataset.layoutAudit = "true";
     if (sidebarResizeAudit) document.body.dataset.sidebarResizeAudit = "true";
+    if (sidebarTabsAudit) document.body.dataset.sidebarTabsAudit = "true";
     if (
       (surplusPlan ||
         layoutAudit ||
@@ -185,11 +190,13 @@
         settingsAudit ||
         localeRaceAudit ||
         sidebarResizeAudit ||
-        sidebarStartupAudit) &&
+        sidebarStartupAudit ||
+        sidebarTabsAudit) &&
       searchParams.get("resetState") === "1" &&
       upgradeEmptyAuditStage !== "reloaded"
     ) {
       localStorage.removeItem("mwi-guild-credit-ui-state-v1");
+      localStorage.removeItem("mwi-sidebar-tab-order-v1");
       localStorage.removeItem(`mwi-guild-building-planner-v1:${location.hostname}:default`);
     }
     if (upgradeEmptyAudit && searchParams.get("resetState") === "1" && upgradeEmptyAuditStage !== "reloaded") {

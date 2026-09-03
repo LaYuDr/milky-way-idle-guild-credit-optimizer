@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.1.69] - 2026-09-03
+
+### Changed
+
+- Added wheel scrolling, drag-and-drop reordering, and persistent ordering for overflowing native sidebar tabs.
+
 ## [1.1.68] - 2026-09-02
 
 ### Changed

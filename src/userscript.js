@@ -58,6 +58,7 @@
     UPDATE_CHECK_TIMEOUT_MS,
     SHOW_ALL_CREDIT_TOKEN_TOGGLE,
     PRICE_REFERENCES,
+    SIDEBAR_TAB_ORDER_STORAGE_KEY: tabOrderKey,
     GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES,
     GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE,
     RENDERED_MARKUP_PROPERTY,
@@ -80,6 +81,7 @@
   const savedMarketState = pluginStorage.loadSavedLiveMarketData();
   const savedMarketSnapshot = pluginStorage.loadSavedMarketSnapshot();
   const savedMarketplaceRequestState = pluginStorage.loadMarketplaceRequestState();
+  const sidebarTabInteractionOptions = { storage: pageWindow.localStorage, storageKey: tabOrderKey, sortableApi };
   const itemNameCatalog = itemNameCatalogApi.createItemNameCatalog({
     pageWindow,
     document,
@@ -868,6 +870,7 @@
       state.creditTab.parentElement === tabBar
     );
     if (currentIntegrationMatches && !localeChanged) {
+      sidebarIntegrationApi.enableSidebarTabInteractions(tabBar, sidebarTabInteractionOptions);
       if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
       stopSidebarIntegrationObserver();
       return true;
@@ -905,6 +908,7 @@
     creditTab.addEventListener("pointerdown", activateCreditTab, true);
     creditTab.addEventListener("click", activateCreditTab, true);
     tabBar.append(creditTab);
+    sidebarIntegrationApi.enableSidebarTabInteractions(tabBar, sidebarTabInteractionOptions);
 
     const panel = state.panel || createPanel();
     panel.hidden = true;
