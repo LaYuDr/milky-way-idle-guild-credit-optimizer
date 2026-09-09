@@ -15,19 +15,25 @@
       guildShrineDetails: null,
       guildBuildingLevels: null,
       guildBuildingDetails: null,
+      guildPointSummary: null,
+      guildWeekStartAt: null,
       characterItems: null,
       characterItemsRevision: 0,
       guildBuffLevelsRevision: 0,
+      guildPointSummaryRevision: 0,
       marketOrderBooks: Object.create(null),
       marketOrderBookRevision: 0
     });
   if (!("guildBuildingLevels" in bridge)) bridge.guildBuildingLevels = null;
   if (!("guildBuildingDetails" in bridge)) bridge.guildBuildingDetails = null;
+  if (!("guildPointSummary" in bridge)) bridge.guildPointSummary = null;
+  if (!("guildWeekStartAt" in bridge)) bridge.guildWeekStartAt = null;
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object")
     bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
   if (!Number.isSafeInteger(bridge.characterItemsRevision)) bridge.characterItemsRevision = 0;
   if (!Number.isSafeInteger(bridge.guildBuffLevelsRevision)) bridge.guildBuffLevelsRevision = 0;
+  if (!Number.isSafeInteger(bridge.guildPointSummaryRevision)) bridge.guildPointSummaryRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
@@ -66,6 +72,7 @@
           ...diagnostics,
           characterItemsRevision: bridge.characterItemsRevision,
           guildBuffLevelsRevision: bridge.guildBuffLevelsRevision,
+          guildPointSummaryRevision: bridge.guildPointSummaryRevision,
           marketOrderBookRevision: bridge.marketOrderBookRevision
         })
       );
@@ -300,6 +307,25 @@
     }
   }
 
+  function publishGuildPointSummaryUpdate() {
+    bridge.guildPointSummaryRevision = Math.min(Number.MAX_SAFE_INTEGER, bridge.guildPointSummaryRevision + 1);
+    publishBridgeDiagnostics();
+    if (typeof bridge.onGuildPointSummaryUpdated === "function") {
+      try {
+        bridge.onGuildPointSummaryUpdated();
+      } catch (_) {
+        // The observer is optional and must never affect the game socket.
+      }
+    }
+  }
+
+  function weekStartTimestamp(value) {
+    const numeric = Number(value);
+    if (Number.isSafeInteger(numeric) && numeric > 0) return numeric;
+    const parsed = Date.parse(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
   function keepGuildData(message) {
     if (!message || typeof message !== "object") return;
     const visited = new Set();
@@ -308,6 +334,7 @@
     let characterItemsChanged = false;
     let characterItemsSource = "";
     const previousGuildBuffLevelsSignature = recordSignature(bridge.guildBuffLevels);
+    const previousGuildPointSummarySignature = recordSignature([bridge.guildPointSummary, bridge.guildWeekStartAt]);
     while (pending.length && scanned < 400) {
       const value = pending.pop();
       if (!value || typeof value !== "object" || visited.has(value)) continue;
@@ -358,6 +385,8 @@
       ];
       const characterItems = value.characterItems;
       const endCharacterItems = value.endCharacterItems;
+      const lifetimeGuildPoints = Number(value.lifetimeGuildPoints);
+      const guildPoints = Number(value.guildPoints);
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
@@ -389,10 +418,32 @@
         characterItemsChanged = true;
         characterItemsSource = "incremental";
       }
+      if (
+        Number.isSafeInteger(lifetimeGuildPoints) &&
+        lifetimeGuildPoints >= 0 &&
+        Number.isSafeInteger(guildPoints) &&
+        guildPoints >= 0
+      ) {
+        bridge.guildPointSummary = {
+          guildId: String(
+            value.guildID ||
+              value.guildId ||
+              value.id ||
+              (bridge.guildPointSummary && bridge.guildPointSummary.guildId) ||
+              ""
+          ),
+          lifetimePoints: lifetimeGuildPoints,
+          availablePoints: guildPoints
+        };
+      }
+      const guildWeekStartAt = weekStartTimestamp(value.currentWeekStartAt);
+      if (guildWeekStartAt) bridge.guildWeekStartAt = guildWeekStartAt;
       for (const child of Object.values(value)) pending.push(child);
     }
     if (characterItemsChanged) publishCharacterItemsUpdate(characterItemsSource);
     if (recordSignature(bridge.guildBuffLevels) !== previousGuildBuffLevelsSignature) publishGuildBuffLevelsUpdate();
+    if (recordSignature([bridge.guildPointSummary, bridge.guildWeekStartAt]) !== previousGuildPointSummarySignature)
+      publishGuildPointSummaryUpdate();
   }
 
   function keepSocketMessage(rawMessage) {

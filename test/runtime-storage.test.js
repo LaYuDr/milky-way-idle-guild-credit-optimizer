@@ -180,8 +180,42 @@ test("公会建设计划按站点和角色隔离并过滤非法等级", () => {
   assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState(), {
     plans: [{ buildingHrid: "/guild_buildings/guild_hall", startLevel: 1, targetLevel: 3 }],
     manualGuildPoints: 5000,
-    category: "life"
+    category: "life",
+    guildPointHistory: { guildId: "", lastObservation: null, weeks: [] }
   });
+});
+
+test("公会点数历史按角色保存并过滤损坏记录", () => {
+  const storage = memoryStorage();
+  const pluginStorage = createStorage(storage);
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  pluginStorage.persistGuildBuildingPlannerState({
+    manualGuildPoints: null,
+    buildingCategory: "all",
+    buildingPlans: [],
+    guildPointHistory: {
+      guildId: "guild-7",
+      lastObservation: {
+        guildId: "guild-7",
+        lifetimePoints: 1200,
+        availablePoints: 300,
+        weekStartAt: week + 7 * 24 * 60 * 60 * 1000,
+        observedAt: week + 8 * 24 * 60 * 60 * 1000
+      },
+      weeks: [
+        { weekStartAt: week, earnedPoints: 200, complete: true, observedAt: week + 7 * 24 * 60 * 60 * 1000 },
+        { weekStartAt: week, earnedPoints: 50, complete: false, observedAt: week + 1000 },
+        { weekStartAt: -1, earnedPoints: 999, complete: true, observedAt: week },
+        { weekStartAt: week + 1, earnedPoints: -2, complete: true, observedAt: week }
+      ]
+    }
+  });
+  const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
+  assert.equal(raw.schemaVersion, 2);
+  assert.deepEqual(raw.guildPointHistory.weeks, [
+    { weekStartAt: week, earnedPoints: 250, complete: true, observedAt: week + 7 * 24 * 60 * 60 * 1000 }
+  ]);
+  assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState().guildPointHistory, raw.guildPointHistory);
 });
 
 test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {

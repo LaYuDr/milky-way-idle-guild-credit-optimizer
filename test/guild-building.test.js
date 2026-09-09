@@ -26,19 +26,34 @@ const projectRuntimeSource = () => {
     .join("\n");
 };
 
-function createConstructionHarness({ guildBuildingLevels = null, guildBuildingLevelsComplete = false } = {}) {
+function createConstructionHarness({
+  guildBuildingLevels = null,
+  guildBuildingLevelsComplete = false,
+  confirmResult = true
+} = {}) {
   const state = {
     guildBuildingLevels,
     guildBuildingLevelsComplete,
     buildingPlans: [],
     nextBuildingPlanId: 1,
-    buildingPlanNotice: ""
+    buildingPlanNotice: "",
+    manualGuildPoints: null,
+    buildingSearch: "",
+    buildingCategory: "all",
+    guildPointSummary: null,
+    guildWeekStartAt: null,
+    guildPointHistory: { guildId: "", lastObservation: null, weeks: [] }
   };
   let persistCount = 0;
+  let confirmCount = 0;
+  const downloadState = { blob: null, clicked: false, fileName: "" };
   const view = constructionViewApi.createConstructionView({
     state,
     buildingDataApi: data,
+    core,
     t: (key) => key,
+    ui: () => ({ locale: "zh-CN" }),
+    escapeHtml: String,
     titleCase: (value) => value,
     simpleItemName: (hrid) =>
       String(hrid || "")
@@ -59,12 +74,38 @@ function createConstructionHarness({ guildBuildingLevels = null, guildBuildingLe
     persistGuildBuildingPlannerState: () => {
       persistCount += 1;
     },
+    document: {
+      body: { appendChild() {} },
+      createElement() {
+        return {
+          href: "",
+          download: "",
+          click() {
+            downloadState.clicked = true;
+            downloadState.fileName = this.download;
+          },
+          remove() {}
+        };
+      }
+    },
+    URL: {
+      createObjectURL(blob) {
+        downloadState.blob = blob;
+        return "blob:test";
+      },
+      revokeObjectURL() {}
+    },
+    Blob,
     pageWindow: {
       clearTimeout() {},
-      setTimeout() {}
+      setTimeout() {},
+      confirm() {
+        confirmCount += 1;
+        return confirmResult;
+      }
     }
   });
-  return { state, view, persistCount: () => persistCount };
+  return { state, view, downloadState, persistCount: () => persistCount, confirmCount: () => confirmCount };
 }
 
 test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
@@ -110,6 +151,214 @@ test("半价建筑使用精确的逐级费用", () => {
   const result = core.aggregateGuildBuildingLevelCosts(gym.levelCosts, 0, 2);
   assert.equal(result.status, "ok");
   assert.equal(result.totalCost, 1175);
+});
+
+test("公会点数按官方周起点累计，消费可用点数不会被误认为收益", () => {
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  const observe = (history, lifetimePoints, availablePoints, weekStartAt, day) =>
+    core.recordGuildPointObservation(history, {
+      guildId: "guild-1",
+      lifetimePoints,
+      availablePoints,
+      weekStartAt,
+      observedAt: week + day * 24 * 60 * 60 * 1000
+    });
+
+  const baseline = observe(null, 1000, 200, week, 1);
+  assert.equal(baseline.changed, true);
+  assert.deepEqual(baseline.history.weeks, []);
+
+  const firstGain = observe(baseline.history, 1100, 300, week, 2);
+  assert.equal(firstGain.recordedPoints, 100);
+  assert.equal(firstGain.history.weeks[0].complete, false);
+
+  const afterSpend = observe(firstGain.history, 1100, 50, week, 3);
+  assert.equal(afterSpend.changed, false);
+  assert.deepEqual(afterSpend.history.weeks, firstGain.history.weeks);
+
+  const nextWeek = week + 7 * 24 * 60 * 60 * 1000;
+  const closed = observe(afterSpend.history, 1250, 200, nextWeek, 8);
+  assert.equal(closed.recordedPoints, 150);
+  assert.deepEqual(
+    closed.history.weeks.map(({ weekStartAt, earnedPoints, complete }) => ({
+      weekStartAt,
+      earnedPoints,
+      complete
+    })),
+    [{ weekStartAt: week, earnedPoints: 250, complete: true }]
+  );
+  assert.equal(core.summarizeGuildPointHistory(closed.history).latest.earnedPoints, 250);
+});
+
+test("周环比增长率和下周预测只使用已结束的连续周", () => {
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  let history = null;
+  const record = (lifetimePoints, weekStartAt, observedAt) => {
+    const result = core.recordGuildPointObservation(history, {
+      guildId: "guild-1",
+      lifetimePoints,
+      availablePoints: lifetimePoints,
+      weekStartAt,
+      observedAt
+    });
+    history = result.history;
+  };
+  record(1000, week, week + day);
+  record(1250, week + 7 * day, week + 8 * day);
+  record(1550, week + 14 * day, week + 15 * day);
+  record(1750, week + 14 * day, week + 16 * day);
+
+  const summary = core.summarizeGuildPointHistory(history);
+  assert.deepEqual(
+    summary.weeks.map((entry) => entry.earnedPoints),
+    [250, 300]
+  );
+  assert.equal(summary.trackedWeeks.at(-1).complete, false);
+  assert.equal(summary.growthRate, 0.2);
+  assert.equal(summary.averageWeeklyChange, 50);
+  assert.equal(summary.forecastPoints, 350);
+  assert.equal(summary.forecastSampleCount, 2);
+});
+
+test("施工 ETA 使用当前缺口和周预测向上取整", () => {
+  assert.deepEqual(core.estimateGuildConstructionWeeks(13975, 5000, 420), {
+    status: "ok",
+    shortfall: 8975,
+    weeks: 22,
+    weeklyForecast: 420
+  });
+  assert.equal(core.estimateGuildConstructionWeeks(5000, 5000, 420).status, "covered");
+  assert.equal(core.estimateGuildConstructionWeeks(5000, null, 420).status, "missing_balance");
+  assert.equal(core.estimateGuildConstructionWeeks(5000, 1000, null).status, "missing_forecast");
+  assert.equal(core.estimateGuildConstructionWeeks(5000, 1000, 0).status, "no_growth");
+  assert.equal(core.estimateGuildConstructionWeeks(0, 1000, 420).status, "no_plan");
+});
+
+test("周记录可导出带 BOM 的 CSV，并标记完整周与追踪中记录", async () => {
+  const harness = createConstructionHarness();
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: week, earnedPoints: 360, complete: true, observedAt: week + 7 },
+    { weekStartAt: week + 7 * 24 * 60 * 60 * 1000, earnedPoints: 120, complete: false, observedAt: week + 8 }
+  ];
+  const csv = harness.view.guildPointHistoryCsv();
+  assert.ok(csv.startsWith("\uFEFF"));
+  assert.match(csv, /"guildPointCsvWeekStart","guildPointCsvEarned","guildPointCsvStatus"\r\n/);
+  assert.match(csv, /"2026-09-01T02:00:00.000Z","360","guildPointCsvComplete"/);
+  assert.match(csv, /"2026-09-08T02:00:00.000Z","120","guildPointCsvTracking"/);
+  assert.equal(harness.view.exportGuildPointHistoryCsv(), true);
+  assert.equal(harness.downloadState.clicked, true);
+  assert.equal(harness.downloadState.fileName, "guildPointCsvFileName");
+  const blobBytes = Buffer.from(await harness.downloadState.blob.arrayBuffer());
+  assert.deepEqual(Array.from(blobBytes.subarray(0, 3)), [0xef, 0xbb, 0xbf]);
+  assert.equal(blobBytes.subarray(3).toString("utf8"), csv.slice(1));
+});
+
+test("重置周记录需要确认，只清除历史并立即建立新基线", () => {
+  const cancelled = createConstructionHarness({ confirmResult: false });
+  cancelled.state.guildPointHistory.weeks = [{ weekStartAt: 1, earnedPoints: 10, complete: true, observedAt: 1 }];
+  assert.equal(cancelled.view.resetGuildPointHistory(), false);
+  assert.equal(cancelled.state.guildPointHistory.weeks.length, 1);
+  assert.equal(cancelled.persistCount(), 0);
+
+  const harness = createConstructionHarness();
+  harness.state.guildPointSummary = { guildId: "guild-1", lifetimePoints: 2000, availablePoints: 250 };
+  harness.state.guildWeekStartAt = Date.parse("2026-09-08T02:00:00Z");
+  harness.state.guildPointHistory = {
+    guildId: "guild-1",
+    lastObservation: {
+      guildId: "guild-1",
+      lifetimePoints: 1500,
+      availablePoints: 100,
+      weekStartAt: Date.parse("2026-09-01T02:00:00Z"),
+      observedAt: Date.parse("2026-09-02T02:00:00Z")
+    },
+    weeks: [{ weekStartAt: 1, earnedPoints: 10, complete: true, observedAt: 1 }]
+  };
+  assert.equal(harness.view.resetGuildPointHistory(), true);
+  assert.equal(harness.confirmCount(), 1);
+  assert.equal(harness.persistCount(), 1);
+  assert.deepEqual(harness.state.guildPointHistory.weeks, []);
+  assert.equal(harness.state.guildPointHistory.lastObservation.lifetimePoints, 2000);
+  assert.equal(harness.state.buildingPlanNotice, "guildPointHistoryReset");
+});
+
+test("跨越多个官方周时跳过无法拆分的增量，换公会时重置历史", () => {
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const baseline = core.recordGuildPointObservation(null, {
+    guildId: "guild-1",
+    lifetimePoints: 1000,
+    availablePoints: 100,
+    weekStartAt: week,
+    observedAt: week + day
+  });
+  const gap = core.recordGuildPointObservation(baseline.history, {
+    guildId: "guild-1",
+    lifetimePoints: 1400,
+    availablePoints: 500,
+    weekStartAt: week + 14 * day,
+    observedAt: week + 15 * day
+  });
+  assert.equal(gap.skippedAmbiguousIncrease, 400);
+  assert.deepEqual(gap.history.weeks, []);
+
+  const changedGuild = core.recordGuildPointObservation(gap.history, {
+    guildId: "guild-2",
+    lifetimePoints: 50,
+    availablePoints: 50,
+    weekStartAt: week + 14 * day,
+    observedAt: week + 16 * day
+  });
+  assert.equal(changedGuild.history.guildId, "guild-2");
+  assert.deepEqual(changedGuild.history.weeks, []);
+});
+
+test("整周没有获得公会点数时会保存为 0，而首次补齐周起点不会伪造记录", () => {
+  const week = Date.parse("2026-09-01T02:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const baseline = core.recordGuildPointObservation(null, {
+    guildId: "guild-1",
+    lifetimePoints: 1000,
+    availablePoints: 100,
+    weekStartAt: null,
+    observedAt: week + day
+  });
+  const identifiedWeek = core.recordGuildPointObservation(baseline.history, {
+    guildId: "guild-1",
+    lifetimePoints: 1000,
+    availablePoints: 100,
+    weekStartAt: week,
+    observedAt: week + 2 * day
+  });
+  assert.deepEqual(identifiedWeek.history.weeks, []);
+  const closed = core.recordGuildPointObservation(identifiedWeek.history, {
+    guildId: "guild-1",
+    lifetimePoints: 1000,
+    availablePoints: 100,
+    weekStartAt: week + 7 * day,
+    observedAt: week + 8 * day
+  });
+  assert.deepEqual(
+    closed.history.weeks.map(({ earnedPoints, complete }) => ({ earnedPoints, complete })),
+    [{ earnedPoints: 0, complete: true }]
+  );
+});
+
+test("周点数追踪可在不渲染建设页时独立落盘", () => {
+  const harness = createConstructionHarness();
+  harness.state.guildPointSummary = { guildId: "guild-1", lifetimePoints: 1000, availablePoints: 200 };
+  harness.state.guildWeekStartAt = Date.parse("2026-09-01T02:00:00Z");
+  const baseline = harness.view.syncGuildPointHistory();
+  assert.equal(baseline.weeks.length, 0);
+  assert.equal(harness.persistCount(), 1);
+
+  harness.state.guildPointSummary = { guildId: "guild-1", lifetimePoints: 1100, availablePoints: 300 };
+  const tracked = harness.view.syncGuildPointHistory();
+  assert.equal(tracked.trackedWeeks[0].earnedPoints, 100);
+  assert.equal(tracked.trackedWeeks[0].complete, false);
+  assert.equal(harness.persistCount(), 2);
 });
 
 test("完整建筑等级快照中缺少的建筑视为 0 级并可直接规划 0→1", () => {
@@ -298,6 +547,8 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(build, /src\/guild-building-data\.js/);
   assert.match(bridge, /guildBuildingLevels/);
   assert.match(bridge, /guildBuildingDetails/);
+  assert.match(bridge, /lifetimeGuildPoints/);
+  assert.match(bridge, /currentWeekStartAt/);
   assert.match(userscript, /data-role="view-construction"/);
   assert.match(userscript, /buildGuildConstructionPlan/);
   assert.match(userscript, /mwi-guild-building-planner-v1/);
@@ -315,6 +566,9 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /mwi-construction-drag-handle/);
   assert.match(userscript, /data-role="construction-affordable"/);
   assert.match(userscript, /data-role="construction-budget-summary"/);
+  assert.match(userscript, /data-role="next-week-guild-point-forecast"/);
+  assert.match(userscript, /recordGuildPointObservation/);
+  assert.match(userscript, /constructionView\.syncGuildPointHistory\(\)/);
   assert.match(userscript, /data-known-count=/);
   assert.match(userscript, /data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(userscript, /data-role="undo-clear-building-plans"/);
@@ -332,6 +586,31 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
   for (const key of [
     "guildConstruction",
     "guildPointBudget",
+    "guildPointTrend",
+    "guildPointTrendHint",
+    "guildPointAutoSaved",
+    "currentAvailableGuildPoints",
+    "latestWeeklyGuildPoints",
+    "weeklyGuildPointGrowth",
+    "nextWeekGuildPointForecast",
+    "guildPointHistoryUnavailable",
+    "guildPointHistoryBaseline",
+    "guildPointForecastNeedsHistory",
+    "guildPointForecastMethod",
+    "recentGuildPointHistory",
+    "constructionEta",
+    "constructionEtaWeeks",
+    "constructionEtaDetail",
+    "exportGuildPointHistory",
+    "resetGuildPointHistory",
+    "resetGuildPointHistoryConfirm",
+    "guildPointHistoryReset",
+    "guildPointCsvWeekStart",
+    "guildPointCsvEarned",
+    "guildPointCsvStatus",
+    "guildPointCsvComplete",
+    "guildPointCsvTracking",
+    "guildPointCsvFileName",
     "manualBudget",
     "affordableUpgrades",
     "constructionBudgetStopsBefore",

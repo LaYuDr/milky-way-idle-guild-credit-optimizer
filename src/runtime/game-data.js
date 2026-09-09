@@ -38,6 +38,8 @@
       setGuildBuildingLevelsFrom,
       seedCompleteGuildBuildingLevelsFrom,
       setGuildBuildingDetailsFrom,
+      setGuildPointSummaryFrom,
+      setGuildWeekStartAtFrom,
       persistLiveMarketData,
       scheduleMarketDataRefresh,
       scheduleInventoryDataRefresh,
@@ -62,6 +64,23 @@
       MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS
     } = runtimeConfig;
     let snapshotLoadPromise = null;
+
+    function scanGuildPointFields(rootValue, maxDepth = 8, maxScanned = 400) {
+      const pending = [{ value: rootValue, depth: 0 }];
+      const visited = new Set();
+      let scanned = 0;
+      let found = false;
+      while (pending.length && scanned < maxScanned) {
+        const { value, depth } = pending.pop();
+        if (!value || typeof value !== "object" || visited.has(value) || depth > maxDepth) continue;
+        visited.add(value);
+        scanned += 1;
+        found = setGuildPointSummaryFrom(value) || found;
+        found = setGuildWeekStartAtFrom(value) || found;
+        for (const child of Object.values(value)) pending.push({ value: child, depth: depth + 1 });
+      }
+      return found;
+    }
 
     function decompressFromUtf16(compressed) {
       if (compressed == null) return "";
@@ -185,6 +204,7 @@
         const hasGuildBuildingLevels = hasRootGuildBuildingLevels || hasNestedGuildBuildingLevels;
         const hasGuildBuildingDetails =
           !state.guildBuildingDetails && (setGuildBuildingDetailsFrom(data) || setGuildBuildingDetailsFrom(data.guild));
+        const hasGuildPointData = scanGuildPointFields(data);
         const hasCharacterItems =
           !state.characterItems && setCharacterItems(data.characterItems || (data.character && data.character.items));
         return (
@@ -195,6 +215,7 @@
           hasGuildShrineDetails ||
           hasGuildBuildingLevels ||
           hasGuildBuildingDetails ||
+          hasGuildPointData ||
           hasCharacterItems
         );
       } catch (_) {
@@ -243,6 +264,7 @@
           found = setGuildShrineDetailsFrom(candidate) || found;
           found = setGuildBuildingLevelsFrom(candidate) || found;
           found = setGuildBuildingDetailsFrom(candidate) || found;
+          found = scanGuildPointFields(candidate, 2, 40) || found;
           found = setCharacterItems(candidate.characterItems) || found;
           if (
             state.itemDetails &&
@@ -250,6 +272,8 @@
             state.guildBuffLevels &&
             state.guildShrineLevels &&
             state.guildBuildingLevels &&
+            state.guildPointSummary &&
+            state.guildWeekStartAt &&
             state.characterItems
           )
             return true;
@@ -272,6 +296,8 @@
       setGuildShrineDetailsFrom(value);
       setGuildBuildingLevelsFrom(value);
       setGuildBuildingDetailsFrom(value);
+      setGuildPointSummaryFrom(value);
+      setGuildWeekStartAtFrom(value);
       setCharacterItems(value.characterItems);
       for (const child of Object.values(value)) scanMessage(child, depth + 1);
     }
@@ -306,6 +332,7 @@
       bridge.onMarketOrderBooksUpdated = hydrateBridgeData;
       bridge.onCharacterItemsUpdated = hydrateBridgeData;
       bridge.onGuildBuffLevelsUpdated = hydrateBridgeData;
+      bridge.onGuildPointSummaryUpdated = hydrateBridgeData;
       setItemDetails(bridge.itemDetails);
       setGuildBuffDetails(bridge.guildBuffDetails);
       setGuildBuffLevelsFrom(bridge);
@@ -313,6 +340,8 @@
       setGuildShrineDetailsFrom(bridge);
       setGuildBuildingLevelsFrom(bridge);
       setGuildBuildingDetailsFrom(bridge);
+      setGuildPointSummaryFrom(bridge.guildPointSummary);
+      setGuildWeekStartAtFrom({ currentWeekStartAt: bridge.guildWeekStartAt });
       const characterItemsRevision = Number(bridge.characterItemsRevision);
       if (Number.isSafeInteger(characterItemsRevision)) {
         if (characterItemsRevision > state.characterItemsBridgeRevision) {
@@ -330,6 +359,14 @@
         guildBuffLevelsRevision > state.guildBuffLevelsBridgeRevision
       ) {
         state.guildBuffLevelsBridgeRevision = guildBuffLevelsRevision;
+        scheduleGuildDataRefresh();
+      }
+      const guildPointSummaryRevision = Number(bridge.guildPointSummaryRevision);
+      if (
+        Number.isSafeInteger(guildPointSummaryRevision) &&
+        guildPointSummaryRevision > state.guildPointSummaryBridgeRevision
+      ) {
+        state.guildPointSummaryBridgeRevision = guildPointSummaryRevision;
         scheduleGuildDataRefresh();
       }
       const bridgeRevision = Number(bridge.marketOrderBookRevision);

@@ -1655,6 +1655,8 @@ test("正式版桥接保留游戏实时神龛等级", () => {
       payload: {
         characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } },
         guildBuildingMap: { "/guild_buildings/tempo_shrine": { level: 4 } },
+        guild: { guildID: "guild-1", lifetimeGuildPoints: 71944, guildPoints: 244 },
+        guildWeeklyTrialSet: { currentWeekStartAt: "2026-09-01T02:00:00.000Z" },
         characterItems: [
           { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 123 }
         ]
@@ -1666,6 +1668,13 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.characterItems[0].count, 123);
   assert.equal(page.__mwiGuildCreditBridge.messages.length, 1);
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(page.__mwiGuildCreditBridge.guildPointSummary)), {
+    guildId: "guild-1",
+    lifetimePoints: 71944,
+    availablePoints: 244
+  });
+  assert.equal(page.__mwiGuildCreditBridge.guildWeekStartAt, Date.parse("2026-09-01T02:00:00.000Z"));
+  assert.equal(page.__mwiGuildCreditBridge.guildPointSummaryRevision, 1);
 
   let callbackCount = 0;
   page.__mwiGuildCreditBridge.onGuildBuffLevelsUpdated = () => {
@@ -1691,6 +1700,17 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevels["/guild_buffs/tempo_combat"].level, 8);
   assert.equal(page.__mwiGuildCreditBridge.guildBuffLevelsRevision, 2);
   assert.equal(callbackCount, 1);
+
+  let pointCallbackCount = 0;
+  page.__mwiGuildCreditBridge.onGuildPointSummaryUpdated = () => {
+    pointCallbackCount += 1;
+  };
+  socket.receive(
+    JSON.stringify({ payload: { guild: { guildID: "guild-1", lifetimeGuildPoints: 72044, guildPoints: 344 } } })
+  );
+  assert.equal(page.__mwiGuildCreditBridge.guildPointSummary.lifetimePoints, 72044);
+  assert.equal(page.__mwiGuildCreditBridge.guildPointSummaryRevision, 2);
+  assert.equal(pointCallbackCount, 1);
 });
 
 test("正式版桥接按游戏原生 endCharacterItems 增量实时更新库存", () => {

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.1] - 2026-09-09
+
+### Changed
+
+- 新增公会点数周记录、增长率与下周预测，并根据施工缺口显示预计完成周数；支持导出周记录 CSV 和二次确认重置。
+
 ## [1.2.0] - 2026-09-03
 
 ### Changed

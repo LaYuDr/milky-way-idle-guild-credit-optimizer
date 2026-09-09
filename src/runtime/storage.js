@@ -40,6 +40,64 @@
     return normalized;
   }
 
+  function normalizeGuildPointHistory(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const normalizeObservation = (observation) => {
+      const lifetimePoints = Number(observation && observation.lifetimePoints);
+      const availablePoints = Number(observation && observation.availablePoints);
+      const weekStartAt = Number(observation && observation.weekStartAt);
+      const observedAt = Number(observation && observation.observedAt);
+      if (
+        !Number.isSafeInteger(lifetimePoints) ||
+        lifetimePoints < 0 ||
+        !Number.isSafeInteger(availablePoints) ||
+        availablePoints < 0 ||
+        !Number.isSafeInteger(observedAt) ||
+        observedAt <= 0
+      )
+        return null;
+      return {
+        guildId: String((observation && observation.guildId) || "").slice(0, 160),
+        lifetimePoints,
+        availablePoints,
+        weekStartAt: Number.isSafeInteger(weekStartAt) && weekStartAt > 0 ? weekStartAt : null,
+        observedAt
+      };
+    };
+    const byWeek = new Map();
+    for (const record of Array.isArray(source.weeks) ? source.weeks : []) {
+      const weekStartAt = Number(record && record.weekStartAt);
+      const earnedPoints = Number(record && record.earnedPoints);
+      const observedAt = Number(record && record.observedAt);
+      if (
+        !Number.isSafeInteger(weekStartAt) ||
+        weekStartAt <= 0 ||
+        !Number.isSafeInteger(earnedPoints) ||
+        earnedPoints < 0
+      )
+        continue;
+      const previous = byWeek.get(weekStartAt);
+      byWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints: previous ? previous.earnedPoints + earnedPoints : earnedPoints,
+        complete: Boolean((previous && previous.complete) || (record && record.complete)),
+        observedAt:
+          Number.isSafeInteger(observedAt) && observedAt > 0
+            ? Math.max(previous ? previous.observedAt : 0, observedAt)
+            : previous
+              ? previous.observedAt
+              : weekStartAt
+      });
+    }
+    return {
+      guildId: String(source.guildId || "").slice(0, 160),
+      lastObservation: normalizeObservation(source.lastObservation),
+      weeks: Array.from(byWeek.values())
+        .sort((left, right) => left.weekStartAt - right.weekStartAt)
+        .slice(-12)
+    };
+  }
+
   function createPluginStorage(options) {
     const { storage, location, config, buildingDataApi, marketDataApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
@@ -136,7 +194,12 @@
     }
 
     function loadSavedGuildBuildingPlannerState() {
-      const fallback = { plans: [], manualGuildPoints: null, category: "all" };
+      const fallback = {
+        plans: [],
+        manualGuildPoints: null,
+        category: "all",
+        guildPointHistory: normalizeGuildPointHistory(null)
+      };
       try {
         const raw = storage && storage.getItem(guildBuildingPlannerStorageKey());
         if (!raw) return fallback;
@@ -173,7 +236,12 @@
         const category = ["all", "core", "life", "combat", "shrine"].includes(stored.category)
           ? stored.category
           : "all";
-        return { plans, manualGuildPoints, category };
+        return {
+          plans,
+          manualGuildPoints,
+          category,
+          guildPointHistory: normalizeGuildPointHistory(stored.guildPointHistory)
+        };
       } catch (_) {
         return fallback;
       }
@@ -185,10 +253,11 @@
           storage.setItem(
             guildBuildingPlannerStorageKey(),
             JSON.stringify({
-              schemaVersion: 1,
+              schemaVersion: 2,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
               category: state.buildingCategory,
+              guildPointHistory: normalizeGuildPointHistory(state.guildPointHistory),
               plans: state.buildingPlans.map((plan) => ({
                 buildingHrid: plan.buildingHrid,
                 startLevel: plan.startLevel,
@@ -395,6 +464,7 @@
   return {
     normalizePanelView,
     normalizePanelOrder,
+    normalizeGuildPointHistory,
     normalizeGuildShrineAutofillExcludedBuffHrids,
     createPluginStorage
   };

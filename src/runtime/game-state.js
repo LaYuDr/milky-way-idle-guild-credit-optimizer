@@ -43,6 +43,13 @@
     "guildBuildingLevels"
   ];
 
+  function guildWeekStartTimestamp(value) {
+    const numeric = Number(value);
+    if (Number.isSafeInteger(numeric) && numeric > 0) return numeric;
+    const parsed = Date.parse(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
   function createGameStateAdapter(state) {
     function setItemDetails(candidate) {
       if (!objectCollection(candidate)) return false;
@@ -83,6 +90,38 @@
 
     function setGuildBuildingDetails(candidate) {
       return setMergedStateField("guildBuildingDetails", candidate);
+    }
+
+    function setGuildPointSummaryFrom(source) {
+      if (!source || typeof source !== "object") return false;
+      const lifetimePoints = Number(source.lifetimeGuildPoints ?? source.lifetimePoints);
+      const availablePoints = Number(source.guildPoints ?? source.availablePoints);
+      if (
+        !Number.isSafeInteger(lifetimePoints) ||
+        lifetimePoints < 0 ||
+        !Number.isSafeInteger(availablePoints) ||
+        availablePoints < 0
+      )
+        return false;
+      const previous = state.guildPointSummary;
+      const guildId = String(source.guildID || source.guildId || source.id || (previous && previous.guildId) || "");
+      if (
+        previous &&
+        previous.guildId === guildId &&
+        previous.lifetimePoints === lifetimePoints &&
+        previous.availablePoints === availablePoints
+      )
+        return false;
+      state.guildPointSummary = { guildId, lifetimePoints, availablePoints };
+      return true;
+    }
+
+    function setGuildWeekStartAtFrom(source) {
+      if (!source || typeof source !== "object") return false;
+      const weekStartAt = guildWeekStartTimestamp(source.currentWeekStartAt);
+      if (!weekStartAt || weekStartAt === state.guildWeekStartAt) return false;
+      state.guildWeekStartAt = weekStartAt;
+      return true;
     }
 
     function setCharacterItems(candidate) {
@@ -187,6 +226,8 @@
       setGuildShrineDetails,
       setGuildBuildingLevels,
       setGuildBuildingDetails,
+      setGuildPointSummaryFrom,
+      setGuildWeekStartAtFrom,
       setCharacterItems,
       setGuildBuffLevelsFrom,
       setGuildShrineLevelsFrom,
@@ -197,5 +238,5 @@
     };
   }
 
-  return { guildShrineLevelRecordKey, mergeGuildShrineLevels, createGameStateAdapter };
+  return { guildShrineLevelRecordKey, mergeGuildShrineLevels, guildWeekStartTimestamp, createGameStateAdapter };
 });

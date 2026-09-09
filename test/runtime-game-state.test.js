@@ -17,6 +17,8 @@ function createState() {
     guildBuildingLevels: null,
     guildBuildingLevelsComplete: false,
     guildBuildingDetails: null,
+    guildPointSummary: null,
+    guildWeekStartAt: null,
     characterItems: null
   };
 }
@@ -96,6 +98,8 @@ test("本地初始化原始 JSON 会补全局部建筑帧并保留当前会话�
   const adapter = gameStateApi.createGameStateAdapter(state);
   adapter.setGuildBuildingLevels([{ guildBuildingHrid: "/guild_buildings/guild_hall", level: 4 }]);
   const raw = JSON.stringify({
+    guild: { guildID: "guild-1", lifetimeGuildPoints: 71944, guildPoints: 244 },
+    guildWeeklyTrialSet: { currentWeekStartAt: "2026-09-01T02:00:00Z" },
     guildBuildingMap: {
       hall: { guildBuildingHrid: "/guild_buildings/guild_hall", level: 1 },
       gym: { guildBuildingHrid: "/guild_buildings/gym", level: 2 }
@@ -121,6 +125,8 @@ test("本地初始化原始 JSON 会补全局部建筑帧并保留当前会话�
   assert.equal(state.guildBuildingLevelsComplete, true);
   assert.equal(state.guildBuildingLevels["/guild_buildings/guild_hall"].level, 4);
   assert.equal(state.guildBuildingLevels["/guild_buildings/gym"].level, 2);
+  assert.deepEqual(state.guildPointSummary, { guildId: "guild-1", lifetimePoints: 71944, availablePoints: 244 });
+  assert.equal(state.guildWeekStartAt, Date.parse("2026-09-01T02:00:00Z"));
 });
 
 test("单件价格上限在统一兑换数据入口按当前价格参考过滤", () => {
@@ -202,4 +208,20 @@ test("兼容游戏消息中的公会状态字段别名", () => {
     true
   );
   assert.equal(state.guildBuildingDetails["/guild_buildings/hall"].hrid, "/guild_buildings/hall");
+});
+
+test("累计公会点数、可用点数与周起点使用游戏原生字段", () => {
+  const state = createState();
+  const adapter = gameStateApi.createGameStateAdapter(state);
+  const weekStartAt = Date.parse("2026-09-01T02:00:00Z");
+  assert.equal(
+    adapter.setGuildPointSummaryFrom({ guildID: "guild-1", lifetimeGuildPoints: 71944, guildPoints: 244 }),
+    true
+  );
+  assert.deepEqual(state.guildPointSummary, { guildId: "guild-1", lifetimePoints: 71944, availablePoints: 244 });
+  assert.equal(adapter.setGuildPointSummaryFrom({ lifetimePoints: 71944, availablePoints: 244 }), false);
+  assert.equal(adapter.setGuildPointSummaryFrom({ lifetimeGuildPoints: -1, guildPoints: 244 }), false);
+  assert.equal(adapter.setGuildWeekStartAtFrom({ currentWeekStartAt: "2026-09-01T02:00:00Z" }), true);
+  assert.equal(state.guildWeekStartAt, weekStartAt);
+  assert.equal(adapter.setGuildWeekStartAtFrom({ currentWeekStartAt: "invalid" }), false);
 });

@@ -527,6 +527,213 @@
     };
   }
 
+  const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function guildPointObservation(value) {
+    const lifetimePoints = Number(value && value.lifetimePoints);
+    const availablePoints = Number(value && value.availablePoints);
+    const observedAt = Number(value && value.observedAt);
+    const parsedWeekStart = Date.parse(value && value.weekStartAt);
+    const numericWeekStart = Number(value && value.weekStartAt);
+    const weekStartAt =
+      Number.isSafeInteger(numericWeekStart) && numericWeekStart > 0 ? numericWeekStart : parsedWeekStart;
+    if (
+      !Number.isSafeInteger(lifetimePoints) ||
+      lifetimePoints < 0 ||
+      !Number.isSafeInteger(availablePoints) ||
+      availablePoints < 0 ||
+      !Number.isSafeInteger(observedAt) ||
+      observedAt <= 0
+    )
+      return null;
+    return {
+      guildId: String((value && value.guildId) || ""),
+      lifetimePoints,
+      availablePoints,
+      weekStartAt: Number.isSafeInteger(weekStartAt) && weekStartAt > 0 ? weekStartAt : null,
+      observedAt
+    };
+  }
+
+  function normalizeGuildPointWeeks(value) {
+    const byWeek = new Map();
+    for (const record of Array.isArray(value) ? value : []) {
+      const weekStartAt = Number(record && record.weekStartAt);
+      const earnedPoints = Number(record && record.earnedPoints);
+      const observedAt = Number(record && record.observedAt);
+      if (
+        !Number.isSafeInteger(weekStartAt) ||
+        weekStartAt <= 0 ||
+        !Number.isSafeInteger(earnedPoints) ||
+        earnedPoints < 0
+      )
+        continue;
+      const previous = byWeek.get(weekStartAt);
+      byWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints: previous ? previous.earnedPoints + earnedPoints : earnedPoints,
+        complete: Boolean((previous && previous.complete) || (record && record.complete)),
+        observedAt:
+          Number.isSafeInteger(observedAt) && observedAt > 0
+            ? Math.max(previous ? previous.observedAt : 0, observedAt)
+            : previous
+              ? previous.observedAt
+              : weekStartAt
+      });
+    }
+    return Array.from(byWeek.values())
+      .sort((left, right) => left.weekStartAt - right.weekStartAt)
+      .slice(-12);
+  }
+
+  function recordGuildPointObservation(history, rawObservation) {
+    const observation = guildPointObservation(rawObservation);
+    const previousHistory = history && typeof history === "object" ? history : {};
+    const weeks = normalizeGuildPointWeeks(previousHistory.weeks);
+    const lastObservation = guildPointObservation(previousHistory.lastObservation);
+    const guildId = String(previousHistory.guildId || (lastObservation && lastObservation.guildId) || "");
+    if (!observation) return { changed: false, history: { guildId, lastObservation, weeks } };
+
+    const guildChanged = Boolean(
+      lastObservation &&
+      lastObservation.guildId &&
+      observation.guildId &&
+      lastObservation.guildId !== observation.guildId
+    );
+    if (!lastObservation || guildChanged || observation.lifetimePoints < lastObservation.lifetimePoints) {
+      return {
+        changed: true,
+        history: {
+          guildId: observation.guildId,
+          lastObservation: observation,
+          weeks: guildChanged || observation.lifetimePoints < (lastObservation?.lifetimePoints ?? 0) ? [] : weeks
+        }
+      };
+    }
+
+    const weekChanged = observation.weekStartAt !== lastObservation.weekStartAt;
+    if (
+      observation.weekStartAt &&
+      lastObservation.weekStartAt &&
+      observation.weekStartAt < lastObservation.weekStartAt
+    ) {
+      return {
+        changed: false,
+        history: { guildId: observation.guildId || guildId, lastObservation, weeks }
+      };
+    }
+
+    const earnedPoints = observation.lifetimePoints - lastObservation.lifetimePoints;
+    if (!observation.weekStartAt && !lastObservation.weekStartAt) {
+      return { changed: false, history: { guildId: observation.guildId || guildId, lastObservation, weeks } };
+    }
+
+    const officialWeekGap =
+      observation.weekStartAt && lastObservation.weekStartAt
+        ? observation.weekStartAt - lastObservation.weekStartAt
+        : null;
+    const completedWeek = officialWeekGap !== null && officialWeekGap >= GUILD_POINT_WEEK_MS * 0.5;
+    const ambiguousGap = officialWeekGap !== null && officialWeekGap > GUILD_POINT_WEEK_MS * 1.5;
+    if (ambiguousGap) {
+      return {
+        changed: true,
+        skippedAmbiguousIncrease: observation.lifetimePoints - lastObservation.lifetimePoints,
+        history: {
+          guildId: observation.guildId || guildId,
+          lastObservation: observation,
+          weeks
+        }
+      };
+    }
+
+    if (!weekChanged && earnedPoints === 0) {
+      return { changed: false, history: { guildId: observation.guildId || guildId, lastObservation, weeks } };
+    }
+    if (!completedWeek && earnedPoints === 0) {
+      return {
+        changed: true,
+        history: { guildId: observation.guildId || guildId, lastObservation: observation, weeks }
+      };
+    }
+    const targetWeekStart =
+      observation.weekStartAt && lastObservation.weekStartAt && observation.weekStartAt > lastObservation.weekStartAt
+        ? lastObservation.weekStartAt
+        : observation.weekStartAt || lastObservation.weekStartAt || observation.observedAt;
+    const nextWeeks = normalizeGuildPointWeeks([
+      ...weeks,
+      { weekStartAt: targetWeekStart, earnedPoints, complete: completedWeek, observedAt: observation.observedAt }
+    ]);
+    return {
+      changed: true,
+      recordedPoints: earnedPoints,
+      history: {
+        guildId: observation.guildId || guildId,
+        lastObservation: observation,
+        weeks: nextWeeks
+      }
+    };
+  }
+
+  function summarizeGuildPointHistory(history) {
+    const trackedWeeks = normalizeGuildPointWeeks(history && history.weeks);
+    const weeks = trackedWeeks.filter((record) => record.complete);
+    const latest = weeks.at(-1) || null;
+    const previous = weeks.at(-2) || null;
+    const growthRate =
+      previous && previous.earnedPoints > 0
+        ? (latest.earnedPoints - previous.earnedPoints) / previous.earnedPoints
+        : null;
+    const consecutive = latest ? [latest] : [];
+    for (let index = weeks.length - 2; index >= 0 && consecutive.length < 4; index -= 1) {
+      const newer = consecutive[0];
+      const candidate = weeks[index];
+      const gap = newer.weekStartAt - candidate.weekStartAt;
+      if (gap < GUILD_POINT_WEEK_MS * 0.5 || gap > GUILD_POINT_WEEK_MS * 1.5) break;
+      consecutive.unshift(candidate);
+    }
+    let forecastPoints = null;
+    let averageWeeklyChange = null;
+    if (consecutive.length >= 2) {
+      averageWeeklyChange =
+        consecutive
+          .slice(1)
+          .reduce((total, record, index) => total + record.earnedPoints - consecutive[index].earnedPoints, 0) /
+        (consecutive.length - 1);
+      forecastPoints = Math.max(0, Math.round(consecutive.at(-1).earnedPoints + averageWeeklyChange));
+    }
+    return {
+      trackedWeeks,
+      weeks,
+      latest,
+      previous,
+      growthRate,
+      forecastPoints,
+      averageWeeklyChange,
+      forecastSampleCount: consecutive.length
+    };
+  }
+
+  function estimateGuildConstructionWeeks(totalCost, availablePoints, weeklyForecast) {
+    const cost = Number(totalCost);
+    if (!Number.isSafeInteger(cost) || cost <= 0)
+      return { status: "no_plan", shortfall: 0, weeks: null, weeklyForecast: null };
+    const available = availablePoints === null || availablePoints === undefined ? NaN : Number(availablePoints);
+    if (!Number.isSafeInteger(available) || available < 0)
+      return { status: "missing_balance", shortfall: null, weeks: null, weeklyForecast: null };
+    const shortfall = Math.max(0, cost - available);
+    if (shortfall === 0) return { status: "covered", shortfall, weeks: 0, weeklyForecast: null };
+    const forecast = weeklyForecast === null || weeklyForecast === undefined ? NaN : Number(weeklyForecast);
+    if (!Number.isSafeInteger(forecast) || forecast < 0)
+      return { status: "missing_forecast", shortfall, weeks: null, weeklyForecast: null };
+    if (forecast === 0) return { status: "no_growth", shortfall, weeks: null, weeklyForecast: forecast };
+    return {
+      status: "ok",
+      shortfall,
+      weeks: Math.ceil(shortfall / forecast),
+      weeklyForecast: forecast
+    };
+  }
+
   function allocateSurplusGuildTokens(creditRows, exchangeRules, availableGuildTokens) {
     const budget = Math.max(0, Math.floor(Number(availableGuildTokens) || 0));
     const rules = new Map();
@@ -802,6 +1009,9 @@
     aggregateGuildBuffPlans,
     aggregateGuildBuildingLevelCosts,
     buildGuildConstructionPlan,
+    recordGuildPointObservation,
+    summarizeGuildPointHistory,
+    estimateGuildConstructionWeeks,
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,
     conversionsFromItemDetails,

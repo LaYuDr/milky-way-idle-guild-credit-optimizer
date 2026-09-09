@@ -57,6 +57,8 @@
       refreshGuildConstructionBudgetPreview,
       copyGuildConstructionPlan,
       exportGuildConstructionCsv,
+      exportGuildPointHistoryCsv,
+      resetGuildPointHistory,
       persistGuildBuildingPlannerState,
       setPriceReference,
       openMarketplaceForItem
@@ -791,7 +793,15 @@
           });
           return;
         }
-        if (button.matches('[data-role="export-building-plan"]')) exportGuildConstructionCsv();
+        if (button.matches('[data-role="export-building-plan"]')) {
+          exportGuildConstructionCsv();
+          return;
+        }
+        if (button.matches('[data-role="export-guild-point-history"]')) {
+          exportGuildPointHistoryCsv();
+          return;
+        }
+        if (button.matches('[data-role="reset-guild-point-history"]')) resetGuildPointHistory(panel);
       });
       panel.querySelector('[data-role="undo-clear-building-plans"]').addEventListener("click", () => {
         if (!undoClearGuildBuildingPlans()) return;

@@ -1,6 +1,5 @@
 (function () {
   "use strict";
-
   const core = window.MwiGuildCreditCore;
   const marketDataApi = window.MwiGuildCreditMarketData;
   const itemNameCatalogApi = window.MwiGuildCreditItemNameCatalog;
@@ -99,6 +98,9 @@
     conversionCache: new Map(),
     guildBuffDetails: null,
     guildBuffLevels: null,
+    guildPointSummary: null,
+    guildWeekStartAt: null,
+    guildPointSummaryBridgeRevision: 0,
     guildShrineLevels: null,
     guildShrineDetails: null,
     characterItems: null,
@@ -168,6 +170,7 @@
   }));
   state.nextBuildingPlanId = state.buildingPlans.length + 1;
   state.manualGuildPoints = savedBuildingPlannerState.manualGuildPoints;
+  state.guildPointHistory = savedBuildingPlannerState.guildPointHistory;
   state.buildingCategory = savedBuildingPlannerState.category;
   state.buildingSearch = "";
   state.buildingPlanNotice = "";
@@ -184,14 +187,15 @@
     setGuildShrineDetailsFrom,
     setGuildBuildingLevelsFrom,
     seedCompleteGuildBuildingLevelsFrom,
-    setGuildBuildingDetailsFrom
+    setGuildBuildingDetailsFrom,
+    setGuildPointSummaryFrom,
+    setGuildWeekStartAtFrom
   } = gameState;
   const updateRenderedMarkup = (element, markup) =>
     domApi.updateRenderedMarkup(element, markup, RENDERED_MARKUP_PROPERTY);
   const escapeHtml = domApi.escapeHtml;
   const itemHridFromIcon = domApi.itemHridFromIcon;
   const enhancementLevelFromIcon = domApi.enhancementLevelFromIcon;
-
   const guildTokenBudgetRefreshTask = schedulerApi.createDebouncedTask({
     task: (panel) => refreshGuildUpgrade(panel),
     delay: 80,
@@ -229,6 +233,7 @@
   });
   const guildDataRefreshTask = schedulerApi.createDebouncedTask({
     task: () => {
+      constructionView.syncGuildPointHistory();
       if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "upgrade")
         refreshGuildUpgrade(state.panel);
       else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
@@ -264,41 +269,32 @@
   function normalizePanelView(view) {
     return storageApi.normalizePanelView(view, PANEL_VIEWS);
   }
-
   function persistGuildBuildingPlannerState() {
     pluginStorage.persistGuildBuildingPlannerState(state);
   }
-
   function persistPluginUiState() {
     return pluginStorage.persistPluginUiState(state);
   }
-
   function persistLiveMarketData() {
     pluginStorage.persistLiveMarketData(state.marketLiveData, state.marketLiveRevision);
   }
-
   function setPriceReference(reference) {
     if (!PRICE_REFERENCES[reference]) return;
     state.priceReference = reference;
     pluginStorage.persistPriceReference(reference);
   }
-
   function ui() {
     return localizationApi.createLocalizer(currentGameLocale());
   }
-
   function t(key, values) {
     return ui().t(key, values);
   }
-
   function itemQuantity(value) {
     return ui().quantity("itemQuantity", value);
   }
-
   function creditQuantity(value) {
     return ui().quantity("creditQuantity", value);
   }
-
   function priceReference(reference) {
     const suffix = reference === "b" ? "B" : "A";
     return { label: t(`priceReference${suffix}`), title: t(`priceReference${suffix}Title`) };
@@ -367,6 +363,8 @@
     setGuildBuildingLevelsFrom,
     seedCompleteGuildBuildingLevelsFrom,
     setGuildBuildingDetailsFrom,
+    setGuildPointSummaryFrom,
+    setGuildWeekStartAtFrom,
     persistLiveMarketData,
     pluginStorage,
     config: configApi,
@@ -641,6 +639,8 @@
     refreshGuildConstruction,
     copyGuildConstructionPlan,
     exportGuildConstructionCsv,
+    exportGuildPointHistoryCsv,
+    resetGuildPointHistory,
     dispose: disposeConstructionView
   } = constructionView;
 
@@ -712,6 +712,8 @@
     refreshGuildConstructionBudgetPreview,
     copyGuildConstructionPlan,
     exportGuildConstructionCsv,
+    exportGuildPointHistoryCsv,
+    resetGuildPointHistory,
     persistGuildBuildingPlannerState,
     setPriceReference,
     openMarketplaceForItem

@@ -62,6 +62,32 @@
         #mwi-credit-optimizer .mwi-construction-budget-input .mwi-field-error{grid-column:1/-1}
         #mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1;display:block;min-width:0;padding:7px 10px;background:#252433;color:#d9cda9;font-size:10px;line-height:1.35}
         #mwi-credit-optimizer .mwi-construction-budget[data-over-budget="true"] .mwi-construction-budget-summary{color:#ffb0b6}
+        #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;margin:0 0 9px;border:1px solid #3f766d;border-radius:8px;background:linear-gradient(135deg,#203b39,#25283f);overflow:hidden}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 9px;border-bottom:1px solid #38635d}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading>span:first-child{display:grid;gap:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading h4{margin:0;color:#dffff7;font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading small{color:#abd5cd;font-size:9px;line-height:1.35}
+        #mwi-credit-optimizer .mwi-guild-point-autosaved{flex:0 0 auto;padding:2px 6px;border:1px solid #4d8b80;border-radius:999px;background:#245149;color:#bff6ea;font-size:9px;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#36534f}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{display:grid;gap:2px;min-width:0;padding:8px 9px;background:#272a42}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:#aebbd4;font-size:9px;line-height:1.25}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{overflow:hidden;color:#77f3d0;font:700 14px ui-monospace,SFMono-Regular,Menlo,monospace;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="up"] strong{color:#78e6a5}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="down"] strong{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-guild-point-eta{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;gap:5px 8px;padding:8px 9px;border-top:1px solid #38635d;background:#223332}
+        #mwi-credit-optimizer .mwi-guild-point-eta small{color:#abd5cd;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-eta strong{color:#f9e596;font:700 13px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-guild-point-eta span{min-width:0;color:#c5d9d5;font-size:9px;line-height:1.35}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 9px;border-top:1px solid #38635d}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-status{min-width:0;margin:0;color:#c5d9d5;font-size:9px;line-height:1.35}
+        #mwi-credit-optimizer .mwi-guild-point-history-actions{display:flex;flex:0 0 auto;gap:5px}
+        #mwi-credit-optimizer .mwi-guild-point-history-actions button{min-height:25px;padding:3px 7px;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-history{border-top:1px solid #38635d;color:#c5d9d5;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-history summary{padding:6px 9px;cursor:pointer;user-select:none}
+        #mwi-credit-optimizer .mwi-guild-point-history ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1px;margin:0;padding:0;list-style:none;background:#36534f}
+        #mwi-credit-optimizer .mwi-guild-point-history li{display:flex;justify-content:space-between;gap:8px;padding:6px 9px;background:#24273d}
+        #mwi-credit-optimizer .mwi-guild-point-history time{color:#aebbd4}
+        #mwi-credit-optimizer .mwi-guild-point-history strong{color:#dffff7;font-variant-numeric:tabular-nums}
         #mwi-credit-optimizer .mwi-construction-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
         #mwi-credit-optimizer .mwi-construction-queue-pane,#mwi-credit-optimizer .mwi-building-picker{min-width:0}
         #mwi-credit-optimizer .mwi-construction-queue{padding:0;border:0;border-radius:0;background:transparent}
@@ -136,7 +162,7 @@
         #mwi-credit-optimizer .mwi-building-tile:focus-visible{outline:2px solid #fff;outline-offset:1px}
         #mwi-credit-optimizer .mwi-building-icon{width:min(70%,42px);height:min(70%,42px)}
         @container (min-width:720px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(0,1fr);align-items:start}#mwi-credit-optimizer .mwi-construction-layout[data-picker-open="true"]{grid-template-columns:minmax(360px,1.12fr) minmax(300px,.88fr)}#mwi-credit-optimizer .mwi-construction-queue-pane{position:static;top:auto}}
-        @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-queue-meta{justify-content:space-between}#mwi-credit-optimizer .mwi-construction-actions{margin-left:auto}}
+        @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1}#mwi-credit-optimizer .mwi-guild-point-forecast-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#mwi-credit-optimizer .mwi-guild-point-forecast-footer{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-guild-point-history-actions{justify-content:flex-end}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-queue-meta{justify-content:space-between}#mwi-credit-optimizer .mwi-construction-actions{margin-left:auto}}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:30px 36px minmax(0,1fr) auto;gap:5px;padding-right:6px}#mwi-credit-optimizer .mwi-construction-drag-handle{width:30px;min-width:30px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{min-width:58px}#mwi-credit-optimizer .mwi-construction-target{min-width:96px}#mwi-credit-optimizer .mwi-construction-target select{width:70px}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group,#mwi-credit-optimizer .mwi-building-picker-toggle{transition:none}}
         #mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"]{border-color:#d8a33c!important;background:linear-gradient(135deg,#493f2a,#353147)!important;color:#fff4d4!important;box-shadow:0 0 0 1px #d8a33c33}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"] .mwi-token-credit-plan-indicator{border-color:#ffd17c;background:#ffd17c;color:#332814}#mwi-credit-optimizer .mwi-material-copy{flex:1 1 auto}#mwi-credit-optimizer .mwi-material-exchange-mode{flex:0 0 auto;min-height:26px!important;padding:4px 7px!important;border:1px solid #66698f!important;border-radius:999px!important;background:#353653!important;color:#dfe1f4!important;font-size:10px;line-height:1.1;white-space:nowrap}#mwi-credit-optimizer .mwi-material-exchange-mode:hover{border-color:#77f3d0!important}#mwi-credit-optimizer .mwi-material-exchange-mode[data-active="true"]{border-color:#43c4ad!important;background:#245149!important;color:#dffff7!important;box-shadow:0 0 0 1px #43c4ad22}
