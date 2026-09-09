@@ -597,7 +597,6 @@
     updateRenderedMarkup
   });
   const { renderSettingsMarkup, refreshSettings } = settingsView;
-
   const constructionView = constructionViewApi.createConstructionView({
     state,
     buildingDataApi,
@@ -620,7 +619,8 @@
     pageWindow,
     document,
     URL,
-    Blob
+    Blob,
+    guildTrialFirstStartAt: configApi.GUILD_TRIAL_FIRST_START_AT
   });
   const {
     guildBuildingDefinitions,

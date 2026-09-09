@@ -210,7 +210,7 @@ test("兼容游戏消息中的公会状态字段别名", () => {
   assert.equal(state.guildBuildingDetails["/guild_buildings/hall"].hrid, "/guild_buildings/hall");
 });
 
-test("累计公会点数、可用点数与周起点使用游戏原生字段", () => {
+test("累计、可用、本周公会点数与周起点使用游戏原生字段", () => {
   const state = createState();
   const adapter = gameStateApi.createGameStateAdapter(state);
   const weekStartAt = Date.parse("2026-09-01T02:00:00Z");
@@ -221,7 +221,19 @@ test("累计公会点数、可用点数与周起点使用游戏原生字段", ()
   assert.deepEqual(state.guildPointSummary, { guildId: "guild-1", lifetimePoints: 71944, availablePoints: 244 });
   assert.equal(adapter.setGuildPointSummaryFrom({ lifetimePoints: 71944, availablePoints: 244 }), false);
   assert.equal(adapter.setGuildPointSummaryFrom({ lifetimeGuildPoints: -1, guildPoints: 244 }), false);
-  assert.equal(adapter.setGuildWeekStartAtFrom({ currentWeekStartAt: "2026-09-01T02:00:00Z" }), true);
+  assert.equal(
+    adapter.setGuildWeekStartAtFrom({
+      currentWeekStartAt: "2026-09-01T02:00:00Z",
+      currentWeekGuildPoints: 9648
+    }),
+    true
+  );
   assert.equal(state.guildWeekStartAt, weekStartAt);
+  assert.deepEqual(state.guildPointSummary, {
+    guildId: "guild-1",
+    lifetimePoints: 71944,
+    availablePoints: 244,
+    currentWeekPoints: 9648
+  });
   assert.equal(adapter.setGuildWeekStartAtFrom({ currentWeekStartAt: "invalid" }), false);
 });

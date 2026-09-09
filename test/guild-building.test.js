@@ -96,6 +96,7 @@ function createConstructionHarness({
       revokeObjectURL() {}
     },
     Blob,
+    guildTrialFirstStartAt: Date.parse("2026-07-13T00:00:00Z"),
     pageWindow: {
       clearTimeout() {},
       setTimeout() {},
@@ -233,6 +234,24 @@ test("施工 ETA 使用当前缺口和周预测向上取整", () => {
   assert.equal(core.estimateGuildConstructionWeeks(5000, 1000, null).status, "missing_forecast");
   assert.equal(core.estimateGuildConstructionWeeks(5000, 1000, 0).status, "no_growth");
   assert.equal(core.estimateGuildConstructionWeeks(0, 1000, 420).status, "no_plan");
+});
+
+test("冷启动估算以历史中点和最新周拟合线性增长并外推下一周", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  assert.deepEqual(core.estimateGuildPointColdStart(65000, 9000, firstTrial + 7 * week, firstTrial), {
+    status: "ok",
+    pastWeekCount: 7,
+    historicalAveragePoints: 8000,
+    currentWeekPoints: 9000,
+    historicalMidpoint: 4,
+    latestWeekOrdinal: 8,
+    weeklyGrowthPoints: 250,
+    growthRate: 0.03125,
+    forecastPoints: 9250
+  });
+  assert.equal(core.estimateGuildPointColdStart(9000, 1000, firstTrial - 1, firstTrial).status, "before_first_trial");
+  assert.equal(core.estimateGuildPointColdStart(-1, 0, firstTrial, firstTrial).status, "unavailable");
 });
 
 test("周记录可导出带 BOM 的 CSV，并标记完整周与追踪中记录", async () => {
@@ -590,17 +609,21 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointTrendHint",
     "guildPointAutoSaved",
     "currentAvailableGuildPoints",
+    "currentWeekGuildPoints",
     "latestWeeklyGuildPoints",
     "weeklyGuildPointGrowth",
+    "guildPointEstimatedGrowth",
     "nextWeekGuildPointForecast",
     "guildPointHistoryUnavailable",
     "guildPointHistoryBaseline",
     "guildPointForecastNeedsHistory",
+    "guildPointForecastColdStart",
     "guildPointForecastMethod",
     "recentGuildPointHistory",
     "constructionEta",
     "constructionEtaWeeks",
     "constructionEtaDetail",
+    "constructionEtaDetailEstimated",
     "exportGuildPointHistory",
     "resetGuildPointHistory",
     "resetGuildPointHistoryConfirm",

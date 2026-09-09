@@ -341,7 +341,10 @@
       setGuildBuildingLevelsFrom(bridge);
       setGuildBuildingDetailsFrom(bridge);
       setGuildPointSummaryFrom(bridge.guildPointSummary);
-      setGuildWeekStartAtFrom({ currentWeekStartAt: bridge.guildWeekStartAt });
+      setGuildWeekStartAtFrom({
+        currentWeekStartAt: bridge.guildWeekStartAt,
+        currentWeekGuildPoints: bridge.guildCurrentWeekPoints
+      });
       const characterItemsRevision = Number(bridge.characterItemsRevision);
       if (Number.isSafeInteger(characterItemsRevision)) {
         if (characterItemsRevision > state.characterItemsBridgeRevision) {

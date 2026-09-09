@@ -51,6 +51,10 @@
   }
 
   function createGameStateAdapter(state) {
+    let currentWeekGuildPoints = Number.isSafeInteger(state.guildPointSummary?.currentWeekPoints)
+      ? state.guildPointSummary.currentWeekPoints
+      : undefined;
+
     function setItemDetails(candidate) {
       if (!objectCollection(candidate)) return false;
       if (state.itemDetails !== candidate) state.conversionCache.clear();
@@ -105,23 +109,51 @@
         return false;
       const previous = state.guildPointSummary;
       const guildId = String(source.guildID || source.guildId || source.id || (previous && previous.guildId) || "");
+      const sourceCurrentWeekPoints = Number(
+        source.currentWeekGuildPoints ?? source.currentWeekPoints ?? source.weeklyGuildPoints
+      );
+      if (Number.isSafeInteger(sourceCurrentWeekPoints) && sourceCurrentWeekPoints >= 0)
+        currentWeekGuildPoints = sourceCurrentWeekPoints;
       if (
         previous &&
         previous.guildId === guildId &&
         previous.lifetimePoints === lifetimePoints &&
-        previous.availablePoints === availablePoints
+        previous.availablePoints === availablePoints &&
+        previous.currentWeekPoints === currentWeekGuildPoints
       )
         return false;
-      state.guildPointSummary = { guildId, lifetimePoints, availablePoints };
+      state.guildPointSummary = {
+        guildId,
+        lifetimePoints,
+        availablePoints,
+        ...(Number.isSafeInteger(currentWeekGuildPoints) ? { currentWeekPoints: currentWeekGuildPoints } : {})
+      };
       return true;
     }
 
     function setGuildWeekStartAtFrom(source) {
       if (!source || typeof source !== "object") return false;
       const weekStartAt = guildWeekStartTimestamp(source.currentWeekStartAt);
-      if (!weekStartAt || weekStartAt === state.guildWeekStartAt) return false;
-      state.guildWeekStartAt = weekStartAt;
-      return true;
+      const sourceCurrentWeekPoints = Number(
+        source.currentWeekGuildPoints ??
+          source.currentWeekPoints ??
+          source.weeklyGuildPoints ??
+          source.guildPointsEarned ??
+          (weekStartAt ? source.guildPoints : NaN)
+      );
+      let changed = false;
+      if (weekStartAt && weekStartAt !== state.guildWeekStartAt) {
+        state.guildWeekStartAt = weekStartAt;
+        changed = true;
+      }
+      if (Number.isSafeInteger(sourceCurrentWeekPoints) && sourceCurrentWeekPoints >= 0) {
+        currentWeekGuildPoints = sourceCurrentWeekPoints;
+        if (state.guildPointSummary && state.guildPointSummary.currentWeekPoints !== currentWeekGuildPoints) {
+          state.guildPointSummary = { ...state.guildPointSummary, currentWeekPoints: currentWeekGuildPoints };
+          changed = true;
+        }
+      }
+      return changed;
     }
 
     function setCharacterItems(candidate) {

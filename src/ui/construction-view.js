@@ -28,7 +28,8 @@
       pageWindow,
       document,
       URL,
-      Blob
+      Blob,
+      guildTrialFirstStartAt
     } = dependencies;
 
     const constructionUi = {
@@ -172,11 +173,32 @@
     function guildPointEta(plan, history) {
       const liveAvailable = state.guildPointSummary && state.guildPointSummary.availablePoints;
       const availablePoints = plan.availableGuildPoints === null ? liveAvailable : plan.availableGuildPoints;
-      return core.estimateGuildConstructionWeeks(plan.totalCost, availablePoints, history.forecastPoints);
+      const forecast = guildPointForecastBasis(history);
+      return core.estimateGuildConstructionWeeks(plan.totalCost, availablePoints, forecast.effectiveForecastPoints);
+    }
+
+    function guildPointForecastBasis(historySummary) {
+      const history = historySummary || core.summarizeGuildPointHistory(state.guildPointHistory);
+      const coldStart = state.guildPointSummary
+        ? core.estimateGuildPointColdStart(
+            state.guildPointSummary.lifetimePoints,
+            state.guildPointSummary.currentWeekPoints,
+            Date.now(),
+            guildTrialFirstStartAt
+          )
+        : { status: "unavailable", pastWeekCount: 0, forecastPoints: null };
+      const usesColdStart = !Number.isFinite(history.forecastPoints) && coldStart.status === "ok";
+      return {
+        ...history,
+        coldStart,
+        usesColdStart,
+        effectiveForecastPoints: usesColdStart ? coldStart.forecastPoints : history.forecastPoints
+      };
     }
 
     function renderGuildPointEta(plan, history) {
-      const eta = guildPointEta(plan, history);
+      const forecast = guildPointForecastBasis(history);
+      const eta = guildPointEta(plan, forecast);
       const copy = {
         no_plan: [t("constructionEtaNoPlan"), t("constructionEtaNoPlanHint")],
         missing_balance: ["-", t("constructionEtaNeedsBalance")],
@@ -185,7 +207,7 @@
         covered: [t("constructionEtaCovered"), t("constructionEtaCoveredHint")],
         ok: [
           t("constructionEtaWeeks", { count: formatNumber(eta.weeks) }),
-          t("constructionEtaDetail", {
+          t(forecast.usesColdStart ? "constructionEtaDetailEstimated" : "constructionEtaDetail", {
             points: formatNumber(eta.weeklyForecast),
             shortfall: formatNumber(eta.shortfall)
           })
@@ -195,11 +217,19 @@
     }
 
     function renderGuildPointForecast(historySummary, plan) {
-      const history = historySummary || core.summarizeGuildPointHistory(state.guildPointHistory);
-      const latestPoints = history.latest ? formatNumber(history.latest.earnedPoints) : "-";
-      const growth = history.growthRate;
+      const history = guildPointForecastBasis(historySummary);
+      const currentWeekPoints = state.guildPointSummary && state.guildPointSummary.currentWeekPoints;
+      const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints);
+      const latestPoints = hasCurrentWeekPoints
+        ? formatNumber(currentWeekPoints)
+        : history.latest
+          ? formatNumber(history.latest.earnedPoints)
+          : "-";
+      const growth = history.usesColdStart ? history.coldStart.growthRate : history.growthRate;
       const growthText = Number.isFinite(growth) ? `${growth > 0 ? "+" : ""}${formatNumber(growth * 100, 1)}%` : "-";
-      const forecastText = Number.isFinite(history.forecastPoints) ? formatNumber(history.forecastPoints) : "-";
+      const forecastText = Number.isFinite(history.effectiveForecastPoints)
+        ? formatNumber(history.effectiveForecastPoints)
+        : "-";
       const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
       const rows = history.weeks
         .slice(-4)
@@ -211,16 +241,27 @@
         .join("");
       const status = !state.guildPointSummary
         ? t("guildPointHistoryUnavailable")
-        : !history.weeks.length
-          ? t("guildPointHistoryBaseline")
-          : history.forecastPoints === null
-            ? t("guildPointForecastNeedsHistory")
-            : t("guildPointForecastMethod", { count: formatNumber(history.forecastSampleCount) });
+        : history.usesColdStart
+          ? t("guildPointForecastColdStart", {
+              count: formatNumber(history.coldStart.pastWeekCount),
+              average: formatNumber(Math.round(history.coldStart.historicalAveragePoints)),
+              current: formatNumber(history.coldStart.currentWeekPoints),
+              growth: `${history.coldStart.weeklyGrowthPoints > 0 ? "+" : ""}${formatNumber(
+                history.coldStart.weeklyGrowthPoints,
+                1
+              )}`,
+              forecast: formatNumber(history.coldStart.forecastPoints)
+            })
+          : !history.weeks.length
+            ? t("guildPointHistoryBaseline")
+            : history.forecastPoints === null
+              ? t("guildPointForecastNeedsHistory")
+              : t("guildPointForecastMethod", { count: formatNumber(history.forecastSampleCount) });
       const canExport = history.trackedWeeks.length > 0;
       const canReset = Boolean(
         (state.guildPointHistory && state.guildPointHistory.lastObservation) || history.trackedWeeks.length
       );
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointTrend"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointTrend"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved">${escapeHtml(t("guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t("latestWeeklyGuildPoints"))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div>${renderGuildPointEta(plan, history)}<div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${rows ? `<details class="mwi-guild-point-history"><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><ol>${rows}</ol></details>` : ""}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointTrend"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointTrend"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved">${escapeHtml(t("guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(hasCurrentWeekPoints ? "currentWeekGuildPoints" : "latestWeeklyGuildPoints"))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t(history.usesColdStart ? "guildPointEstimatedGrowth" : "weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.usesColdStart ? "cold-start" : "tracked"}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div>${renderGuildPointEta(plan, history)}<div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${rows ? `<details class="mwi-guild-point-history"><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><ol>${rows}</ol></details>` : ""}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {

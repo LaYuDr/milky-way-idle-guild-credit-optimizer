@@ -713,6 +713,52 @@
     };
   }
 
+  function estimateGuildPointColdStart(lifetimePoints, currentWeekPoints, observedAt, firstTrialStartAt) {
+    if (currentWeekPoints === null || currentWeekPoints === undefined)
+      return { status: "unavailable", pastWeekCount: 0, forecastPoints: null };
+    const lifetime = Number(lifetimePoints);
+    const currentWeek = Number(currentWeekPoints);
+    const observed = Number(observedAt);
+    const firstTrial = Number(firstTrialStartAt);
+    if (
+      !Number.isSafeInteger(lifetime) ||
+      lifetime < 0 ||
+      !Number.isSafeInteger(currentWeek) ||
+      currentWeek < 0 ||
+      currentWeek > lifetime ||
+      !Number.isSafeInteger(observed) ||
+      observed <= 0 ||
+      !Number.isSafeInteger(firstTrial) ||
+      firstTrial <= 0
+    ) {
+      return { status: "unavailable", pastWeekCount: 0, forecastPoints: null };
+    }
+    if (observed < firstTrial) {
+      return { status: "before_first_trial", pastWeekCount: 0, forecastPoints: null };
+    }
+    const pastWeekCount = Math.floor((observed - firstTrial) / GUILD_POINT_WEEK_MS);
+    if (pastWeekCount < 1) {
+      return { status: "insufficient_history", pastWeekCount, forecastPoints: null };
+    }
+    const historicalAveragePoints = (lifetime - currentWeek) / pastWeekCount;
+    const latestWeekOrdinal = pastWeekCount + 1;
+    const historicalMidpoint = (pastWeekCount + 1) / 2;
+    const trendDistance = latestWeekOrdinal - historicalMidpoint;
+    const weeklyGrowthPoints = (currentWeek - historicalAveragePoints) / trendDistance;
+    const forecastPoints = Math.max(0, Math.round(currentWeek + weeklyGrowthPoints));
+    return {
+      status: "ok",
+      pastWeekCount,
+      historicalAveragePoints,
+      currentWeekPoints: currentWeek,
+      historicalMidpoint,
+      latestWeekOrdinal,
+      weeklyGrowthPoints,
+      growthRate: historicalAveragePoints > 0 ? weeklyGrowthPoints / historicalAveragePoints : null,
+      forecastPoints
+    };
+  }
+
   function estimateGuildConstructionWeeks(totalCost, availablePoints, weeklyForecast) {
     const cost = Number(totalCost);
     if (!Number.isSafeInteger(cost) || cost <= 0)
@@ -1011,6 +1057,7 @@
     buildGuildConstructionPlan,
     recordGuildPointObservation,
     summarizeGuildPointHistory,
+    estimateGuildPointColdStart,
     estimateGuildConstructionWeeks,
     allocateSurplusGuildTokens,
     estimateGuildUpgradeCosts,

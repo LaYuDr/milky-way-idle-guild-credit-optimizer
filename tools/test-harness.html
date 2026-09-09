@@ -167,6 +167,7 @@
     const upgradeEmptyAudit = searchParams.get("upgradeEmptyAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
+    const coldStartAudit = searchParams.get("coldStartAudit") === "1";
     const settingsAudit = searchParams.get("settingsAudit") === "1";
     const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
     const sidebarResizeAudit = searchParams.get("sidebarResizeAudit") === "1";
@@ -227,20 +228,22 @@
               weekStartAt: currentWeekStart,
               observedAt: currentWeekStart + 60 * 60 * 1000
             },
-            weeks: [
-              {
-                weekStartAt: Date.parse("2026-08-25T02:00:00Z"),
-                earnedPoints: 300,
-                complete: true,
-                observedAt: Date.parse("2026-09-01T02:00:00Z")
-              },
-              {
-                weekStartAt: Date.parse("2026-09-01T02:00:00Z"),
-                earnedPoints: 360,
-                complete: true,
-                observedAt: currentWeekStart
-              }
-            ]
+            weeks: coldStartAudit
+              ? []
+              : [
+                  {
+                    weekStartAt: Date.parse("2026-08-25T02:00:00Z"),
+                    earnedPoints: 300,
+                    complete: true,
+                    observedAt: Date.parse("2026-09-01T02:00:00Z")
+                  },
+                  {
+                    weekStartAt: Date.parse("2026-09-01T02:00:00Z"),
+                    earnedPoints: 360,
+                    complete: true,
+                    observedAt: currentWeekStart
+                  }
+                ]
           }
         })
       );
@@ -409,8 +412,10 @@
       guildPointSummary: {
         guildId: "fixture-guild",
         lifetimePoints: 72044,
-        availablePoints: 244
+        availablePoints: 244,
+        currentWeekPoints: 9648
       },
+      guildCurrentWeekPoints: 9648,
       guildWeekStartAt: Date.parse("2026-09-08T02:00:00Z"),
       guildPointSummaryRevision: 1,
       itemDetails: {
@@ -1656,7 +1661,7 @@
           compactNumber(audit.sample.cutoffText).includes("750"),
         weeklyPointForecastUsesCompletedWeeks:
           compactNumber(panel.querySelector('[data-role="current-available-guild-points"]')?.textContent) === "244" &&
-          compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "360" &&
+          compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "9648" &&
           normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "+20%" &&
           compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "420" &&
           compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("22") &&

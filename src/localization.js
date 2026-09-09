@@ -119,12 +119,16 @@
       guildPointTrendHint: "按累计公会点数增量自动记录，建筑消费不会影响统计。",
       guildPointAutoSaved: "自动保存",
       currentAvailableGuildPoints: "当前可用",
-      latestWeeklyGuildPoints: "最近一周获得",
+      currentWeekGuildPoints: "本周试炼点数",
+      latestWeeklyGuildPoints: "最近完整周获得",
       weeklyGuildPointGrowth: "环比增长",
+      guildPointEstimatedGrowth: "预计周增长速度",
       nextWeekGuildPointForecast: "下周预测",
       guildPointHistoryUnavailable: "尚未读取公会点数；打开公会页面后会自动建立本机基线。",
       guildPointHistoryBaseline: "已建立累计点数基线；下一次周奖励到账后将生成首条周记录。",
       guildPointForecastNeedsHistory: "已自动保存周记录；至少需要连续 2 周数据才能预测。",
+      guildPointForecastColdStart:
+        "此前 {count} 周平均 {average} 点，本周已获 {current} 点；按历史中点拟合，每周约增长 {growth} 点，下周预计 {forecast} 点。本周未结束时结果仍会变化。",
       guildPointForecastMethod: "按最近连续 {count} 周的平均增量预测；本机最多保留 12 周。",
       recentGuildPointHistory: "最近周记录",
       constructionEta: "施工计划预计",
@@ -137,6 +141,7 @@
       constructionEtaCoveredHint: "无需等待新的周点数即可完成计划。",
       constructionEtaWeeks: "约 {count} 周",
       constructionEtaDetail: "按每周约 {points} 点，尚缺 {shortfall} 点。",
+      constructionEtaDetailEstimated: "暂按历史回填每周约 {points} 点，尚缺 {shortfall} 点。",
       exportGuildPointHistory: "导出周记录 CSV",
       resetGuildPointHistory: "重置周记录",
       resetGuildPointHistoryConfirm: "确定重置当前角色的公会点数周记录吗？施工计划不会被删除，此操作无法撤销。",
@@ -465,8 +470,10 @@
       guildPointTrendHint: "Tracks lifetime Guild Point increases, so building spending does not affect the history.",
       guildPointAutoSaved: "Auto-saved",
       currentAvailableGuildPoints: "Available now",
-      latestWeeklyGuildPoints: "Latest week earned",
+      currentWeekGuildPoints: "This week's trial points",
+      latestWeeklyGuildPoints: "Latest complete week",
       weeklyGuildPointGrowth: "Week-over-week",
+      guildPointEstimatedGrowth: "Estimated weekly growth",
       nextWeekGuildPointForecast: "Next-week forecast",
       guildPointHistoryUnavailable:
         "Guild Points are not available yet. Open the Guild page to create a local baseline.",
@@ -474,6 +481,8 @@
         "The lifetime-point baseline is saved. The next weekly reward will create the first record.",
       guildPointForecastNeedsHistory:
         "Weekly records are being saved. Two consecutive weeks are required for a forecast.",
+      guildPointForecastColdStart:
+        "The prior {count} weeks averaged {average} points, and this week has earned {current}. A midpoint trend fit estimates {growth} points of weekly growth and {forecast} next week. The result can change until this week ends.",
       guildPointForecastMethod:
         "Forecast from the average change over {count} consecutive weeks; up to 12 weeks stay on this device.",
       recentGuildPointHistory: "Recent weekly records",
@@ -487,6 +496,8 @@
       constructionEtaCoveredHint: "The plan can be completed without waiting for more weekly points.",
       constructionEtaWeeks: "About {count} weeks",
       constructionEtaDetail: "About {points} points per week with {shortfall} still needed.",
+      constructionEtaDetailEstimated:
+        "Using the historical backfill estimate of about {points} points per week, with {shortfall} still needed.",
       exportGuildPointHistory: "Export weekly CSV",
       resetGuildPointHistory: "Reset weekly records",
       resetGuildPointHistoryConfirm:

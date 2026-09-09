@@ -1656,7 +1656,10 @@ test("正式版桥接保留游戏实时神龛等级", () => {
         characterGuildBuffDict: { "/guild_buffs/tempo_combat": { level: 7 } },
         guildBuildingMap: { "/guild_buildings/tempo_shrine": { level: 4 } },
         guild: { guildID: "guild-1", lifetimeGuildPoints: 71944, guildPoints: 244 },
-        guildWeeklyTrialSet: { currentWeekStartAt: "2026-09-01T02:00:00.000Z" },
+        guildWeeklyTrialSet: {
+          currentWeekStartAt: "2026-09-01T02:00:00.000Z",
+          currentWeekGuildPoints: 9648
+        },
         characterItems: [
           { itemHrid: "/items/green_guild_credit", itemLocationHrid: "/item_locations/inventory", count: 123 }
         ]
@@ -1671,7 +1674,8 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(page.__mwiGuildCreditBridge.guildPointSummary)), {
     guildId: "guild-1",
     lifetimePoints: 71944,
-    availablePoints: 244
+    availablePoints: 244,
+    currentWeekPoints: 9648
   });
   assert.equal(page.__mwiGuildCreditBridge.guildWeekStartAt, Date.parse("2026-09-01T02:00:00.000Z"));
   assert.equal(page.__mwiGuildCreditBridge.guildPointSummaryRevision, 1);
@@ -1711,6 +1715,42 @@ test("正式版桥接保留游戏实时神龛等级", () => {
   assert.equal(page.__mwiGuildCreditBridge.guildPointSummary.lifetimePoints, 72044);
   assert.equal(page.__mwiGuildCreditBridge.guildPointSummaryRevision, 2);
   assert.equal(pointCallbackCount, 1);
+});
+
+test("正式版桥接可从公会试炼页面只读提取本周公会点数", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeMutationObserver {
+    observe() {}
+  }
+  class FakeWebSocket {
+    addEventListener() {}
+  }
+  const page = {
+    WebSocket: FakeWebSocket,
+    MutationObserver: FakeMutationObserver,
+    setTimeout(callback) {
+      callback();
+      return 1;
+    },
+    document: {
+      documentElement: { setAttribute() {} },
+      querySelectorAll() {
+        return [{ textContent: "本周公会点数: 9,648" }];
+      }
+    }
+  };
+  vm.runInNewContext(bridgeSource, {
+    window: page,
+    JSON,
+    Map,
+    Object,
+    Set,
+    WeakSet,
+    URL,
+    String,
+    setTimeout: page.setTimeout
+  });
+  assert.equal(page.__mwiGuildCreditBridge.guildCurrentWeekPoints, 9648);
 });
 
 test("正式版桥接按游戏原生 endCharacterItems 增量实时更新库存", () => {

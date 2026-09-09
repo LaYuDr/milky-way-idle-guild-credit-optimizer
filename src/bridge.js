@@ -17,6 +17,7 @@
       guildBuildingDetails: null,
       guildPointSummary: null,
       guildWeekStartAt: null,
+      guildCurrentWeekPoints: null,
       characterItems: null,
       characterItemsRevision: 0,
       guildBuffLevelsRevision: 0,
@@ -28,6 +29,7 @@
   if (!("guildBuildingDetails" in bridge)) bridge.guildBuildingDetails = null;
   if (!("guildPointSummary" in bridge)) bridge.guildPointSummary = null;
   if (!("guildWeekStartAt" in bridge)) bridge.guildWeekStartAt = null;
+  if (!("guildCurrentWeekPoints" in bridge)) bridge.guildCurrentWeekPoints = null;
   if (!bridge.marketOrderBooks || typeof bridge.marketOrderBooks !== "object")
     bridge.marketOrderBooks = Object.create(null);
   if (!Number.isSafeInteger(bridge.marketOrderBookRevision)) bridge.marketOrderBookRevision = 0;
@@ -433,11 +435,26 @@
               ""
           ),
           lifetimePoints: lifetimeGuildPoints,
-          availablePoints: guildPoints
+          availablePoints: guildPoints,
+          ...(Number.isSafeInteger(bridge.guildCurrentWeekPoints)
+            ? { currentWeekPoints: bridge.guildCurrentWeekPoints }
+            : {})
         };
       }
       const guildWeekStartAt = weekStartTimestamp(value.currentWeekStartAt);
       if (guildWeekStartAt) bridge.guildWeekStartAt = guildWeekStartAt;
+      const currentWeekGuildPoints = Number(
+        value.currentWeekGuildPoints ??
+          value.currentWeekPoints ??
+          value.weeklyGuildPoints ??
+          value.guildPointsEarned ??
+          (guildWeekStartAt ? value.guildPoints : NaN)
+      );
+      if (Number.isSafeInteger(currentWeekGuildPoints) && currentWeekGuildPoints >= 0) {
+        bridge.guildCurrentWeekPoints = currentWeekGuildPoints;
+        if (bridge.guildPointSummary)
+          bridge.guildPointSummary = { ...bridge.guildPointSummary, currentWeekPoints: currentWeekGuildPoints };
+      }
       for (const child of Object.values(value)) pending.push(child);
     }
     if (characterItemsChanged) publishCharacterItemsUpdate(characterItemsSource);
@@ -468,17 +485,51 @@
   let marketDomScanScheduled = false;
   let marketDomObserver = null;
 
+  function currentWeekGuildPointsFromDom(documentRef) {
+    if (!documentRef || typeof documentRef.querySelectorAll !== "function") return null;
+    const patterns = [
+      /^本周公会点数\s*[:：]\s*([\d,]+)$/,
+      /^(?:Guild Points This Week|This Week(?:'s)? Guild Points)\s*[:：]\s*([\d,]+)$/i
+    ];
+    for (const element of documentRef.querySelectorAll("div, span, p")) {
+      const text = String(element && element.textContent ? element.textContent : "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!text || text.length > 80) continue;
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (!match) continue;
+        const points = Number(match[1].replaceAll(",", ""));
+        if (Number.isSafeInteger(points) && points >= 0) return points;
+      }
+    }
+    return null;
+  }
+
   function scanMarketDom() {
     marketDomScanScheduled = false;
-    if (!marketDomApi || typeof marketDomApi.readMarketDomSnapshot !== "function") return false;
-    const snapshot = marketDomApi.readMarketDomSnapshot(window.document);
-    if (!snapshot || snapshot.signature === lastMarketDomSignature) return false;
-    const message = marketDomApi.createMarketMessage(snapshot);
-    if (!message) return false;
-    lastMarketDomSignature = snapshot.signature;
-    diagnostics.domSnapshotCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.domSnapshotCount + 1);
-    keepMarketData(message, "market_dom");
-    return true;
+    let changed = false;
+    if (marketDomApi && typeof marketDomApi.readMarketDomSnapshot === "function") {
+      const snapshot = marketDomApi.readMarketDomSnapshot(window.document);
+      if (snapshot && snapshot.signature !== lastMarketDomSignature) {
+        const message = marketDomApi.createMarketMessage(snapshot);
+        if (message) {
+          lastMarketDomSignature = snapshot.signature;
+          diagnostics.domSnapshotCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.domSnapshotCount + 1);
+          keepMarketData(message, "market_dom");
+          changed = true;
+        }
+      }
+    }
+    const currentWeekPoints = currentWeekGuildPointsFromDom(window.document);
+    if (currentWeekPoints !== null && currentWeekPoints !== bridge.guildCurrentWeekPoints) {
+      bridge.guildCurrentWeekPoints = currentWeekPoints;
+      if (bridge.guildPointSummary) bridge.guildPointSummary = { ...bridge.guildPointSummary, currentWeekPoints };
+      diagnostics.domSnapshotCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.domSnapshotCount + 1);
+      publishGuildPointSummaryUpdate();
+      changed = true;
+    }
+    return changed;
   }
 
   function scheduleMarketDomScan() {
@@ -489,7 +540,7 @@
   }
 
   function installMarketDomObserver() {
-    if (marketDomObserver || !marketDomApi || !window.document) return false;
+    if (marketDomObserver || !window.document) return false;
     const root = window.document.documentElement;
     const Observer = window.MutationObserver || (typeof MutationObserver === "function" ? MutationObserver : null);
     if (!root || typeof Observer !== "function") return false;
