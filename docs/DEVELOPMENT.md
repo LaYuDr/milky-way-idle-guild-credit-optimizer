@@ -227,7 +227,9 @@ live frame. Missing records remain visibly marked as unread, but resolve to
 level `0` for planning. The audit adds three known-level buildings, directly
 adds one unread building as `0 -> 1` without a manual-level prompt, checks inline target editing, collapsed step
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
-search focus, and focus visibility after rerenders. It leaves a reusable final
+search focus, focus visibility after rerenders, and the full weekly-point edit
+table: every completed week is visible at once, estimated weeks can be edited
+in place, and clearing a manual value restores its estimate. It leaves a reusable final
 sample with 28 visible square catalog tiles, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.

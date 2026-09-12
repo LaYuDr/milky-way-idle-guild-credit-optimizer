@@ -154,6 +154,8 @@
         if (target.buildingHrid && element.dataset.buildingHrid !== target.buildingHrid) return false;
         if (target.direction !== undefined && element.dataset.direction !== String(target.direction)) return false;
         if (target.delta !== undefined && element.dataset.delta !== String(target.delta)) return false;
+        if (target.weekStartAt !== undefined && element.dataset.weekStartAt !== String(target.weekStartAt))
+          return false;
         return !element.disabled && !element.hidden && !element.closest("[hidden]");
       });
     }
@@ -810,20 +812,23 @@
           exportGuildPointHistoryCsv();
           return;
         }
-        if (button.matches('[data-role="save-manual-guild-point-week"]')) {
+        if (button.matches('[data-role="save-manual-guild-point-history"]')) {
           const form = button.closest('[data-role="manual-guild-point-form"]');
-          const week = form && form.querySelector('[data-role="manual-guild-point-week"]');
-          const earned = form && form.querySelector('[data-role="manual-guild-point-earned"]');
-          if (!week || !earned || !earned.reportValidity()) return;
-          const result = constructionView.saveManualGuildPointWeek(Number(week.value), Number(earned.value));
-          refreshConstructionAndFocus(panel, {
-            role: result.status === "saved" ? "manual-guild-point-week" : "manual-guild-point-earned"
-          });
-          return;
-        }
-        if (button.matches('[data-role="remove-manual-guild-point-week"]')) {
-          if (constructionView.removeManualGuildPointWeek(Number(button.dataset.weekStartAt)))
-            refreshConstructionAndFocus(panel, { role: "manual-guild-point-week" });
+          const inputs = form ? Array.from(form.querySelectorAll('[data-role="manual-guild-point-earned"]')) : [];
+          const invalid = inputs.find((input) => !input.reportValidity());
+          if (invalid) {
+            invalid.focus();
+            return;
+          }
+          const result = constructionView.saveManualGuildPointHistory(
+            inputs.map((input) => ({ weekStartAt: input.dataset.weekStartAt, earnedPoints: input.value }))
+          );
+          refreshConstructionAndFocus(
+            panel,
+            result.status === "saved"
+              ? { role: "save-manual-guild-point-history" }
+              : { role: "manual-guild-point-earned", weekStartAt: result.weekStartAt }
+          );
           return;
         }
         if (button.matches('[data-role="reset-guild-point-history"]')) resetGuildPointHistory(panel);

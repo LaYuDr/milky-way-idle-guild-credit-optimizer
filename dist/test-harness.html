@@ -1549,35 +1549,39 @@
       let guildPointDetails = panel.querySelector(".mwi-guild-point-history");
       guildPointDetails.open = true;
       guildPointDetails.dispatchEvent(new Event("toggle"));
-      const manualWeek = guildPointDetails.querySelector('[data-role="manual-guild-point-week"]');
-      const manualEarned = guildPointDetails.querySelector('[data-role="manual-guild-point-earned"]');
-      const selectedManualWeek = Number(manualWeek.value);
+      const manualInputs = Array.from(guildPointDetails.querySelectorAll('[data-role="manual-guild-point-earned"]'));
+      const manualEarned = manualInputs[0];
+      const selectedManualWeek = Number(manualEarned.dataset.weekStartAt);
       manualEarned.value = "10000";
-      guildPointDetails.querySelector('[data-role="save-manual-guild-point-week"]').click();
+      guildPointDetails.querySelector('[data-role="save-manual-guild-point-history"]').click();
       await waitFor(() =>
         panel.querySelector(
-          `.mwi-guild-point-history li[data-source="manual"] [data-role="remove-manual-guild-point-week"][data-week-start-at="${selectedManualWeek}"]`
+          `.mwi-guild-point-history tr[data-source="manual"] [data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
         )
       );
       audit.manualGuildPointHistory = {
-        optionCount: panel.querySelectorAll('[data-role="manual-guild-point-week"] option').length,
-        manualCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="manual"]').length,
-        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length,
-        earned: normalizedText(
-          panel.querySelector(`.mwi-guild-point-history li[data-source="manual"]`)?.querySelector("strong")
-        )
+        rowCount: panel.querySelectorAll(".mwi-guild-point-history tbody tr").length,
+        editableCount: panel.querySelectorAll('[data-role="manual-guild-point-earned"]').length,
+        manualCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="manual"]').length,
+        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length,
+        trackedCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="tracked"]').length,
+        earned: panel.querySelector(
+          `.mwi-guild-point-history [data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
+        )?.value
       };
-      panel
-        .querySelector(`[data-role="remove-manual-guild-point-week"][data-week-start-at="${selectedManualWeek}"]`)
-        .click();
+      const savedManualInput = panel.querySelector(
+        `[data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
+      );
+      savedManualInput.value = "";
+      panel.querySelector('[data-role="save-manual-guild-point-history"]').click();
       await waitFor(
         () =>
-          !panel.querySelector('.mwi-guild-point-history li[data-source="manual"]') &&
-          panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length === 8
+          !panel.querySelector('.mwi-guild-point-history tr[data-source="manual"]') &&
+          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length === 8
       );
       audit.manualGuildPointHistory.afterRemove = {
-        manualCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="manual"]').length,
-        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length,
+        manualCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="manual"]').length,
+        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length,
         detailsOpen: panel.querySelector(".mwi-guild-point-history")?.open === true
       };
 
@@ -1703,9 +1707,11 @@
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
         manualGuildPointHistoryCanBeSavedAndRemoved:
-          audit.manualGuildPointHistory.optionCount === 8 &&
+          audit.manualGuildPointHistory.rowCount === 8 &&
+          audit.manualGuildPointHistory.editableCount === 8 &&
           audit.manualGuildPointHistory.manualCount === 1 &&
           audit.manualGuildPointHistory.estimatedCount === 7 &&
+          audit.manualGuildPointHistory.trackedCount === 0 &&
           compactNumber(audit.manualGuildPointHistory.earned) === "10000" &&
           audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
           audit.manualGuildPointHistory.afterRemove.estimatedCount === 8 &&

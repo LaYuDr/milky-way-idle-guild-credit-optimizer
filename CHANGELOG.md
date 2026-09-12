@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.4] - 2026-09-12
+
+### Changed
+
+- 修复公会点数历史录入，并改为整表直接填写与批量保存
+
 ## [1.2.3] - 2026-09-12
 
 ### Changed

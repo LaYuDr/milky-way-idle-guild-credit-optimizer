@@ -308,22 +308,52 @@ test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
   );
 });
 
-test("建设页保存和删除手动历史并在 CSV 标注自动补充来源", () => {
+test("建设页可批量保存、修改和清空手动历史，并在 CSV 标注来源", () => {
   const harness = createConstructionHarness();
   const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const secondTrial = firstTrial + 7 * 24 * 60 * 60 * 1000;
   harness.state.guildPointSummary = {
     guildId: "guild-1",
     lifetimePoints: 65000,
     availablePoints: 1000,
     currentWeekPoints: 9000
   };
-  assert.equal(harness.view.saveManualGuildPointWeek(firstTrial, 7600).status, "saved");
+  assert.equal(
+    harness.view.saveManualGuildPointHistory([
+      { weekStartAt: firstTrial, earnedPoints: "7600" },
+      { weekStartAt: secondTrial, earnedPoints: "8100" }
+    ]).status,
+    "saved"
+  );
   assert.equal(harness.persistCount(), 1);
   assert.match(harness.view.guildPointHistoryCsv(), /"7600","guildPointCsvManual"/);
   assert.match(harness.view.guildPointHistoryCsv(), /"guildPointCsvEstimated"/);
-  assert.equal(harness.view.removeManualGuildPointWeek(firstTrial), true);
+  assert.equal(
+    harness.view.saveManualGuildPointHistory([
+      { weekStartAt: firstTrial, earnedPoints: "7700" },
+      { weekStartAt: secondTrial, earnedPoints: "" }
+    ]).status,
+    "saved"
+  );
   assert.equal(harness.persistCount(), 2);
-  assert.deepEqual(harness.state.guildPointHistory.manualWeeks, []);
+  assert.deepEqual(
+    harness.state.guildPointHistory.manualWeeks.map((record) => [record.weekStartAt, record.earnedPoints]),
+    [[firstTrial, 7700]]
+  );
+});
+
+test("批量历史存在非法值时原子失败，不会部分覆盖已有数据", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  harness.view.saveManualGuildPointWeek(firstTrial, 7600);
+  const before = structuredClone(harness.state.guildPointHistory);
+  const result = harness.view.saveManualGuildPointHistory([
+    { weekStartAt: firstTrial, earnedPoints: "8000" },
+    { weekStartAt: firstTrial + 1, earnedPoints: "9000" }
+  ]);
+  assert.equal(result.status, "invalid");
+  assert.deepEqual(harness.state.guildPointHistory, before);
+  assert.equal(harness.persistCount(), 1);
 });
 
 test("周记录可导出带 BOM 的 CSV，并标记完整周与追踪中记录", async () => {
@@ -659,7 +689,9 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /data-role="construction-budget-summary"/);
   assert.match(userscript, /data-role="next-week-guild-point-forecast"/);
   assert.match(userscript, /recordGuildPointObservation/);
-  assert.match(userscript, /save-manual-guild-point-week/);
+  assert.match(userscript, /save-manual-guild-point-history/);
+  assert.match(userscript, /mwi-guild-point-table-scroll/);
+  assert.doesNotMatch(userscript, /data-role="manual-guild-point-week"/);
   assert.match(userscript, /supplementGuildPointHistory/);
   assert.match(userscript, /constructionView\.syncGuildPointHistory\(\)/);
   assert.match(userscript, /data-known-count=/);
@@ -697,13 +729,18 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "recentGuildPointHistory",
     "manualGuildPointWeek",
     "manualGuildPointEarned",
-    "saveManualGuildPointWeek",
+    "manualGuildPointEarnedForWeek",
+    "guildPointHistorySource",
+    "saveManualGuildPointHistory",
     "manualGuildPointHint",
+    "manualGuildPointHistoryEmpty",
     "guildPointSourceTracked",
     "guildPointSourceManual",
     "guildPointSourceEstimated",
+    "guildPointSourceEmpty",
     "manualGuildPointWeekSaved",
     "manualGuildPointWeekRemoved",
+    "manualGuildPointHistorySaved",
     "constructionEta",
     "constructionEtaWeeks",
     "constructionEtaDetail",

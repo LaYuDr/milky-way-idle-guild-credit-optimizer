@@ -226,39 +226,38 @@
       };
     }
 
-    function manualGuildPointWeekOptions() {
+    function manualGuildPointWeekStarts() {
       const elapsedWeeks = Math.max(0, Math.floor((Date.now() - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)));
-      const trackedWeeks = new Set(
-        core.summarizeGuildPointHistory(state.guildPointHistory).weeks.map((record) => record.weekStartAt)
-      );
       return Array.from(
         { length: elapsedWeeks },
         (_, index) => guildTrialFirstStartAt + index * 7 * 24 * 60 * 60 * 1000
-      )
-        .filter((weekStartAt) => !trackedWeeks.has(weekStartAt))
-        .reverse();
+      ).reverse();
     }
 
     function renderManualGuildPointHistory(history) {
-      const options = manualGuildPointWeekOptions()
-        .map(
-          (weekStartAt) =>
-            `<option value="${weekStartAt}">${escapeHtml(t("guildPointManualWeekOption", { week: guildPointWeekLabel(weekStartAt) }))}</option>`
-        )
-        .join("");
-      const rows = history.weeks
-        .slice(-12)
-        .reverse()
-        .map((record) => {
-          const source = ["manual", "estimated"].includes(record.source) ? record.source : "tracked";
-          const remove =
-            source === "manual"
-              ? `<button data-role="remove-manual-guild-point-week" data-week-start-at="${record.weekStartAt}" type="button" aria-label="${escapeHtml(t("removeManualGuildPointWeek", { week: guildPointWeekLabel(record.weekStartAt) }))}">×</button>`
-              : "";
-          return `<li data-source="${source}"><time datetime="${new Date(record.weekStartAt).toISOString()}">${escapeHtml(guildPointWeekLabel(record.weekStartAt))}</time><strong>${formatNumber(record.earnedPoints)}</strong><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small>${remove}</li>`;
+      const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
+      const rows = manualGuildPointWeekStarts()
+        .map((weekStartAt) => {
+          const record = recordsByWeek.get(weekStartAt);
+          const source = record
+            ? ["manual", "estimated"].includes(record.source)
+              ? record.source
+              : "tracked"
+            : "empty";
+          const week = guildPointWeekLabel(weekStartAt);
+          const value = source === "manual" ? record.earnedPoints : "";
+          const placeholder = source === "estimated" ? formatNumber(record.earnedPoints) : "";
+          const points =
+            source === "tracked"
+              ? `<strong class="mwi-guild-point-readonly">${formatNumber(record.earnedPoints)}</strong>`
+              : `<input data-role="manual-guild-point-earned" data-week-start-at="${weekStartAt}" type="number" min="0" step="1" inputmode="numeric" aria-label="${escapeHtml(t("manualGuildPointEarnedForWeek", { week }))}" value="${value}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}>`;
+          return `<tr data-source="${source}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time></th><td>${points}</td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
         })
         .join("");
-      return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form"><label><span>${escapeHtml(t("manualGuildPointWeek"))}</span><select data-role="manual-guild-point-week"${options ? "" : " disabled"}>${options}</select></label><label><span>${escapeHtml(t("manualGuildPointEarned"))}</span><input data-role="manual-guild-point-earned" type="number" min="0" step="1" required></label><button data-role="save-manual-guild-point-week" type="button"${options ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointWeek"))}</button></form><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p>${rows ? `<ol>${rows}</ol>` : ""}</details>`;
+      const body = rows
+        ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
+      return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form">${body}<div class="mwi-guild-point-manual-footer"><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p><button data-role="save-manual-guild-point-history" type="button"${rows ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointHistory"))}</button></div></form></details>`;
     }
 
     function setGuildPointHistoryOpen(open) {
@@ -823,6 +822,37 @@
       return result;
     }
 
+    function saveManualGuildPointHistory(entries) {
+      const originalHistory = state.guildPointHistory;
+      let nextHistory = originalHistory;
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        const weekStartAt = Number(entry && entry.weekStartAt);
+        const rawPoints = String((entry && entry.earnedPoints) ?? "").trim();
+        if (rawPoints === "") {
+          nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt).history;
+          continue;
+        }
+        const result = core.setManualGuildPointWeek(
+          nextHistory,
+          weekStartAt,
+          Number(rawPoints),
+          Date.now(),
+          guildTrialFirstStartAt
+        );
+        if (result.status !== "saved") {
+          state.buildingPlanNotice = t(
+            result.status === "tracked" ? "manualGuildPointWeekTracked" : "manualGuildPointWeekInvalid"
+          );
+          return { ...result, weekStartAt };
+        }
+        nextHistory = result.history;
+      }
+      state.guildPointHistory = nextHistory;
+      state.buildingPlanNotice = t("manualGuildPointHistorySaved");
+      persistGuildBuildingPlannerState();
+      return { status: "saved", history: nextHistory };
+    }
+
     function removeManualGuildPointWeek(weekStartAt) {
       const result = core.removeManualGuildPointWeek(state.guildPointHistory, weekStartAt);
       if (!result.changed) return false;
@@ -870,6 +900,7 @@
       guildPointHistoryCsv,
       exportGuildPointHistoryCsv,
       saveManualGuildPointWeek,
+      saveManualGuildPointHistory,
       removeManualGuildPointWeek,
       resetGuildPointHistory,
       dispose
