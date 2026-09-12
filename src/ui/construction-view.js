@@ -35,6 +35,7 @@
     const constructionUi = {
       pickerOpen: state.buildingPlans.length === 0,
       expandedBuildingHrids: new Set(),
+      guildPointHistoryOpen: false,
       clearUndoPlans: null,
       clearUndoTimer: null
     };
@@ -147,7 +148,7 @@
 
     function syncGuildPointHistory() {
       const summary = state.guildPointSummary;
-      if (!summary) return core.summarizeGuildPointHistory(state.guildPointHistory);
+      if (!summary) return guildPointHistorySummary();
       const update = core.recordGuildPointObservation(state.guildPointHistory, {
         guildId: summary.guildId,
         lifetimePoints: summary.lifetimePoints,
@@ -159,7 +160,36 @@
         state.guildPointHistory = update.history;
         persistGuildBuildingPlannerState();
       }
-      return core.summarizeGuildPointHistory(state.guildPointHistory);
+      return guildPointHistorySummary();
+    }
+
+    function supplementedGuildPointHistory() {
+      const summary = state.guildPointSummary;
+      if (!summary) return { history: state.guildPointHistory, estimatedCount: 0 };
+      return core.supplementGuildPointHistory(
+        state.guildPointHistory,
+        summary.lifetimePoints,
+        summary.currentWeekPoints,
+        Date.now(),
+        guildTrialFirstStartAt
+      );
+    }
+
+    function guildPointHistorySummary() {
+      const supplemented = supplementedGuildPointHistory();
+      const history = core.summarizeGuildPointHistory(supplemented.history);
+      return {
+        ...history,
+        ...(Number.isFinite(supplemented.forecastPoints)
+          ? {
+              growthRate: supplemented.growthRate,
+              forecastPoints: supplemented.forecastPoints,
+              averageWeeklyChange: supplemented.averageWeeklyChange,
+              forecastSampleCount: supplemented.forecastSampleCount
+            }
+          : {}),
+        supplemented
+      };
     }
 
     function guildPointWeekLabel(weekStartAt) {
@@ -178,7 +208,7 @@
     }
 
     function guildPointForecastBasis(historySummary) {
-      const history = historySummary || core.summarizeGuildPointHistory(state.guildPointHistory);
+      const history = historySummary || guildPointHistorySummary();
       const coldStart = state.guildPointSummary
         ? core.estimateGuildPointColdStart(
             state.guildPointSummary.lifetimePoints,
@@ -194,6 +224,45 @@
         usesColdStart,
         effectiveForecastPoints: usesColdStart ? coldStart.forecastPoints : history.forecastPoints
       };
+    }
+
+    function manualGuildPointWeekOptions() {
+      const elapsedWeeks = Math.max(0, Math.floor((Date.now() - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)));
+      const trackedWeeks = new Set(
+        core.summarizeGuildPointHistory(state.guildPointHistory).weeks.map((record) => record.weekStartAt)
+      );
+      return Array.from(
+        { length: elapsedWeeks },
+        (_, index) => guildTrialFirstStartAt + index * 7 * 24 * 60 * 60 * 1000
+      )
+        .filter((weekStartAt) => !trackedWeeks.has(weekStartAt))
+        .reverse();
+    }
+
+    function renderManualGuildPointHistory(history) {
+      const options = manualGuildPointWeekOptions()
+        .map(
+          (weekStartAt) =>
+            `<option value="${weekStartAt}">${escapeHtml(t("guildPointManualWeekOption", { week: guildPointWeekLabel(weekStartAt) }))}</option>`
+        )
+        .join("");
+      const rows = history.weeks
+        .slice(-12)
+        .reverse()
+        .map((record) => {
+          const source = ["manual", "estimated"].includes(record.source) ? record.source : "tracked";
+          const remove =
+            source === "manual"
+              ? `<button data-role="remove-manual-guild-point-week" data-week-start-at="${record.weekStartAt}" type="button" aria-label="${escapeHtml(t("removeManualGuildPointWeek", { week: guildPointWeekLabel(record.weekStartAt) }))}">×</button>`
+              : "";
+          return `<li data-source="${source}"><time datetime="${new Date(record.weekStartAt).toISOString()}">${escapeHtml(guildPointWeekLabel(record.weekStartAt))}</time><strong>${formatNumber(record.earnedPoints)}</strong><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small>${remove}</li>`;
+        })
+        .join("");
+      return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form"><label><span>${escapeHtml(t("manualGuildPointWeek"))}</span><select data-role="manual-guild-point-week"${options ? "" : " disabled"}>${options}</select></label><label><span>${escapeHtml(t("manualGuildPointEarned"))}</span><input data-role="manual-guild-point-earned" type="number" min="0" step="1" required></label><button data-role="save-manual-guild-point-week" type="button"${options ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointWeek"))}</button></form><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p>${rows ? `<ol>${rows}</ol>` : ""}</details>`;
+    }
+
+    function setGuildPointHistoryOpen(open) {
+      constructionUi.guildPointHistoryOpen = Boolean(open);
     }
 
     function renderGuildPointEta(plan, history) {
@@ -231,14 +300,6 @@
         ? formatNumber(history.effectiveForecastPoints)
         : "-";
       const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
-      const rows = history.weeks
-        .slice(-4)
-        .reverse()
-        .map(
-          (record) =>
-            `<li><time datetime="${new Date(record.weekStartAt).toISOString()}">${escapeHtml(guildPointWeekLabel(record.weekStartAt))}</time><strong>${formatNumber(record.earnedPoints)}</strong></li>`
-        )
-        .join("");
       const status = !state.guildPointSummary
         ? t("guildPointHistoryUnavailable")
         : history.usesColdStart
@@ -261,7 +322,7 @@
       const canReset = Boolean(
         (state.guildPointHistory && state.guildPointHistory.lastObservation) || history.trackedWeeks.length
       );
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointTrend"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointTrend"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved">${escapeHtml(t("guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(hasCurrentWeekPoints ? "currentWeekGuildPoints" : "latestWeeklyGuildPoints"))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t(history.usesColdStart ? "guildPointEstimatedGrowth" : "weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.usesColdStart ? "cold-start" : "tracked"}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div>${renderGuildPointEta(plan, history)}<div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${rows ? `<details class="mwi-guild-point-history"><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><ol>${rows}</ol></details>` : ""}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointTrend"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointTrend"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(hasCurrentWeekPoints ? "currentWeekGuildPoints" : "latestWeeklyGuildPoints"))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t(history.usesColdStart ? "guildPointEstimatedGrowth" : "weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.usesColdStart ? "cold-start" : "tracked"}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div>${renderGuildPointEta(plan, history)}<div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -606,7 +667,7 @@
       if (queuePane)
         queuePane.innerHTML = renderGuildConstructionQueue(plan, definitions, guildBuildingSpriteBaseHref());
       const eta = results.querySelector(".mwi-guild-point-eta");
-      if (eta) eta.outerHTML = renderGuildPointEta(plan, core.summarizeGuildPointHistory(state.guildPointHistory));
+      if (eta) eta.outerHTML = renderGuildPointEta(plan, guildPointHistorySummary());
     }
 
     function refreshGuildConstruction(panel) {
@@ -706,21 +767,29 @@
     }
 
     function guildPointHistoryCsv() {
-      const history = core.summarizeGuildPointHistory(state.guildPointHistory);
+      const history = guildPointHistorySummary();
       const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
       const rows = [[t("guildPointCsvWeekStart"), t("guildPointCsvEarned"), t("guildPointCsvStatus")]];
       for (const record of history.trackedWeeks) {
         rows.push([
           new Date(record.weekStartAt).toISOString(),
           record.earnedPoints,
-          t(record.complete ? "guildPointCsvComplete" : "guildPointCsvTracking")
+          t(
+            record.complete
+              ? record.source === "manual"
+                ? "guildPointCsvManual"
+                : record.source === "estimated"
+                  ? "guildPointCsvEstimated"
+                  : "guildPointCsvComplete"
+              : "guildPointCsvTracking"
+          )
         ]);
       }
       return `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
     }
 
     function exportGuildPointHistoryCsv() {
-      const history = core.summarizeGuildPointHistory(state.guildPointHistory);
+      const history = guildPointHistorySummary();
       if (!history.trackedWeeks.length) return false;
       const url = URL.createObjectURL(new Blob([guildPointHistoryCsv()], { type: "text/csv;charset=utf-8" }));
       const anchor = document.createElement("a");
@@ -730,6 +799,36 @@
       anchor.click();
       anchor.remove();
       pageWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
+      return true;
+    }
+
+    function saveManualGuildPointWeek(weekStartAt, earnedPoints) {
+      const result = core.setManualGuildPointWeek(
+        state.guildPointHistory,
+        weekStartAt,
+        earnedPoints,
+        Date.now(),
+        guildTrialFirstStartAt
+      );
+      state.buildingPlanNotice = t(
+        result.status === "saved"
+          ? "manualGuildPointWeekSaved"
+          : result.status === "tracked"
+            ? "manualGuildPointWeekTracked"
+            : "manualGuildPointWeekInvalid"
+      );
+      if (result.status !== "saved") return result;
+      state.guildPointHistory = result.history;
+      persistGuildBuildingPlannerState();
+      return result;
+    }
+
+    function removeManualGuildPointWeek(weekStartAt) {
+      const result = core.removeManualGuildPointWeek(state.guildPointHistory, weekStartAt);
+      if (!result.changed) return false;
+      state.guildPointHistory = result.history;
+      state.buildingPlanNotice = t("manualGuildPointWeekRemoved");
+      persistGuildBuildingPlannerState();
       return true;
     }
 
@@ -757,6 +856,7 @@
       moveGuildBuildingPlan,
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
+      setGuildPointHistoryOpen,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,
@@ -769,6 +869,8 @@
       exportGuildConstructionCsv,
       guildPointHistoryCsv,
       exportGuildPointHistoryCsv,
+      saveManualGuildPointWeek,
+      removeManualGuildPointWeek,
       resetGuildPointHistory,
       dispose
     };

@@ -1546,6 +1546,41 @@
       await waitFor(() => detailsToggle.getAttribute("aria-expanded") === "false");
       audit.detailsCollapsed = constructionStateSnapshot(panel);
 
+      let guildPointDetails = panel.querySelector(".mwi-guild-point-history");
+      guildPointDetails.open = true;
+      guildPointDetails.dispatchEvent(new Event("toggle"));
+      const manualWeek = guildPointDetails.querySelector('[data-role="manual-guild-point-week"]');
+      const manualEarned = guildPointDetails.querySelector('[data-role="manual-guild-point-earned"]');
+      const selectedManualWeek = Number(manualWeek.value);
+      manualEarned.value = "10000";
+      guildPointDetails.querySelector('[data-role="save-manual-guild-point-week"]').click();
+      await waitFor(() =>
+        panel.querySelector(
+          `.mwi-guild-point-history li[data-source="manual"] [data-role="remove-manual-guild-point-week"][data-week-start-at="${selectedManualWeek}"]`
+        )
+      );
+      audit.manualGuildPointHistory = {
+        optionCount: panel.querySelectorAll('[data-role="manual-guild-point-week"] option').length,
+        manualCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="manual"]').length,
+        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length,
+        earned: normalizedText(
+          panel.querySelector(`.mwi-guild-point-history li[data-source="manual"]`)?.querySelector("strong")
+        )
+      };
+      panel
+        .querySelector(`[data-role="remove-manual-guild-point-week"][data-week-start-at="${selectedManualWeek}"]`)
+        .click();
+      await waitFor(
+        () =>
+          !panel.querySelector('.mwi-guild-point-history li[data-source="manual"]') &&
+          panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length === 8
+      );
+      audit.manualGuildPointHistory.afterRemove = {
+        manualCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="manual"]').length,
+        estimatedCount: panel.querySelectorAll('.mwi-guild-point-history li[data-source="estimated"]').length,
+        detailsOpen: panel.querySelector(".mwi-guild-point-history")?.open === true
+      };
+
       const gymHrid = "/guild_buildings/gym";
       moveButtonFor(gymHrid, -1).click();
       await waitFor(() => constructionGroupOrder(panel).indexOf(gymHrid) === 1);
@@ -1662,11 +1697,19 @@
         weeklyPointForecastUsesCompletedWeeks:
           compactNumber(panel.querySelector('[data-role="current-available-guild-points"]')?.textContent) === "244" &&
           compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "9648" &&
-          normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "+20%" &&
-          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "420" &&
-          compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("22") &&
+          normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "+4.4%" &&
+          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "10059" &&
+          compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("1") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
+        manualGuildPointHistoryCanBeSavedAndRemoved:
+          audit.manualGuildPointHistory.optionCount === 8 &&
+          audit.manualGuildPointHistory.manualCount === 1 &&
+          audit.manualGuildPointHistory.estimatedCount === 7 &&
+          compactNumber(audit.manualGuildPointHistory.earned) === "10000" &&
+          audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
+          audit.manualGuildPointHistory.afterRemove.estimatedCount === 8 &&
+          audit.manualGuildPointHistory.afterRemove.detailsOpen,
         buttonReorderRecalculatesBudget:
           audit.buttonReorder.groupOrder[0] === gymHrid &&
           compactNumber(audit.buttonReorder.affordable) === "4/9" &&

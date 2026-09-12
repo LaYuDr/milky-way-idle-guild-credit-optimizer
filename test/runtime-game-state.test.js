@@ -212,6 +212,7 @@ test("兼容游戏消息中的公会状态字段别名", () => {
 
 test("累计、可用、本周公会点数与周起点使用游戏原生字段", () => {
   const state = createState();
+  state.guildPointSummaryCached = true;
   const adapter = gameStateApi.createGameStateAdapter(state);
   const weekStartAt = Date.parse("2026-09-01T02:00:00Z");
   assert.equal(
@@ -219,6 +220,8 @@ test("累计、可用、本周公会点数与周起点使用游戏原生字段",
     true
   );
   assert.deepEqual(state.guildPointSummary, { guildId: "guild-1", lifetimePoints: 71944, availablePoints: 244 });
+  assert.equal(state.guildPointSummaryCached, false);
+  assert.equal(Number.isSafeInteger(state.guildPointSummaryObservedAt), true);
   assert.equal(adapter.setGuildPointSummaryFrom({ lifetimePoints: 71944, availablePoints: 244 }), false);
   assert.equal(adapter.setGuildPointSummaryFrom({ lifetimeGuildPoints: -1, guildPoints: 244 }), false);
   assert.equal(

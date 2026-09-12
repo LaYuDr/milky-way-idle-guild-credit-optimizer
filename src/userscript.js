@@ -98,8 +98,7 @@
     conversionCache: new Map(),
     guildBuffDetails: null,
     guildBuffLevels: null,
-    guildPointSummary: null,
-    guildWeekStartAt: null,
+    ...storageApi.guildPointStateFromSnapshot(savedBuildingPlannerState.guildPointSnapshot),
     guildPointSummaryBridgeRevision: 0,
     guildShrineLevels: null,
     guildShrineDetails: null,
@@ -234,6 +233,7 @@
   const guildDataRefreshTask = schedulerApi.createDebouncedTask({
     task: () => {
       constructionView.syncGuildPointHistory();
+      persistGuildBuildingPlannerState();
       if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "upgrade")
         refreshGuildUpgrade(state.panel);
       else if (state.panel && state.panel.isConnected && state.panel.dataset.activeView === "construction")
@@ -713,6 +713,7 @@
     copyGuildConstructionPlan,
     exportGuildConstructionCsv,
     exportGuildPointHistoryCsv,
+    constructionView,
     resetGuildPointHistory,
     persistGuildBuildingPlannerState,
     setPriceReference,
@@ -747,7 +748,6 @@
   function scheduleInventoryDataRefresh() {
     inventoryDataRefreshTask.schedule();
   }
-
   function scheduleGuildDataRefresh() {
     guildDataRefreshTask.schedule();
   }

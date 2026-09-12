@@ -573,6 +573,11 @@
         weekStartAt,
         earnedPoints: previous ? previous.earnedPoints + earnedPoints : earnedPoints,
         complete: Boolean((previous && previous.complete) || (record && record.complete)),
+        ...(record && ["tracked", "manual", "estimated"].includes(record.source)
+          ? { source: record.source }
+          : previous && previous.source
+            ? { source: previous.source }
+            : {}),
         observedAt:
           Number.isSafeInteger(observedAt) && observedAt > 0
             ? Math.max(previous ? previous.observedAt : 0, observedAt)
@@ -583,16 +588,49 @@
     }
     return Array.from(byWeek.values())
       .sort((left, right) => left.weekStartAt - right.weekStartAt)
-      .slice(-12);
+      .slice(-104);
+  }
+
+  function normalizeManualGuildPointWeeks(value) {
+    const byWeek = new Map();
+    for (const record of Array.isArray(value) ? value : []) {
+      const weekStartAt = Number(record && record.weekStartAt);
+      const earnedPoints = Number(record && record.earnedPoints);
+      const observedAt = Number(record && record.observedAt);
+      if (
+        !Number.isSafeInteger(weekStartAt) ||
+        weekStartAt <= 0 ||
+        !Number.isSafeInteger(earnedPoints) ||
+        earnedPoints < 0
+      )
+        continue;
+      byWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints,
+        observedAt: Number.isSafeInteger(observedAt) && observedAt > 0 ? observedAt : weekStartAt
+      });
+    }
+    return Array.from(byWeek.values())
+      .sort((left, right) => left.weekStartAt - right.weekStartAt)
+      .slice(-104);
+  }
+
+  function normalizedGuildPointHistory(history) {
+    const source = history && typeof history === "object" ? history : {};
+    return {
+      guildId: String(source.guildId || ""),
+      lastObservation: guildPointObservation(source.lastObservation),
+      weeks: normalizeGuildPointWeeks(source.weeks),
+      manualWeeks: normalizeManualGuildPointWeeks(source.manualWeeks)
+    };
   }
 
   function recordGuildPointObservation(history, rawObservation) {
     const observation = guildPointObservation(rawObservation);
-    const previousHistory = history && typeof history === "object" ? history : {};
-    const weeks = normalizeGuildPointWeeks(previousHistory.weeks);
-    const lastObservation = guildPointObservation(previousHistory.lastObservation);
+    const previousHistory = normalizedGuildPointHistory(history);
+    const { weeks, manualWeeks, lastObservation } = previousHistory;
     const guildId = String(previousHistory.guildId || (lastObservation && lastObservation.guildId) || "");
-    if (!observation) return { changed: false, history: { guildId, lastObservation, weeks } };
+    if (!observation) return { changed: false, history: { guildId, lastObservation, weeks, manualWeeks } };
 
     const guildChanged = Boolean(
       lastObservation &&
@@ -606,7 +644,8 @@
         history: {
           guildId: observation.guildId,
           lastObservation: observation,
-          weeks: guildChanged || observation.lifetimePoints < (lastObservation?.lifetimePoints ?? 0) ? [] : weeks
+          weeks: guildChanged || observation.lifetimePoints < (lastObservation?.lifetimePoints ?? 0) ? [] : weeks,
+          manualWeeks: guildChanged ? [] : manualWeeks
         }
       };
     }
@@ -619,13 +658,16 @@
     ) {
       return {
         changed: false,
-        history: { guildId: observation.guildId || guildId, lastObservation, weeks }
+        history: { guildId: observation.guildId || guildId, lastObservation, weeks, manualWeeks }
       };
     }
 
     const earnedPoints = observation.lifetimePoints - lastObservation.lifetimePoints;
     if (!observation.weekStartAt && !lastObservation.weekStartAt) {
-      return { changed: false, history: { guildId: observation.guildId || guildId, lastObservation, weeks } };
+      return {
+        changed: false,
+        history: { guildId: observation.guildId || guildId, lastObservation, weeks, manualWeeks }
+      };
     }
 
     const officialWeekGap =
@@ -641,18 +683,22 @@
         history: {
           guildId: observation.guildId || guildId,
           lastObservation: observation,
-          weeks
+          weeks,
+          manualWeeks
         }
       };
     }
 
     if (!weekChanged && earnedPoints === 0) {
-      return { changed: false, history: { guildId: observation.guildId || guildId, lastObservation, weeks } };
+      return {
+        changed: false,
+        history: { guildId: observation.guildId || guildId, lastObservation, weeks, manualWeeks }
+      };
     }
     if (!completedWeek && earnedPoints === 0) {
       return {
         changed: true,
-        history: { guildId: observation.guildId || guildId, lastObservation: observation, weeks }
+        history: { guildId: observation.guildId || guildId, lastObservation: observation, weeks, manualWeeks }
       };
     }
     const targetWeekStart =
@@ -669,8 +715,147 @@
       history: {
         guildId: observation.guildId || guildId,
         lastObservation: observation,
-        weeks: nextWeeks
+        weeks: nextWeeks,
+        manualWeeks
       }
+    };
+  }
+
+  function setManualGuildPointWeek(history, rawWeekStartAt, rawEarnedPoints, observedAt, firstTrialStartAt) {
+    const normalized = normalizedGuildPointHistory(history);
+    const weekStartAt = Number(rawWeekStartAt);
+    const earnedPoints = Number(rawEarnedPoints);
+    const observed = Number(observedAt);
+    const firstTrial = Number(firstTrialStartAt);
+    const pastWeekCount = Math.floor((observed - firstTrial) / GUILD_POINT_WEEK_MS);
+    const ordinal = (weekStartAt - firstTrial) / GUILD_POINT_WEEK_MS;
+    if (
+      !Number.isSafeInteger(weekStartAt) ||
+      !Number.isSafeInteger(earnedPoints) ||
+      earnedPoints < 0 ||
+      !Number.isSafeInteger(observed) ||
+      !Number.isSafeInteger(firstTrial) ||
+      !Number.isInteger(ordinal) ||
+      ordinal < 0 ||
+      ordinal >= pastWeekCount
+    )
+      return { status: "invalid", history: normalized };
+    if (normalized.weeks.some((record) => record.complete && record.weekStartAt === weekStartAt))
+      return { status: "tracked", history: normalized };
+    return {
+      status: "saved",
+      history: {
+        ...normalized,
+        manualWeeks: normalizeManualGuildPointWeeks([
+          ...normalized.manualWeeks.filter((record) => record.weekStartAt !== weekStartAt),
+          { weekStartAt, earnedPoints, observedAt: observed }
+        ])
+      }
+    };
+  }
+
+  function removeManualGuildPointWeek(history, rawWeekStartAt) {
+    const normalized = normalizedGuildPointHistory(history);
+    const weekStartAt = Number(rawWeekStartAt);
+    const manualWeeks = normalized.manualWeeks.filter((record) => record.weekStartAt !== weekStartAt);
+    return {
+      changed: manualWeeks.length !== normalized.manualWeeks.length,
+      history: { ...normalized, manualWeeks }
+    };
+  }
+
+  function supplementGuildPointHistory(history, lifetimePoints, currentWeekPoints, observedAt, firstTrialStartAt) {
+    const normalized = normalizedGuildPointHistory(history);
+    const coldStart = estimateGuildPointColdStart(lifetimePoints, currentWeekPoints, observedAt, firstTrialStartAt);
+    if (coldStart.status !== "ok") return { status: coldStart.status, history: normalized, estimatedCount: 0 };
+    const firstTrial = Number(firstTrialStartAt);
+    const completeTracked = new Map(
+      normalized.weeks.filter((record) => record.complete).map((record) => [record.weekStartAt, record])
+    );
+    const manual = new Map(normalized.manualWeeks.map((record) => [record.weekStartAt, record]));
+    const records = [];
+    const missing = [];
+    let knownPoints = 0;
+    for (let index = 0; index < coldStart.pastWeekCount; index += 1) {
+      const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
+      const trackedRecord = completeTracked.get(weekStartAt);
+      const manualRecord = manual.get(weekStartAt);
+      const record = trackedRecord
+        ? { ...trackedRecord, source: "tracked" }
+        : manualRecord
+          ? { ...manualRecord, complete: true, source: "manual" }
+          : null;
+      if (record) {
+        records.push(record);
+        knownPoints += record.earnedPoints;
+      } else {
+        missing.push({ weekStartAt, ordinal: index + 1 });
+      }
+    }
+    const historicalTotal = Number(lifetimePoints) - Number(currentWeekPoints);
+    const remainingPoints = Math.max(0, historicalTotal - knownPoints);
+    const latestOrdinal = coldStart.pastWeekCount + 1;
+    const denominator = missing.reduce((total, record) => total + record.ordinal - latestOrdinal, 0);
+    const slope = denominator ? (remainingPoints - missing.length * Number(currentWeekPoints)) / denominator : 0;
+    let estimates = missing.map((record) => ({
+      weekStartAt: record.weekStartAt,
+      earnedPoints: Math.round(Number(currentWeekPoints) + slope * (record.ordinal - latestOrdinal))
+    }));
+    if (estimates.some((record) => !Number.isSafeInteger(record.earnedPoints) || record.earnedPoints < 0)) {
+      const average = missing.length ? remainingPoints / missing.length : 0;
+      estimates = missing.map((record) => ({ ...record, earnedPoints: Math.round(average) }));
+    }
+    let roundingDelta = remainingPoints - estimates.reduce((total, record) => total + record.earnedPoints, 0);
+    for (let index = estimates.length - 1; roundingDelta !== 0 && estimates.length; index -= 1) {
+      const record = estimates[(index + estimates.length) % estimates.length];
+      const adjustment = roundingDelta > 0 ? 1 : -1;
+      if (record.earnedPoints + adjustment >= 0) {
+        record.earnedPoints += adjustment;
+        roundingDelta -= adjustment;
+      }
+    }
+    for (const record of estimates) {
+      records.push({
+        weekStartAt: record.weekStartAt,
+        earnedPoints: record.earnedPoints,
+        complete: true,
+        observedAt: Number(observedAt),
+        source: "estimated"
+      });
+    }
+    records.sort((left, right) => left.weekStartAt - right.weekStartAt);
+    const forecastSeries = [
+      ...records.slice(-3),
+      {
+        weekStartAt: firstTrial + coldStart.pastWeekCount * GUILD_POINT_WEEK_MS,
+        earnedPoints: Number(currentWeekPoints)
+      }
+    ];
+    const averageWeeklyChange =
+      forecastSeries.length >= 2
+        ? forecastSeries
+            .slice(1)
+            .reduce((total, record, index) => total + record.earnedPoints - forecastSeries[index].earnedPoints, 0) /
+          (forecastSeries.length - 1)
+        : null;
+    const outsideRange = normalized.weeks.filter(
+      (record) => !record.complete || record.weekStartAt < firstTrial || record.weekStartAt >= Number(observedAt)
+    );
+    return {
+      status: knownPoints > historicalTotal ? "known_points_exceed_total" : "ok",
+      history: { ...normalized, weeks: [...records, ...outsideRange] },
+      estimatedCount: estimates.length,
+      manualCount: records.filter((record) => record.source === "manual").length,
+      trackedCount: records.filter((record) => record.source === "tracked").length,
+      averageWeeklyChange,
+      forecastPoints: Number.isFinite(averageWeeklyChange)
+        ? Math.max(0, Math.round(Number(currentWeekPoints) + averageWeeklyChange))
+        : null,
+      growthRate:
+        Number.isFinite(averageWeeklyChange) && forecastSeries.at(-2)?.earnedPoints > 0
+          ? averageWeeklyChange / forecastSeries.at(-2).earnedPoints
+          : null,
+      forecastSampleCount: forecastSeries.length
     };
   }
 
@@ -1056,6 +1241,9 @@
     aggregateGuildBuildingLevelCosts,
     buildGuildConstructionPlan,
     recordGuildPointObservation,
+    setManualGuildPointWeek,
+    removeManualGuildPointWeek,
+    supplementGuildPointHistory,
     summarizeGuildPointHistory,
     estimateGuildPointColdStart,
     estimateGuildConstructionWeeks,

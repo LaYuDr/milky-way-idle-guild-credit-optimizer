@@ -89,12 +89,83 @@
               : weekStartAt
       });
     }
+    const manualByWeek = new Map();
+    for (const record of Array.isArray(source.manualWeeks) ? source.manualWeeks : []) {
+      const weekStartAt = Number(record && record.weekStartAt);
+      const earnedPoints = Number(record && record.earnedPoints);
+      const observedAt = Number(record && record.observedAt);
+      if (
+        !Number.isSafeInteger(weekStartAt) ||
+        weekStartAt <= 0 ||
+        !Number.isSafeInteger(earnedPoints) ||
+        earnedPoints < 0
+      )
+        continue;
+      manualByWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints,
+        observedAt: Number.isSafeInteger(observedAt) && observedAt > 0 ? observedAt : weekStartAt
+      });
+    }
     return {
       guildId: String(source.guildId || "").slice(0, 160),
       lastObservation: normalizeObservation(source.lastObservation),
       weeks: Array.from(byWeek.values())
         .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-12)
+        .slice(-12),
+      manualWeeks: Array.from(manualByWeek.values())
+        .sort((left, right) => left.weekStartAt - right.weekStartAt)
+        .slice(-104)
+    };
+  }
+
+  function normalizeGuildPointSnapshot(value) {
+    if (!value || typeof value !== "object") return null;
+    const lifetimePoints = Number(value.lifetimePoints);
+    const availablePoints = Number(value.availablePoints);
+    const currentWeekPoints =
+      value.currentWeekPoints === null || value.currentWeekPoints === undefined ? NaN : Number(value.currentWeekPoints);
+    const weekStartAt = Number(value.weekStartAt);
+    const observedAt = Number(value.observedAt);
+    if (
+      !Number.isSafeInteger(lifetimePoints) ||
+      lifetimePoints < 0 ||
+      !Number.isSafeInteger(availablePoints) ||
+      availablePoints < 0 ||
+      !Number.isSafeInteger(weekStartAt) ||
+      weekStartAt <= 0 ||
+      !Number.isSafeInteger(observedAt) ||
+      observedAt <= 0
+    )
+      return null;
+    return {
+      guildId: String(value.guildId || "").slice(0, 160),
+      lifetimePoints,
+      availablePoints,
+      currentWeekPoints: Number.isSafeInteger(currentWeekPoints) && currentWeekPoints >= 0 ? currentWeekPoints : null,
+      weekStartAt,
+      observedAt
+    };
+  }
+
+  function guildPointStateFromSnapshot(value) {
+    const snapshot = normalizeGuildPointSnapshot(value);
+    if (!snapshot)
+      return {
+        guildPointSummary: null,
+        guildWeekStartAt: null,
+        guildPointSummaryObservedAt: null,
+        guildPointSummaryCached: false
+      };
+    const { weekStartAt, observedAt, currentWeekPoints, ...summary } = snapshot;
+    return {
+      guildPointSummary: {
+        ...summary,
+        ...(Number.isSafeInteger(currentWeekPoints) ? { currentWeekPoints } : {})
+      },
+      guildWeekStartAt: weekStartAt,
+      guildPointSummaryObservedAt: observedAt,
+      guildPointSummaryCached: true
     };
   }
 
@@ -198,7 +269,8 @@
         plans: [],
         manualGuildPoints: null,
         category: "all",
-        guildPointHistory: normalizeGuildPointHistory(null)
+        guildPointHistory: normalizeGuildPointHistory(null),
+        guildPointSnapshot: null
       };
       try {
         const raw = storage && storage.getItem(guildBuildingPlannerStorageKey());
@@ -240,7 +312,8 @@
           plans,
           manualGuildPoints,
           category,
-          guildPointHistory: normalizeGuildPointHistory(stored.guildPointHistory)
+          guildPointHistory: normalizeGuildPointHistory(stored.guildPointHistory),
+          guildPointSnapshot: normalizeGuildPointSnapshot(stored.guildPointSnapshot)
         };
       } catch (_) {
         return fallback;
@@ -253,11 +326,16 @@
           storage.setItem(
             guildBuildingPlannerStorageKey(),
             JSON.stringify({
-              schemaVersion: 2,
+              schemaVersion: 4,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
               category: state.buildingCategory,
               guildPointHistory: normalizeGuildPointHistory(state.guildPointHistory),
+              guildPointSnapshot: normalizeGuildPointSnapshot({
+                ...state.guildPointSummary,
+                weekStartAt: state.guildWeekStartAt,
+                observedAt: state.guildPointSummaryObservedAt
+              }),
               plans: state.buildingPlans.map((plan) => ({
                 buildingHrid: plan.buildingHrid,
                 startLevel: plan.startLevel,
@@ -465,6 +543,7 @@
     normalizePanelView,
     normalizePanelOrder,
     normalizeGuildPointHistory,
+    guildPointStateFromSnapshot,
     normalizeGuildShrineAutofillExcludedBuffHrids,
     createPluginStorage
   };

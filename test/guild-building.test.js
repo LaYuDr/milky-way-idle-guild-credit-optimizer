@@ -254,6 +254,78 @@ test("冷启动估算以历史中点和最新周拟合线性增长并外推下�
   assert.equal(core.estimateGuildPointColdStart(-1, 0, firstTrial, firstTrial).status, "unavailable");
 });
 
+test("缺失历史周按累计点数和线性趋势自动补齐", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const result = core.supplementGuildPointHistory(null, 65000, 9000, firstTrial + 7 * week, firstTrial);
+  const summary = core.summarizeGuildPointHistory(result.history);
+  assert.equal(result.status, "ok");
+  assert.equal(result.estimatedCount, 7);
+  assert.deepEqual(
+    summary.weeks.map((record) => record.earnedPoints),
+    [7250, 7500, 7750, 8000, 8250, 8500, 8750]
+  );
+  assert.equal(
+    summary.weeks.reduce((total, record) => total + record.earnedPoints, 0),
+    56000
+  );
+  assert.equal(result.averageWeeklyChange, 250);
+  assert.equal(result.forecastPoints, 9250);
+});
+
+test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const observedAt = firstTrial + 7 * week;
+  const saved = core.setManualGuildPointWeek(null, firstTrial + 3 * week, 8500, observedAt, firstTrial);
+  assert.equal(saved.status, "saved");
+  const result = core.supplementGuildPointHistory(saved.history, 65000, 9000, observedAt, firstTrial);
+  const records = core.summarizeGuildPointHistory(result.history).weeks;
+  assert.equal(result.manualCount, 1);
+  assert.equal(result.estimatedCount, 6);
+  assert.equal(records.find((record) => record.weekStartAt === firstTrial + 3 * week).earnedPoints, 8500);
+  assert.equal(records.find((record) => record.weekStartAt === firstTrial + 3 * week).source, "manual");
+  assert.equal(
+    records.reduce((total, record) => total + record.earnedPoints, 0),
+    56000
+  );
+  const removed = core.removeManualGuildPointWeek(saved.history, firstTrial + 3 * week);
+  assert.equal(removed.changed, true);
+  assert.deepEqual(removed.history.manualWeeks, []);
+});
+
+test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const observedAt = firstTrial + 2 * week;
+  const tracked = {
+    weeks: [{ weekStartAt: firstTrial, earnedPoints: 8000, complete: true, observedAt: firstTrial + week }]
+  };
+  assert.equal(core.setManualGuildPointWeek(tracked, firstTrial, 9000, observedAt, firstTrial).status, "tracked");
+  assert.equal(
+    core.setManualGuildPointWeek(tracked, firstTrial + 2 * week, 9000, observedAt, firstTrial).status,
+    "invalid"
+  );
+});
+
+test("建设页保存和删除手动历史并在 CSV 标注自动补充来源", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 65000,
+    availablePoints: 1000,
+    currentWeekPoints: 9000
+  };
+  assert.equal(harness.view.saveManualGuildPointWeek(firstTrial, 7600).status, "saved");
+  assert.equal(harness.persistCount(), 1);
+  assert.match(harness.view.guildPointHistoryCsv(), /"7600","guildPointCsvManual"/);
+  assert.match(harness.view.guildPointHistoryCsv(), /"guildPointCsvEstimated"/);
+  assert.equal(harness.view.removeManualGuildPointWeek(firstTrial), true);
+  assert.equal(harness.persistCount(), 2);
+  assert.deepEqual(harness.state.guildPointHistory.manualWeeks, []);
+});
+
 test("周记录可导出带 BOM 的 CSV，并标记完整周与追踪中记录", async () => {
   const harness = createConstructionHarness();
   const week = Date.parse("2026-09-01T02:00:00Z");
@@ -587,6 +659,8 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /data-role="construction-budget-summary"/);
   assert.match(userscript, /data-role="next-week-guild-point-forecast"/);
   assert.match(userscript, /recordGuildPointObservation/);
+  assert.match(userscript, /save-manual-guild-point-week/);
+  assert.match(userscript, /supplementGuildPointHistory/);
   assert.match(userscript, /constructionView\.syncGuildPointHistory\(\)/);
   assert.match(userscript, /data-known-count=/);
   assert.match(userscript, /data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"/);
@@ -608,6 +682,7 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointTrend",
     "guildPointTrendHint",
     "guildPointAutoSaved",
+    "guildPointSavedSnapshot",
     "currentAvailableGuildPoints",
     "currentWeekGuildPoints",
     "latestWeeklyGuildPoints",
@@ -620,6 +695,15 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointForecastColdStart",
     "guildPointForecastMethod",
     "recentGuildPointHistory",
+    "manualGuildPointWeek",
+    "manualGuildPointEarned",
+    "saveManualGuildPointWeek",
+    "manualGuildPointHint",
+    "guildPointSourceTracked",
+    "guildPointSourceManual",
+    "guildPointSourceEstimated",
+    "manualGuildPointWeekSaved",
+    "manualGuildPointWeekRemoved",
     "constructionEta",
     "constructionEtaWeeks",
     "constructionEtaDetail",
@@ -633,6 +717,8 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointCsvStatus",
     "guildPointCsvComplete",
     "guildPointCsvTracking",
+    "guildPointCsvManual",
+    "guildPointCsvEstimated",
     "guildPointCsvFileName",
     "manualBudget",
     "affordableUpgrades",

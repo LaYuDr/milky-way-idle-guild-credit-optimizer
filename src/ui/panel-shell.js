@@ -58,6 +58,7 @@
       copyGuildConstructionPlan,
       exportGuildConstructionCsv,
       exportGuildPointHistoryCsv,
+      constructionView,
       resetGuildPointHistory,
       persistGuildBuildingPlannerState,
       setPriceReference,
@@ -685,6 +686,14 @@
         setGuildBuildingPickerOpen(false);
         refreshConstructionAndFocus(panel, { role: "toggle-building-picker" });
       });
+      constructionResults.addEventListener(
+        "toggle",
+        (event) => {
+          if (event.target.matches(".mwi-guild-point-history"))
+            constructionView.setGuildPointHistoryOpen(event.target.open);
+        },
+        true
+      );
       constructionResults.addEventListener("click", (event) => {
         const button = event.target.closest("button");
         if (!button) return;
@@ -799,6 +808,22 @@
         }
         if (button.matches('[data-role="export-guild-point-history"]')) {
           exportGuildPointHistoryCsv();
+          return;
+        }
+        if (button.matches('[data-role="save-manual-guild-point-week"]')) {
+          const form = button.closest('[data-role="manual-guild-point-form"]');
+          const week = form && form.querySelector('[data-role="manual-guild-point-week"]');
+          const earned = form && form.querySelector('[data-role="manual-guild-point-earned"]');
+          if (!week || !earned || !earned.reportValidity()) return;
+          const result = constructionView.saveManualGuildPointWeek(Number(week.value), Number(earned.value));
+          refreshConstructionAndFocus(panel, {
+            role: result.status === "saved" ? "manual-guild-point-week" : "manual-guild-point-earned"
+          });
+          return;
+        }
+        if (button.matches('[data-role="remove-manual-guild-point-week"]')) {
+          if (constructionView.removeManualGuildPointWeek(Number(button.dataset.weekStartAt)))
+            refreshConstructionAndFocus(panel, { role: "manual-guild-point-week" });
           return;
         }
         if (button.matches('[data-role="reset-guild-point-history"]')) resetGuildPointHistory(panel);

@@ -114,6 +114,8 @@
       );
       if (Number.isSafeInteger(sourceCurrentWeekPoints) && sourceCurrentWeekPoints >= 0)
         currentWeekGuildPoints = sourceCurrentWeekPoints;
+      state.guildPointSummaryObservedAt = Date.now();
+      state.guildPointSummaryCached = false;
       if (
         previous &&
         previous.guildId === guildId &&
