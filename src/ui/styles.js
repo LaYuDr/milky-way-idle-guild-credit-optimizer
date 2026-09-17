@@ -70,7 +70,8 @@
         #mwi-credit-optimizer .mwi-guild-point-autosaved{flex:0 0 auto;padding:2px 6px;border:1px solid #4d8b80;border-radius:999px;background:#245149;color:#bff6ea;font-size:9px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-guild-point-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:8px 9px;border-bottom:1px solid #38635d;background:#203330}
         #mwi-credit-optimizer .mwi-guild-point-controls label{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 7px;min-width:0;color:#dffff7;font-size:10px;font-weight:700}
-        #mwi-credit-optimizer .mwi-guild-point-controls select{min-width:104px;max-width:100%;min-height:28px;font-size:10px}
+        #mwi-credit-optimizer .mwi-guild-point-week-stepper{width:104px;min-width:104px}
+        #mwi-credit-optimizer .mwi-guild-point-week-stepper input{flex:0 0 68px;width:68px;min-width:0;padding:4px 7px;text-align:center}
         #mwi-credit-optimizer .mwi-guild-point-controls label small{grid-column:1/-1;color:#9fc9c1;font-size:9px;font-weight:400;line-height:1.3}
         #mwi-credit-optimizer .mwi-guild-point-controls output{grid-column:1/-1;min-width:0;color:#c5d9d5;font-size:9px;line-height:1.35;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-controls output[data-state="warning"]{color:#ffd17c}
@@ -101,6 +102,8 @@
         #mwi-credit-optimizer .mwi-guild-point-history tbody th{background:#24273d;color:#cbd3e6;font-weight:400}
         #mwi-credit-optimizer .mwi-guild-point-history tbody td{background:#24273d}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-source="manual"] :is(th,td){background:#253b3a}
+        #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-current-week="true"] :is(th,td){border-top:1px solid #67b9a9;background:#1d3534}
+        #mwi-credit-optimizer .mwi-guild-point-current-label{display:block;margin-top:2px;color:#77f3d0;font-size:8px;font-weight:700}
         #mwi-credit-optimizer .mwi-guild-point-history input{box-sizing:border-box;width:100%;min-width:0;height:29px;padding:3px 7px;border:1px solid #4d6966;border-radius:4px;background:#171a2b;color:#eef5ff;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
         #mwi-credit-optimizer .mwi-guild-point-history input::placeholder{color:#9ea9bd;opacity:1}
         #mwi-credit-optimizer .mwi-guild-point-readonly{display:block;padding:4px 7px;color:#dffff7;font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace}

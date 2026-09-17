@@ -358,6 +358,35 @@ test("建设页将本周 0 显示为历史预测而非实际周样本", () => {
   const markup = harness.view.renderGuildPointForecast(history, { totalCost: 5000, planning });
   assert.match(markup, /predictedCurrentWeekGuildPoints/);
   assert.doesNotMatch(markup, />0<\/strong>/);
+  assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
+  assert.match(markup, /data-role="current-week-guild-points">\d+<\/strong>/);
+});
+
+test("当前周实际点数以只读行显示在历史表最底部", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const currentWeekStartAt = firstTrial + Math.floor((Date.now() - firstTrial) / week) * week;
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 65000,
+    availablePoints: 1000,
+    currentWeekPoints: 4321
+  };
+  harness.state.guildWeekStartAt = currentWeekStartAt + 2 * 60 * 60 * 1000;
+  const history = harness.view.guildPointHistorySummary();
+  const planning = harness.view.guildPointPlanningBudget(history);
+  const markup = harness.view.renderGuildPointForecast(history, { totalCost: 5000, planning });
+  assert.match(markup, /data-source="current" data-current-week="true"/);
+  assert.match(markup, /data-role="current-week-guild-points">4321<\/strong>/);
+  assert.match(markup, /guildPointSourceCurrent/);
+  assert.match(markup, /guildPointWeekWithDate/);
+  assert.match(markup, /data-current-week="true"[\s\S]*<\/tr><\/tbody>/);
+  assert.match(markup, /data-role="guild-point-forecast-weeks" type="number" min="2" max="12" step="1"/);
+  assert.match(markup, /data-role="guild-point-planning-weeks" type="number" min="0" max="12" step="1"/);
+  assert.match(markup, /data-input-role="guild-point-forecast-weeks" data-direction="1"/);
+  assert.match(markup, /data-input-role="guild-point-planning-weeks" data-direction="-1"/);
+  assert.doesNotMatch(markup, /<select data-role="guild-point-(?:forecast|planning)-weeks"/);
 });
 
 test("规划周数将预测产出加入当前预算且对缺失预测降级", () => {
@@ -838,10 +867,15 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointHistoryConflict",
     "guildPointForecastWeeks",
     "guildPointForecastWeeksHint",
+    "increaseGuildPointForecastWeeks",
+    "decreaseGuildPointForecastWeeks",
     "guildPointPlanningWeeks",
     "guildPointPlanningWeeksHint",
+    "increaseGuildPointPlanningWeeks",
+    "decreaseGuildPointPlanningWeeks",
     "guildPointPlanningCurrentOnly",
     "guildPointWeekCount",
+    "guildPointWeekWithDate",
     "guildPointPlanningBudgetProjected",
     "recentGuildPointHistory",
     "manualGuildPointWeek",
@@ -855,6 +889,11 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointSourceManual",
     "guildPointSourceEstimated",
     "guildPointSourceEmpty",
+    "guildPointSourceCurrent",
+    "guildPointSourceCurrentEstimated",
+    "guildPointSourceCurrentPending",
+    "guildPointSourceCurrentUnavailable",
+    "currentGuildPointWeek",
     "manualGuildPointWeekSaved",
     "manualGuildPointWeekRemoved",
     "manualGuildPointHistorySaved",

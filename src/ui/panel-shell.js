@@ -342,9 +342,8 @@
 
     function numberInputForStepButton(panel, button) {
       const inputRole = button.dataset.inputRole;
-      return inputRole === "target" || inputRole === "max-item-unit-price-millions"
-        ? panel.querySelector(`[data-role="${inputRole}"]`)
-        : null;
+      const input = button.closest(".mwi-number-stepper")?.querySelector("input[data-role]");
+      return input && input.dataset.role === inputRole && panel.contains(input) ? input : null;
     }
 
     function dispatchNumberInputChange(input) {
@@ -381,7 +380,7 @@
     }
 
     function bindNumberStepperControls(panel) {
-      const controls = panel.querySelector(".mwi-controls");
+      const controls = panel;
       const view = document.defaultView;
       let activeButton = null;
       let activeInput = null;

@@ -224,7 +224,13 @@
 
     function guildPointWeekLabel(weekStartAt) {
       try {
-        return new Intl.DateTimeFormat(ui().locale, { month: "numeric", day: "numeric" }).format(new Date(weekStartAt));
+        const date = new Intl.DateTimeFormat(ui().locale, { month: "numeric", day: "numeric" }).format(
+          new Date(weekStartAt)
+        );
+        const ordinal = Math.floor((Number(weekStartAt) - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)) + 1;
+        return Number.isSafeInteger(ordinal) && ordinal > 0
+          ? t("guildPointWeekWithDate", { count: formatNumber(ordinal), date })
+          : date;
       } catch (_) {
         return "-";
       }
@@ -265,6 +271,43 @@
       ).reverse();
     }
 
+    function renderCurrentGuildPointWeek(history) {
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      const elapsedWeeks = Math.floor((Date.now() - guildTrialFirstStartAt) / weekMs);
+      const fallbackWeekStartAt =
+        Number.isSafeInteger(guildTrialFirstStartAt) && elapsedWeeks >= 0
+          ? guildTrialFirstStartAt + elapsedWeeks * weekMs
+          : null;
+      const trackedWeekIndex = Number.isSafeInteger(state.guildWeekStartAt)
+        ? Math.floor((state.guildWeekStartAt - guildTrialFirstStartAt) / weekMs)
+        : null;
+      const weekStartAt =
+        Number.isSafeInteger(state.guildWeekStartAt) && state.guildWeekStartAt > 0 && trackedWeekIndex === elapsedWeeks
+          ? state.guildWeekStartAt
+          : fallbackWeekStartAt;
+      if (!weekStartAt) return "";
+
+      const currentWeekPoints = state.guildPointSummary?.currentWeekPoints;
+      const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints) && currentWeekPoints > 0;
+      const predictsCurrentWeek = currentWeekPoints === 0 && Number.isSafeInteger(history.effectiveForecastPoints);
+      const source = hasCurrentWeekPoints
+        ? "current"
+        : predictsCurrentWeek
+          ? "currentEstimated"
+          : currentWeekPoints === 0
+            ? "currentPending"
+            : "currentUnavailable";
+      const points = hasCurrentWeekPoints
+        ? formatNumber(currentWeekPoints)
+        : predictsCurrentWeek
+          ? formatNumber(history.effectiveForecastPoints)
+          : currentWeekPoints === 0
+            ? formatNumber(0)
+            : "-";
+      const week = guildPointWeekLabel(weekStartAt);
+      return `<tr data-source="${source}" data-current-week="true" aria-label="${escapeHtml(t("currentGuildPointWeek"))}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time><small class="mwi-guild-point-current-label">${escapeHtml(t("currentGuildPointWeek"))}</small></th><td><strong class="mwi-guild-point-readonly" data-role="current-week-guild-points">${escapeHtml(points)}</strong></td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
+    }
+
     function renderManualGuildPointHistory(history) {
       const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
       const rows = manualGuildPointWeekStarts()
@@ -285,9 +328,11 @@
           return `<tr data-source="${source}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time></th><td>${points}</td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
         })
         .join("");
-      const body = rows
-        ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}</tbody></table></div>`
-        : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
+      const currentWeekRow = renderCurrentGuildPointWeek(history);
+      const body =
+        rows || currentWeekRow
+          ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}${currentWeekRow}</tbody></table></div>`
+          : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
       return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form">${body}<div class="mwi-guild-point-manual-footer"><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p><button data-role="save-manual-guild-point-history" type="button"${rows ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointHistory"))}</button></div></form></details>`;
     }
 
@@ -295,15 +340,11 @@
       constructionUi.guildPointHistoryOpen = Boolean(open);
     }
 
-    function guildPointWeekOptions(minimum, maximum, selected, zeroKey = null) {
-      return Array.from({ length: maximum - minimum + 1 }, (_, index) => minimum + index)
-        .map(
-          (weeks) =>
-            `<option value="${weeks}"${weeks === selected ? " selected" : ""}>${escapeHtml(
-              weeks === 0 && zeroKey ? t(zeroKey) : t("guildPointWeekCount", { count: formatNumber(weeks) })
-            )}</option>`
-        )
-        .join("");
+    function renderGuildPointWeekStepper(role, value, minimum, maximum, labelKey, increaseKey, decreaseKey) {
+      const label = escapeHtml(t(labelKey));
+      const increase = escapeHtml(t(increaseKey));
+      const decrease = escapeHtml(t(decreaseKey));
+      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}" aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
     }
 
     function renderGuildPointForecastControls(plan) {
@@ -323,7 +364,25 @@
                   total: formatNumber(planning.budget)
                 })
               : t("guildPointPlanningBudgetCurrent", { total: formatNumber(planning.budget) });
-      return `<div class="mwi-guild-point-controls"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span><select data-role="guild-point-forecast-weeks">${guildPointWeekOptions(2, 12, forecastWeeks)}</select><small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span><select data-role="guild-point-planning-weeks">${guildPointWeekOptions(0, 12, planningWeeks, "guildPointPlanningCurrentOnly")}</select><small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><output data-state="${planning.weeks > 0 && !planning.canProject ? "warning" : "ready"}">${escapeHtml(planningSummary)}</output></div>`;
+      const forecastStepper = renderGuildPointWeekStepper(
+        "guild-point-forecast-weeks",
+        forecastWeeks,
+        2,
+        12,
+        "guildPointForecastWeeks",
+        "increaseGuildPointForecastWeeks",
+        "decreaseGuildPointForecastWeeks"
+      );
+      const planningStepper = renderGuildPointWeekStepper(
+        "guild-point-planning-weeks",
+        planningWeeks,
+        0,
+        12,
+        "guildPointPlanningWeeks",
+        "increaseGuildPointPlanningWeeks",
+        "decreaseGuildPointPlanningWeeks"
+      );
+      return `<div class="mwi-guild-point-controls"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><output data-state="${planning.weeks > 0 && !planning.canProject ? "warning" : "ready"}">${escapeHtml(planningSummary)}</output></div>`;
     }
 
     function renderGuildPointEta(plan, history) {

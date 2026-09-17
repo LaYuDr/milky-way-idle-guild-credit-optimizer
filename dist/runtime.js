@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.5";
+window.MwiGuildCreditVersion = "1.2.6";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2262,28 +2262,38 @@ window.MwiGuildCreditVersion = "1.2.5";
       guildPointHistoryConflict: "历史周点数合计超过游戏累计值，已停止预测。请检查手动记录或重置周记录。",
       guildPointForecastWeeks: "预测回看周数",
       guildPointForecastWeeksHint: "只使用最近连续的完整周。",
+      increaseGuildPointForecastWeeks: "增加 1 周预测回看范围",
+      decreaseGuildPointForecastWeeks: "减少 1 周预测回看范围",
       guildPointPlanningWeeks: "规划周数",
-      guildPointPlanningWeeksHint: "将预测周产出加入可用预算。",
+      guildPointPlanningWeeksHint: "0 表示仅使用当前点数；大于 0 时将预测周产出加入可用预算。",
+      increaseGuildPointPlanningWeeks: "增加 1 周规划时间",
+      decreaseGuildPointPlanningWeeks: "减少 1 周规划时间",
       guildPointPlanningCurrentOnly: "仅当前点数",
       guildPointWeekCount: "{count} 周",
+      guildPointWeekWithDate: "第 {count} 周（{date}）",
       guildPointPlanningNeedsBalance: "尚未读取当前可用点数。",
       guildPointPlanningNeedsForecast: "已保留当前点数预算；历史不足或冲突，暂无法加入未来周。",
       guildPointPlanningBudgetCurrent: "规划预算：当前 {total} 点。",
       guildPointPlanningBudgetProjected: "规划预算：{current} + {weeks} 周 × {weekly} = {total} 点。",
       recentGuildPointHistory: "最近周记录",
-      manualGuildPointWeek: "历史周",
+      manualGuildPointWeek: "周次",
       manualGuildPointEarned: "该周获得点数",
       manualGuildPointEarnedForWeek: "{week} 获得的公会点数",
       guildPointHistorySource: "来源",
       saveManualGuildPointHistory: "保存整张表",
       manualGuildPointHint:
-        "直接填写需要更正的历史周；灰色占位数为自动估算，留空则继续使用估算值。清空已有手动值后保存，可恢复自动估算。",
+        "直接填写需要更正的历史周；灰色占位数为自动估算，留空则继续使用估算值。最底部的当前周仅供查看。清空已有手动值后保存，可恢复自动估算。",
       manualGuildPointHistoryEmpty: "尚无已结束的试炼周可填写。",
       guildPointManualWeekOption: "{week} 开始",
       guildPointSourceTracked: "游戏追踪",
       guildPointSourceManual: "手动录入",
       guildPointSourceEstimated: "自动补充",
       guildPointSourceEmpty: "待填写",
+      guildPointSourceCurrent: "游戏追踪中",
+      guildPointSourceCurrentEstimated: "本周预测",
+      guildPointSourceCurrentPending: "本周未开始",
+      guildPointSourceCurrentUnavailable: "尚未读取",
+      currentGuildPointWeek: "当前周",
       removeManualGuildPointWeek: "删除 {week} 的手动记录",
       manualGuildPointWeekSaved: "历史公会点数已保存，缺失周已重新自动补充。",
       manualGuildPointWeekTracked: "该周已有游戏真实追踪记录，不能被手动值覆盖。",
@@ -2654,29 +2664,40 @@ window.MwiGuildCreditVersion = "1.2.5";
         "Historical weekly points exceed the game's lifetime total, so forecasting is paused. Check manual entries or reset weekly records.",
       guildPointForecastWeeks: "Forecast lookback",
       guildPointForecastWeeksHint: "Uses only the latest consecutive complete weeks.",
+      increaseGuildPointForecastWeeks: "Increase the forecast lookback by 1 week",
+      decreaseGuildPointForecastWeeks: "Decrease the forecast lookback by 1 week",
       guildPointPlanningWeeks: "Planning horizon",
-      guildPointPlanningWeeksHint: "Adds forecast weekly output to the available budget.",
+      guildPointPlanningWeeksHint:
+        "0 uses current points only; values above 0 add forecast weekly output to the available budget.",
+      increaseGuildPointPlanningWeeks: "Increase the planning horizon by 1 week",
+      decreaseGuildPointPlanningWeeks: "Decrease the planning horizon by 1 week",
       guildPointPlanningCurrentOnly: "Current points only",
       guildPointWeekCount: "{count} weeks",
+      guildPointWeekWithDate: "Week {count} ({date})",
       guildPointPlanningNeedsBalance: "Available Guild Points have not been read yet.",
       guildPointPlanningNeedsForecast:
         "The current-point budget is preserved; future weeks cannot be added because history is insufficient or conflicting.",
       guildPointPlanningBudgetCurrent: "Planning budget: {total} current points.",
       guildPointPlanningBudgetProjected: "Planning budget: {current} + {weeks} weeks × {weekly} = {total} points.",
       recentGuildPointHistory: "Recent weekly records",
-      manualGuildPointWeek: "Historical week",
+      manualGuildPointWeek: "Week",
       manualGuildPointEarned: "Points earned that week",
       manualGuildPointEarnedForWeek: "Guild Points earned for {week}",
       guildPointHistorySource: "Source",
       saveManualGuildPointHistory: "Save full table",
       manualGuildPointHint:
-        "Enter only the historical weeks that need correction. Gray placeholders are estimates; leave them blank to keep estimating. Clear a manual value and save to restore its estimate.",
+        "Enter only the historical weeks that need correction. Gray placeholders are estimates; leave them blank to keep estimating. The current week at the bottom is read-only. Clear a manual value and save to restore its estimate.",
       manualGuildPointHistoryEmpty: "There are no completed trial weeks to enter yet.",
       guildPointManualWeekOption: "Starting {week}",
       guildPointSourceTracked: "Game tracked",
       guildPointSourceManual: "Manual",
       guildPointSourceEstimated: "Auto-filled",
       guildPointSourceEmpty: "Not entered",
+      guildPointSourceCurrent: "Tracking now",
+      guildPointSourceCurrentEstimated: "Current-week forecast",
+      guildPointSourceCurrentPending: "Not started this week",
+      guildPointSourceCurrentUnavailable: "Not loaded",
+      currentGuildPointWeek: "Current week",
       removeManualGuildPointWeek: "Remove the manual record for {week}",
       manualGuildPointWeekSaved: "Historical Guild Points were saved and missing weeks were recalculated.",
       manualGuildPointWeekTracked: "This week already has a game-tracked record and cannot be overwritten manually.",
@@ -6778,7 +6799,8 @@ window.MwiGuildCreditVersion = "1.2.5";
         #mwi-credit-optimizer .mwi-guild-point-autosaved{flex:0 0 auto;padding:2px 6px;border:1px solid #4d8b80;border-radius:999px;background:#245149;color:#bff6ea;font-size:9px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-guild-point-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:8px 9px;border-bottom:1px solid #38635d;background:#203330}
         #mwi-credit-optimizer .mwi-guild-point-controls label{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:3px 7px;min-width:0;color:#dffff7;font-size:10px;font-weight:700}
-        #mwi-credit-optimizer .mwi-guild-point-controls select{min-width:104px;max-width:100%;min-height:28px;font-size:10px}
+        #mwi-credit-optimizer .mwi-guild-point-week-stepper{width:104px;min-width:104px}
+        #mwi-credit-optimizer .mwi-guild-point-week-stepper input{flex:0 0 68px;width:68px;min-width:0;padding:4px 7px;text-align:center}
         #mwi-credit-optimizer .mwi-guild-point-controls label small{grid-column:1/-1;color:#9fc9c1;font-size:9px;font-weight:400;line-height:1.3}
         #mwi-credit-optimizer .mwi-guild-point-controls output{grid-column:1/-1;min-width:0;color:#c5d9d5;font-size:9px;line-height:1.35;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-controls output[data-state="warning"]{color:#ffd17c}
@@ -6809,6 +6831,8 @@ window.MwiGuildCreditVersion = "1.2.5";
         #mwi-credit-optimizer .mwi-guild-point-history tbody th{background:#24273d;color:#cbd3e6;font-weight:400}
         #mwi-credit-optimizer .mwi-guild-point-history tbody td{background:#24273d}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-source="manual"] :is(th,td){background:#253b3a}
+        #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-current-week="true"] :is(th,td){border-top:1px solid #67b9a9;background:#1d3534}
+        #mwi-credit-optimizer .mwi-guild-point-current-label{display:block;margin-top:2px;color:#77f3d0;font-size:8px;font-weight:700}
         #mwi-credit-optimizer .mwi-guild-point-history input{box-sizing:border-box;width:100%;min-width:0;height:29px;padding:3px 7px;border:1px solid #4d6966;border-radius:4px;background:#171a2b;color:#eef5ff;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
         #mwi-credit-optimizer .mwi-guild-point-history input::placeholder{color:#9ea9bd;opacity:1}
         #mwi-credit-optimizer .mwi-guild-point-readonly{display:block;padding:4px 7px;color:#dffff7;font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -7514,7 +7538,13 @@ window.MwiGuildCreditVersion = "1.2.5";
 
     function guildPointWeekLabel(weekStartAt) {
       try {
-        return new Intl.DateTimeFormat(ui().locale, { month: "numeric", day: "numeric" }).format(new Date(weekStartAt));
+        const date = new Intl.DateTimeFormat(ui().locale, { month: "numeric", day: "numeric" }).format(
+          new Date(weekStartAt)
+        );
+        const ordinal = Math.floor((Number(weekStartAt) - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)) + 1;
+        return Number.isSafeInteger(ordinal) && ordinal > 0
+          ? t("guildPointWeekWithDate", { count: formatNumber(ordinal), date })
+          : date;
       } catch (_) {
         return "-";
       }
@@ -7555,6 +7585,43 @@ window.MwiGuildCreditVersion = "1.2.5";
       ).reverse();
     }
 
+    function renderCurrentGuildPointWeek(history) {
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      const elapsedWeeks = Math.floor((Date.now() - guildTrialFirstStartAt) / weekMs);
+      const fallbackWeekStartAt =
+        Number.isSafeInteger(guildTrialFirstStartAt) && elapsedWeeks >= 0
+          ? guildTrialFirstStartAt + elapsedWeeks * weekMs
+          : null;
+      const trackedWeekIndex = Number.isSafeInteger(state.guildWeekStartAt)
+        ? Math.floor((state.guildWeekStartAt - guildTrialFirstStartAt) / weekMs)
+        : null;
+      const weekStartAt =
+        Number.isSafeInteger(state.guildWeekStartAt) && state.guildWeekStartAt > 0 && trackedWeekIndex === elapsedWeeks
+          ? state.guildWeekStartAt
+          : fallbackWeekStartAt;
+      if (!weekStartAt) return "";
+
+      const currentWeekPoints = state.guildPointSummary?.currentWeekPoints;
+      const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints) && currentWeekPoints > 0;
+      const predictsCurrentWeek = currentWeekPoints === 0 && Number.isSafeInteger(history.effectiveForecastPoints);
+      const source = hasCurrentWeekPoints
+        ? "current"
+        : predictsCurrentWeek
+          ? "currentEstimated"
+          : currentWeekPoints === 0
+            ? "currentPending"
+            : "currentUnavailable";
+      const points = hasCurrentWeekPoints
+        ? formatNumber(currentWeekPoints)
+        : predictsCurrentWeek
+          ? formatNumber(history.effectiveForecastPoints)
+          : currentWeekPoints === 0
+            ? formatNumber(0)
+            : "-";
+      const week = guildPointWeekLabel(weekStartAt);
+      return `<tr data-source="${source}" data-current-week="true" aria-label="${escapeHtml(t("currentGuildPointWeek"))}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time><small class="mwi-guild-point-current-label">${escapeHtml(t("currentGuildPointWeek"))}</small></th><td><strong class="mwi-guild-point-readonly" data-role="current-week-guild-points">${escapeHtml(points)}</strong></td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
+    }
+
     function renderManualGuildPointHistory(history) {
       const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
       const rows = manualGuildPointWeekStarts()
@@ -7575,9 +7642,11 @@ window.MwiGuildCreditVersion = "1.2.5";
           return `<tr data-source="${source}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time></th><td>${points}</td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
         })
         .join("");
-      const body = rows
-        ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}</tbody></table></div>`
-        : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
+      const currentWeekRow = renderCurrentGuildPointWeek(history);
+      const body =
+        rows || currentWeekRow
+          ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}${currentWeekRow}</tbody></table></div>`
+          : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
       return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form">${body}<div class="mwi-guild-point-manual-footer"><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p><button data-role="save-manual-guild-point-history" type="button"${rows ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointHistory"))}</button></div></form></details>`;
     }
 
@@ -7585,15 +7654,11 @@ window.MwiGuildCreditVersion = "1.2.5";
       constructionUi.guildPointHistoryOpen = Boolean(open);
     }
 
-    function guildPointWeekOptions(minimum, maximum, selected, zeroKey = null) {
-      return Array.from({ length: maximum - minimum + 1 }, (_, index) => minimum + index)
-        .map(
-          (weeks) =>
-            `<option value="${weeks}"${weeks === selected ? " selected" : ""}>${escapeHtml(
-              weeks === 0 && zeroKey ? t(zeroKey) : t("guildPointWeekCount", { count: formatNumber(weeks) })
-            )}</option>`
-        )
-        .join("");
+    function renderGuildPointWeekStepper(role, value, minimum, maximum, labelKey, increaseKey, decreaseKey) {
+      const label = escapeHtml(t(labelKey));
+      const increase = escapeHtml(t(increaseKey));
+      const decrease = escapeHtml(t(decreaseKey));
+      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}" aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
     }
 
     function renderGuildPointForecastControls(plan) {
@@ -7613,7 +7678,25 @@ window.MwiGuildCreditVersion = "1.2.5";
                   total: formatNumber(planning.budget)
                 })
               : t("guildPointPlanningBudgetCurrent", { total: formatNumber(planning.budget) });
-      return `<div class="mwi-guild-point-controls"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span><select data-role="guild-point-forecast-weeks">${guildPointWeekOptions(2, 12, forecastWeeks)}</select><small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span><select data-role="guild-point-planning-weeks">${guildPointWeekOptions(0, 12, planningWeeks, "guildPointPlanningCurrentOnly")}</select><small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><output data-state="${planning.weeks > 0 && !planning.canProject ? "warning" : "ready"}">${escapeHtml(planningSummary)}</output></div>`;
+      const forecastStepper = renderGuildPointWeekStepper(
+        "guild-point-forecast-weeks",
+        forecastWeeks,
+        2,
+        12,
+        "guildPointForecastWeeks",
+        "increaseGuildPointForecastWeeks",
+        "decreaseGuildPointForecastWeeks"
+      );
+      const planningStepper = renderGuildPointWeekStepper(
+        "guild-point-planning-weeks",
+        planningWeeks,
+        0,
+        12,
+        "guildPointPlanningWeeks",
+        "increaseGuildPointPlanningWeeks",
+        "decreaseGuildPointPlanningWeeks"
+      );
+      return `<div class="mwi-guild-point-controls"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><output data-state="${planning.weeks > 0 && !planning.canProject ? "warning" : "ready"}">${escapeHtml(planningSummary)}</output></div>`;
     }
 
     function renderGuildPointEta(plan, history) {
@@ -10701,9 +10784,8 @@ window.MwiGuildCreditVersion = "1.2.5";
 
     function numberInputForStepButton(panel, button) {
       const inputRole = button.dataset.inputRole;
-      return inputRole === "target" || inputRole === "max-item-unit-price-millions"
-        ? panel.querySelector(`[data-role="${inputRole}"]`)
-        : null;
+      const input = button.closest(".mwi-number-stepper")?.querySelector("input[data-role]");
+      return input && input.dataset.role === inputRole && panel.contains(input) ? input : null;
     }
 
     function dispatchNumberInputChange(input) {
@@ -10740,7 +10822,7 @@ window.MwiGuildCreditVersion = "1.2.5";
     }
 
     function bindNumberStepperControls(panel) {
-      const controls = panel.querySelector(".mwi-controls");
+      const controls = panel;
       const view = document.defaultView;
       let activeButton = null;
       let activeInput = null;

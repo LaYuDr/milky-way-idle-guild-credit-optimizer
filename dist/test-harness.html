@@ -1518,24 +1518,57 @@
         );
       const targetFor = (buildingHrid) =>
         panel.querySelector(`[data-role="building-target"][data-building-hrid="${buildingHrid}"]`);
+      const stepWeekControl = async (role, direction, expectedValue) => {
+        const button = panel.querySelector(
+          `.mwi-guild-point-week-stepper [data-role="number-step"][data-input-role="${role}"][data-direction="${direction}"]`
+        );
+        const rect = button.getBoundingClientRect();
+        const pointer = {
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2
+        };
+        dispatchAuditPointer(button, "pointerdown", pointer);
+        dispatchAuditPointer(button, "pointerup", pointer);
+        await waitFor(() => panel.querySelector(`[data-role="${role}"]`)?.value === String(expectedValue));
+      };
       const waitForOrder = (order) =>
         waitFor(() => constructionGroupOrder(panel).join("|") === order.join("|") && constructionGroupOrder(panel));
 
       audit.initial = constructionStateSnapshot(panel);
 
-      let forecastWeeks = panel.querySelector('[data-role="guild-point-forecast-weeks"]');
-      forecastWeeks.value = "4";
-      forecastWeeks.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFor(() => panel.querySelector('[data-role="guild-point-forecast-weeks"]')?.value === "4");
-      let planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
-      planningWeeks.value = "2";
-      planningWeeks.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFor(() => panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value === "2");
-      audit.forecastSettings = constructionStateSnapshot(panel);
-      planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
-      planningWeeks.value = "0";
-      planningWeeks.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFor(() => panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value === "0");
+      await stepWeekControl("guild-point-forecast-weeks", -1, 5);
+      await stepWeekControl("guild-point-forecast-weeks", -1, 4);
+      await stepWeekControl("guild-point-planning-weeks", 1, 1);
+      await stepWeekControl("guild-point-planning-weeks", 1, 2);
+      audit.forecastSettings = {
+        ...constructionStateSnapshot(panel),
+        forecastWeeks: panel.querySelector('[data-role="guild-point-forecast-weeks"]')?.value || "",
+        planningWeeks: panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value || ""
+      };
+      await stepWeekControl("guild-point-planning-weeks", -1, 1);
+      await stepWeekControl("guild-point-planning-weeks", -1, 0);
+      const forecastWeeks = panel.querySelector('[data-role="guild-point-forecast-weeks"]');
+      const planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
+      const weekStepperAudit = (input) => {
+        const stepper = input.closest(".mwi-guild-point-week-stepper");
+        const increase = stepper.querySelector('[data-role="number-step"][data-direction="1"]');
+        const decrease = stepper.querySelector('[data-role="number-step"][data-direction="-1"]');
+        return {
+          tagName: input.tagName,
+          type: input.type,
+          min: input.min,
+          max: input.max,
+          step: input.step,
+          label: input.getAttribute("aria-label") || "",
+          increaseLabel: increase.getAttribute("aria-label") || "",
+          decreaseLabel: decrease.getAttribute("aria-label") || "",
+          buttonSizes: [increase, decrease].map((button) => elementRect(button))
+        };
+      };
+      audit.weekSteppers = {
+        forecast: weekStepperAudit(forecastWeeks),
+        planning: weekStepperAudit(planningWeeks)
+      };
 
       let budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
       budgetInput.value = "5000";
@@ -1613,7 +1646,13 @@
         trackedCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="tracked"]').length,
         earned: panel.querySelector(
           `.mwi-guild-point-history [data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
-        )?.value
+        )?.value,
+        currentWeekAtBottom:
+          panel.querySelector('.mwi-guild-point-history tr[data-current-week="true"]') ===
+          panel.querySelector(".mwi-guild-point-history tbody")?.lastElementChild,
+        currentWeekPoints: normalizedText(panel.querySelector('[data-role="current-week-guild-points"]')),
+        currentWeekSource:
+          panel.querySelector('.mwi-guild-point-history tr[data-current-week="true"]')?.dataset.source || ""
       };
       const savedManualInput = panel.querySelector(
         `[data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
@@ -1752,13 +1791,40 @@
           compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("2") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
+        weeklyPointControlsUseNumberSteppers:
+          audit.forecastSettings.forecastWeeks === "4" &&
+          audit.forecastSettings.planningWeeks === "2" &&
+          audit.weekSteppers.forecast.tagName === "INPUT" &&
+          audit.weekSteppers.forecast.type === "number" &&
+          audit.weekSteppers.forecast.min === "2" &&
+          audit.weekSteppers.forecast.max === "12" &&
+          audit.weekSteppers.forecast.step === "1" &&
+          audit.weekSteppers.planning.tagName === "INPUT" &&
+          audit.weekSteppers.planning.type === "number" &&
+          audit.weekSteppers.planning.min === "0" &&
+          audit.weekSteppers.planning.max === "12" &&
+          audit.weekSteppers.planning.step === "1" &&
+          audit.weekSteppers.forecast.increaseLabel ===
+            (english ? "Increase the forecast lookback by 1 week" : "增加 1 周预测回看范围") &&
+          audit.weekSteppers.forecast.decreaseLabel ===
+            (english ? "Decrease the forecast lookback by 1 week" : "减少 1 周预测回看范围") &&
+          audit.weekSteppers.planning.increaseLabel ===
+            (english ? "Increase the planning horizon by 1 week" : "增加 1 周规划时间") &&
+          audit.weekSteppers.planning.decreaseLabel ===
+            (english ? "Decrease the planning horizon by 1 week" : "减少 1 周规划时间") &&
+          [...audit.weekSteppers.forecast.buttonSizes, ...audit.weekSteppers.planning.buttonSizes].every(
+            (rect) => rect.width >= 33 && rect.height >= 18
+          ),
         manualGuildPointHistoryCanBeSavedAndRemoved:
-          audit.manualGuildPointHistory.rowCount === expectedEstimatedCount &&
+          audit.manualGuildPointHistory.rowCount === expectedEstimatedCount + 1 &&
           audit.manualGuildPointHistory.editableCount === expectedEstimatedCount &&
           audit.manualGuildPointHistory.manualCount === 1 &&
           audit.manualGuildPointHistory.estimatedCount === expectedEstimatedCount - 1 &&
           audit.manualGuildPointHistory.trackedCount === 0 &&
           compactNumber(audit.manualGuildPointHistory.earned) === "10000" &&
+          audit.manualGuildPointHistory.currentWeekAtBottom &&
+          compactNumber(audit.manualGuildPointHistory.currentWeekPoints) === "9648" &&
+          audit.manualGuildPointHistory.currentWeekSource === "current" &&
           audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
           audit.manualGuildPointHistory.afterRemove.estimatedCount === expectedEstimatedCount &&
           audit.manualGuildPointHistory.afterRemove.detailsOpen,
