@@ -38,6 +38,8 @@ function createConstructionHarness({
     nextBuildingPlanId: 1,
     buildingPlanNotice: "",
     manualGuildPoints: null,
+    guildPointForecastWeeks: 6,
+    guildPointPlanningWeeks: 0,
     buildingSearch: "",
     buildingCategory: "all",
     guildPointSummary: null,
@@ -236,7 +238,7 @@ test("施工 ETA 使用当前缺口和周预测向上取整", () => {
   assert.equal(core.estimateGuildConstructionWeeks(0, 1000, 420).status, "no_plan");
 });
 
-test("冷启动估算以历史中点和最新周拟合线性增长并外推下一周", () => {
+test("冷启动估算不将尚未结束的本周当作完整周趋势", () => {
   const firstTrial = Date.parse("2026-07-13T00:00:00Z");
   const week = 7 * 24 * 60 * 60 * 1000;
   assert.deepEqual(core.estimateGuildPointColdStart(65000, 9000, firstTrial + 7 * week, firstTrial), {
@@ -246,15 +248,15 @@ test("冷启动估算以历史中点和最新周拟合线性增长并外推下�
     currentWeekPoints: 9000,
     historicalMidpoint: 4,
     latestWeekOrdinal: 8,
-    weeklyGrowthPoints: 250,
-    growthRate: 0.03125,
-    forecastPoints: 9250
+    weeklyGrowthPoints: null,
+    growthRate: null,
+    forecastPoints: 8000
   });
   assert.equal(core.estimateGuildPointColdStart(9000, 1000, firstTrial - 1, firstTrial).status, "before_first_trial");
   assert.equal(core.estimateGuildPointColdStart(-1, 0, firstTrial, firstTrial).status, "unavailable");
 });
 
-test("缺失历史周按累计点数和线性趋势自动补齐", () => {
+test("缺失历史周按累计点数均匀补齐且不引入本周进度", () => {
   const firstTrial = Date.parse("2026-07-13T00:00:00Z");
   const week = 7 * 24 * 60 * 60 * 1000;
   const result = core.supplementGuildPointHistory(null, 65000, 9000, firstTrial + 7 * week, firstTrial);
@@ -263,14 +265,116 @@ test("缺失历史周按累计点数和线性趋势自动补齐", () => {
   assert.equal(result.estimatedCount, 7);
   assert.deepEqual(
     summary.weeks.map((record) => record.earnedPoints),
-    [7250, 7500, 7750, 8000, 8250, 8500, 8750]
+    [8000, 8000, 8000, 8000, 8000, 8000, 8000]
   );
   assert.equal(
     summary.weeks.reduce((total, record) => total + record.earnedPoints, 0),
     56000
   );
-  assert.equal(result.averageWeeklyChange, 250);
-  assert.equal(result.forecastPoints, 9250);
+  assert.equal(result.averageWeeklyChange, 0);
+  assert.equal(result.forecastPoints, 8000);
+});
+
+test("本周为 0 或只有少量进度时仍按已结束历史周预测", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const zero = core.supplementGuildPointHistory(null, 65000, 0, firstTrial + 7 * week, firstTrial);
+  const partial = core.supplementGuildPointHistory(null, 65000, 1000, firstTrial + 7 * week, firstTrial);
+  assert.equal(zero.status, "ok");
+  assert.equal(zero.forecastPoints, 9286);
+  assert.equal(partial.forecastPoints, 9143);
+  assert.ok(zero.forecastPoints > 0);
+  assert.ok(partial.forecastPoints > 0);
+});
+
+test("预测回看周数只限制最近连续完整周", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const history = {
+    weeks: Array.from({ length: 8 }, (_, index) => ({
+      weekStartAt: firstTrial + index * week,
+      earnedPoints: index === 7 ? 800 : 100,
+      complete: true,
+      observedAt: firstTrial + (index + 1) * week
+    }))
+  };
+  const threeWeeks = core.summarizeGuildPointHistory(history, { forecastWeekCount: 3 });
+  const sixWeeks = core.summarizeGuildPointHistory(history, { forecastWeekCount: 6 });
+  assert.equal(threeWeeks.forecastPoints, 1150);
+  assert.equal(threeWeeks.forecastSampleCount, 3);
+  assert.equal(sixWeeks.forecastPoints, 940);
+  assert.equal(sixWeeks.forecastSampleCount, 6);
+});
+
+test("历史已知点数超过游戏累计值时停止预测", () => {
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  const result = core.supplementGuildPointHistory(
+    { weeks: [{ weekStartAt: firstTrial, earnedPoints: 10000, complete: true, observedAt: firstTrial + week }] },
+    12000,
+    5000,
+    firstTrial + 2 * week,
+    firstTrial
+  );
+  assert.equal(result.status, "known_points_exceed_total");
+  assert.equal(result.forecastPoints, null);
+  assert.equal(result.forecastSampleCount, 0);
+});
+
+test("建设页在历史冲突时同时停止未来预算和 ETA", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  harness.state.guildPointPlanningWeeks = 4;
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 12000,
+    availablePoints: 1000,
+    currentWeekPoints: 5000
+  };
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: firstTrial, earnedPoints: 10000, complete: true, observedAt: firstTrial + week }
+  ];
+  const history = harness.view.guildPointHistorySummary();
+  const planning = harness.view.guildPointPlanningBudget(history);
+  const eta = harness.view.guildPointEta({ totalCost: 5000, planning }, history);
+  assert.equal(history.supplemented.status, "known_points_exceed_total");
+  assert.equal(history.forecastPoints, null);
+  assert.equal(planning.status, "missing_forecast");
+  assert.equal(planning.budget, 1000);
+  assert.equal(eta.status, "history_conflict");
+});
+
+test("建设页将本周 0 显示为历史预测而非实际周样本", () => {
+  const harness = createConstructionHarness();
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 65000,
+    availablePoints: 1000,
+    currentWeekPoints: 0
+  };
+  const history = harness.view.guildPointHistorySummary();
+  const planning = harness.view.guildPointPlanningBudget(history);
+  const markup = harness.view.renderGuildPointForecast(history, { totalCost: 5000, planning });
+  assert.match(markup, /predictedCurrentWeekGuildPoints/);
+  assert.doesNotMatch(markup, />0<\/strong>/);
+});
+
+test("规划周数将预测产出加入当前预算且对缺失预测降级", () => {
+  assert.deepEqual(core.calculateGuildPointPlanningBudget(5000, 8000, 4), {
+    status: "ok",
+    basePoints: 5000,
+    weeks: 4,
+    forecastPoints: 8000,
+    budget: 37000
+  });
+  assert.deepEqual(core.calculateGuildPointPlanningBudget(5000, null, 4), {
+    status: "missing_forecast",
+    basePoints: 5000,
+    weeks: 4,
+    forecastPoints: null,
+    budget: 5000
+  });
 });
 
 test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
@@ -688,6 +792,9 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /data-role="construction-affordable"/);
   assert.match(userscript, /data-role="construction-budget-summary"/);
   assert.match(userscript, /data-role="next-week-guild-point-forecast"/);
+  assert.match(userscript, /data-role="guild-point-forecast-weeks"/);
+  assert.match(userscript, /data-role="guild-point-planning-weeks"/);
+  assert.match(userscript, /calculateGuildPointPlanningBudget/);
   assert.match(userscript, /recordGuildPointObservation/);
   assert.match(userscript, /save-manual-guild-point-history/);
   assert.match(userscript, /mwi-guild-point-table-scroll/);
@@ -717,6 +824,7 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointSavedSnapshot",
     "currentAvailableGuildPoints",
     "currentWeekGuildPoints",
+    "predictedCurrentWeekGuildPoints",
     "latestWeeklyGuildPoints",
     "weeklyGuildPointGrowth",
     "guildPointEstimatedGrowth",
@@ -726,6 +834,15 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointForecastNeedsHistory",
     "guildPointForecastColdStart",
     "guildPointForecastMethod",
+    "guildPointForecastEstimatedMethod",
+    "guildPointHistoryConflict",
+    "guildPointForecastWeeks",
+    "guildPointForecastWeeksHint",
+    "guildPointPlanningWeeks",
+    "guildPointPlanningWeeksHint",
+    "guildPointPlanningCurrentOnly",
+    "guildPointWeekCount",
+    "guildPointPlanningBudgetProjected",
     "recentGuildPointHistory",
     "manualGuildPointWeek",
     "manualGuildPointEarned",
@@ -745,6 +862,7 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "constructionEtaWeeks",
     "constructionEtaDetail",
     "constructionEtaDetailEstimated",
+    "constructionEtaHistoryConflict",
     "exportGuildPointHistory",
     "resetGuildPointHistory",
     "resetGuildPointHistoryConfirm",

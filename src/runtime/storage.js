@@ -268,6 +268,7 @@
       const fallback = {
         plans: [],
         manualGuildPoints: null,
+        guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
         category: "all",
         guildPointHistory: normalizeGuildPointHistory(null),
         guildPointSnapshot: null
@@ -308,9 +309,25 @@
         const category = ["all", "core", "life", "combat", "shrine"].includes(stored.category)
           ? stored.category
           : "all";
+        const guildPointForecastWeeksValue = Number(stored.guildPointForecastWeeks);
+        const guildPointPlanningWeeksValue = Number(stored.guildPointPlanningWeeks);
         return {
           plans,
           manualGuildPoints,
+          guildPointSettings: {
+            guildPointForecastWeeks:
+              Number.isSafeInteger(guildPointForecastWeeksValue) &&
+              guildPointForecastWeeksValue >= 2 &&
+              guildPointForecastWeeksValue <= 12
+                ? guildPointForecastWeeksValue
+                : 6,
+            guildPointPlanningWeeks:
+              Number.isSafeInteger(guildPointPlanningWeeksValue) &&
+              guildPointPlanningWeeksValue >= 0 &&
+              guildPointPlanningWeeksValue <= 12
+                ? guildPointPlanningWeeksValue
+                : 0
+          },
           category,
           guildPointHistory: normalizeGuildPointHistory(stored.guildPointHistory),
           guildPointSnapshot: normalizeGuildPointSnapshot(stored.guildPointSnapshot)
@@ -326,9 +343,11 @@
           storage.setItem(
             guildBuildingPlannerStorageKey(),
             JSON.stringify({
-              schemaVersion: 4,
+              schemaVersion: 5,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
+              guildPointForecastWeeks: state.guildPointForecastWeeks,
+              guildPointPlanningWeeks: state.guildPointPlanningWeeks,
               category: state.buildingCategory,
               guildPointHistory: normalizeGuildPointHistory(state.guildPointHistory),
               guildPointSnapshot: normalizeGuildPointSnapshot({

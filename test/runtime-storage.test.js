@@ -180,6 +180,7 @@ test("公会建设计划按站点和角色隔离并过滤非法等级", () => {
   assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState(), {
     plans: [{ buildingHrid: "/guild_buildings/guild_hall", startLevel: 1, targetLevel: 3 }],
     manualGuildPoints: 5000,
+    guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
     category: "life",
     guildPointHistory: { guildId: "", lastObservation: null, weeks: [], manualWeeks: [] },
     guildPointSnapshot: null
@@ -192,6 +193,8 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
   const week = Date.parse("2026-09-01T02:00:00Z");
   pluginStorage.persistGuildBuildingPlannerState({
     manualGuildPoints: null,
+    guildPointForecastWeeks: 8,
+    guildPointPlanningWeeks: 4,
     buildingCategory: "all",
     buildingPlans: [],
     guildPointSummary: {
@@ -224,7 +227,9 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     }
   });
   const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
-  assert.equal(raw.schemaVersion, 4);
+  assert.equal(raw.schemaVersion, 5);
+  assert.equal(raw.guildPointForecastWeeks, 8);
+  assert.equal(raw.guildPointPlanningWeeks, 4);
   assert.deepEqual(raw.guildPointHistory.weeks, [
     { weekStartAt: week, earnedPoints: 250, complete: true, observedAt: week + 7 * 24 * 60 * 60 * 1000 }
   ]);

@@ -229,7 +229,9 @@ adds one unread building as `0 -> 1` without a manual-level prompt, checks inlin
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
 search focus, focus visibility after rerenders, and the full weekly-point edit
 table: every completed week is visible at once, estimated weeks can be edited
-in place, and clearing a manual value restores its estimate. It leaves a reusable final
+in place, and clearing a manual value restores its estimate. It also changes
+the forecast lookback and planning horizon once, verifies the rerendered controls,
+then restores the current-points-only planning mode. It leaves a reusable final
 sample with 28 visible square catalog tiles, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.

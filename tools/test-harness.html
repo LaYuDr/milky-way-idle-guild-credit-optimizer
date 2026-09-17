@@ -214,9 +214,11 @@
       localStorage.setItem(
         `mwi-guild-building-planner-v1:${location.hostname}:default`,
         JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 5,
           rulesVersion: "2026-08-04-v1",
           manualGuildPoints: null,
+          guildPointForecastWeeks: 6,
+          guildPointPlanningWeeks: 0,
           category: "all",
           plans: [],
           guildPointHistory: {
@@ -1356,13 +1358,40 @@
         root.querySelectorAll("[data-role='construction-view'],[data-role='construction-view'] *")
       );
       const visibleAuditElements = auditElements.filter(elementIsVisible);
+      const clippedElementRect = (element) => {
+        const rect = element.getBoundingClientRect();
+        const clipped = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+        for (
+          let ancestor = element.parentElement;
+          ancestor && root.contains(ancestor);
+          ancestor = ancestor.parentElement
+        ) {
+          const style = getComputedStyle(ancestor);
+          const ancestorRect = ancestor.getBoundingClientRect();
+          if (["auto", "scroll", "hidden", "clip"].includes(style.overflowX)) {
+            clipped.left = Math.max(clipped.left, ancestorRect.left);
+            clipped.right = Math.min(clipped.right, ancestorRect.right);
+          }
+          if (["auto", "scroll", "hidden", "clip"].includes(style.overflowY)) {
+            clipped.top = Math.max(clipped.top, ancestorRect.top);
+            clipped.bottom = Math.min(clipped.bottom, ancestorRect.bottom);
+          }
+        }
+        return clipped.right > clipped.left && clipped.bottom > clipped.top ? clipped : null;
+      };
       const horizontalOverflow = visibleAuditElements
         .filter((element) => {
           const style = getComputedStyle(element);
           const intentionallyEllipsized =
             style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
+          const intentionallyScrollable = ["auto", "scroll"].includes(style.overflowX);
           const visuallyHidden = style.clipPath !== "none" && element.clientWidth <= 1 && element.clientHeight <= 1;
-          return !intentionallyEllipsized && !visuallyHidden && element.scrollWidth > element.clientWidth + 2;
+          return (
+            !intentionallyEllipsized &&
+            !intentionallyScrollable &&
+            !visuallyHidden &&
+            element.scrollWidth > element.clientWidth + 2
+          );
         })
         .map((element) => ({
           className: String(element.className || ""),
@@ -1370,17 +1399,16 @@
           clientWidth: element.clientWidth,
           scrollWidth: element.scrollWidth
         }));
-      const interactiveElements = visibleAuditElements.filter((element) =>
-        ["BUTTON", "INPUT", "SELECT", "SUMMARY"].includes(element.tagName)
-      );
+      const interactiveElements = visibleAuditElements
+        .filter((element) => ["BUTTON", "INPUT", "SELECT", "SUMMARY"].includes(element.tagName))
+        .map((element) => ({ element, rect: clippedElementRect(element) }))
+        .filter(({ rect }) => rect);
       const controlOverlaps = [];
       for (let leftIndex = 0; leftIndex < interactiveElements.length; leftIndex += 1) {
         for (let rightIndex = leftIndex + 1; rightIndex < interactiveElements.length; rightIndex += 1) {
-          const left = interactiveElements[leftIndex];
-          const right = interactiveElements[rightIndex];
+          const { element: left, rect: leftRect } = interactiveElements[leftIndex];
+          const { element: right, rect: rightRect } = interactiveElements[rightIndex];
           if (left.contains(right) || right.contains(left)) continue;
-          const leftRect = left.getBoundingClientRect();
-          const rightRect = right.getBoundingClientRect();
           const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
           const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
           if (overlapWidth > 1 && overlapHeight > 1)
@@ -1461,6 +1489,9 @@
           growth: normalizedText(root.querySelector('[data-role="weekly-guild-point-growth"]')),
           forecast: normalizedText(root.querySelector('[data-role="next-week-guild-point-forecast"]')),
           eta: normalizedText(root.querySelector('[data-role="construction-eta"]')),
+          forecastWeeks: root.querySelector('[data-role="guild-point-forecast-weeks"]')?.value || "",
+          planningWeeks: root.querySelector('[data-role="guild-point-planning-weeks"]')?.value || "",
+          planningSummary: normalizedText(root.querySelector(".mwi-guild-point-controls output")),
           exportDisabled: Boolean(root.querySelector('[data-role="export-guild-point-history"]')?.disabled),
           resetDisabled: Boolean(root.querySelector('[data-role="reset-guild-point-history"]')?.disabled)
         },
@@ -1491,6 +1522,20 @@
         waitFor(() => constructionGroupOrder(panel).join("|") === order.join("|") && constructionGroupOrder(panel));
 
       audit.initial = constructionStateSnapshot(panel);
+
+      let forecastWeeks = panel.querySelector('[data-role="guild-point-forecast-weeks"]');
+      forecastWeeks.value = "4";
+      forecastWeeks.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => panel.querySelector('[data-role="guild-point-forecast-weeks"]')?.value === "4");
+      let planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
+      planningWeeks.value = "2";
+      planningWeeks.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value === "2");
+      audit.forecastSettings = constructionStateSnapshot(panel);
+      planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
+      planningWeeks.value = "0";
+      planningWeeks.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value === "0");
 
       let budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
       budgetInput.value = "5000";
@@ -1550,6 +1595,7 @@
       guildPointDetails.open = true;
       guildPointDetails.dispatchEvent(new Event("toggle"));
       const manualInputs = Array.from(guildPointDetails.querySelectorAll('[data-role="manual-guild-point-earned"]'));
+      const expectedEstimatedCount = manualInputs.length;
       const manualEarned = manualInputs[0];
       const selectedManualWeek = Number(manualEarned.dataset.weekStartAt);
       manualEarned.value = "10000";
@@ -1577,14 +1623,14 @@
       await waitFor(
         () =>
           !panel.querySelector('.mwi-guild-point-history tr[data-source="manual"]') &&
-          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length === 8
+          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length ===
+            expectedEstimatedCount
       );
       audit.manualGuildPointHistory.afterRemove = {
         manualCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="manual"]').length,
         estimatedCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length,
         detailsOpen: panel.querySelector(".mwi-guild-point-history")?.open === true
       };
-
       const gymHrid = "/guild_buildings/gym";
       moveButtonFor(gymHrid, -1).click();
       await waitFor(() => constructionGroupOrder(panel).indexOf(gymHrid) === 1);
@@ -1701,20 +1747,20 @@
         weeklyPointForecastUsesCompletedWeeks:
           compactNumber(panel.querySelector('[data-role="current-available-guild-points"]')?.textContent) === "244" &&
           compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "9648" &&
-          normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "+4.4%" &&
-          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "10059" &&
-          compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("1") &&
+          normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "0%" &&
+          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "6933" &&
+          compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("2") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
         manualGuildPointHistoryCanBeSavedAndRemoved:
-          audit.manualGuildPointHistory.rowCount === 8 &&
-          audit.manualGuildPointHistory.editableCount === 8 &&
+          audit.manualGuildPointHistory.rowCount === expectedEstimatedCount &&
+          audit.manualGuildPointHistory.editableCount === expectedEstimatedCount &&
           audit.manualGuildPointHistory.manualCount === 1 &&
-          audit.manualGuildPointHistory.estimatedCount === 7 &&
+          audit.manualGuildPointHistory.estimatedCount === expectedEstimatedCount - 1 &&
           audit.manualGuildPointHistory.trackedCount === 0 &&
           compactNumber(audit.manualGuildPointHistory.earned) === "10000" &&
           audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
-          audit.manualGuildPointHistory.afterRemove.estimatedCount === 8 &&
+          audit.manualGuildPointHistory.afterRemove.estimatedCount === expectedEstimatedCount &&
           audit.manualGuildPointHistory.afterRemove.detailsOpen,
         buttonReorderRecalculatesBudget:
           audit.buttonReorder.groupOrder[0] === gymHrid &&

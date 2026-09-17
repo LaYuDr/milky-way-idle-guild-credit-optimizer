@@ -661,6 +661,22 @@
         }
       });
       constructionResults.addEventListener("change", (event) => {
+        if (event.target.matches('[data-role="guild-point-forecast-weeks"]')) {
+          const weeks = Number(event.target.value);
+          state.guildPointForecastWeeks = Number.isSafeInteger(weeks) && weeks >= 2 && weeks <= 12 ? weeks : 6;
+          clearConstructionNotice(panel);
+          persistGuildBuildingPlannerState();
+          refreshConstructionAndFocus(panel, { role: "guild-point-forecast-weeks" }, null);
+          return;
+        }
+        if (event.target.matches('[data-role="guild-point-planning-weeks"]')) {
+          const weeks = Number(event.target.value);
+          state.guildPointPlanningWeeks = Number.isSafeInteger(weeks) && weeks >= 0 && weeks <= 12 ? weeks : 0;
+          clearConstructionNotice(panel);
+          persistGuildBuildingPlannerState();
+          refreshConstructionAndFocus(panel, { role: "guild-point-planning-weeks" }, null);
+          return;
+        }
         if (event.target.matches('[data-role="guild-point-budget"]')) {
           const parsed = guildPointBudgetInputValue(event.target);
           setGuildPointBudgetValidity(panel, event.target, parsed.valid);

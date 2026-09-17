@@ -100,6 +100,7 @@
     guildBuffLevels: null,
     ...storageApi.guildPointStateFromSnapshot(savedBuildingPlannerState.guildPointSnapshot),
     guildPointSummaryBridgeRevision: 0,
+    ...savedBuildingPlannerState.guildPointSettings,
     guildShrineLevels: null,
     guildShrineDetails: null,
     characterItems: null,

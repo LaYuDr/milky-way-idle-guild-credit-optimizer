@@ -65,7 +65,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
 
 test("组合入口保持精简并在页面退出时统一清理运行时资源", () => {
   const source = fs.readFileSync(path.join(root, "src", "userscript.js"), "utf8");
-  assert.ok(source.split(/\r?\n/).length <= 1020, "src/userscript.js should remain a composition root");
+  assert.ok(source.split(/\r?\n/).length <= 1021, "src/userscript.js should remain a composition root");
   assert.match(source, /function disposeRuntime\(\)/);
   assert.match(source, /\.dispose\(\)/);
   assert.match(source, /window\.addEventListener\("pagehide", disposeRuntime/);
