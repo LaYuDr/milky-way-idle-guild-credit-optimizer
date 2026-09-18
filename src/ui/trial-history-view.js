@@ -77,6 +77,8 @@
       escapeHtml,
       trialName,
       recordDate,
+      collapsedSections: pluginStorage.loadTrialAnalysisCollapsed(),
+      onCollapsedChange: pluginStorage.saveTrialAnalysisCollapsed,
       onSelectRecord(key) {
         selectedKey = key;
         refresh(getPanel());

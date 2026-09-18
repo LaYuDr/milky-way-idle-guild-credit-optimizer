@@ -210,6 +210,34 @@
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
     }
 
+    function normalizeTrialAnalysisSections(value) {
+      return Array.isArray(value)
+        ? [...new Set(value.filter((id) => config.TRIAL_ANALYTICS_SECTIONS.includes(id)))]
+        : [];
+    }
+
+    function loadTrialAnalysisCollapsed() {
+      try {
+        return normalizeTrialAnalysisSections(
+          JSON.parse(storage.getItem(`${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`))
+        );
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveTrialAnalysisCollapsed(value) {
+      try {
+        storage.setItem(
+          `${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`,
+          JSON.stringify(normalizeTrialAnalysisSections(value))
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function loadTrialHistory() {
       const records = [];
       let failed = false;
@@ -312,7 +340,8 @@
         shrineGuideEnabled: false,
         maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
-        showConstructionView: true,
+        showConstructionView: false,
+        showTrialHistoryView: false,
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -372,7 +401,8 @@
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView !== false,
+          showConstructionView: stored.showConstructionView === true,
+          showTrialHistoryView: stored.showTrialHistoryView === true,
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -513,7 +543,8 @@
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
-            showConstructionView: state.showConstructionView !== false,
+            showConstructionView: state.showConstructionView === true,
+            showTrialHistoryView: state.showTrialHistoryView === true,
             activeView: state.activeView,
             panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
             useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
@@ -667,6 +698,8 @@
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
+      loadTrialAnalysisCollapsed,
+      saveTrialAnalysisCollapsed,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,

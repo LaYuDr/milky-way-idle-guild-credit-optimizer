@@ -70,7 +70,11 @@
         t("showConstructionView")
       )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
         t("showConstructionViewHint")
-      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label></section>`;
+      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
+        t("showTrialHistoryView")
+      )}</strong><small id="mwi-settings-trials-hint">${escapeHtml(
+        t("showTrialHistoryViewHint")
+      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch" aria-describedby="mwi-settings-trials-hint"></label></section>`;
     }
 
     function renderSettingsMarkup() {
@@ -99,7 +103,9 @@
       for (const input of settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'))
         input.checked = !excludedHrids.has(input.dataset.guildBuffHrid);
       const constructionInput = settingsPanel.querySelector('[data-role="settings-show-construction"]');
-      if (constructionInput) constructionInput.checked = state.showConstructionView !== false;
+      if (constructionInput) constructionInput.checked = state.showConstructionView === true;
+      const trialsInput = settingsPanel.querySelector('[data-role="settings-show-trials"]');
+      if (trialsInput) trialsInput.checked = state.showTrialHistoryView === true;
       return settingsPanel;
     }
 

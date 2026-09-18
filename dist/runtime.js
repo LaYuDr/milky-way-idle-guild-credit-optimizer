@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.12";
+window.MwiGuildCreditVersion = "1.2.13";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -726,6 +726,8 @@ window.MwiGuildCreditVersion = "1.2.12";
     FALLBACK_INSTALL_URL,
     PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
+    TRIAL_ANALYTICS_UI_STORAGE_KEY: "mwi-trial-analytics-ui-v1",
+    TRIAL_ANALYTICS_SECTIONS: ["overview", "ranking", "comparison", "member", "coverage", "scatter"],
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
@@ -2780,8 +2782,12 @@ window.MwiGuildCreditVersion = "1.2.12";
       settingsShrinesLoading: "正在读取可配置的公会神龛…",
       settingsShrinesEmpty: "已读取游戏数据，但没有可配置的公会神龛。",
       interfaceVisibility: "界面",
-      showConstructionView: "显示公会建设页面",
-      showConstructionViewHint: "关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
+      showConstructionView: "显示公会建设页签（测试版功能，效果不佳）",
+      showTrialHistoryView: "显示历史试炼数据页签（测试版功能，效果不佳）",
+      showTrialHistoryViewHint: "默认关闭。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
+      trialHistoryViewShown: "已显示历史试炼数据页签。",
+      trialHistoryViewHidden: "已隐藏历史试炼数据页签；历史记录和自动保存不受影响。",
+      showConstructionViewHint: "默认关闭。关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
       settingsSaved: "设置已保存。",
       settingsSaveFailed: "设置已生效，但未能保存；刷新页面后可能恢复。",
       constructionViewShown: "已显示公会建设页面。",
@@ -3095,6 +3101,9 @@ window.MwiGuildCreditVersion = "1.2.12";
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
       analysisTitle: "试炼数据分析",
+      analysisCollapse: "折叠",
+      analysisExpand: "展开",
+      analysisCollapseSaveFailed: "折叠状态暂时无法保存，当前页面仍有效。",
       analysisOverview: "单次试炼概览",
       analysisRanking: "成员贡献排行",
       analysisComparison: "同项目跨周对比",
@@ -3338,8 +3347,14 @@ window.MwiGuildCreditVersion = "1.2.12";
       settingsShrinesLoading: "Reading configurable guild shrines…",
       settingsShrinesEmpty: "Game data is available, but there are no configurable guild shrines.",
       interfaceVisibility: "Interface",
-      showConstructionView: "Show the Guild construction page",
-      showConstructionViewHint: "Turning this off hides the tab but keeps every construction plan for later.",
+      showConstructionView: "Show Guild construction (Beta feature; results may be unsatisfactory)",
+      showTrialHistoryView: "Show Trial history (Beta feature; results may be unsatisfactory)",
+      showTrialHistoryViewHint:
+        "Off by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
+      trialHistoryViewShown: "The Trial history tab is now visible.",
+      trialHistoryViewHidden: "The Trial history tab is hidden; history and automatic saving are unaffected.",
+      showConstructionViewHint:
+        "Off by default. Turning this off hides the tab but keeps every construction plan for later.",
       settingsSaved: "Settings saved.",
       settingsSaveFailed: "The change is active but could not be saved; it may reset after a page refresh.",
       constructionViewShown: "The Guild construction page is now visible.",
@@ -3671,6 +3686,9 @@ window.MwiGuildCreditVersion = "1.2.12";
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
       analysisTitle: "Trial analytics",
+      analysisCollapse: "Collapse",
+      analysisExpand: "Expand",
+      analysisCollapseSaveFailed: "Could not save collapsed sections. Your choices still apply on this page.",
       analysisOverview: "Trial overview",
       analysisRanking: "Member contributions",
       analysisComparison: "Compare the same trial across weeks",
@@ -5620,6 +5638,34 @@ window.MwiGuildCreditVersion = "1.2.12";
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
     }
 
+    function normalizeTrialAnalysisSections(value) {
+      return Array.isArray(value)
+        ? [...new Set(value.filter((id) => config.TRIAL_ANALYTICS_SECTIONS.includes(id)))]
+        : [];
+    }
+
+    function loadTrialAnalysisCollapsed() {
+      try {
+        return normalizeTrialAnalysisSections(
+          JSON.parse(storage.getItem(`${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`))
+        );
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveTrialAnalysisCollapsed(value) {
+      try {
+        storage.setItem(
+          `${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`,
+          JSON.stringify(normalizeTrialAnalysisSections(value))
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function loadTrialHistory() {
       const records = [];
       let failed = false;
@@ -5722,7 +5768,8 @@ window.MwiGuildCreditVersion = "1.2.12";
         shrineGuideEnabled: false,
         maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
-        showConstructionView: true,
+        showConstructionView: false,
+        showTrialHistoryView: false,
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -5782,7 +5829,8 @@ window.MwiGuildCreditVersion = "1.2.12";
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView !== false,
+          showConstructionView: stored.showConstructionView === true,
+          showTrialHistoryView: stored.showTrialHistoryView === true,
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -5923,7 +5971,8 @@ window.MwiGuildCreditVersion = "1.2.12";
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
-            showConstructionView: state.showConstructionView !== false,
+            showConstructionView: state.showConstructionView === true,
+            showTrialHistoryView: state.showTrialHistoryView === true,
             activeView: state.activeView,
             panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
             useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
@@ -6077,6 +6126,8 @@ window.MwiGuildCreditVersion = "1.2.12";
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
+      loadTrialAnalysisCollapsed,
+      saveTrialAnalysisCollapsed,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,
@@ -7683,6 +7734,13 @@ window.MwiGuildCreditVersion = "1.2.12";
   "use strict";
 
   const PANEL_STYLES = `
+        #mwi-credit-optimizer button.mwi-analysis-toggle{display:flex;align-items:center;gap:12px;width:100%;min-height:40px;padding:6px 0;border:0;border-radius:3px;background:transparent;color:inherit;font:inherit;text-align:left}
+        #mwi-credit-optimizer button.mwi-analysis-toggle:hover{background:#343753;color:#fff}
+        #mwi-credit-optimizer .mwi-analysis-toggle-action{margin-left:auto;flex-shrink:0;font-size:13px;font-weight:400;color:#aebdff}
+        #mwi-credit-optimizer .mwi-analysis-toggle svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+        #mwi-credit-optimizer .mwi-analysis-toggle[aria-expanded="false"] svg{transform:rotate(-90deg)}
+        #mwi-credit-optimizer [id^="mwi-analysis-body-"][hidden]{display:none!important}
+        #mwi-credit-optimizer [data-analysis-collapse-status]:empty{display:none}
         #mwi-credit-optimizer .mwi-analysis-nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
         #mwi-credit-optimizer .mwi-analysis-nav button{font-size:13px;background:#343753;color:#d6dfff;padding:8px 10px;min-height:34px}
         #mwi-credit-optimizer .mwi-analysis-nav button:hover{background:#454b70;color:#fff}
@@ -7775,7 +7833,7 @@ window.MwiGuildCreditVersion = "1.2.12";
         #mwi-credit-optimizer [data-role="trials-view"] :focus-visible{outline:2px solid #77e1cb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;gap:2px;background:transparent}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:28px;min-width:28px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
         #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
-        #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-switch+.mwi-settings-switch{margin-top:6px}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-number-field{display:grid;gap:4px;min-width:0}#mwi-credit-optimizer .mwi-number-field>label{display:block}#mwi-credit-optimizer .mwi-price-reference{display:flex;flex:0 0 auto;align-items:center;gap:0;height:40px;min-height:40px;border:1px solid #5b5d7b;border-radius:6px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{height:38px;min-height:38px;border-radius:0;background:#353653;color:#c9cbeb;padding:0 9px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}#mwi-credit-optimizer .mwi-controls>[data-role="refresh"]{min-height:40px}
@@ -9659,6 +9717,8 @@ window.MwiGuildCreditVersion = "1.2.12";
       escapeHtml,
       trialName,
       recordDate,
+      collapsedSections: pluginStorage.loadTrialAnalysisCollapsed(),
+      onCollapsedChange: pluginStorage.saveTrialAnalysisCollapsed,
       onSelectRecord(key) {
         selectedKey = key;
         refresh(getPanel());
@@ -9864,7 +9924,18 @@ window.MwiGuildCreditVersion = "1.2.12";
   // Extend the incumbent guild panel: scoped filters, comparable statistics,
   // full-width ranks and charts with inspectable tables. Minimum design width
   // is 900px; smaller panels retain contained scrolling and usable controls.
-  function createTrialAnalyticsView({ api, t, escapeHtml: esc, trialName, recordDate, onSelectRecord }) {
+  function createTrialAnalyticsView({
+    api,
+    t,
+    escapeHtml: esc,
+    trialName,
+    recordDate,
+    onSelectRecord,
+    collapsedSections = [],
+    onCollapsedChange = () => true
+  }) {
+    const collapsed = new Set(collapsedSections);
+    let collapseSaveFailed = false;
     let records = [],
       selected = null,
       host = null,
@@ -9906,7 +9977,7 @@ window.MwiGuildCreditVersion = "1.2.12";
     const memberButton = (entry, body) =>
       `<button type="button" class="mwi-analysis-member" data-analysis-member="${esc(entry.identity)}" aria-label="${text("analysisOpenMember", { name: personName(entry) })}">${body || esc(personName(entry))}</button>`;
     const section = (id, title, content) =>
-      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}">${text(title)}</h3>${content}</section>`;
+      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}"><button type="button" class="mwi-analysis-toggle" data-analysis-toggle="${id}" aria-expanded="${!collapsed.has(id)}" aria-controls="mwi-analysis-body-${id}"><span>${text(title)}</span><span class="mwi-analysis-toggle-action" data-analysis-toggle-label>${text(collapsed.has(id) ? "analysisExpand" : "analysisCollapse")}</span><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4"/></svg></button></h3><div id="mwi-analysis-body-${id}"${collapsed.has(id) ? " hidden" : ""}>${content}</div></section>`;
     const scrollTable = (caption, headers, rows) =>
       `<div class="mwi-analysis-table-scroll" role="region" tabindex="0" aria-label="${esc(caption)}"><table class="mwi-trial-table"><caption>${esc(caption)}</caption><thead><tr>${headers.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
     const matches = (entry) => personName(entry).toLocaleLowerCase().includes(state.query.toLocaleLowerCase());
@@ -10141,7 +10212,21 @@ window.MwiGuildCreditVersion = "1.2.12";
       ]
         .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
         .join("")}</nav>`;
-      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p>${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+    }
+    function setCollapsed(id, value) {
+      const button = host?.querySelector(`[data-analysis-toggle="${id}"]`);
+      if (!button || collapsed.has(id) === value) return;
+      if (value) collapsed.add(id);
+      else collapsed.delete(id);
+      button.setAttribute("aria-expanded", String(!value));
+      button.querySelector("[data-analysis-toggle-label]").textContent = t(
+        value ? "analysisExpand" : "analysisCollapse"
+      );
+      host.querySelector(`#mwi-analysis-body-${id}`).hidden = value;
+      collapseSaveFailed = onCollapsedChange([...collapsed]) === false;
+      const status = host.querySelector("[data-analysis-collapse-status]");
+      if (status) status.textContent = collapseSaveFailed ? t("analysisCollapseSaveFailed") : "";
     }
     function render(nextRecords, nextSelected) {
       records = nextRecords;
@@ -10220,16 +10305,16 @@ window.MwiGuildCreditVersion = "1.2.12";
         applySearch(event);
       });
       host.addEventListener("click", (event) => {
+        const toggle = event.target.closest("[data-analysis-toggle]");
+        if (toggle) setCollapsed(toggle.dataset.analysisToggle, !collapsed.has(toggle.dataset.analysisToggle));
         const jump = event.target.closest("[data-analysis-jump]");
         if (jump) {
-          const heading = host.querySelector(`#mwi-analysis-${jump.dataset.analysisJump}`);
-          if (heading) {
-            heading.tabIndex = -1;
-            focusAndReveal(heading);
-          }
+          setCollapsed(jump.dataset.analysisJump, false);
+          focusAndReveal(host.querySelector(`[data-analysis-toggle="${jump.dataset.analysisJump}"]`));
         }
         const button = event.target.closest("[data-analysis-member]");
         if (button) {
+          setCollapsed("member", false);
           state.member = button.dataset.analysisMember;
           refresh(null, true);
         }
@@ -11168,7 +11253,11 @@ window.MwiGuildCreditVersion = "1.2.12";
         t("showConstructionView")
       )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
         t("showConstructionViewHint")
-      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label></section>`;
+      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
+        t("showTrialHistoryView")
+      )}</strong><small id="mwi-settings-trials-hint">${escapeHtml(
+        t("showTrialHistoryViewHint")
+      )}</small></span><input class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch" aria-describedby="mwi-settings-trials-hint"></label></section>`;
     }
 
     function renderSettingsMarkup() {
@@ -11197,7 +11286,9 @@ window.MwiGuildCreditVersion = "1.2.12";
       for (const input of settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'))
         input.checked = !excludedHrids.has(input.dataset.guildBuffHrid);
       const constructionInput = settingsPanel.querySelector('[data-role="settings-show-construction"]');
-      if (constructionInput) constructionInput.checked = state.showConstructionView !== false;
+      if (constructionInput) constructionInput.checked = state.showConstructionView === true;
+      const trialsInput = settingsPanel.querySelector('[data-role="settings-show-trials"]');
+      if (trialsInput) trialsInput.checked = state.showTrialHistoryView === true;
       return settingsPanel;
     }
 
@@ -12420,7 +12511,9 @@ window.MwiGuildCreditVersion = "1.2.12";
     };
 
     function panelViewEnabled(view) {
-      return view !== "construction" || state.showConstructionView !== false;
+      if (view === "construction") return state.showConstructionView === true;
+      if (view === "trials") return state.showTrialHistoryView === true;
+      return true;
     }
 
     function normalizedPanelOrder() {
@@ -12620,20 +12713,19 @@ window.MwiGuildCreditVersion = "1.2.12";
       if (restoreFocus && trigger) trigger.focus();
     }
 
-    function setConstructionViewVisibility(panel, visible) {
-      state.showConstructionView = Boolean(visible);
-      if (!state.showConstructionView && state.activeView === "construction") {
-        setPanelView(panel, nearestVisiblePanelView("construction"));
+    function setOptionalViewVisibility(panel, view, visible) {
+      const construction = view === "construction";
+      const stateKey = construction ? "showConstructionView" : "showTrialHistoryView";
+      const statusPrefix = construction ? "constructionView" : "trialHistoryView";
+      state[stateKey] = Boolean(visible);
+      if (!state[stateKey] && state.activeView === view) {
+        setPanelView(panel, nearestVisiblePanelView(view));
       }
       syncPanelViewVisibility(panel);
       const persisted = persistPluginUiState();
       setSettingsStatus(
         panel,
-        persisted === false
-          ? "settingsSaveFailed"
-          : state.showConstructionView
-            ? "constructionViewShown"
-            : "constructionViewHidden"
+        persisted === false ? "settingsSaveFailed" : `${statusPrefix}${visible ? "Shown" : "Hidden"}`
       );
     }
 
@@ -12918,7 +13010,10 @@ window.MwiGuildCreditVersion = "1.2.12";
           return;
         }
         if (event.target.matches('[data-role="settings-show-construction"]')) {
-          setConstructionViewVisibility(panel, event.target.checked);
+          setOptionalViewVisibility(panel, "construction", event.target.checked);
+        }
+        if (event.target.matches('[data-role="settings-show-trials"]')) {
+          setOptionalViewVisibility(panel, "trials", event.target.checked);
         }
       });
       panel.querySelector(".mwi-price-reference").addEventListener("click", (event) => {
@@ -13716,6 +13811,7 @@ window.MwiGuildCreditVersion = "1.2.12";
     maxConversionItemUnitPrice: savedUiState.maxConversionItemUnitPrice,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
+    showTrialHistoryView: savedUiState.showTrialHistoryView,
     settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,

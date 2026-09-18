@@ -77,7 +77,9 @@
     };
 
     function panelViewEnabled(view) {
-      return view !== "construction" || state.showConstructionView !== false;
+      if (view === "construction") return state.showConstructionView === true;
+      if (view === "trials") return state.showTrialHistoryView === true;
+      return true;
     }
 
     function normalizedPanelOrder() {
@@ -277,20 +279,19 @@
       if (restoreFocus && trigger) trigger.focus();
     }
 
-    function setConstructionViewVisibility(panel, visible) {
-      state.showConstructionView = Boolean(visible);
-      if (!state.showConstructionView && state.activeView === "construction") {
-        setPanelView(panel, nearestVisiblePanelView("construction"));
+    function setOptionalViewVisibility(panel, view, visible) {
+      const construction = view === "construction";
+      const stateKey = construction ? "showConstructionView" : "showTrialHistoryView";
+      const statusPrefix = construction ? "constructionView" : "trialHistoryView";
+      state[stateKey] = Boolean(visible);
+      if (!state[stateKey] && state.activeView === view) {
+        setPanelView(panel, nearestVisiblePanelView(view));
       }
       syncPanelViewVisibility(panel);
       const persisted = persistPluginUiState();
       setSettingsStatus(
         panel,
-        persisted === false
-          ? "settingsSaveFailed"
-          : state.showConstructionView
-            ? "constructionViewShown"
-            : "constructionViewHidden"
+        persisted === false ? "settingsSaveFailed" : `${statusPrefix}${visible ? "Shown" : "Hidden"}`
       );
     }
 
@@ -575,7 +576,10 @@
           return;
         }
         if (event.target.matches('[data-role="settings-show-construction"]')) {
-          setConstructionViewVisibility(panel, event.target.checked);
+          setOptionalViewVisibility(panel, "construction", event.target.checked);
+        }
+        if (event.target.matches('[data-role="settings-show-trials"]')) {
+          setOptionalViewVisibility(panel, "trials", event.target.checked);
         }
       });
       panel.querySelector(".mwi-price-reference").addEventListener("click", (event) => {

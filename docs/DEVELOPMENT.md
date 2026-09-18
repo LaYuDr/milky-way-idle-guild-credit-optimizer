@@ -278,6 +278,9 @@ For the persistent settings and hidden-view interaction contract, open:
 http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&sidebarWidth=420
 ```
 
+Both beta tabs default to hidden unless their saved visibility is explicitly `true`.
+Feature audits with `resetState=1` explicitly enable them before runtime startup.
+
 `settingsAudit=1` seeds one existing Spirit Shrine (life) upgrade plan, one
 Guild Hall construction plan, and the complete panel order
 `construction, credit, upgrade`. It then exercises the real controls to:
@@ -297,6 +300,8 @@ Guild Hall construction plan, and the complete panel order
 - require normal tab keyboard navigation and pointer sorting to operate on the
   two visible views only while merging their new order back around the hidden
   construction slot;
+- hide the active Trial history tab, require a safe fallback and saved visibility,
+  then hide both beta tabs and restore them independently without changing trial storage;
 - re-enable construction, require its tab and panel to be reachable in the
   merged complete order, enter it again, and require the original construction
   plan to remain intact.
@@ -509,7 +514,12 @@ use synthetic data for committed fixtures.
 `src/trial-analytics.js` owns pure summaries, competition ranks, identity,
 same-trial comparison cohorts, member history and coverage states.
 `src/ui/trial-analytics-view.js` renders the six analysis sections; it never
-writes storage. `trial-history-view` owns record selection and persistence.
+writes trial data. `trial-history-view` owns record selection and persistence.
+Each analysis heading is a native button with `aria-expanded`/`aria-controls`.
+Collapsed sections are hidden from focus navigation and retain their controls.
+A separate server/character-scoped UI preference stores validated section IDs;
+failed preference writes keep this page usable and report the failure.
+Section navigation and member links open their target before moving focus.
 The analytics modules are explicit build inputs and are wired in userscript.
 
 Identity uses guild-scoped character IDs. ID-less records use exact names;
@@ -535,7 +545,8 @@ and await `window.__mwiTrialAnalyticsAuditReady`; require every check true.
 The synthetic import covers six sections, three-week lines, common members,
 single-week states, member-name substring search, IME composition, member
 history, zero and missing coverage, combat metric switching, keyboard point details,
-visible section jumps and unchanged stored records. Run alongside
+visible section jumps, independent collapse, preserved preferences, automatic
+expansion on navigation/member selection and unchanged stored trial records. Run alongside
 `trialHistoryAudit` and the documented eleven-width layout matrix, including
 English 320/610/900. The design baseline is sidebar 900px; also inspect actual
 panel widths at 1200 and 1500 (the harness accepts up to 1800). Record actual

@@ -7,7 +7,18 @@
   // Extend the incumbent guild panel: scoped filters, comparable statistics,
   // full-width ranks and charts with inspectable tables. Minimum design width
   // is 900px; smaller panels retain contained scrolling and usable controls.
-  function createTrialAnalyticsView({ api, t, escapeHtml: esc, trialName, recordDate, onSelectRecord }) {
+  function createTrialAnalyticsView({
+    api,
+    t,
+    escapeHtml: esc,
+    trialName,
+    recordDate,
+    onSelectRecord,
+    collapsedSections = [],
+    onCollapsedChange = () => true
+  }) {
+    const collapsed = new Set(collapsedSections);
+    let collapseSaveFailed = false;
     let records = [],
       selected = null,
       host = null,
@@ -49,7 +60,7 @@
     const memberButton = (entry, body) =>
       `<button type="button" class="mwi-analysis-member" data-analysis-member="${esc(entry.identity)}" aria-label="${text("analysisOpenMember", { name: personName(entry) })}">${body || esc(personName(entry))}</button>`;
     const section = (id, title, content) =>
-      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}">${text(title)}</h3>${content}</section>`;
+      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}"><button type="button" class="mwi-analysis-toggle" data-analysis-toggle="${id}" aria-expanded="${!collapsed.has(id)}" aria-controls="mwi-analysis-body-${id}"><span>${text(title)}</span><span class="mwi-analysis-toggle-action" data-analysis-toggle-label>${text(collapsed.has(id) ? "analysisExpand" : "analysisCollapse")}</span><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4"/></svg></button></h3><div id="mwi-analysis-body-${id}"${collapsed.has(id) ? " hidden" : ""}>${content}</div></section>`;
     const scrollTable = (caption, headers, rows) =>
       `<div class="mwi-analysis-table-scroll" role="region" tabindex="0" aria-label="${esc(caption)}"><table class="mwi-trial-table"><caption>${esc(caption)}</caption><thead><tr>${headers.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
     const matches = (entry) => personName(entry).toLocaleLowerCase().includes(state.query.toLocaleLowerCase());
@@ -284,7 +295,21 @@
       ]
         .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
         .join("")}</nav>`;
-      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p>${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+    }
+    function setCollapsed(id, value) {
+      const button = host?.querySelector(`[data-analysis-toggle="${id}"]`);
+      if (!button || collapsed.has(id) === value) return;
+      if (value) collapsed.add(id);
+      else collapsed.delete(id);
+      button.setAttribute("aria-expanded", String(!value));
+      button.querySelector("[data-analysis-toggle-label]").textContent = t(
+        value ? "analysisExpand" : "analysisCollapse"
+      );
+      host.querySelector(`#mwi-analysis-body-${id}`).hidden = value;
+      collapseSaveFailed = onCollapsedChange([...collapsed]) === false;
+      const status = host.querySelector("[data-analysis-collapse-status]");
+      if (status) status.textContent = collapseSaveFailed ? t("analysisCollapseSaveFailed") : "";
     }
     function render(nextRecords, nextSelected) {
       records = nextRecords;
@@ -363,16 +388,16 @@
         applySearch(event);
       });
       host.addEventListener("click", (event) => {
+        const toggle = event.target.closest("[data-analysis-toggle]");
+        if (toggle) setCollapsed(toggle.dataset.analysisToggle, !collapsed.has(toggle.dataset.analysisToggle));
         const jump = event.target.closest("[data-analysis-jump]");
         if (jump) {
-          const heading = host.querySelector(`#mwi-analysis-${jump.dataset.analysisJump}`);
-          if (heading) {
-            heading.tabIndex = -1;
-            focusAndReveal(heading);
-          }
+          setCollapsed(jump.dataset.analysisJump, false);
+          focusAndReveal(host.querySelector(`[data-analysis-toggle="${jump.dataset.analysisJump}"]`));
         }
         const button = event.target.closest("[data-analysis-member]");
         if (button) {
+          setCollapsed("member", false);
           state.member = button.dataset.analysisMember;
           refresh(null, true);
         }

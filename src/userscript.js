@@ -127,6 +127,7 @@
     maxConversionItemUnitPrice: savedUiState.maxConversionItemUnitPrice,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
+    showTrialHistoryView: savedUiState.showTrialHistoryView,
     settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,

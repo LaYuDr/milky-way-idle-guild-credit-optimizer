@@ -319,6 +319,22 @@
         })
       );
     }
+    // Feature audits explicitly opt in; normal startup keeps beta tabs off by default.
+    if (
+      searchParams.get("resetState") === "1" &&
+      upgradeEmptyAuditStage !== "reloaded" &&
+      Array.from(searchParams).some(([key, value]) => key.endsWith("Audit") && value === "1")
+    ) {
+      const auditUiState = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
+      localStorage.setItem(
+        "mwi-guild-credit-ui-state-v1",
+        JSON.stringify({
+          ...auditUiState,
+          showConstructionView: true,
+          showTrialHistoryView: true
+        })
+      );
+    }
     if (constructionAudit || constructionSnapshotAudit || trackedEditAudit) localStorage.removeItem("initClientData");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
@@ -2563,6 +2579,36 @@
         constructionPlans: savedConstructionPlans()
       };
 
+      const trialSwitch = settingsPanel.querySelector('[data-role="settings-show-trials"]');
+      const trialStorageBefore = Object.fromEntries(
+        Object.keys(localStorage)
+          .filter((key) => key.includes("trial"))
+          .map((key) => [key, localStorage.getItem(key)])
+      );
+      panel.querySelector('[data-role="view-trials"]').click();
+      trialSwitch.click();
+      const trialsHidden = {
+        safeFallback: panel.dataset.activeView !== "trials",
+        tabHidden: panel.querySelector('.mwi-view-tab-item[data-sort-key="trials"]').hidden,
+        panelHidden: !elementIsVisible(panel.querySelector('[data-role="trials-view"]')),
+        saved: savedPluginUiState().showTrialHistoryView === false,
+        constructionUnchanged: savedPluginUiState().showConstructionView === true
+      };
+      constructionSwitch.click();
+      const bothHidden =
+        Array.from(panel.querySelectorAll(".mwi-view-tab-item:not([hidden])"), (item) => item.dataset.sortKey).join(
+          "|"
+        ) === "upgrade|credit";
+      trialSwitch.click();
+      const independentlyRestored =
+        savedPluginUiState().showTrialHistoryView === true &&
+        savedPluginUiState().showConstructionView === false &&
+        !panel.querySelector('.mwi-view-tab-item[data-sort-key="trials"]').hidden;
+      constructionSwitch.click();
+      panel.querySelector('[data-role="view-construction"]').click();
+      const trialsUnchanged = Object.entries(trialStorageBefore).every(
+        ([key, value]) => localStorage.getItem(key) === value
+      );
       const layout = settingsGeometrySnapshot(panel);
       const closeTarget = settingsPanel.querySelector('[data-role="settings-close"]');
       closeTarget.focus();
@@ -2597,6 +2643,12 @@
         }
       };
       report.checks = {
+        trialSwitchAccessible:
+          trialSwitch.getAttribute("role") === "switch" &&
+          Boolean(document.getElementById(trialSwitch.getAttribute("aria-describedby"))),
+        hidingActiveTrialsFallsBackAndPersists: Object.values(trialsHidden).every(Boolean),
+        betaSwitchesAreIndependent: bothHidden && independentlyRestored,
+        trialHistoryPreserved: trialsUnchanged,
         deterministicFixtureLoaded:
           initial.activeView === "construction" &&
           initial.panelOrder.join("|") === "construction|credit|upgrade" &&
@@ -3328,6 +3380,32 @@
         panel.querySelector("#mwi-analysis-scatter").getBoundingClientRect().top >=
         panel.querySelector(".mwi-view-tabs-shell").getBoundingClientRect().bottom;
       checks.healingMetric = panel.querySelector(".mwi-analysis-ranking strong").textContent === "50";
+      const sectionIds = ["overview", "ranking", "comparison", "member", "coverage", "scatter"];
+      for (const id of sectionIds) panel.querySelector(`[data-analysis-toggle="${id}"]`).click();
+      checks.independentCollapse = sectionIds.every(
+        (id) =>
+          panel.querySelector(`#mwi-analysis-body-${id}`).hidden &&
+          panel.querySelector(`[data-analysis-toggle="${id}"]`).getAttribute("aria-expanded") === "false"
+      );
+      choose("metric", "damageDealt");
+      checks.collapseSurvivesRefresh = sectionIds.every((id) => panel.querySelector(`#mwi-analysis-body-${id}`).hidden);
+      panel.querySelector('[data-analysis-jump="ranking"]').click();
+      checks.jumpExpands =
+        !panel.querySelector("#mwi-analysis-body-ranking").hidden &&
+        panel.querySelector("#mwi-analysis-body-member").hidden;
+      panel.querySelector(".mwi-analysis-ranking [data-analysis-member]").click();
+      checks.memberExpands = !panel.querySelector("#mwi-analysis-body-member").hidden;
+      const preferences = window.MwiGuildCreditStorage.createPluginStorage({
+        storage: localStorage,
+        location,
+        config: window.MwiGuildCreditConfig
+      });
+      checks.collapseSaved =
+        JSON.stringify(preferences.loadTrialAnalysisCollapsed()) ===
+        JSON.stringify(["overview", "comparison", "coverage", "scatter"]);
+      for (const id of sectionIds)
+        if (panel.querySelector(`#mwi-analysis-body-${id}`).hidden)
+          panel.querySelector(`[data-analysis-toggle="${id}"]`).click();
       checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
       const saved = Object.entries(localStorage)
         .filter(([key]) => key.startsWith("mwi-guild-trial-history-v1:"))

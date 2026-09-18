@@ -81,7 +81,8 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
     settingsOpen: true,
     guildBuffDetails: {},
     guildShrineAutofillExcludedBuffHrids: new Set(["/guild_buffs/combat"]),
-    showConstructionView: false
+    showConstructionView: false,
+    showTrialHistoryView: false
   };
   const entries = [
     { hrid: "/guild_buffs/life", detail: { isCombat: false, label: "Life Shrine" } },
@@ -90,11 +91,13 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
   const content = {};
   const shrineInputs = entries.map((entry) => ({ dataset: { guildBuffHrid: entry.hrid }, checked: null }));
   const constructionInput = { checked: null };
+  const trialsInput = { checked: null };
   const settingsPanel = {
     hidden: true,
     querySelector(selector) {
       if (selector === '[data-role="settings-content"]') return content;
       if (selector === '[data-role="settings-show-construction"]') return constructionInput;
+      if (selector === '[data-role="settings-show-trials"]') return trialsInput;
       return null;
     },
     querySelectorAll(selector) {
@@ -125,6 +128,7 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
   assert.equal(shrineInputs[0].checked, true);
   assert.equal(shrineInputs[1].checked, false);
   assert.equal(constructionInput.checked, false);
+  assert.equal(trialsInput.checked, false);
   assert.match(content.innerHTML, /data-domain="life"/);
   assert.match(content.innerHTML, /data-domain="combat"/);
 });

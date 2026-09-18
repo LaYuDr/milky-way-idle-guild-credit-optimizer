@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.13] - 2026-09-18
+
+### Changed
+
+- 完善试炼分析与历史页面设置、存储迁移和界面交互，补充测试台与回归验证。
+
 ## [1.2.12] - 2026-09-18
 
 ### Changed
