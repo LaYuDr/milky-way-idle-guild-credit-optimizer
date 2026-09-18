@@ -232,7 +232,14 @@ table: every completed week is visible at once, estimated weeks can be edited
 in place, and clearing a manual value restores its estimate. It also changes
 the forecast lookback and planning horizon once, verifies the rerendered controls,
 then restores the current-points-only planning mode. It leaves a reusable final
-sample with 28 visible square catalog tiles, three collapsed building groups in
+sample after verifying that custom starting points update the budget summary
+on input without changing the observed game balance, and clearing the input
+restores the game balance. The completed-week forecast expectation is derived
+from the fixture's completed week count instead of a date-sensitive constant.
+The planning-horizon control is initially hidden under Future budget settings;
+the audit opens it, checks that it stays open while stepping values and
+rerendering, then closes it again. The final fixture contains 28 visible square
+catalog tiles, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.
 

@@ -698,6 +698,30 @@
         }
       });
       constructionResults.addEventListener("keydown", (event) => {
+        const trackedEditDialog = event.target.closest('[data-role="tracked-guild-point-edit-dialog"]');
+        if (trackedEditDialog) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            const weekStartAt = constructionView.cancelTrackedGuildPointEditWarning();
+            refreshConstructionAndFocus(panel, { role: "edit-tracked-guild-point-week", weekStartAt });
+            return;
+          }
+          if (event.key === "Tab") {
+            const controls = Array.from(trackedEditDialog.querySelectorAll("button:not([disabled])"));
+            if (!controls.length) return;
+            const currentIndex = controls.indexOf(document.activeElement);
+            const nextIndex = event.shiftKey
+              ? currentIndex <= 0
+                ? controls.length - 1
+                : currentIndex - 1
+              : currentIndex < 0 || currentIndex >= controls.length - 1
+                ? 0
+                : currentIndex + 1;
+            event.preventDefault();
+            controls[nextIndex].focus();
+          }
+          return;
+        }
         if (event.key !== "Escape" || !event.target.closest(".mwi-building-picker-body")) return;
         event.preventDefault();
         setGuildBuildingPickerOpen(false);
@@ -708,6 +732,8 @@
         (event) => {
           if (event.target.matches(".mwi-guild-point-history"))
             constructionView.setGuildPointHistoryOpen(event.target.open);
+          if (event.target.matches(".mwi-guild-point-planning-options"))
+            constructionView.setGuildPointPlanningOptionsOpen(event.target.open);
         },
         true
       );
@@ -827,6 +853,22 @@
           exportGuildPointHistoryCsv();
           return;
         }
+        if (button.matches('[data-role="edit-tracked-guild-point-week"]')) {
+          const weekStartAt = Number(button.dataset.weekStartAt);
+          if (!constructionView.openTrackedGuildPointEditWarning(weekStartAt)) return;
+          refreshConstructionAndFocus(panel, { role: "confirm-tracked-guild-point-edit", weekStartAt });
+          return;
+        }
+        if (button.matches('[data-role="cancel-tracked-guild-point-edit"]')) {
+          const weekStartAt = constructionView.cancelTrackedGuildPointEditWarning();
+          refreshConstructionAndFocus(panel, { role: "edit-tracked-guild-point-week", weekStartAt });
+          return;
+        }
+        if (button.matches('[data-role="confirm-tracked-guild-point-edit"]')) {
+          const weekStartAt = constructionView.confirmTrackedGuildPointEditWarning();
+          refreshConstructionAndFocus(panel, { role: "manual-guild-point-earned", weekStartAt });
+          return;
+        }
         if (button.matches('[data-role="save-manual-guild-point-history"]')) {
           const form = button.closest('[data-role="manual-guild-point-form"]');
           const inputs = form ? Array.from(form.querySelectorAll('[data-role="manual-guild-point-earned"]')) : [];
@@ -836,7 +878,11 @@
             return;
           }
           const result = constructionView.saveManualGuildPointHistory(
-            inputs.map((input) => ({ weekStartAt: input.dataset.weekStartAt, earnedPoints: input.value }))
+            inputs.map((input) => ({
+              weekStartAt: input.dataset.weekStartAt,
+              earnedPoints: input.value,
+              trackedOriginalPoints: input.dataset.trackedOriginalPoints
+            }))
           );
           refreshConstructionAndFocus(
             panel,

@@ -114,6 +114,15 @@ function createConstructionHarness({
   return { state, view, downloadState, persistCount: () => persistCount, confirmCount: () => confirmCount };
 }
 
+function renderGuildPointForecast(harness, history) {
+  const planning = harness.view.guildPointPlanningBudget(history);
+  const plan = {
+    ...core.buildGuildConstructionPlan([], planning.budget),
+    planning
+  };
+  return harness.view.renderGuildPointForecast(history, plan, data.definitions());
+}
+
 test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
   const definitions = data.definitions();
   assert.equal(definitions.length, 28);
@@ -377,15 +386,14 @@ test("建设页将本周 0 显示为历史预测而非实际周样本", () => {
     currentWeekPoints: 0
   };
   const history = harness.view.guildPointHistorySummary();
-  const planning = harness.view.guildPointPlanningBudget(history);
-  const markup = harness.view.renderGuildPointForecast(history, { totalCost: 5000, planning });
+  const markup = renderGuildPointForecast(harness, history);
   assert.match(markup, /predictedCurrentWeekGuildPoints/);
-  assert.doesNotMatch(markup, />0<\/strong>/);
+  assert.doesNotMatch(markup, /data-role="(?:latest-weekly-guild-points|current-week-guild-points)">0<\/strong>/);
   assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
   assert.match(markup, /data-role="current-week-guild-points">\d+<\/strong>/);
 });
 
-test("当前周实际点数以只读行显示在历史表最底部", () => {
+test("当前周实际点数以只读行显示在历史表最上方", () => {
   const harness = createConstructionHarness();
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
@@ -398,13 +406,12 @@ test("当前周实际点数以只读行显示在历史表最底部", () => {
   };
   harness.state.guildWeekStartAt = currentWeekStartAt + 2 * 60 * 60 * 1000;
   const history = harness.view.guildPointHistorySummary();
-  const planning = harness.view.guildPointPlanningBudget(history);
-  const markup = harness.view.renderGuildPointForecast(history, { totalCost: 5000, planning });
+  const markup = renderGuildPointForecast(harness, history);
   assert.match(markup, /data-source="current" data-current-week="true"/);
   assert.match(markup, /data-role="current-week-guild-points">4321<\/strong>/);
   assert.match(markup, /guildPointSourceCurrent/);
   assert.match(markup, /guildPointWeekWithDate/);
-  assert.match(markup, /data-current-week="true"[\s\S]*<\/tr><\/tbody>/);
+  assert.match(markup, /<tbody><tr data-source="current" data-current-week="true"/);
   assert.match(markup, /data-role="guild-point-forecast-weeks" type="number" min="2" max="12" step="1"/);
   assert.match(markup, /data-role="guild-point-planning-weeks" type="number" min="0" max="12" step="1"/);
   assert.match(markup, /data-input-role="guild-point-forecast-weeks" data-direction="1"/);
@@ -450,7 +457,7 @@ test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
   assert.deepEqual(removed.history.manualWeeks, []);
 });
 
-test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
+test("手动历史默认不覆盖游戏追踪周，明确授权后才使用手工值", () => {
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const observedAt = firstTrial + 2 * week;
@@ -458,9 +465,57 @@ test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
     weeks: [{ weekStartAt: firstTrial, earnedPoints: 8000, complete: true, observedAt: firstTrial + week }]
   };
   assert.equal(core.setManualGuildPointWeek(tracked, firstTrial, 9000, observedAt, firstTrial).status, "tracked");
+  const overridden = core.setManualGuildPointWeek(tracked, firstTrial, 9000, observedAt, firstTrial, {
+    allowTrackedOverride: true
+  });
+  assert.equal(overridden.status, "saved");
+  const supplemented = core.supplementGuildPointHistory(overridden.history, 17000, 8000, observedAt, firstTrial);
+  assert.equal(supplemented.history.weeks.find((record) => record.weekStartAt === firstTrial).earnedPoints, 9000);
+  assert.equal(supplemented.history.weeks.find((record) => record.weekStartAt === firstTrial).source, "manual");
   assert.equal(
     core.setManualGuildPointWeek(tracked, firstTrial + 2 * week, 9000, observedAt, firstTrial).status,
     "invalid"
+  );
+});
+
+test("游戏追踪周只有确认警告后才解锁编辑，取消不改数据", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
+  const week = 7 * 24 * 60 * 60 * 1000;
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 18000,
+    availablePoints: 1000,
+    currentWeekPoints: 8000
+  };
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: firstTrial, earnedPoints: 10000, complete: true, observedAt: firstTrial + week }
+  ];
+
+  const history = harness.view.guildPointHistorySummary();
+  const initialMarkup = renderGuildPointForecast(harness, history);
+  assert.match(initialMarkup, /data-role="edit-tracked-guild-point-week"/);
+  assert.doesNotMatch(initialMarkup, /data-role="tracked-guild-point-edit-dialog"/);
+
+  assert.equal(harness.view.openTrackedGuildPointEditWarning(firstTrial), true);
+  const warningMarkup = renderGuildPointForecast(harness, history);
+  assert.match(warningMarkup, /role="alertdialog"/);
+  assert.match(warningMarkup, /aria-modal="true"/);
+  assert.equal(harness.view.cancelTrackedGuildPointEditWarning(), firstTrial);
+  assert.deepEqual(harness.state.guildPointHistory.manualWeeks || [], []);
+
+  harness.view.openTrackedGuildPointEditWarning(firstTrial);
+  assert.equal(harness.view.confirmTrackedGuildPointEditWarning(), firstTrial);
+  const unlockedMarkup = renderGuildPointForecast(harness, history);
+  assert.match(unlockedMarkup, /data-source="trackedEditing"/);
+  assert.match(unlockedMarkup, /data-tracked-original-points="10000"/);
+  assert.equal(
+    harness.view.saveManualGuildPointHistory([{ weekStartAt: firstTrial, earnedPoints: "9500" }]).status,
+    "saved"
+  );
+  assert.deepEqual(
+    harness.state.guildPointHistory.manualWeeks.map((record) => record.earnedPoints),
+    [9500]
   );
 });
 
@@ -909,7 +964,9 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "manualGuildPointHint",
     "manualGuildPointHistoryEmpty",
     "guildPointSourceTracked",
+    "guildPointSourceTrackedEditing",
     "guildPointSourceManual",
+    "guildPointSourceManualOverride",
     "guildPointSourceEstimated",
     "guildPointSourceEmpty",
     "guildPointSourceCurrent",
@@ -918,6 +975,13 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointSourceCurrentUnavailable",
     "currentGuildPointWeek",
     "manualGuildPointWeekSaved",
+    "editTrackedGuildPointWeek",
+    "editTrackedGuildPointWeekShort",
+    "trackedGuildPointEditWarningTitle",
+    "trackedGuildPointEditWarningBody",
+    "trackedGuildPointEditWarningHint",
+    "cancelTrackedGuildPointEdit",
+    "confirmTrackedGuildPointEdit",
     "manualGuildPointWeekRemoved",
     "manualGuildPointHistorySaved",
     "constructionEta",

@@ -733,7 +733,14 @@
     };
   }
 
-  function setManualGuildPointWeek(history, rawWeekStartAt, rawEarnedPoints, observedAt, firstTrialStartAt) {
+  function setManualGuildPointWeek(
+    history,
+    rawWeekStartAt,
+    rawEarnedPoints,
+    observedAt,
+    firstTrialStartAt,
+    options = {}
+  ) {
     const normalized = normalizedGuildPointHistory(history);
     const weekStartAt = Number(rawWeekStartAt);
     const earnedPoints = Number(rawEarnedPoints);
@@ -752,7 +759,10 @@
       ordinal >= pastWeekCount
     )
       return { status: "invalid", history: normalized };
-    if (normalized.weeks.some((record) => record.complete && record.weekStartAt === weekStartAt))
+    if (
+      options.allowTrackedOverride !== true &&
+      normalized.weeks.some((record) => record.complete && record.weekStartAt === weekStartAt)
+    )
       return { status: "tracked", history: normalized };
     return {
       status: "saved",
@@ -799,10 +809,10 @@
       const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
       const trackedRecord = completeTracked.get(weekStartAt);
       const manualRecord = manual.get(weekStartAt);
-      const record = trackedRecord
-        ? { ...trackedRecord, source: "tracked" }
-        : manualRecord
-          ? { ...manualRecord, complete: true, source: "manual" }
+      const record = manualRecord
+        ? { ...manualRecord, complete: true, source: "manual" }
+        : trackedRecord
+          ? { ...trackedRecord, source: "tracked" }
           : null;
       if (record) {
         records.push(record);

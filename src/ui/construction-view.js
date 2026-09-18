@@ -36,6 +36,9 @@
       pickerOpen: state.buildingPlans.length === 0,
       expandedBuildingHrids: new Set(),
       guildPointHistoryOpen: false,
+      planningOptionsOpen: false,
+      trackedGuildPointEditWeekStarts: new Set(),
+      trackedGuildPointEditWarning: null,
       clearUndoPlans: null,
       clearUndoTimer: null
     };
@@ -310,34 +313,98 @@
 
     function renderManualGuildPointHistory(history) {
       const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
+      const trackedByWeek = new Map(
+        (state.guildPointHistory?.weeks || [])
+          .filter((record) => record.complete)
+          .map((record) => [record.weekStartAt, record])
+      );
+      const manualByWeek = new Map(
+        (state.guildPointHistory?.manualWeeks || []).map((record) => [record.weekStartAt, record])
+      );
       const rows = manualGuildPointWeekStarts()
         .map((weekStartAt) => {
           const record = recordsByWeek.get(weekStartAt);
-          const source = record
-            ? ["manual", "estimated"].includes(record.source)
-              ? record.source
-              : "tracked"
-            : "empty";
+          const trackedRecord = trackedByWeek.get(weekStartAt);
+          const manualRecord = manualByWeek.get(weekStartAt);
+          const trackedEditEnabled =
+            Boolean(trackedRecord) && constructionUi.trackedGuildPointEditWeekStarts.has(weekStartAt);
+          const source =
+            manualRecord && trackedRecord
+              ? "manualOverride"
+              : trackedEditEnabled
+                ? "trackedEditing"
+                : record
+                  ? ["manual", "estimated"].includes(record.source)
+                    ? record.source
+                    : "tracked"
+                  : "empty";
           const week = guildPointWeekLabel(weekStartAt);
-          const value = source === "manual" ? record.earnedPoints : "";
+          const value = manualRecord
+            ? manualRecord.earnedPoints
+            : trackedEditEnabled
+              ? trackedRecord.earnedPoints
+              : source === "manual"
+                ? record.earnedPoints
+                : "";
           const placeholder = source === "estimated" ? formatNumber(record.earnedPoints) : "";
+          const input = `<input data-role="manual-guild-point-earned" data-week-start-at="${weekStartAt}"${trackedRecord ? ` data-tracked-original-points="${trackedRecord.earnedPoints}"` : ""} type="number" min="0" step="1" inputmode="numeric" aria-label="${escapeHtml(t("manualGuildPointEarnedForWeek", { week }))}" value="${value}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}>`;
           const points =
             source === "tracked"
-              ? `<strong class="mwi-guild-point-readonly">${formatNumber(record.earnedPoints)}</strong>`
-              : `<input data-role="manual-guild-point-earned" data-week-start-at="${weekStartAt}" type="number" min="0" step="1" inputmode="numeric" aria-label="${escapeHtml(t("manualGuildPointEarnedForWeek", { week }))}" value="${value}"${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}>`;
+              ? `<span class="mwi-guild-point-tracked-value"><strong class="mwi-guild-point-readonly">${formatNumber(record.earnedPoints)}</strong><button data-role="edit-tracked-guild-point-week" data-week-start-at="${weekStartAt}" type="button" aria-label="${escapeHtml(t("editTrackedGuildPointWeek", { week }))}">${escapeHtml(t("editTrackedGuildPointWeekShort"))}</button></span>`
+              : input;
           return `<tr data-source="${source}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time></th><td>${points}</td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
         })
         .join("");
       const currentWeekRow = renderCurrentGuildPointWeek(history);
       const body =
         rows || currentWeekRow
-          ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${rows}${currentWeekRow}</tbody></table></div>`
+          ? `<div class="mwi-guild-point-table-scroll"><table><thead><tr><th scope="col">${escapeHtml(t("manualGuildPointWeek"))}</th><th scope="col">${escapeHtml(t("manualGuildPointEarned"))}</th><th scope="col">${escapeHtml(t("guildPointHistorySource"))}</th></tr></thead><tbody>${currentWeekRow}${rows}</tbody></table></div>`
           : `<p class="mwi-guild-point-history-empty">${escapeHtml(t("manualGuildPointHistoryEmpty"))}</p>`;
-      return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form">${body}<div class="mwi-guild-point-manual-footer"><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p><button data-role="save-manual-guild-point-history" type="button"${rows ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointHistory"))}</button></div></form></details>`;
+      const warning = renderTrackedGuildPointEditWarning();
+      return `<details class="mwi-guild-point-history"${constructionUi.guildPointHistoryOpen ? " open" : ""}><summary>${escapeHtml(t("recentGuildPointHistory"))}</summary><form class="mwi-guild-point-manual-form" data-role="manual-guild-point-form">${body}<div class="mwi-guild-point-manual-footer"><p class="mwi-guild-point-manual-hint">${escapeHtml(t("manualGuildPointHint"))}</p><button data-role="save-manual-guild-point-history" type="button"${rows ? "" : " disabled"}>${escapeHtml(t("saveManualGuildPointHistory"))}</button></div></form>${warning}</details>`;
+    }
+
+    function renderTrackedGuildPointEditWarning() {
+      const warning = constructionUi.trackedGuildPointEditWarning;
+      if (!warning) return "";
+      const week = guildPointWeekLabel(warning.weekStartAt);
+      return `<div class="mwi-guild-point-dialog-layer" data-role="tracked-guild-point-edit-dialog" role="alertdialog" aria-modal="true" aria-labelledby="mwi-tracked-edit-title" aria-describedby="mwi-tracked-edit-description"><section class="mwi-guild-point-dialog"><svg class="mwi-guild-point-dialog-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 21 20H3L12 3.5Z"></path><path d="M12 9v5"></path><circle cx="12" cy="17" r=".7"></circle></svg><div class="mwi-guild-point-dialog-copy"><h4 id="mwi-tracked-edit-title">${escapeHtml(t("trackedGuildPointEditWarningTitle"))}</h4><p id="mwi-tracked-edit-description">${escapeHtml(t("trackedGuildPointEditWarningBody", { week, points: formatNumber(warning.earnedPoints) }))}</p><small>${escapeHtml(t("trackedGuildPointEditWarningHint"))}</small></div><div class="mwi-guild-point-dialog-actions"><button data-role="cancel-tracked-guild-point-edit" type="button">${escapeHtml(t("cancelTrackedGuildPointEdit"))}</button><button class="mwi-guild-point-dialog-confirm" data-role="confirm-tracked-guild-point-edit" data-week-start-at="${warning.weekStartAt}" type="button">${escapeHtml(t("confirmTrackedGuildPointEdit"))}</button></div></section></div>`;
     }
 
     function setGuildPointHistoryOpen(open) {
       constructionUi.guildPointHistoryOpen = Boolean(open);
+    }
+
+    function setGuildPointPlanningOptionsOpen(open) {
+      constructionUi.planningOptionsOpen = Boolean(open);
+    }
+
+    function openTrackedGuildPointEditWarning(weekStartAt) {
+      const normalizedWeekStartAt = Number(weekStartAt);
+      const record = (state.guildPointHistory?.weeks || []).find(
+        (candidate) => candidate.complete && candidate.weekStartAt === normalizedWeekStartAt
+      );
+      if (!record) return false;
+      constructionUi.trackedGuildPointEditWarning = {
+        weekStartAt: normalizedWeekStartAt,
+        earnedPoints: record.earnedPoints
+      };
+      constructionUi.guildPointHistoryOpen = true;
+      return true;
+    }
+
+    function cancelTrackedGuildPointEditWarning() {
+      const warning = constructionUi.trackedGuildPointEditWarning;
+      constructionUi.trackedGuildPointEditWarning = null;
+      return warning ? warning.weekStartAt : null;
+    }
+
+    function confirmTrackedGuildPointEditWarning() {
+      const warning = constructionUi.trackedGuildPointEditWarning;
+      if (!warning) return null;
+      constructionUi.trackedGuildPointEditWeekStarts.add(warning.weekStartAt);
+      constructionUi.trackedGuildPointEditWarning = null;
+      return warning.weekStartAt;
     }
 
     function renderGuildPointWeekStepper(role, value, minimum, maximum, labelKey, increaseKey, decreaseKey) {
@@ -347,23 +414,25 @@
       return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}" aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
     }
 
+    function guildPointPlanningSummary(planning) {
+      return planning.basePoints === null
+        ? t("guildPointPlanningNeedsBalance")
+        : planning.weeks > 0 && !planning.canProject
+          ? t("guildPointPlanningNeedsForecast")
+          : planning.weeks > 0
+            ? t("guildPointPlanningBudgetProjected", {
+                current: formatNumber(planning.basePoints),
+                weeks: formatNumber(planning.weeks),
+                weekly: formatNumber(planning.forecastPoints),
+                total: formatNumber(planning.budget)
+              })
+            : t("guildPointPlanningBudgetCurrent", { total: formatNumber(planning.budget) });
+    }
+
     function renderGuildPointForecastControls(plan) {
       const forecastWeeks = guildPointForecastWeekCount();
       const planningWeeks = guildPointPlanningWeekCount();
       const planning = plan.planning;
-      const planningSummary =
-        planning.basePoints === null
-          ? t("guildPointPlanningNeedsBalance")
-          : planning.weeks > 0 && !planning.canProject
-            ? t("guildPointPlanningNeedsForecast")
-            : planning.weeks > 0
-              ? t("guildPointPlanningBudgetProjected", {
-                  current: formatNumber(planning.basePoints),
-                  weeks: formatNumber(planning.weeks),
-                  weekly: formatNumber(planning.forecastPoints),
-                  total: formatNumber(planning.budget)
-                })
-              : t("guildPointPlanningBudgetCurrent", { total: formatNumber(planning.budget) });
       const forecastStepper = renderGuildPointWeekStepper(
         "guild-point-forecast-weeks",
         forecastWeeks,
@@ -382,7 +451,7 @@
         "increaseGuildPointPlanningWeeks",
         "decreaseGuildPointPlanningWeeks"
       );
-      return `<div class="mwi-guild-point-controls"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><output data-state="${planning.weeks > 0 && !planning.canProject ? "warning" : "ready"}">${escapeHtml(planningSummary)}</output></div>`;
+      return `<div class="mwi-guild-point-controls"><div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointStartingBalance"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("guildPointFollowBalance"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("guildPointStartingBalanceHint"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><details class="mwi-guild-point-planning-options"${constructionUi.planningOptionsOpen ? " open" : ""}><summary>${escapeHtml(t("guildPointPlanningOptions"))}</summary><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label></details><output data-role="guild-point-planning-summary" data-state="${planning.basePoints === null || (planning.weeks > 0 && !planning.canProject) ? "warning" : "ready"}">${escapeHtml(guildPointPlanningSummary(planning))}</output></div>`;
     }
 
     function renderGuildPointEta(plan, history) {
@@ -406,7 +475,8 @@
       return `<div class="mwi-guild-point-eta" data-status="${eta.status}"><small>${escapeHtml(t("constructionEta"))}</small><strong data-role="construction-eta">${escapeHtml(copy[0])}</strong><span data-role="construction-eta-detail">${escapeHtml(copy[1])}</span></div>`;
     }
 
-    function renderGuildPointForecast(historySummary, plan) {
+    function renderGuildPointForecast(historySummary, plan, definitions = null) {
+      const budgetMarkup = definitions ? renderGuildBuildingBudget(plan, definitions) : "";
       const history = guildPointForecastBasis(historySummary);
       const currentWeekPoints = state.guildPointSummary && state.guildPointSummary.currentWeekPoints;
       const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints) && currentWeekPoints > 0;
@@ -444,7 +514,7 @@
         : predictsCurrentWeek
           ? "predictedCurrentWeekGuildPoints"
           : "latestWeeklyGuildPoints";
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointTrend"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointTrend"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div>${renderGuildPointForecastControls(plan)}<div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div>${renderGuildPointEta(plan, history)}<div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointOverview"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointOverview"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div><div class="mwi-guild-point-planning"><h4>${escapeHtml(t("guildPointPlanningHeading"))}</h4>${renderGuildPointForecastControls(plan)}${budgetMarkup}${renderGuildPointEta(plan, history)}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -627,7 +697,6 @@
         ? `${formatNumber(plan.affordableStepCount)} / ${formatNumber(plan.steps.length)}`
         : formatNumber(plan.steps.length);
       return `<section class="mwi-construction-budget" data-over-budget="${String(Boolean(plan.overBudget))}">
-        <div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointBudget"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("budgetOptional"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("manualBudget"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div>
         <div class="mwi-construction-metric"><small>${escapeHtml(t("plannedSpend"))}</small><strong data-role="construction-planned-spend">${formatNumber(plan.totalCost)}</strong></div>
         <div class="mwi-construction-metric"><small data-role="construction-affordable-label">${escapeHtml(coverageLabel)}</small><strong data-role="construction-affordable">${coverageValue}</strong></div>
         <div class="mwi-construction-metric" data-role="construction-balance-metric" data-state="${hasBudget && remaining < 0 ? "danger" : "safe"}"><small data-role="construction-balance-label">${escapeHtml(remainingTitle)}</small><strong data-role="construction-balance">${remainingLabel}</strong></div>
@@ -730,7 +799,7 @@
       const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
       const levels = guildBuildingLevelSnapshot(definitions);
       const spriteBaseHref = guildBuildingSpriteBaseHref();
-      return `${renderGuildBuildingBudget(plan, definitions)}${renderGuildPointForecast(historySummary, plan)}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>`;
+      return `${renderGuildPointForecast(historySummary, plan, definitions)}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>`;
     }
 
     function applyGuildBuildingFilters(results) {
@@ -791,6 +860,14 @@
         queuePane.innerHTML = renderGuildConstructionQueue(plan, definitions, guildBuildingSpriteBaseHref());
       const eta = results.querySelector(".mwi-guild-point-eta");
       if (eta) eta.outerHTML = renderGuildPointEta(plan, historySummary);
+      const planningSummary = results.querySelector('[data-role="guild-point-planning-summary"]');
+      if (planningSummary) {
+        planningSummary.textContent = guildPointPlanningSummary(plan.planning);
+        planningSummary.dataset.state =
+          plan.planning.basePoints === null || (plan.planning.weeks > 0 && !plan.planning.canProject)
+            ? "warning"
+            : "ready";
+      }
     }
 
     function refreshGuildConstruction(panel) {
@@ -952,16 +1029,27 @@
       for (const entry of Array.isArray(entries) ? entries : []) {
         const weekStartAt = Number(entry && entry.weekStartAt);
         const rawPoints = String((entry && entry.earnedPoints) ?? "").trim();
+        const trackedRecord = (originalHistory?.weeks || []).find(
+          (record) => record.complete && record.weekStartAt === weekStartAt
+        );
+        const existingManualRecord = (originalHistory?.manualWeeks || []).find(
+          (record) => record.weekStartAt === weekStartAt
+        );
         if (rawPoints === "") {
           nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt).history;
           continue;
         }
+        if (trackedRecord && !existingManualRecord && Number(rawPoints) === trackedRecord.earnedPoints) continue;
         const result = core.setManualGuildPointWeek(
           nextHistory,
           weekStartAt,
           Number(rawPoints),
           Date.now(),
-          guildTrialFirstStartAt
+          guildTrialFirstStartAt,
+          {
+            allowTrackedOverride:
+              Boolean(existingManualRecord) || constructionUi.trackedGuildPointEditWeekStarts.has(weekStartAt)
+          }
         );
         if (result.status !== "saved") {
           state.buildingPlanNotice = t(
@@ -971,6 +1059,7 @@
         }
         nextHistory = result.history;
       }
+      constructionUi.trackedGuildPointEditWeekStarts.clear();
       state.guildPointHistory = nextHistory;
       state.buildingPlanNotice = t("manualGuildPointHistorySaved");
       persistGuildBuildingPlannerState();
@@ -1011,6 +1100,10 @@
       reorderGuildBuildingPlan,
       setGuildBuildingPickerOpen,
       setGuildPointHistoryOpen,
+      setGuildPointPlanningOptionsOpen,
+      openTrackedGuildPointEditWarning,
+      cancelTrackedGuildPointEditWarning,
+      confirmTrackedGuildPointEditWarning,
       toggleGuildBuildingSteps,
       clearGuildBuildingPlans,
       undoClearGuildBuildingPlans,

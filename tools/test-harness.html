@@ -167,6 +167,7 @@
     const upgradeEmptyAudit = searchParams.get("upgradeEmptyAudit") === "1";
     const constructionAudit = searchParams.get("constructionAudit") === "1";
     const constructionSnapshotAudit = searchParams.get("constructionSnapshotAudit") === "1";
+    const trackedEditAudit = searchParams.get("trackedEditAudit") === "1";
     const coldStartAudit = searchParams.get("coldStartAudit") === "1";
     const settingsAudit = searchParams.get("settingsAudit") === "1";
     const localeRaceAudit = searchParams.get("localeRaceAudit") === "1";
@@ -176,7 +177,14 @@
     const upgradeEmptyAuditStageKey = "mwi-upgrade-empty-audit-stage-v1";
     const upgradeEmptyAuditEvidenceKey = "mwi-upgrade-empty-audit-evidence-v1";
     const upgradeEmptyAuditStage = upgradeEmptyAudit ? sessionStorage.getItem(upgradeEmptyAuditStageKey) : "";
-    if (layoutAudit || upgradeEmptyAudit || constructionAudit || constructionSnapshotAudit || settingsAudit)
+    if (
+      layoutAudit ||
+      upgradeEmptyAudit ||
+      constructionAudit ||
+      constructionSnapshotAudit ||
+      trackedEditAudit ||
+      settingsAudit
+    )
       document.body.dataset.layoutAudit = "true";
     if (sidebarResizeAudit) document.body.dataset.sidebarResizeAudit = "true";
     if (sidebarTabsAudit) document.body.dataset.sidebarTabsAudit = "true";
@@ -188,6 +196,7 @@
         upgradeEmptyAudit ||
         constructionAudit ||
         constructionSnapshotAudit ||
+        trackedEditAudit ||
         settingsAudit ||
         localeRaceAudit ||
         sidebarResizeAudit ||
@@ -250,6 +259,34 @@
         })
       );
     }
+    if (trackedEditAudit && searchParams.get("resetState") === "1") {
+      const trackedWeekStart = Date.parse("2026-09-11T00:00:00Z");
+      localStorage.setItem(
+        "mwi-guild-credit-ui-state-v1",
+        JSON.stringify({ activeView: "construction", panelOrder: ["construction", "upgrade", "credit"] })
+      );
+      localStorage.setItem(
+        `mwi-guild-building-planner-v1:${location.hostname}:default`,
+        JSON.stringify({
+          schemaVersion: 6,
+          rulesVersion: "2026-08-04-v1",
+          guildPointHistory: {
+            guildId: "fixture-guild",
+            lastObservation: null,
+            weeks: [
+              {
+                weekStartAt: trackedWeekStart,
+                earnedPoints: 6400,
+                complete: true,
+                observedAt: trackedWeekStart + 7 * 24 * 60 * 60 * 1000
+              }
+            ],
+            manualWeeks: []
+          },
+          plans: []
+        })
+      );
+    }
     if (tokenGuideAudit && searchParams.get("resetState") === "1") {
       localStorage.setItem(
         "mwi-guild-credit-ui-state-v1",
@@ -282,7 +319,7 @@
         })
       );
     }
-    if (constructionAudit || constructionSnapshotAudit) localStorage.removeItem("initClientData");
+    if (constructionAudit || constructionSnapshotAudit || trackedEditAudit) localStorage.removeItem("initClientData");
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
@@ -1504,6 +1541,7 @@
 
     const runConstructionInteractionAudit = async (panel) => {
       const audit = {};
+      const compactNumber = (value) => String(value || "").replace(/[\s,，]/g, "");
       const expectedOrder = [
         "/guild_buildings/guild_hall",
         "/guild_buildings/skilling_encampment",
@@ -1535,6 +1573,9 @@
         waitFor(() => constructionGroupOrder(panel).join("|") === order.join("|") && constructionGroupOrder(panel));
 
       audit.initial = constructionStateSnapshot(panel);
+      audit.planningInitiallyHidden = !panel.querySelector(".mwi-guild-point-planning-options").open;
+      panel.querySelector(".mwi-guild-point-planning-options summary").click();
+      await settleConstructionAudit();
 
       await stepWeekControl("guild-point-forecast-weeks", -1, 5);
       await stepWeekControl("guild-point-forecast-weeks", -1, 4);
@@ -1569,8 +1610,24 @@
         forecast: weekStepperAudit(forecastWeeks),
         planning: weekStepperAudit(planningWeeks)
       };
+      audit.planningStaysOpen = panel.querySelector(".mwi-guild-point-planning-options").open;
+      panel.querySelector(".mwi-guild-point-planning-options summary").click();
+      await settleConstructionAudit();
 
       let budgetInput = panel.querySelector('[data-role="guild-point-budget"]');
+      const planningSummaryText = () =>
+        normalizedText(panel.querySelector('[data-role="guild-point-planning-summary"]'));
+      budgetInput.value = "8000";
+      budgetInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(() => compactNumber(planningSummaryText()).includes("8000"));
+      audit.liveBudget = {
+        customSummary: planningSummaryText(),
+        actualBalance: normalizedText(panel.querySelector('[data-role="current-available-guild-points"]'))
+      };
+      budgetInput.value = "";
+      budgetInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await waitFor(() => compactNumber(planningSummaryText()).includes("244"));
+      audit.liveBudget.restoredSummary = planningSummaryText();
       budgetInput.value = "5000";
       budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
       await waitFor(() => panel.querySelector('[data-role="guild-point-budget"]')?.value === "5000");
@@ -1647,9 +1704,9 @@
         earned: panel.querySelector(
           `.mwi-guild-point-history [data-role="manual-guild-point-earned"][data-week-start-at="${selectedManualWeek}"]`
         )?.value,
-        currentWeekAtBottom:
+        currentWeekAtTop:
           panel.querySelector('.mwi-guild-point-history tr[data-current-week="true"]') ===
-          panel.querySelector(".mwi-guild-point-history tbody")?.lastElementChild,
+          panel.querySelector(".mwi-guild-point-history tbody")?.firstElementChild,
         currentWeekPoints: normalizedText(panel.querySelector('[data-role="current-week-guild-points"]')),
         currentWeekSource:
           panel.querySelector('.mwi-guild-point-history tr[data-current-week="true"]')?.dataset.source || ""
@@ -1754,11 +1811,14 @@
       await settleConstructionAudit();
       audit.final = constructionStateSnapshot(panel);
 
-      const compactNumber = (value) => String(value || "").replace(/[\s,，]/g, "");
       const storedDefaultZeroPlan = audit.defaultZeroAdded.storedPlans.find(
         (plan) => plan.buildingHrid === unknownBuildingHrid
       );
       audit.checks = {
+        planningHorizonIsOptional:
+          audit.planningInitiallyHidden &&
+          audit.planningStaysOpen &&
+          !panel.querySelector(".mwi-guild-point-planning-options").open,
         initialEmptyPlan: audit.initial.groupCount === 0 && audit.initial.pickerOpen,
         partialLevelCoverage:
           audit.initial.tileCount === 28 &&
@@ -1787,10 +1847,15 @@
           compactNumber(panel.querySelector('[data-role="current-available-guild-points"]')?.textContent) === "244" &&
           compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "9648" &&
           normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "0%" &&
-          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) === "6933" &&
+          compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) ===
+            String(Math.floor(62400 / expectedEstimatedCount)) &&
           compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("2") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
+        customBudgetUpdatesWithoutChangingGameBalance:
+          compactNumber(audit.liveBudget.customSummary).includes("8000") &&
+          compactNumber(audit.liveBudget.actualBalance) === "244" &&
+          compactNumber(audit.liveBudget.restoredSummary).includes("244"),
         weeklyPointControlsUseNumberSteppers:
           audit.forecastSettings.forecastWeeks === "4" &&
           audit.forecastSettings.planningWeeks === "2" &&
@@ -1822,7 +1887,7 @@
           audit.manualGuildPointHistory.estimatedCount === expectedEstimatedCount - 1 &&
           audit.manualGuildPointHistory.trackedCount === 0 &&
           compactNumber(audit.manualGuildPointHistory.earned) === "10000" &&
-          audit.manualGuildPointHistory.currentWeekAtBottom &&
+          audit.manualGuildPointHistory.currentWeekAtTop &&
           compactNumber(audit.manualGuildPointHistory.currentWeekPoints) === "9648" &&
           audit.manualGuildPointHistory.currentWeekSource === "current" &&
           audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
