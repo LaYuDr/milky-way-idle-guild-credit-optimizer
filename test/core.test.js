@@ -2148,8 +2148,8 @@ test("正式版桥接保留神龛建筑定义，供等级记录关联", () => {
 
 test("内部页签会持久化并恢复最后打开的可见视图", () => {
   const source = projectRuntimeSource();
-  assert.match(source, /PANEL_VIEWS: \["credit", "upgrade", "construction"\]/);
-  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction"\]/);
+  assert.match(source, /PANEL_VIEWS: \["credit", "upgrade", "construction", "trials"\]/);
+  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction", "trials"\]/);
   assert.match(source, /activeView: "credit"/);
   assert.match(source, /activeView: normalizePanelView\(stored\.activeView, config\.PANEL_VIEWS\)/);
   assert.match(source, /activeView: state\.activeView/);
@@ -2435,7 +2435,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /core\.rankConversions\(conversions, books, targetCredits\)/);
   assert.doesNotMatch(source, /data-role="item-query-/);
   assert.doesNotMatch(source, /core\.analyzeItemConversion\(/);
-  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction"\]/);
+  assert.match(source, /DEFAULT_PANEL_ORDER: \["upgrade", "credit", "construction", "trials"\]/);
   assert.match(source, /function bestCreditMaterialPlans\(estimate\)/);
   assert.match(source, /row\.remainingMissing \?\? row\.missing/);
   assert.match(source, /data-role="guild-token-budget-range"/);

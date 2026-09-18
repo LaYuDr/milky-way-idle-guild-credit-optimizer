@@ -27,6 +27,8 @@
       refreshPanel,
       refreshGuildUpgrade,
       refreshGuildConstruction,
+      refreshTrialHistory,
+      bindTrialHistory,
       refreshGuildExchangeAdvisor,
       renderSettingsMarkup,
       refreshSettings,
@@ -70,7 +72,8 @@
     const panelViewLabels = {
       upgrade: "shrineUpgrade",
       credit: "creditValue",
-      construction: "guildConstruction"
+      construction: "guildConstruction",
+      trials: "trialHistory"
     };
 
     function panelViewEnabled(view) {
@@ -230,6 +233,7 @@
       updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
+      else if (selectedView === "trials") refreshTrialHistory(panel);
       else refreshPanel(panel);
       return persisted;
     }
@@ -521,6 +525,7 @@
           <div class="mwi-status mwi-construction-status" data-role="construction-status" hidden><span data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"></span><button data-role="undo-clear-building-plans" type="button" hidden>${escapeHtml(t("undoClearBuildingPlans"))}</button></div>
           <div data-role="construction-results"></div>
         </div>
+        <div id="mwi-view-panel-trials" data-role="trials-view" role="tabpanel" aria-labelledby="mwi-view-tab-trials"${state.activeView === "trials" ? "" : " hidden"}></div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
       panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
       const numberStepperCleanup = bindNumberStepperControls(panel);
@@ -615,6 +620,8 @@
         if (body) body.hidden = collapsed;
         persistPluginUiState();
       });
+      bindTrialHistory(panel);
+      panel.querySelector('[data-role="view-trials"]').addEventListener("click", () => setPanelView(panel, "trials"));
       panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
       panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
       panel

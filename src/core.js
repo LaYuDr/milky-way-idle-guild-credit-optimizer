@@ -776,13 +776,20 @@
     };
   }
 
-  function removeManualGuildPointWeek(history, rawWeekStartAt) {
+  function removeManualGuildPointWeek(history, rawWeekStartAt, options = {}) {
     const normalized = normalizedGuildPointHistory(history);
     const weekStartAt = Number(rawWeekStartAt);
     const manualWeeks = normalized.manualWeeks.filter((record) => record.weekStartAt !== weekStartAt);
+    // A zero remains a valid observation unless the user explicitly clears it.
+    const weeks =
+      options.discardZeroTracked === true
+        ? normalized.weeks.filter(
+            (record) => !(record.weekStartAt === weekStartAt && record.complete && record.earnedPoints === 0)
+          )
+        : normalized.weeks;
     return {
-      changed: manualWeeks.length !== normalized.manualWeeks.length,
-      history: { ...normalized, manualWeeks }
+      changed: manualWeeks.length !== normalized.manualWeeks.length || weeks.length !== normalized.weeks.length,
+      history: { ...normalized, weeks, manualWeeks }
     };
   }
 

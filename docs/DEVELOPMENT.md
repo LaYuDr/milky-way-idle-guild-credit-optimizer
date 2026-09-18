@@ -236,9 +236,10 @@ sample after verifying that custom starting points update the budget summary
 on input without changing the observed game balance, and clearing the input
 restores the game balance. The completed-week forecast expectation is derived
 from the fixture's completed week count instead of a date-sensitive constant.
-The planning-horizon control is initially hidden under Future budget settings;
-the audit opens it, checks that it stays open while stepping values and
-rerendering, then closes it again. The final fixture contains 28 visible square
+The forecast-lookback control is initially hidden under Forecast settings,
+while the planning horizon remains visible. The audit opens the settings,
+checks that they stay open while stepping values and rerendering, then closes
+them again. The final fixture contains 28 visible square
 catalog tiles, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.
@@ -434,3 +435,23 @@ Locally retained third-party plugins belong under the visible
 references/local-plugins/ directory. This directory is ignored by Git and the
 release process, while tracked third-party references under references/ must
 include provenance and license notes.
+
+## Trial history audit
+
+Open `http://127.0.0.1:4173/test-harness.html?trialHistoryAudit=1&resetState=1&sidebarWidth=420`.
+Await `window.__mwiTrialHistoryAuditReady` and require every `checks` value
+to be true. Run the eleven-width matrix above and English passes at 320,
+610, and 900. The fixture sends the official bridge event with a guild snapshot,
+member names and a full `guild_trial_stats_updated` response, then checks the
+fourth tab, empty state, both trial kinds, exact values, duplicate and empty
+responses, escaped member names and a contained horizontal table scroller.
+Also export JSON and reload without `trialHistoryAudit` or `resetState` to
+verify that both records survive. Fixture storage is confined to localhost.
+
+The protocol was checked against the official CN frontend on 2026-09-18
+(`main.bdda2571.chunk.js`): opening Stats calls `get_guild_trial_stats`; the
+response supplies `guildId` and the complete `guildTrialStatList`. Archive
+only parties whose `guild.currentTrialsData[kind].parties[trialHrid].done` is
+true, using `guild.currentWeekStartAt` as the week identity. The bridge observes
+responses and never sends that request. Keep complete stat rows, party state,
+member snapshots and trial definitions; do not round the stored values.

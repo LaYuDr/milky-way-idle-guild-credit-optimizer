@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.9] - 2026-09-18
+
+### Changed
+
+- 新增只读历史试炼页：被动保存已完成生活与战斗试炼统计，按公会、角色和服务器隔离持久化，支持双语查看与 JSON 导出，并补充桥接、存储和响应式审计。
+
 ## [1.2.8] - 2026-09-18
 
 ### Changed

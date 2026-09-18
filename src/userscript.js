@@ -22,6 +22,8 @@
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
+  const trialHistoryApi = window.MwiGuildTrialHistory;
+  const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
     !core ||
@@ -46,7 +48,9 @@
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
-    !creditViewApi
+    !creditViewApi ||
+    !trialHistoryApi ||
+    !trialHistoryViewApi
   )
     return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
@@ -72,7 +76,8 @@
     location: pageWindow.location,
     config: configApi,
     buildingDataApi,
-    marketDataApi
+    marketDataApi,
+    trialHistoryApi
   });
   const savedUiState = pluginStorage.loadSavedPluginUiState();
   const savedBuildingPlannerState = pluginStorage.loadSavedGuildBuildingPlannerState();
@@ -665,6 +670,17 @@
   const { scheduleShrineGuide, startShrineGuideObserver, stopShrineGuideObserver, setShrineGuideEnabled } =
     shrineGuideUi;
 
+  const trialHistoryView = trialHistoryViewApi.createTrialHistoryView({
+    document,
+    pageWindow,
+    t,
+    escapeHtml,
+    pluginStorage,
+    getBridge: () => window.__mwiGuildCreditBridge,
+    getPanel: () => state.panel
+  });
+  const refreshTrialHistory = (panel) => trialHistoryView.refresh(panel);
+
   const panelShell = panelShellApi.createPanelShell({
     state,
     document,
@@ -683,6 +699,8 @@
     refreshPanel: (...args) => refreshPanel(...args),
     refreshGuildUpgrade,
     refreshGuildConstruction,
+    refreshTrialHistory,
+    bindTrialHistory: (panel) => trialHistoryView.bind(panel),
     refreshGuildExchangeAdvisor: (...args) => refreshGuildExchangeAdvisor(...args),
     renderSettingsMarkup,
     refreshSettings,
@@ -851,6 +869,7 @@
     if (state.settingsOpen) refreshSettings(panel);
     if (panel.dataset.activeView === "upgrade") refreshGuildUpgrade(panel);
     else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
+    else if (panel.dataset.activeView === "trials") refreshTrialHistory(panel);
     else refreshPanel(panel);
   }
 
@@ -974,6 +993,7 @@
   }
 
   function disposeRuntime() {
+    trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
@@ -1003,6 +1023,7 @@
     window.removeEventListener("orientationchange", scheduleSidebarIntegration);
   }
 
+  trialHistoryView.start();
   hydrateBridgeData();
   extractItemDetailsFromReact();
   hydrateLocalInitData();

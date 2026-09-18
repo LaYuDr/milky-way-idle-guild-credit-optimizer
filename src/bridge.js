@@ -37,6 +37,9 @@
   if (!Number.isSafeInteger(bridge.guildBuffLevelsRevision)) bridge.guildBuffLevelsRevision = 0;
   if (!Number.isSafeInteger(bridge.guildPointSummaryRevision)) bridge.guildPointSummaryRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+  bridge.trialHistoryContext = bridge.trialHistoryContext || {};
+  bridge.pendingTrialSnapshots = bridge.pendingTrialSnapshots || [];
+
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
   const DIAGNOSTICS_ATTRIBUTE = "data-mwi-credit-bridge-diagnostics";
@@ -474,6 +477,15 @@
       diagnostics.lastMessageType = String((message && message.type) || "");
       keepMarketData(message, "websocket");
       keepGuildData(message);
+      const trialApi = window.MwiGuildTrialHistory;
+      if (trialApi) {
+        bridge.trialHistoryContext = trialApi.updateContext(bridge.trialHistoryContext, message);
+        const snapshots = trialApi.completedSnapshots(bridge.trialHistoryContext, message);
+        if (snapshots.length) {
+          bridge.pendingTrialSnapshots.push(...snapshots);
+          if (typeof bridge.onTrialStatsUpdated === "function") bridge.onTrialStatsUpdated();
+        }
+      }
     } catch (_) {
       diagnostics.lastMessageType = "non_json";
       // Ignore non-JSON protocol frames.

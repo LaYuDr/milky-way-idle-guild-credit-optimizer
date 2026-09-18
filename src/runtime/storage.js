@@ -192,7 +192,7 @@
   }
 
   function createPluginStorage(options) {
-    const { storage, location, config, buildingDataApi, marketDataApi } = options;
+    const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {
@@ -204,6 +204,48 @@
       }
       const hostname = (location && location.hostname) || "game";
       return `${config.GUILD_BUILDING_PLAN_STORAGE_PREFIX}:${hostname}:${characterId}`;
+    }
+
+    function trialHistoryPrefix() {
+      return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function loadTrialHistory() {
+      const records = [];
+      let failed = false;
+      try {
+        for (let index = 0; index < storage.length; index += 1) {
+          const key = storage.key(index);
+          if (!key || !key.startsWith(trialHistoryPrefix())) continue;
+          try {
+            const record = JSON.parse(storage.getItem(key));
+            if (trialHistoryApi.validSnapshot(record)) records.push(record);
+            else failed = true;
+          } catch (_) {
+            failed = true;
+          }
+        }
+      } catch (_) {
+        failed = true;
+      }
+      return {
+        records: records.sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)),
+        failed
+      };
+    }
+
+    function saveTrialSnapshot(record) {
+      try {
+        if (!trialHistoryApi.validSnapshot(record)) return false;
+        const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+        const previous = JSON.parse(storage.getItem(key) || "null");
+        const members = { ...(previous?.members || {}), ...record.members };
+        // One key per trial: a quota error cannot destroy any older records.
+        storage.setItem(key, JSON.stringify({ ...record, members }));
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     function loadSavedPluginUiState() {
@@ -569,6 +611,8 @@
 
     return {
       guildBuildingPlannerStorageKey,
+      loadTrialHistory,
+      saveTrialSnapshot,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,

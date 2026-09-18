@@ -47,7 +47,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",
-    panelOrder: ["upgrade", "credit", "construction"],
+    panelOrder: ["upgrade", "credit", "construction", "trials"],
     targetCredit: 1,
     upgradePlans: []
   });
@@ -63,7 +63,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   ).loadSavedPluginUiState();
   assert.equal(migrated.guildTokenCreditHrids.length, 8);
   assert.equal(migrated.activeView, "construction");
-  assert.deepEqual(migrated.panelOrder, ["upgrade", "credit", "construction"]);
+  assert.deepEqual(migrated.panelOrder, ["upgrade", "credit", "construction", "trials"]);
   assert.equal(migrated.targetCredit, 200);
   assert.deepEqual(migrated.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(migrated.showConstructionView, true);
@@ -147,7 +147,7 @@ test("页签顺序忽略重复和未知项并在保存时补齐缺项", () => {
   const pluginStorage = createStorage(storage);
   const loaded = pluginStorage.loadSavedPluginUiState();
   assert.equal(loaded.activeView, "construction");
-  assert.deepEqual(loaded.panelOrder, ["construction", "upgrade", "credit"]);
+  assert.deepEqual(loaded.panelOrder, ["construction", "upgrade", "credit", "trials"]);
 
   pluginStorage.persistPluginUiState({
     ...loaded,
@@ -158,7 +158,8 @@ test("页签顺序忽略重复和未知项并在保存时补齐缺项", () => {
   assert.deepEqual(JSON.parse(storage.value(config.UI_STATE_STORAGE_KEY)).panelOrder, [
     "credit",
     "upgrade",
-    "construction"
+    "construction",
+    "trials"
   ]);
 });
 
@@ -305,13 +306,13 @@ test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "upgrade",
-    panelOrder: ["construction", "upgrade", "credit"],
+    panelOrder: ["construction", "upgrade", "credit", "trials"],
     targetCredit: 100,
     upgradePlans: [{ guildBuffHrid: "/guild_buffs/force", startLevel: 1, targetLevel: 2 }]
   });
   const ui = JSON.parse(storage.value(config.UI_STATE_STORAGE_KEY));
   assert.equal(ui.activeView, "upgrade");
-  assert.deepEqual(ui.panelOrder, ["construction", "upgrade", "credit"]);
+  assert.deepEqual(ui.panelOrder, ["construction", "upgrade", "credit", "trials"]);
   assert.deepEqual(ui.guildTokenCreditHrids, ["/items/green_guild_credit"]);
   assert.deepEqual(ui.guildShrineAutofillExcludedBuffHrids, []);
   assert.equal(ui.showConstructionView, true);
@@ -343,7 +344,7 @@ test("UI 持久化会返回写入成功或失败", () => {
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: true,
     activeView: "credit",
-    panelOrder: ["upgrade", "credit", "construction"],
+    panelOrder: ["upgrade", "credit", "construction", "trials"],
     targetCredit: 1,
     upgradePlans: []
   };

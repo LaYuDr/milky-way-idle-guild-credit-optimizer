@@ -448,6 +448,7 @@
     window.addEventListener("pointerup", finishSidebarResize);
     window.addEventListener("pointercancel", finishSidebarResize);
     window.__mwiGuildCreditBridge = {
+      messages: [],
       guildPointSummary: {
         guildId: "fixture-guild",
         lifetimePoints: 72044,
@@ -1573,7 +1574,10 @@
         waitFor(() => constructionGroupOrder(panel).join("|") === order.join("|") && constructionGroupOrder(panel));
 
       audit.initial = constructionStateSnapshot(panel);
-      audit.planningInitiallyHidden = !panel.querySelector(".mwi-guild-point-planning-options").open;
+      audit.forecastInitiallyHidden =
+        !panel.querySelector(".mwi-guild-point-planning-options").open &&
+        Boolean(panel.querySelector('[data-role="guild-point-forecast-weeks"]').closest("details"));
+      audit.planningAlwaysVisible = !panel.querySelector('[data-role="guild-point-planning-weeks"]').closest("details");
       panel.querySelector(".mwi-guild-point-planning-options summary").click();
       await settleConstructionAudit();
 
@@ -1610,7 +1614,7 @@
         forecast: weekStepperAudit(forecastWeeks),
         planning: weekStepperAudit(planningWeeks)
       };
-      audit.planningStaysOpen = panel.querySelector(".mwi-guild-point-planning-options").open;
+      audit.forecastSettingsStayOpen = panel.querySelector(".mwi-guild-point-planning-options").open;
       panel.querySelector(".mwi-guild-point-planning-options summary").click();
       await settleConstructionAudit();
 
@@ -1815,9 +1819,10 @@
         (plan) => plan.buildingHrid === unknownBuildingHrid
       );
       audit.checks = {
-        planningHorizonIsOptional:
-          audit.planningInitiallyHidden &&
-          audit.planningStaysOpen &&
+        forecastLookbackIsOptional:
+          audit.forecastInitiallyHidden &&
+          audit.planningAlwaysVisible &&
+          audit.forecastSettingsStayOpen &&
           !panel.querySelector(".mwi-guild-point-planning-options").open,
         initialEmptyPlan: audit.initial.groupCount === 0 && audit.initial.pickerOpen,
         partialLevelCoverage:
@@ -2458,7 +2463,7 @@
       );
       const visibleCreditTab = panel.querySelector('[data-role="view-credit"]');
       visibleCreditTab.focus();
-      visibleCreditTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      visibleCreditTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
       await waitFor(() => panel.dataset.activeView === "upgrade");
       const keyboardNavigation = {
         visibleTabRoles: visibleTabRolesBeforeKeyboard,
@@ -2482,7 +2487,7 @@
         clientX: upgradeRect.right + 8,
         clientY: upgradeRect.top + upgradeRect.height / 2
       });
-      await waitFor(() => (savedPluginUiState().panelOrder || []).join("|") === "construction|upgrade|credit");
+      await waitFor(() => (savedPluginUiState().panelOrder || []).join("|") === "construction|upgrade|credit|trials");
       const pointerReorder = {
         fullOrder: (savedPluginUiState().panelOrder || []).slice(),
         visibleOrder: Array.from(
@@ -2608,16 +2613,16 @@
         hidingConstructionPreservesPlanAndFullOrder:
           constructionHidden.constructionStorageUnchanged &&
           constructionHidden.constructionPlans.length === 1 &&
-          constructionHidden.fullOrderBeforeHide.join("|") === "construction|credit|upgrade" &&
-          constructionHidden.fullOrderAfterHide.join("|") === "construction|credit|upgrade",
+          constructionHidden.fullOrderBeforeHide.join("|") === "construction|credit|upgrade|trials" &&
+          constructionHidden.fullOrderAfterHide.join("|") === "construction|credit|upgrade|trials",
         keyboardNavigationSkipsHiddenConstruction:
-          keyboardNavigation.visibleTabRoles.join("|") === "view-credit|view-upgrade" &&
+          keyboardNavigation.visibleTabRoles.join("|") === "view-credit|view-upgrade|view-trials" &&
           keyboardNavigation.activeView === "upgrade" &&
           keyboardNavigation.focus.role === "view-upgrade",
         pointerSortingSkipsHiddenConstruction:
           pointerReorder.constructionHidden &&
-          pointerReorder.visibleOrder.join("|") === "upgrade|credit" &&
-          pointerReorder.fullOrder.join("|") === "construction|upgrade|credit",
+          pointerReorder.visibleOrder.join("|") === "upgrade|credit|trials" &&
+          pointerReorder.fullOrder.join("|") === "construction|upgrade|credit|trials",
         restoringConstructionPreservesMergedOrderAndPlan:
           constructionRestored.activeView === "construction" &&
           constructionRestored.tabVisible &&
@@ -2626,8 +2631,8 @@
           constructionRestored.panelLabelledBy === "mwi-view-tab-construction" &&
           constructionRestored.settingsVisible &&
           constructionRestored.switchChecked &&
-          constructionRestored.fullOrder.join("|") === "construction|upgrade|credit" &&
-          constructionRestored.visibleOrder.join("|") === "construction|upgrade|credit" &&
+          constructionRestored.fullOrder.join("|") === "construction|upgrade|credit|trials" &&
+          constructionRestored.visibleOrder.join("|") === "construction|upgrade|credit|trials" &&
           constructionRestored.constructionStorageUnchanged &&
           constructionRestored.constructionPlans.length === 1 &&
           constructionRestored.constructionPlans[0].buildingHrid === "/guild_buildings/guild_hall",
@@ -2636,7 +2641,7 @@
           report.persisted.excludedHrids.includes(tempoLifeHrid) &&
           report.persisted.showConstructionView === true &&
           report.persisted.activeView === "construction" &&
-          report.persisted.panelOrder.join("|") === "construction|upgrade|credit",
+          report.persisted.panelOrder.join("|") === "construction|upgrade|credit|trials",
         escapeClosesSettingsAndRestoresTriggerFocus:
           closed.hidden && closed.expanded === "false" && closed.focus.role === "toggle-settings",
         noHorizontalOverflow:
@@ -2900,7 +2905,7 @@
           report.creditTabBeforeFixtureInsert === "false" &&
           report.mutationCountAtMeasurement >= 5,
         creditTabMountsWithinHalfSecond: report.mountLatencyMs >= 0 && report.mountLatencyMs < 500,
-        creditTabUsesChineseGameLocale: report.creditTabLabel === "信用",
+        creditTabUsesChineseGameLocale: report.creditTabLabel === "公会助手",
         exactlyOneCreditTabAfterFurtherMutations: report.creditTabCount === 1,
         mountedPanelOpensNormally: report.panelConnected && report.panelVisibleAfterClick
       };
@@ -3070,6 +3075,98 @@
           document.getElementById("mwi-credit-optimizer").clientWidth
       };
     };
+
+    async function runTrialHistoryAudit() {
+      document.getElementById("close-exchange-modal").click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      document.querySelector('#test-tabs [data-mwi-credit-tab="true"]').click();
+      panel.querySelector('[data-role="view-trials"]').click();
+      const empty = !panel.querySelector('[data-role="trial-select"]');
+      const send = (message) =>
+        window.dispatchEvent(new CustomEvent("__mwiGuildCreditSocketMessageV1", { detail: JSON.stringify(message) }));
+      const week = "2026-09-14T00:00:00Z";
+      const milk = "/guild_skilling/milking";
+      const combat = "/guild_combat/hedgehog";
+      const guild = {
+        id: "fixture-guild",
+        name: "测试公会 / Test Guild",
+        currentWeekStartAt: week,
+        currentTrialsData: JSON.stringify({
+          skilling: { parties: { [milk]: { done: true, highestTier: 4, nextTierProgress: 0.25 } } },
+          combat: { parties: { [combat]: { done: true, highestTier: 6 } } },
+          points: { [milk]: 120, [combat]: 240 }
+        })
+      };
+      const members = { 101: { name: "长名字测试成员 Alpha" }, 102: { name: "<b>原样显示</b>" } };
+      const message = {
+        type: "guild_trial_stats_updated",
+        guildId: guild.id,
+        guildTrialStatList: [
+          { trialHrid: milk, characterId: 101, workDone: 123456789.125, additionalStatistic: 7 },
+          { trialHrid: milk, characterId: 102, workDone: 0 },
+          {
+            trialHrid: combat,
+            characterId: 101,
+            damageDealt: 987654321.25,
+            healingDone: 8000,
+            premitigatedDamageTaken: 123456
+          },
+          { trialHrid: combat, characterId: 102, damageDealt: 0, healingDone: 0, premitigatedDamageTaken: 0 }
+        ]
+      };
+      send({ type: "guild_updated", guild });
+      send({ type: "guild_characters_updated", guildSharableCharacterMap: members });
+      send(message);
+      await waitFor(() => panel.querySelectorAll('[data-role="trial-select"] option').length === 2);
+      send(message);
+      const repeatCount = panel.querySelectorAll('[data-role="trial-select"] option').length;
+      send({ ...message, guildTrialStatList: [] });
+      const emptyResponseCount = panel.querySelectorAll('[data-role="trial-select"] option').length;
+      const keys = Object.keys(localStorage).filter((key) => key.startsWith("mwi-guild-trial-history-v1:"));
+      const records = keys.map((key) => JSON.parse(localStorage.getItem(key)));
+      const selected = panel.querySelector('[data-role="trial-select"]');
+      selected.value = String(
+        [...records]
+          .sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid))
+          .findIndex((record) => record.kind === "combat")
+      );
+      selected.dispatchEvent(new Event("change", { bubbles: true }));
+      const host = panel.querySelector('[data-role="trials-view"]');
+      const report = {
+        width: sidebarWidth,
+        rootOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth),
+        checks: {
+          fourthTab: panel.querySelectorAll(".mwi-view-tab").length === 4,
+          renamed:
+            document.querySelector('[data-mwi-credit-tab="true"]').textContent ===
+            (english ? "Guild Assistant" : "公会助手"),
+          emptyState: empty,
+          allCompletedTrials: records.length === 2,
+          repeatDeduplicated: repeatCount === 2,
+          emptyPreservesRecords: emptyResponseCount === 2,
+          rawPrecisionPreserved: records.some((record) =>
+            record.rows.some((row) => row.workDone === 123456789.125 && row.additionalStatistic === 7)
+          ),
+          memberNamesEscaped: !host.querySelector("tbody b"),
+          detailTable: host.querySelectorAll("tbody tr").length === 2,
+          fullRawRecord: Boolean(host.querySelector(".mwi-trial-raw pre")),
+          selectedCombat: host.querySelectorAll("thead th").length === 4,
+          zeroPanelOverflow: panel.scrollWidth <= panel.clientWidth,
+          keyboardFocusableScroller: host.querySelector(".mwi-trial-table-scroll").tabIndex === 0
+        }
+      };
+      return report;
+    }
+    if (searchParams.has("trialHistoryAudit")) {
+      // Only this isolated fixture origin is cleared, never the game's storage.
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith("mwi-guild-trial-history-v1:")) localStorage.removeItem(key);
+      window.__mwiTrialHistoryAuditReady = runTrialHistoryAudit().then((report) => {
+        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+        document.body.dataset.trialHistoryAuditReady = "true";
+        return report;
+      });
+    }
 
     if (stabilityAudit) {
       window.__mwiPlanStabilityReady = runPlanStabilityAudit().then((report) => {

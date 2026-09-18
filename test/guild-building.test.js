@@ -519,6 +519,89 @@ test("游戏追踪周只有确认警告后才解锁编辑，取消不改数据",
   );
 });
 
+test("明确清空零值追踪周才移除追踪记录，并回退自动补充", () => {
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
+  const week = GUILD_TRIAL_WEEK_MS;
+  const history = {
+    weeks: [
+      { weekStartAt: firstTrial, earnedPoints: 0, complete: true, observedAt: firstTrial + week },
+      { weekStartAt: firstTrial + week, earnedPoints: 8000, complete: true, observedAt: firstTrial + 2 * week }
+    ]
+  };
+  const before = structuredClone(history);
+  assert.equal(core.removeManualGuildPointWeek(history, firstTrial).changed, false);
+  const removed = core.removeManualGuildPointWeek(history, firstTrial, { discardZeroTracked: true });
+  assert.equal(removed.changed, true);
+  assert.equal(removed.history.weeks.length, 1);
+  assert.deepEqual(history, before);
+  const supplemented = core.supplementGuildPointHistory(
+    removed.history,
+    18000,
+    2000,
+    firstTrial + 2 * week,
+    firstTrial
+  );
+  const restored = supplemented.history.weeks.find((record) => record.weekStartAt === firstTrial);
+  assert.equal(restored.source, "estimated");
+  assert.equal(restored.earnedPoints, 8000);
+  assert.equal(
+    core.removeManualGuildPointWeek(history, firstTrial + week, { discardZeroTracked: true }).changed,
+    false
+  );
+});
+
+test("清空零值追踪需要确认，保存后来源与 CSV 都变为自动补充", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 65000,
+    availablePoints: 1000,
+    currentWeekPoints: 9000
+  };
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: firstTrial, earnedPoints: 0, complete: true, observedAt: firstTrial + GUILD_TRIAL_WEEK_MS }
+  ];
+  harness.view.saveManualGuildPointHistory([{ weekStartAt: firstTrial, earnedPoints: "" }]);
+  assert.equal(harness.state.guildPointHistory.weeks.length, 1);
+  harness.view.openTrackedGuildPointEditWarning(firstTrial);
+  harness.view.confirmTrackedGuildPointEditWarning();
+  assert.equal(
+    harness.view.saveManualGuildPointHistory([{ weekStartAt: firstTrial, earnedPoints: "" }]).status,
+    "saved"
+  );
+  assert.equal(harness.state.guildPointHistory.weeks.length, 0);
+  const restored = harness.view.guildPointHistorySummary().weeks.find((record) => record.weekStartAt === firstTrial);
+  assert.equal(restored.source, "estimated");
+  assert.ok(restored.earnedPoints > 0);
+  assert.match(harness.view.guildPointHistoryCsv(), /"guildPointCsvEstimated"/);
+  assert.doesNotMatch(
+    renderGuildPointForecast(harness, harness.view.guildPointHistorySummary()),
+    /data-source="trackedEditing"/
+  );
+});
+
+test("明确填写零仍保留零样本，零值追踪清空遇到非法行时整表不变", () => {
+  const harness = createConstructionHarness();
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: firstTrial, earnedPoints: 0, complete: true, observedAt: firstTrial + GUILD_TRIAL_WEEK_MS }
+  ];
+  harness.view.openTrackedGuildPointEditWarning(firstTrial);
+  harness.view.confirmTrackedGuildPointEditWarning();
+  harness.view.saveManualGuildPointHistory([{ weekStartAt: firstTrial, earnedPoints: "0" }]);
+  assert.equal(harness.state.guildPointHistory.weeks[0].earnedPoints, 0);
+  harness.view.openTrackedGuildPointEditWarning(firstTrial);
+  harness.view.confirmTrackedGuildPointEditWarning();
+  const before = structuredClone(harness.state.guildPointHistory);
+  const result = harness.view.saveManualGuildPointHistory([
+    { weekStartAt: firstTrial, earnedPoints: "" },
+    { weekStartAt: firstTrial + 1, earnedPoints: "9000" }
+  ]);
+  assert.equal(result.status, "invalid");
+  assert.deepEqual(harness.state.guildPointHistory, before);
+});
+
 test("建设页可批量保存、修改和清空手动历史，并在 CSV 标注来源", () => {
   const harness = createConstructionHarness();
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;

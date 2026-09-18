@@ -451,7 +451,7 @@
         "increaseGuildPointPlanningWeeks",
         "decreaseGuildPointPlanningWeeks"
       );
-      return `<div class="mwi-guild-point-controls"><div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointStartingBalance"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("guildPointFollowBalance"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("guildPointStartingBalanceHint"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><details class="mwi-guild-point-planning-options"${constructionUi.planningOptionsOpen ? " open" : ""}><summary>${escapeHtml(t("guildPointPlanningOptions"))}</summary><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label></details><output data-role="guild-point-planning-summary" data-state="${planning.basePoints === null || (planning.weeks > 0 && !planning.canProject) ? "warning" : "ready"}">${escapeHtml(guildPointPlanningSummary(planning))}</output></div>`;
+      return `<div class="mwi-guild-point-controls"><div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointStartingBalance"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("guildPointFollowBalance"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("guildPointStartingBalanceHint"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><details class="mwi-guild-point-planning-options"${constructionUi.planningOptionsOpen ? " open" : ""}><summary>${escapeHtml(t("guildPointPlanningOptions"))}</summary><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label></details><output data-role="guild-point-planning-summary" data-state="${planning.basePoints === null || (planning.weeks > 0 && !planning.canProject) ? "warning" : "ready"}">${escapeHtml(guildPointPlanningSummary(planning))}</output></div>`;
     }
 
     function renderGuildPointEta(plan, history) {
@@ -1036,7 +1036,10 @@
           (record) => record.weekStartAt === weekStartAt
         );
         if (rawPoints === "") {
-          nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt).history;
+          nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt, {
+            discardZeroTracked:
+              Boolean(existingManualRecord) || constructionUi.trackedGuildPointEditWeekStarts.has(weekStartAt)
+          }).history;
           continue;
         }
         if (trackedRecord && !existingManualRecord && Number(rawPoints) === trackedRecord.earnedPoints) continue;

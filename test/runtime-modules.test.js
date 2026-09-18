@@ -26,8 +26,8 @@ test("运行时配置集中保留既有信用点、存储键与只读安全边�
   assert.equal(config.MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS, 60 * 1000);
   assert.equal(config.MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS, 10 * 60 * 1000);
   assert.equal(config.SELLER_TAX_RATE, 0.05);
-  assert.deepEqual(config.PANEL_VIEWS, ["credit", "upgrade", "construction"]);
-  assert.deepEqual(config.DEFAULT_PANEL_ORDER, ["upgrade", "credit", "construction"]);
+  assert.deepEqual(config.PANEL_VIEWS, ["credit", "upgrade", "construction", "trials"]);
+  assert.deepEqual(config.DEFAULT_PANEL_ORDER, ["upgrade", "credit", "construction", "trials"]);
 });
 
 test("构建入口使用显式且无重复的模块清单并最后启动 userscript", () => {
@@ -38,6 +38,8 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.equal(files.length, new Set(files).size);
   assert.equal(files.at(-1), "src/userscript.js");
   const requiredModules = [
+    "src/trial-history.js",
+    "src/ui/trial-history-view.js",
     "src/runtime/config.js",
     "src/runtime/storage.js",
     "src/runtime/scheduler.js",
@@ -65,7 +67,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
 
 test("组合入口保持精简并在页面退出时统一清理运行时资源", () => {
   const source = fs.readFileSync(path.join(root, "src", "userscript.js"), "utf8");
-  assert.ok(source.split(/\r?\n/).length <= 1021, "src/userscript.js should remain a composition root");
+  assert.ok(source.split(/\r?\n/).length <= 1050, "src/userscript.js should remain a composition root");
   assert.match(source, /function disposeRuntime\(\)/);
   assert.match(source, /\.dispose\(\)/);
   assert.match(source, /window\.addEventListener\("pagehide", disposeRuntime/);

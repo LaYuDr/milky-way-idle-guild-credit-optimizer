@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.8";
+window.MwiGuildCreditVersion = "1.2.9";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -682,6 +682,105 @@ window.MwiGuildCreditVersion = "1.2.8";
 });
 
 
+// SOURCE: src/trial-history.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialHistory = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  function objectData(value) {
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function updateContext(previous = {}, message) {
+    if (!message || typeof message !== "object") return previous;
+    let next = previous;
+    if (message.guildTrialDetailMap) next = { ...next, details: message.guildTrialDetailMap };
+    if (Object.hasOwn(message, "guild")) {
+      const guild = message.guild;
+      const changed = String(guild?.id || "") !== String(previous.guild?.id || "");
+      next = { ...next, guild, members: changed ? {} : previous.members };
+    }
+    if (message.guildSharableCharacterMap) next = { ...next, members: message.guildSharableCharacterMap };
+    return next;
+  }
+
+  // The official stats response contains every trial. Only completed parties
+  // have final statistics; keep the entire row, including future server fields.
+  function completedSnapshots(context, message, capturedAt = Date.now()) {
+    if (message?.type !== "guild_trial_stats_updated" || !Array.isArray(message.guildTrialStatList)) return [];
+    const guild = context?.guild;
+    if (!guild?.id || String(message.guildId) !== String(guild.id)) return [];
+    const weekStartAt =
+      typeof guild.currentWeekStartAt === "number" ? guild.currentWeekStartAt : Date.parse(guild.currentWeekStartAt);
+    if (!Number.isSafeInteger(weekStartAt) || weekStartAt <= 0 || weekStartAt > capturedAt) return [];
+    const trials = objectData(guild.currentTrialsData);
+    const snapshots = [];
+    for (const kind of ["skilling", "combat"]) {
+      for (const [trialHrid, party] of Object.entries(trials[kind]?.parties || {})) {
+        if (party?.done !== true) continue;
+        const rows = message.guildTrialStatList.filter((row) => row && row.trialHrid === trialHrid);
+        // Empty responses can occur while the server is publishing stats.
+        // Never let them overwrite an already captured complete result.
+        if (!rows.length) continue;
+        const members = {};
+        for (const row of rows) {
+          const member = context.members?.[row.characterId];
+          if (member) members[row.characterId] = member;
+        }
+        snapshots.push(
+          JSON.parse(
+            JSON.stringify({
+              schemaVersion: 1,
+              key: JSON.stringify([String(guild.id), weekStartAt, trialHrid]),
+              guildId: String(guild.id),
+              guildName: String(guild.name || guild.id),
+              weekStartAt,
+              trialHrid,
+              kind,
+              capturedAt,
+              points: trials.points?.[trialHrid] ?? null,
+              party,
+              rows,
+              members,
+              trialDetail: context.details?.[trialHrid] || null
+            })
+          )
+        );
+      }
+    }
+    return snapshots;
+  }
+
+  function validSnapshot(value) {
+    return Boolean(
+      value &&
+      value.schemaVersion === 1 &&
+      typeof value.guildId === "string" &&
+      Number.isSafeInteger(value.weekStartAt) &&
+      value.weekStartAt > 0 &&
+      typeof value.trialHrid === "string" &&
+      ["combat", "skilling"].includes(value.kind) &&
+      value.key === JSON.stringify([value.guildId, value.weekStartAt, value.trialHrid]) &&
+      Number.isFinite(value.capturedAt) &&
+      value.party?.done === true &&
+      Array.isArray(value.rows) &&
+      value.rows.length &&
+      value.rows.every((row) => row && row.trialHrid === value.trialHrid)
+    );
+  }
+
+  return { updateContext, completedSnapshots, validSnapshot };
+});
+
+
 // SOURCE: src/bridge.js
 (function () {
   "use strict";
@@ -722,6 +821,9 @@ window.MwiGuildCreditVersion = "1.2.8";
   if (!Number.isSafeInteger(bridge.guildBuffLevelsRevision)) bridge.guildBuffLevelsRevision = 0;
   if (!Number.isSafeInteger(bridge.guildPointSummaryRevision)) bridge.guildPointSummaryRevision = 0;
   if (bridge.marketObserverActive !== true) bridge.marketObserverActive = false;
+  bridge.trialHistoryContext = bridge.trialHistoryContext || {};
+  bridge.pendingTrialSnapshots = bridge.pendingTrialSnapshots || [];
+
   const SOCKET_MESSAGE_EVENT = "__mwiGuildCreditSocketMessageV1";
   const SOCKET_READY_EVENT = "__mwiGuildCreditSocketReadyV1";
   const DIAGNOSTICS_ATTRIBUTE = "data-mwi-credit-bridge-diagnostics";
@@ -1159,6 +1261,15 @@ window.MwiGuildCreditVersion = "1.2.8";
       diagnostics.lastMessageType = String((message && message.type) || "");
       keepMarketData(message, "websocket");
       keepGuildData(message);
+      const trialApi = window.MwiGuildTrialHistory;
+      if (trialApi) {
+        bridge.trialHistoryContext = trialApi.updateContext(bridge.trialHistoryContext, message);
+        const snapshots = trialApi.completedSnapshots(bridge.trialHistoryContext, message);
+        if (snapshots.length) {
+          bridge.pendingTrialSnapshots.push(...snapshots);
+          if (typeof bridge.onTrialStatsUpdated === "function") bridge.onTrialStatsUpdated();
+        }
+      }
     } catch (_) {
       diagnostics.lastMessageType = "non_json";
       // Ignore non-JSON protocol frames.
@@ -2270,7 +2381,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       increaseGuildPointForecastWeeks: "增加 1 周预测回看范围",
       decreaseGuildPointForecastWeeks: "减少 1 周预测回看范围",
       guildPointPlanningWeeks: "规划周数",
-      guildPointPlanningOptions: "未来预算设置",
+      guildPointPlanningOptions: "预测设置",
       guildPointPlanningWeeksHint: "0 表示仅使用当前点数；大于 0 时将预测周产出加入可用预算。",
       increaseGuildPointPlanningWeeks: "增加 1 周规划时间",
       decreaseGuildPointPlanningWeeks: "减少 1 周规划时间",
@@ -2288,7 +2399,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       guildPointHistorySource: "来源",
       saveManualGuildPointHistory: "保存整张表",
       manualGuildPointHint:
-        "直接填写需要更正的历史周；灰色占位数为自动估算。游戏追踪值需先点击“修改”并确认警告。清空手工值后保存，可恢复原数据。当前周仅供查看。",
+        "灰色占位数为自动估算。修改游戏追踪值需先确认警告。清空后保存：原追踪值为 0 时改为自动补充，非零时恢复原值；直接填写 0 则保留零值。当前周仅供查看。",
       manualGuildPointHistoryEmpty: "尚无已结束的试炼周可填写。",
       guildPointManualWeekOption: "{week} 开始",
       guildPointSourceTracked: "游戏追踪",
@@ -2310,7 +2421,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       trackedGuildPointEditWarningTitle: "要覆盖游戏追踪值吗？",
       trackedGuildPointEditWarningBody:
         "{week} 的 {points} 点来自游戏追踪。继续后可以用手工值更正；这只会影响插件的历史统计、预测和施工估算，不会修改游戏内数据。",
-      trackedGuildPointEditWarningHint: "若要恢复，清空手工覆盖值并保存整张表。",
+      trackedGuildPointEditWarningHint: "清空后保存：原追踪值为 0 时改为自动补充，非零时恢复原值。",
       cancelTrackedGuildPointEdit: "取消",
       confirmTrackedGuildPointEdit: "继续修改",
       manualGuildPointWeekInvalid: "请选择已结束的试炼周，并输入不小于 0 的整数。",
@@ -2538,7 +2649,43 @@ window.MwiGuildCreditVersion = "1.2.8";
       purchaseCost: "买入成本",
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
-      sidebarCredit: "信用"
+      trialHistory: "历史试炼数据",
+      trialHistoryHint:
+        "试炼结束后，打开游戏中的“统计”即可自动归档本次返回的全部已完成项目。记录保存在当前浏览器，按服务器和角色隔离；未查看的往期统计无法补回。",
+      trialHistoryEmpty: "暂无记录。请在试炼结束后打开一次生活或战斗试炼的“统计”。",
+      trialSavedCount: "已保存 {count} 项试炼记录。",
+      trialSaveFailed: "部分记录尚未保存到浏览器。请先导出备份，再检查浏览器存储空间；当前页面仍保留待保存数据。",
+      trialLoadFailed: "部分本地记录读取失败，已保留原数据。当前仅显示可读取的记录。",
+      trialChoose: "选择历史试炼",
+      trialExport: "导出全部 JSON",
+      trialSkilling: "生活试炼",
+      trialCombat: "战斗试炼",
+      trialSummary: "{count} 位成员 · {points} 公会点数 · 最高第 {tier} 层",
+      trialCaptured: "统计读取于 {time}",
+      trialStatsTable: "成员试炼统计",
+      trialMember: "成员",
+      trialFormerMember: "名称未读取",
+      trialRaw: "查看完整原始记录",
+      trialField_workDone: "工作量",
+      trialField_damageDealt: "造成伤害",
+      trialField_healingDone: "治疗量",
+      trialField_premitigatedDamageTaken: "减伤前承伤",
+      trialName_milking: "挤奶",
+      trialName_badger: "试炼獾",
+      trialName_chameleon: "试炼变色龙",
+      trialName_jellyfish: "试炼水母",
+      trialName_hedgehog: "试炼刺猬",
+      trialName_swarm: "试炼虫群",
+      trialName_foraging: "采摘",
+      trialName_woodcutting: "伐木",
+      trialName_cheesesmithing: "奶酪锻造",
+      trialName_crafting: "制作",
+      trialName_tailoring: "缝纫",
+      trialName_cooking: "烹饪",
+      trialName_brewing: "冲泡",
+      trialName_alchemy: "炼金",
+      trialName_enhancing: "强化",
+      sidebarCredit: "公会助手"
     },
     en: {
       unknownItem: "Unknown item",
@@ -2688,7 +2835,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       increaseGuildPointForecastWeeks: "Increase the forecast lookback by 1 week",
       decreaseGuildPointForecastWeeks: "Decrease the forecast lookback by 1 week",
       guildPointPlanningWeeks: "Planning horizon",
-      guildPointPlanningOptions: "Future budget settings",
+      guildPointPlanningOptions: "Forecast settings",
       guildPointPlanningWeeksHint:
         "0 uses current points only; values above 0 add forecast weekly output to the available budget.",
       increaseGuildPointPlanningWeeks: "Increase the planning horizon by 1 week",
@@ -2708,7 +2855,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       guildPointHistorySource: "Source",
       saveManualGuildPointHistory: "Save full table",
       manualGuildPointHint:
-        'Enter corrections directly; gray placeholders are estimates. For game-tracked values, select "Edit" and confirm the warning first. Clear a manual value and save to restore the original source. The current week is read-only.',
+        "Gray placeholders are estimates. Confirm the warning before editing tracked values. Clear and save to auto-fill an original tracked zero, or restore a nonzero original. Entering 0 keeps a zero value. The current week is read-only.",
       manualGuildPointHistoryEmpty: "There are no completed trial weeks to enter yet.",
       guildPointManualWeekOption: "Starting {week}",
       guildPointSourceTracked: "Game tracked",
@@ -2731,7 +2878,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       trackedGuildPointEditWarningBody:
         "The {points} points for {week} came from game tracking. Continuing lets you enter a manual correction. It affects only this plugin's history, forecast, and construction estimate; it does not change game data.",
       trackedGuildPointEditWarningHint:
-        "To restore the tracked value, clear the manual override and save the full table.",
+        "Clear and save to auto-fill an original tracked zero, or restore a nonzero original.",
       cancelTrackedGuildPointEdit: "Cancel",
       confirmTrackedGuildPointEdit: "Continue editing",
       manualGuildPointWeekInvalid: "Choose a completed trial week and enter a non-negative integer.",
@@ -2969,7 +3116,45 @@ window.MwiGuildCreditVersion = "1.2.8";
       noSellPrice: "This item has no public buy price, so sell-and-buy-back cannot be estimated.",
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
-      sidebarCredit: "Credits"
+      trialHistory: "Trial history",
+      trialHistoryHint:
+        "After a trial ends, open the game’s Stats to archive every completed trial in its response. Records stay in this browser, separated by server and character. Past stats that were never viewed cannot be recovered.",
+      trialHistoryEmpty: "No records yet. Open skilling or combat trial Stats after a trial ends.",
+      trialSavedCount: "{count} trial records saved.",
+      trialSaveFailed:
+        "Some records could not be saved. Export a backup before checking browser storage space; unsaved data is still available on this page.",
+      trialLoadFailed:
+        "Some local records could not be read. Their stored data was preserved; only readable records are shown.",
+      trialChoose: "Choose a past trial",
+      trialExport: "Export all JSON",
+      trialSkilling: "Skilling trial",
+      trialCombat: "Combat trial",
+      trialSummary: "{count} members · {points} Guild Points · Highest tier {tier}",
+      trialCaptured: "Stats captured at {time}",
+      trialStatsTable: "Member trial statistics",
+      trialMember: "Member",
+      trialFormerMember: "Name unavailable",
+      trialRaw: "View complete raw record",
+      trialField_workDone: "Work done",
+      trialField_damageDealt: "Damage dealt",
+      trialField_healingDone: "Healing done",
+      trialField_premitigatedDamageTaken: "Damage taken before mitigation",
+      trialName_milking: "Milking",
+      trialName_badger: "Trial Badger",
+      trialName_chameleon: "Trial Chameleon",
+      trialName_jellyfish: "Trial Jellyfish",
+      trialName_hedgehog: "Trial Hedgehog",
+      trialName_swarm: "Trial Swarm",
+      trialName_foraging: "Foraging",
+      trialName_woodcutting: "Woodcutting",
+      trialName_cheesesmithing: "Cheesesmithing",
+      trialName_crafting: "Crafting",
+      trialName_tailoring: "Tailoring",
+      trialName_cooking: "Cooking",
+      trialName_brewing: "Brewing",
+      trialName_alchemy: "Alchemy",
+      trialName_enhancing: "Enhancing",
+      sidebarCredit: "Guild Assistant"
     }
   };
 
@@ -3838,13 +4023,20 @@ window.MwiGuildCreditVersion = "1.2.8";
     };
   }
 
-  function removeManualGuildPointWeek(history, rawWeekStartAt) {
+  function removeManualGuildPointWeek(history, rawWeekStartAt, options = {}) {
     const normalized = normalizedGuildPointHistory(history);
     const weekStartAt = Number(rawWeekStartAt);
     const manualWeeks = normalized.manualWeeks.filter((record) => record.weekStartAt !== weekStartAt);
+    // A zero remains a valid observation unless the user explicitly clears it.
+    const weeks =
+      options.discardZeroTracked === true
+        ? normalized.weeks.filter(
+            (record) => !(record.weekStartAt === weekStartAt && record.complete && record.earnedPoints === 0)
+          )
+        : normalized.weeks;
     return {
-      changed: manualWeeks.length !== normalized.manualWeeks.length,
-      history: { ...normalized, manualWeeks }
+      changed: manualWeeks.length !== normalized.manualWeeks.length || weeks.length !== normalized.weeks.length,
+      history: { ...normalized, weeks, manualWeeks }
     };
   }
 
@@ -4612,8 +4804,9 @@ window.MwiGuildCreditVersion = "1.2.8";
     GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES: [20, 40, 50, 60, 80, 100],
     GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE: 2.5,
     RENDERED_MARKUP_PROPERTY: "__mwiGuildCreditRenderedMarkup",
-    PANEL_VIEWS: ["credit", "upgrade", "construction"],
-    DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction"],
+    TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
+    PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
+    DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
     CREDIT_TYPES,
     GUILD_TOKEN_CREDIT_CONVERSIONS,
     SELLER_TAX_RATE: 0.05,
@@ -4823,7 +5016,7 @@ window.MwiGuildCreditVersion = "1.2.8";
   }
 
   function createPluginStorage(options) {
-    const { storage, location, config, buildingDataApi, marketDataApi } = options;
+    const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {
@@ -4835,6 +5028,48 @@ window.MwiGuildCreditVersion = "1.2.8";
       }
       const hostname = (location && location.hostname) || "game";
       return `${config.GUILD_BUILDING_PLAN_STORAGE_PREFIX}:${hostname}:${characterId}`;
+    }
+
+    function trialHistoryPrefix() {
+      return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function loadTrialHistory() {
+      const records = [];
+      let failed = false;
+      try {
+        for (let index = 0; index < storage.length; index += 1) {
+          const key = storage.key(index);
+          if (!key || !key.startsWith(trialHistoryPrefix())) continue;
+          try {
+            const record = JSON.parse(storage.getItem(key));
+            if (trialHistoryApi.validSnapshot(record)) records.push(record);
+            else failed = true;
+          } catch (_) {
+            failed = true;
+          }
+        }
+      } catch (_) {
+        failed = true;
+      }
+      return {
+        records: records.sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)),
+        failed
+      };
+    }
+
+    function saveTrialSnapshot(record) {
+      try {
+        if (!trialHistoryApi.validSnapshot(record)) return false;
+        const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+        const previous = JSON.parse(storage.getItem(key) || "null");
+        const members = { ...(previous?.members || {}), ...record.members };
+        // One key per trial: a quota error cannot destroy any older records.
+        storage.setItem(key, JSON.stringify({ ...record, members }));
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     function loadSavedPluginUiState() {
@@ -5200,6 +5435,8 @@ window.MwiGuildCreditVersion = "1.2.8";
 
     return {
       guildBuildingPlannerStorageKey,
+      loadTrialHistory,
+      saveTrialSnapshot,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,
@@ -6807,6 +7044,23 @@ window.MwiGuildCreditVersion = "1.2.8";
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
+        @container (max-width:320px){#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-view-tab{font-size:11px}}
+        #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{color:#c4c7df;line-height:1.6;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-notice{color:#f0d39b;line-height:1.5}
+        #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:16px 0}
+        #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:6px;flex:1 1 240px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:36px}
+        #mwi-credit-optimizer .mwi-trial-title{margin:20px 0 8px;font-size:16px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-table-scroll{max-width:100%;overflow-x:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:10px 8px;text-align:right;border-bottom:1px solid #454760;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-table small{display:block;color:#c4c7df;font-weight:normal}
+        #mwi-credit-optimizer .mwi-trial-raw{margin:18px 0;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0}
+        #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.5}
+        #mwi-credit-optimizer [data-role="trials-view"] :focus-visible{outline:2px solid #77e1cb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;gap:2px;background:transparent}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:28px;min-width:28px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
         #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
         #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
@@ -7367,7 +7621,7 @@ window.MwiGuildCreditVersion = "1.2.8";
         #mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger{width:30px;min-width:30px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}
         #mwi-credit-optimizer .mwi-view-order-actions button:hover:not(:disabled),#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger:hover{background:#ffffff0d!important;color:#fff!important}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-view-tab{transition:none}}
-        @container (max-width:400px){
+        @container (max-width:480px){
           #mwi-credit-optimizer .mwi-view-tabs-shell{grid-template-columns:1fr auto;gap:0 6px;padding-top:4px}
           #mwi-credit-optimizer .mwi-view-order-actions{grid-column:1;grid-row:1;justify-self:end}
           #mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger{grid-column:2;grid-row:1}
@@ -7885,7 +8139,7 @@ window.MwiGuildCreditVersion = "1.2.8";
         "increaseGuildPointPlanningWeeks",
         "decreaseGuildPointPlanningWeeks"
       );
-      return `<div class="mwi-guild-point-controls"><div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointStartingBalance"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("guildPointFollowBalance"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("guildPointStartingBalanceHint"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label><details class="mwi-guild-point-planning-options"${constructionUi.planningOptionsOpen ? " open" : ""}><summary>${escapeHtml(t("guildPointPlanningOptions"))}</summary><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label></details><output data-role="guild-point-planning-summary" data-state="${planning.basePoints === null || (planning.weeks > 0 && !planning.canProject) ? "warning" : "ready"}">${escapeHtml(guildPointPlanningSummary(planning))}</output></div>`;
+      return `<div class="mwi-guild-point-controls"><div class="mwi-construction-budget-input"><label><span>${escapeHtml(t("guildPointStartingBalance"))}</span><input data-role="guild-point-budget" type="number" min="0" step="1" aria-describedby="mwi-guild-point-budget-help mwi-guild-point-budget-error" placeholder="${escapeHtml(t("guildPointFollowBalance"))}" value="${state.manualGuildPoints === null ? "" : state.manualGuildPoints}"></label><small id="mwi-guild-point-budget-help">${escapeHtml(t("guildPointStartingBalanceHint"))}</small><small id="mwi-guild-point-budget-error" class="mwi-field-error" hidden>${escapeHtml(t("invalidGuildPointBudget"))}</small></div><label><span>${escapeHtml(t("guildPointPlanningWeeks"))}</span>${planningStepper}<small>${escapeHtml(t("guildPointPlanningWeeksHint"))}</small></label><details class="mwi-guild-point-planning-options"${constructionUi.planningOptionsOpen ? " open" : ""}><summary>${escapeHtml(t("guildPointPlanningOptions"))}</summary><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}<small>${escapeHtml(t("guildPointForecastWeeksHint"))}</small></label></details><output data-role="guild-point-planning-summary" data-state="${planning.basePoints === null || (planning.weeks > 0 && !planning.canProject) ? "warning" : "ready"}">${escapeHtml(guildPointPlanningSummary(planning))}</output></div>`;
     }
 
     function renderGuildPointEta(plan, history) {
@@ -8470,7 +8724,10 @@ window.MwiGuildCreditVersion = "1.2.8";
           (record) => record.weekStartAt === weekStartAt
         );
         if (rawPoints === "") {
-          nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt).history;
+          nextHistory = core.removeManualGuildPointWeek(nextHistory, weekStartAt, {
+            discardZeroTracked:
+              Boolean(existingManualRecord) || constructionUi.trackedGuildPointEditWeekStarts.has(weekStartAt)
+          }).history;
           continue;
         }
         if (trackedRecord && !existingManualRecord && Number(rawPoints) === trackedRecord.earnedPoints) continue;
@@ -8563,6 +8820,136 @@ window.MwiGuildCreditVersion = "1.2.8";
   }
 
   return { createConstructionView };
+});
+
+
+// SOURCE: src/ui/trial-history-view.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialHistoryView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  function createTrialHistoryView({ document, pageWindow, t, escapeHtml, pluginStorage, getBridge, getPanel }) {
+    let selectedKey = "";
+    let records = [];
+    let loadFailed = false;
+    const unsaved = new Map();
+    const date = (value) =>
+      new Date(value).toLocaleString(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    const trialName = (record) => {
+      const key = String(record.trialDetail?.skillHrid || record.trialHrid)
+        .split("/")
+        .pop();
+      const label = t(`trialName_${key}`);
+      return label === `trialName_${key}` ? String(record.trialDetail?.name || key) : label;
+    };
+    const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
+
+    function reload() {
+      const loaded = pluginStorage.loadTrialHistory();
+      loadFailed = loaded.failed;
+      const merged = new Map(loaded.records.map((record) => [record.key, record]));
+      for (const [key, record] of unsaved) merged.set(key, record);
+      records = Array.from(merged.values()).sort(
+        (a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)
+      );
+    }
+
+    function capture() {
+      const bridge = getBridge();
+      for (const record of bridge?.pendingTrialSnapshots?.splice(0) || []) unsaved.set(record.key, record);
+      for (const [key, record] of unsaved) {
+        if (pluginStorage.saveTrialSnapshot(record)) unsaved.delete(key);
+      }
+      reload();
+    }
+
+    function refresh(panel) {
+      capture();
+      const host = panel?.querySelector('[data-role="trials-view"]');
+      if (!host) return;
+      const selected = records.find((record) => record.key === selectedKey) || records[0];
+      selectedKey = selected?.key || "";
+      let markup = `<p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p>
+        <p class="mwi-trial-notice" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p>`;
+      if (!selected) {
+        host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
+        return;
+      }
+      markup += `<div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
+        .map(
+          (record, index) =>
+            `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${date(record.weekStartAt)} · ${record.guildName} · ${trialName(record)}`)}</option>`
+        )
+        .join("")}</select></label>
+        <button type="button" data-role="trial-export">${escapeHtml(t("trialExport"))}</button></div>
+        <h3 class="mwi-trial-title">${escapeHtml(trialName(selected))}</h3>
+        <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
+      const fields =
+        selected.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+      const rows = [...selected.rows].sort((a, b) => {
+        for (const field of fields) {
+          const diff = (Number(b[field]) || 0) - (Number(a[field]) || 0);
+          if (diff) return diff;
+        }
+        return String(a.characterId).localeCompare(String(b.characterId));
+      });
+      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.characterId]?.name || t("trialFormerMember"))}<small>ID ${escapeHtml(row.characterId)}</small></th>${fields.map((field) => `<td>${escapeHtml(number(row[field]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details>`;
+      host.innerHTML = markup;
+    }
+
+    function exportHistory() {
+      capture();
+      const url = pageWindow.URL.createObjectURL(
+        new pageWindow.Blob([JSON.stringify({ schemaVersion: 1, records }, null, 2)], { type: "application/json" })
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "guild-trial-history.json";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 0);
+    }
+
+    function bind(panel) {
+      const host = panel.querySelector('[data-role="trials-view"]');
+      host.addEventListener("change", (event) => {
+        if (event.target.dataset.role !== "trial-select") return;
+        selectedKey = records[Number(event.target.value)]?.key || "";
+        refresh(panel);
+        host.querySelector('[data-role="trial-select"]')?.focus();
+      });
+      host.addEventListener("click", (event) => {
+        if (event.target.closest('[data-role="trial-export"]')) exportHistory();
+      });
+    }
+    const onStats = () => {
+      capture();
+      const panel = getPanel();
+      if (panel && panel.dataset.activeView === "trials") refresh(panel);
+    };
+    function start() {
+      const bridge = getBridge();
+      if (bridge) bridge.onTrialStatsUpdated = onStats;
+      capture();
+    }
+    function dispose() {
+      const bridge = getBridge();
+      if (bridge?.onTrialStatsUpdated === onStats) bridge.onTrialStatsUpdated = null;
+    }
+    return { start, dispose, bind, refresh };
+  }
+  return { createTrialHistoryView };
 });
 
 
@@ -10682,6 +11069,8 @@ window.MwiGuildCreditVersion = "1.2.8";
       refreshPanel,
       refreshGuildUpgrade,
       refreshGuildConstruction,
+      refreshTrialHistory,
+      bindTrialHistory,
       refreshGuildExchangeAdvisor,
       renderSettingsMarkup,
       refreshSettings,
@@ -10725,7 +11114,8 @@ window.MwiGuildCreditVersion = "1.2.8";
     const panelViewLabels = {
       upgrade: "shrineUpgrade",
       credit: "creditValue",
-      construction: "guildConstruction"
+      construction: "guildConstruction",
+      trials: "trialHistory"
     };
 
     function panelViewEnabled(view) {
@@ -10885,6 +11275,7 @@ window.MwiGuildCreditVersion = "1.2.8";
       updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
+      else if (selectedView === "trials") refreshTrialHistory(panel);
       else refreshPanel(panel);
       return persisted;
     }
@@ -11176,6 +11567,7 @@ window.MwiGuildCreditVersion = "1.2.8";
           <div class="mwi-status mwi-construction-status" data-role="construction-status" hidden><span data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"></span><button data-role="undo-clear-building-plans" type="button" hidden>${escapeHtml(t("undoClearBuildingPlans"))}</button></div>
           <div data-role="construction-results"></div>
         </div>
+        <div id="mwi-view-panel-trials" data-role="trials-view" role="tabpanel" aria-labelledby="mwi-view-tab-trials"${state.activeView === "trials" ? "" : " hidden"}></div>
         <footer class="mwi-plugin-footer">${escapeHtml(t("author"))}<br>${escapeHtml(t("support"))}<br><a href="${escapeHtml(FALLBACK_INSTALL_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("fallbackInstaller"))}</a></footer>`;
       panel.querySelector('[data-role="refresh"]').addEventListener("click", () => refreshPanel(panel, true));
       const numberStepperCleanup = bindNumberStepperControls(panel);
@@ -11270,6 +11662,8 @@ window.MwiGuildCreditVersion = "1.2.8";
         if (body) body.hidden = collapsed;
         persistPluginUiState();
       });
+      bindTrialHistory(panel);
+      panel.querySelector('[data-role="view-trials"]').addEventListener("click", () => setPanelView(panel, "trials"));
       panel.querySelector('[data-role="view-credit"]').addEventListener("click", () => setPanelView(panel, "credit"));
       panel.querySelector('[data-role="view-upgrade"]').addEventListener("click", () => setPanelView(panel, "upgrade"));
       panel
@@ -11916,6 +12310,8 @@ window.MwiGuildCreditVersion = "1.2.8";
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
+  const trialHistoryApi = window.MwiGuildTrialHistory;
+  const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
     !core ||
@@ -11940,7 +12336,9 @@ window.MwiGuildCreditVersion = "1.2.8";
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
-    !creditViewApi
+    !creditViewApi ||
+    !trialHistoryApi ||
+    !trialHistoryViewApi
   )
     return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
@@ -11966,7 +12364,8 @@ window.MwiGuildCreditVersion = "1.2.8";
     location: pageWindow.location,
     config: configApi,
     buildingDataApi,
-    marketDataApi
+    marketDataApi,
+    trialHistoryApi
   });
   const savedUiState = pluginStorage.loadSavedPluginUiState();
   const savedBuildingPlannerState = pluginStorage.loadSavedGuildBuildingPlannerState();
@@ -12559,6 +12958,17 @@ window.MwiGuildCreditVersion = "1.2.8";
   const { scheduleShrineGuide, startShrineGuideObserver, stopShrineGuideObserver, setShrineGuideEnabled } =
     shrineGuideUi;
 
+  const trialHistoryView = trialHistoryViewApi.createTrialHistoryView({
+    document,
+    pageWindow,
+    t,
+    escapeHtml,
+    pluginStorage,
+    getBridge: () => window.__mwiGuildCreditBridge,
+    getPanel: () => state.panel
+  });
+  const refreshTrialHistory = (panel) => trialHistoryView.refresh(panel);
+
   const panelShell = panelShellApi.createPanelShell({
     state,
     document,
@@ -12577,6 +12987,8 @@ window.MwiGuildCreditVersion = "1.2.8";
     refreshPanel: (...args) => refreshPanel(...args),
     refreshGuildUpgrade,
     refreshGuildConstruction,
+    refreshTrialHistory,
+    bindTrialHistory: (panel) => trialHistoryView.bind(panel),
     refreshGuildExchangeAdvisor: (...args) => refreshGuildExchangeAdvisor(...args),
     renderSettingsMarkup,
     refreshSettings,
@@ -12745,6 +13157,7 @@ window.MwiGuildCreditVersion = "1.2.8";
     if (state.settingsOpen) refreshSettings(panel);
     if (panel.dataset.activeView === "upgrade") refreshGuildUpgrade(panel);
     else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
+    else if (panel.dataset.activeView === "trials") refreshTrialHistory(panel);
     else refreshPanel(panel);
   }
 
@@ -12868,6 +13281,7 @@ window.MwiGuildCreditVersion = "1.2.8";
   }
 
   function disposeRuntime() {
+    trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
@@ -12897,6 +13311,7 @@ window.MwiGuildCreditVersion = "1.2.8";
     window.removeEventListener("orientationchange", scheduleSidebarIntegration);
   }
 
+  trialHistoryView.start();
   hydrateBridgeData();
   extractItemDetailsFromReact();
   hydrateLocalInitData();
