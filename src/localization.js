@@ -499,6 +499,7 @@
         "当前为公会未注明的手动记录组；跨记录比较仅在这些数据来自同一公会时有意义，请勿混入其他公会数据。",
       analysisIdentityHint:
         "优先按角色 ID 关联；无 ID 时按完全相同的姓名匹配并标注。重名或前成员不跨记录合并，疑似拼写错误不自动修正。",
+      trialDataTransfer: "试炼数据导入与导出",
       trialImport: "导入 JSON",
       trialImportFile: "选择试炼历史 JSON 文件",
       trialImportHint:
@@ -1089,6 +1090,7 @@
         "This group contains manual records without a guild. Cross-record comparisons are meaningful only if they belong to the same guild.",
       analysisIdentityHint:
         "Identity uses character IDs first; ID-less records match exact names and are labeled. Duplicate or former-member names stay separate. Suspected typos are not corrected.",
+      trialDataTransfer: "Trial data import and export",
       trialImport: "Import JSON",
       trialImportFile: "Choose a trial history JSON file",
       trialImportHint:

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.13";
+window.MwiGuildCreditVersion = "1.2.14";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3177,6 +3177,7 @@ window.MwiGuildCreditVersion = "1.2.13";
         "当前为公会未注明的手动记录组；跨记录比较仅在这些数据来自同一公会时有意义，请勿混入其他公会数据。",
       analysisIdentityHint:
         "优先按角色 ID 关联；无 ID 时按完全相同的姓名匹配并标注。重名或前成员不跨记录合并，疑似拼写错误不自动修正。",
+      trialDataTransfer: "试炼数据导入与导出",
       trialImport: "导入 JSON",
       trialImportFile: "选择试炼历史 JSON 文件",
       trialImportHint:
@@ -3767,6 +3768,7 @@ window.MwiGuildCreditVersion = "1.2.13";
         "This group contains manual records without a guild. Cross-record comparisons are meaningful only if they belong to the same guild.",
       analysisIdentityHint:
         "Identity uses character IDs first; ID-less records match exact names and are labeled. Duplicate or former-member names stay separate. Suspected typos are not corrected.",
+      trialDataTransfer: "Trial data import and export",
       trialImport: "Import JSON",
       trialImportFile: "Choose a trial history JSON file",
       trialImportHint:
@@ -9734,8 +9736,9 @@ window.MwiGuildCreditVersion = "1.2.13";
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
-      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialImport"))}" aria-busy="${importBusy}">
-        <button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
+        <div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
@@ -9830,8 +9833,7 @@ window.MwiGuildCreditVersion = "1.2.13";
           (record, index) =>
             `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")} · ${trialName(record)}`)}</option>`
         )
-        .join("")}</select></label>
-        <button type="button" data-role="trial-export">${escapeHtml(t("trialExport"))}</button></div>
+        .join("")}</select></label></div>
         <h3 class="mwi-trial-title">${escapeHtml(trialName(selected))}</h3>
         <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(selected.source === "manual" ? t("trialManualDescription", { date: recordDate(selected) }) : t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
       if (selected.source === "manual" && typeof selected.sourceTimestamp === "string") {

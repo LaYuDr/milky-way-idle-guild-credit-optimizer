@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.14] - 2026-09-18
+
+### Changed
+
+- 优化试炼历史视图的成员信息显示与相关双语文案。
+
 ## [1.2.13] - 2026-09-18
 
 ### Changed

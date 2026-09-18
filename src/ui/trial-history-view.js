@@ -94,8 +94,9 @@
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
-      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialImport"))}" aria-busy="${importBusy}">
-        <button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
+        <div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
@@ -190,8 +191,7 @@
           (record, index) =>
             `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")} · ${trialName(record)}`)}</option>`
         )
-        .join("")}</select></label>
-        <button type="button" data-role="trial-export">${escapeHtml(t("trialExport"))}</button></div>
+        .join("")}</select></label></div>
         <h3 class="mwi-trial-title">${escapeHtml(trialName(selected))}</h3>
         <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(selected.source === "manual" ? t("trialManualDescription", { date: recordDate(selected) }) : t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
       if (selected.source === "manual" && typeof selected.sourceTimestamp === "string") {
