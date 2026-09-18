@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.7] - 2026-09-18
+
+### Changed
+
+- 修正公会试炼首期日期并迁移旧版周记录，固定建设页页签滚动时的顶部显示，并补充存储迁移与界面回归测试。
+
 ## [1.2.6] - 2026-09-17
 
 ### Changed

@@ -227,7 +227,7 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     }
   });
   const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
-  assert.equal(raw.schemaVersion, 5);
+  assert.equal(raw.schemaVersion, 6);
   assert.equal(raw.guildPointForecastWeeks, 8);
   assert.equal(raw.guildPointPlanningWeeks, 4);
   assert.deepEqual(raw.guildPointHistory.weeks, [
@@ -245,6 +245,30 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     weekStartAt: week + 7 * 24 * 60 * 60 * 1000,
     observedAt: week + 8 * 24 * 60 * 60 * 1000
   });
+});
+
+test("旧版错误试炼锚点的手动周记录会按序号迁移到新日期", () => {
+  const storage = memoryStorage();
+  const pluginStorage = createStorage(storage);
+  const key = "mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7";
+  const legacyFirstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const week = 7 * 24 * 60 * 60 * 1000;
+  storage.setItem(
+    key,
+    JSON.stringify({
+      schemaVersion: 5,
+      guildPointHistory: {
+        manualWeeks: [
+          { weekStartAt: legacyFirstTrial, earnedPoints: 100, observedAt: legacyFirstTrial + week },
+          { weekStartAt: legacyFirstTrial + 10 * week, earnedPoints: 200, observedAt: legacyFirstTrial + 11 * week }
+        ]
+      }
+    })
+  );
+  assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState().guildPointHistory.manualWeeks, [
+    { weekStartAt: Date.parse("2026-07-10T00:00:00Z"), earnedPoints: 100, observedAt: legacyFirstTrial + week },
+    { weekStartAt: Date.parse("2026-09-18T00:00:00Z"), earnedPoints: 200, observedAt: legacyFirstTrial + 11 * week }
+  ]);
 });
 
 test("公会点数快照恢复为缓存状态且保留缺失的本周点数", () => {

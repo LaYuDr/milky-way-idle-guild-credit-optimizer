@@ -6,6 +6,9 @@
   "use strict";
 
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
+  const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const LEGACY_GUILD_TRIAL_FIRST_START_AT = Date.parse("2026-07-13T00:00:00Z");
+  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 6;
 
   function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
     const values =
@@ -117,6 +120,25 @@
         .sort((left, right) => left.weekStartAt - right.weekStartAt)
         .slice(-104)
     };
+  }
+
+  function migrateLegacyGuildPointManualWeeks(value, schemaVersion, firstTrialStartAt) {
+    const normalized = normalizeGuildPointHistory(value);
+    if (Number(schemaVersion) >= GUILD_BUILDING_PLANNER_SCHEMA_VERSION) return normalized;
+    const firstTrial = Number(firstTrialStartAt);
+    if (!Number.isSafeInteger(firstTrial) || firstTrial <= 0) return normalized;
+    const currentWeekStarts = new Set(
+      normalized.manualWeeks
+        .filter((record) => (record.weekStartAt - firstTrial) % GUILD_POINT_WEEK_MS === 0)
+        .map((record) => record.weekStartAt)
+    );
+    const manualWeeks = normalized.manualWeeks.flatMap((record) => {
+      const ordinal = (record.weekStartAt - LEGACY_GUILD_TRIAL_FIRST_START_AT) / GUILD_POINT_WEEK_MS;
+      if (!Number.isInteger(ordinal) || ordinal < 0) return [record];
+      const weekStartAt = firstTrial + ordinal * GUILD_POINT_WEEK_MS;
+      return currentWeekStarts.has(weekStartAt) ? [] : [{ ...record, weekStartAt }];
+    });
+    return normalizeGuildPointHistory({ ...normalized, manualWeeks });
   }
 
   function normalizeGuildPointSnapshot(value) {
@@ -329,7 +351,11 @@
                 : 0
           },
           category,
-          guildPointHistory: normalizeGuildPointHistory(stored.guildPointHistory),
+          guildPointHistory: migrateLegacyGuildPointManualWeeks(
+            stored.guildPointHistory,
+            stored.schemaVersion,
+            config.GUILD_TRIAL_FIRST_START_AT
+          ),
           guildPointSnapshot: normalizeGuildPointSnapshot(stored.guildPointSnapshot)
         };
       } catch (_) {
@@ -343,7 +369,7 @@
           storage.setItem(
             guildBuildingPlannerStorageKey(),
             JSON.stringify({
-              schemaVersion: 5,
+              schemaVersion: GUILD_BUILDING_PLANNER_SCHEMA_VERSION,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
               guildPointForecastWeeks: state.guildPointForecastWeeks,

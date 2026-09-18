@@ -2305,6 +2305,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(harnessSource, /creditTabMountsWithinHalfSecond/);
   assert.match(source, /MwiGuildCreditSidebarIntegration/);
   assert.match(source, /overflow-y:auto/);
+  assert.match(source, /\.mwi-view-tabs-shell\{position:sticky;z-index:20;top:0;[^}]*background:#171927/);
   assert.match(source, /data-role="toggle-credit-section"/);
   assert.match(source, /collapsedCreditSections/);
   assert.match(source, /mwi-credit-body/);

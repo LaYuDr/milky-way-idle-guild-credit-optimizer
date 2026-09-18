@@ -6,7 +6,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const data = require("../src/guild-building-data.js");
 const core = require("../src/core.js");
+const config = require("../src/runtime/config.js");
 const constructionViewApi = require("../src/ui/construction-view.js");
+
+const GUILD_TRIAL_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const projectFile = (relativePath) => fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 const projectRuntimeSource = () => {
@@ -98,7 +101,7 @@ function createConstructionHarness({
       revokeObjectURL() {}
     },
     Blob,
-    guildTrialFirstStartAt: Date.parse("2026-07-13T00:00:00Z"),
+    guildTrialFirstStartAt: config.GUILD_TRIAL_FIRST_START_AT,
     pageWindow: {
       clearTimeout() {},
       setTimeout() {},
@@ -238,8 +241,28 @@ test("施工 ETA 使用当前缺口和周预测向上取整", () => {
   assert.equal(core.estimateGuildConstructionWeeks(0, 1000, 420).status, "no_plan");
 });
 
+test("公会试炼从首期时间起每 7 天推算一次", () => {
+  const expectedStarts = [
+    "2026-07-10T00:00:00.000Z",
+    "2026-07-17T00:00:00.000Z",
+    "2026-07-24T00:00:00.000Z",
+    "2026-07-31T00:00:00.000Z",
+    "2026-08-07T00:00:00.000Z",
+    "2026-08-14T00:00:00.000Z",
+    "2026-08-21T00:00:00.000Z",
+    "2026-08-28T00:00:00.000Z",
+    "2026-09-04T00:00:00.000Z",
+    "2026-09-11T00:00:00.000Z",
+    "2026-09-18T00:00:00.000Z"
+  ];
+  const actualStarts = expectedStarts.map((_, index) =>
+    new Date(config.GUILD_TRIAL_FIRST_START_AT + index * GUILD_TRIAL_WEEK_MS).toISOString()
+  );
+  assert.deepEqual(actualStarts, expectedStarts);
+});
+
 test("冷启动估算不将尚未结束的本周当作完整周趋势", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   assert.deepEqual(core.estimateGuildPointColdStart(65000, 9000, firstTrial + 7 * week, firstTrial), {
     status: "ok",
@@ -257,7 +280,7 @@ test("冷启动估算不将尚未结束的本周当作完整周趋势", () => {
 });
 
 test("缺失历史周按累计点数均匀补齐且不引入本周进度", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const result = core.supplementGuildPointHistory(null, 65000, 9000, firstTrial + 7 * week, firstTrial);
   const summary = core.summarizeGuildPointHistory(result.history);
@@ -276,7 +299,7 @@ test("缺失历史周按累计点数均匀补齐且不引入本周进度", () =>
 });
 
 test("本周为 0 或只有少量进度时仍按已结束历史周预测", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const zero = core.supplementGuildPointHistory(null, 65000, 0, firstTrial + 7 * week, firstTrial);
   const partial = core.supplementGuildPointHistory(null, 65000, 1000, firstTrial + 7 * week, firstTrial);
@@ -288,7 +311,7 @@ test("本周为 0 或只有少量进度时仍按已结束历史周预测", () =>
 });
 
 test("预测回看周数只限制最近连续完整周", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const history = {
     weeks: Array.from({ length: 8 }, (_, index) => ({
@@ -307,7 +330,7 @@ test("预测回看周数只限制最近连续完整周", () => {
 });
 
 test("历史已知点数超过游戏累计值时停止预测", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const result = core.supplementGuildPointHistory(
     { weeks: [{ weekStartAt: firstTrial, earnedPoints: 10000, complete: true, observedAt: firstTrial + week }] },
@@ -323,7 +346,7 @@ test("历史已知点数超过游戏累计值时停止预测", () => {
 
 test("建设页在历史冲突时同时停止未来预算和 ETA", () => {
   const harness = createConstructionHarness();
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   harness.state.guildPointPlanningWeeks = 4;
   harness.state.guildPointSummary = {
@@ -364,7 +387,7 @@ test("建设页将本周 0 显示为历史预测而非实际周样本", () => {
 
 test("当前周实际点数以只读行显示在历史表最底部", () => {
   const harness = createConstructionHarness();
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const currentWeekStartAt = firstTrial + Math.floor((Date.now() - firstTrial) / week) * week;
   harness.state.guildPointSummary = {
@@ -407,7 +430,7 @@ test("规划周数将预测产出加入当前预算且对缺失预测降级", ()
 });
 
 test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const observedAt = firstTrial + 7 * week;
   const saved = core.setManualGuildPointWeek(null, firstTrial + 3 * week, 8500, observedAt, firstTrial);
@@ -428,7 +451,7 @@ test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
 });
 
 test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const observedAt = firstTrial + 2 * week;
   const tracked = {
@@ -443,7 +466,7 @@ test("手动历史不能覆盖游戏追踪周或录入当前周", () => {
 
 test("建设页可批量保存、修改和清空手动历史，并在 CSV 标注来源", () => {
   const harness = createConstructionHarness();
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const secondTrial = firstTrial + 7 * 24 * 60 * 60 * 1000;
   harness.state.guildPointSummary = {
     guildId: "guild-1",
@@ -477,7 +500,7 @@ test("建设页可批量保存、修改和清空手动历史，并在 CSV 标注
 
 test("批量历史存在非法值时原子失败，不会部分覆盖已有数据", () => {
   const harness = createConstructionHarness();
-  const firstTrial = Date.parse("2026-07-13T00:00:00Z");
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   harness.view.saveManualGuildPointWeek(firstTrial, 7600);
   const before = structuredClone(harness.state.guildPointHistory);
   const result = harness.view.saveManualGuildPointHistory([
