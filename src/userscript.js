@@ -676,6 +676,7 @@
     t,
     escapeHtml,
     pluginStorage,
+    trialHistoryApi,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

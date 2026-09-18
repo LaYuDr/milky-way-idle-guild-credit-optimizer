@@ -455,3 +455,35 @@ only parties whose `guild.currentTrialsData[kind].parties[trialHrid].done` is
 true, using `guild.currentWeekStartAt` as the week identity. The bridge observes
 responses and never sends that request. Keep complete stat rows, party state,
 member snapshots and trial definitions; do not round the stored values.
+
+### Trial history JSON import
+
+The importer accepts exported envelopes with `schemaVersion: 1` or `2` and
+a non-empty `records` array (up to 1,000 records, 1,000 members per record,
+and a 10 MB file). Game captures retain record schema version 1. Import
+validates every record before writing, previews new/duplicate/conflicting
+keys, and rechecks storage on confirmation. Existing keys are never replaced;
+write failures roll back only this attempt's new values. If rollback itself
+fails, the UI reports how many new records remain.
+
+Manual transcripts use record schema version 2 and `source: "manual"`.
+They have a stable `recordId` and `key = JSON.stringify(["manual", recordId])`,
+separate from automatic capture keys. Missing `guildId`, `weekStartAt`,
+`capturedAt` and member `characterId` are explicitly `null`. A known trial
+calendar date is stored as `trialDate: "YYYY-MM-DD"`; otherwise use `null`.
+`guildName` may be a name or `null`. Each row has a unique `memberKey` mapped
+to `members[memberKey].name`, a matching `trialHrid`, and numeric non-negative
+`workDone` (skilling) or `damageDealt`, `healingDone`, and
+`premitigatedDamageTaken` (combat). Keep `kind`, `party.done: true`, `points`
+and `party.highestTier` (the latter two may be null). Preserve source text or
+uncertain copied tokens in additional fields; do not invent game IDs or infer
+missing values as zero. Exports now use envelope schema version 2 and can
+contain both automatic and manual records.
+
+Browser QA for import: test from an empty history and from existing records;
+choose a file, inspect the preview, cancel once, then confirm. Verify numeric
+member names, missing IDs, duplicate/conflict skipping, invalid JSON, invalid
+statistics, export/re-import and reload. Repeat preview and result states at
+320, 360, 420, 460, 480, 520, 560, 610, 720, 900 and 1200 pixels, plus English
+at 320, 610 and 900. Keep user-provided transcripts outside the repository and
+use synthetic data for committed fixtures.

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.9";
+window.MwiGuildCreditVersion = "1.2.10";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -760,6 +760,7 @@ window.MwiGuildCreditVersion = "1.2.9";
   }
 
   function validSnapshot(value) {
+    if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
       value.schemaVersion === 1 &&
@@ -777,7 +778,157 @@ window.MwiGuildCreditVersion = "1.2.9";
     );
   }
 
-  return { updateContext, completedSnapshots, validSnapshot };
+  const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+  const isObject = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
+  const isText = (value) => typeof value === "string" && value.length > 0 && value.length <= 500;
+  const isMetric = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const validDate = (value) =>
+    value === null ||
+    (typeof value === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      Number.isFinite(Date.parse(value)) &&
+      new Date(value).toISOString().slice(0, 10) === value);
+
+  function validManualSnapshot(value) {
+    return Boolean(
+      value &&
+      value.schemaVersion === 2 &&
+      value.source === "manual" &&
+      isText(value.recordId) &&
+      value.key === JSON.stringify(["manual", value.recordId]) &&
+      value.guildId === null &&
+      (value.guildName === null || isText(value.guildName)) &&
+      value.weekStartAt === null &&
+      validDate(value.trialDate) &&
+      value.capturedAt === null &&
+      isText(value.trialHrid) &&
+      ["combat", "skilling"].includes(value.kind) &&
+      isObject(value.party) &&
+      value.party.done === true &&
+      isObject(value.members) &&
+      Array.isArray(value.rows) &&
+      value.rows.length > 0 &&
+      value.rows.every(
+        (row) =>
+          isObject(row) &&
+          row.trialHrid === value.trialHrid &&
+          row.characterId === null &&
+          isText(row.memberKey) &&
+          Object.hasOwn(value.members, row.memberKey) &&
+          isText(value.members[row.memberKey]?.name)
+      )
+    );
+  }
+
+  function snapshotTime(record) {
+    return record.weekStartAt || (record.trialDate ? Date.parse(record.trialDate) : 0);
+  }
+
+  function compareSnapshots(a, b) {
+    return snapshotTime(b) - snapshotTime(a) || a.trialHrid.localeCompare(b.trialHrid);
+  }
+
+  function importError(code, index) {
+    const error = new Error(code);
+    error.code = code;
+    if (index !== undefined) error.recordIndex = index + 1;
+    throw error;
+  }
+
+  function parseImport(text) {
+    if (typeof text !== "string" || text.length > MAX_IMPORT_BYTES) importError("trialImportTooLarge");
+    let value;
+    try {
+      value = JSON.parse(text.replace(/^\uFEFF/, ""), (key, item) => {
+        if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("unsafe key");
+        return item;
+      });
+    } catch (_) {
+      importError("trialImportInvalidJson");
+    }
+    if (
+      !isObject(value) ||
+      ![1, 2].includes(value.schemaVersion) ||
+      !Array.isArray(value.records) ||
+      !value.records.length ||
+      value.records.length > 1000
+    )
+      importError("trialImportInvalidFile");
+    const keys = new Set();
+    for (const [index, record] of value.records.entries()) {
+      if (
+        !validSnapshot(record) ||
+        !isObject(record.members) ||
+        !isObject(record.party) ||
+        !isText(record.trialHrid) ||
+        record.rows.length > 1000 ||
+        !(record.points === null || isMetric(record.points)) ||
+        !(
+          record.party.highestTier === undefined ||
+          record.party.highestTier === null ||
+          isMetric(record.party.highestTier)
+        )
+      )
+        importError("trialImportInvalidRecord", index);
+      if (
+        record.schemaVersion === 1 &&
+        (!isText(record.guildId) || !isText(record.guildName) || record.capturedAt <= 0 || record.source === "manual")
+      )
+        importError("trialImportInvalidRecord", index);
+      const fields =
+        record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+      const memberKeys = new Set();
+      for (const row of record.rows) {
+        const id = record.source === "manual" ? row.memberKey : row.characterId;
+        if (
+          !(isText(id) || (Number.isSafeInteger(id) && id > 0)) ||
+          memberKeys.has(String(id)) ||
+          fields.some((field) => !(record.schemaVersion === 1 && row[field] === undefined) && !isMetric(row[field]))
+        )
+          importError("trialImportInvalidRecord", index);
+        memberKeys.add(String(id));
+        const member = record.members[id];
+        if (member !== undefined && (!isObject(member) || !isText(member.name)))
+          importError("trialImportInvalidRecord", index);
+      }
+      if (keys.has(record.key)) importError("trialImportDuplicateKey", index);
+      keys.add(record.key);
+    }
+    return value.records;
+  }
+
+  function contentSignature(value) {
+    if (Array.isArray(value)) return `[${value.map(contentSignature).join(",")}]`;
+    if (isObject(value))
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${contentSignature(value[key])}`)
+        .join(",")}}`;
+    return JSON.stringify(value);
+  }
+
+  function previewImport(incoming, existing) {
+    const byKey = new Map(existing.map((record) => [record.key, record]));
+    return incoming.map((record) => {
+      const previous = byKey.get(record.key);
+      const status = !previous
+        ? "new"
+        : contentSignature(previous) === contentSignature(record)
+          ? "duplicate"
+          : "conflict";
+      return { record, status };
+    });
+  }
+
+  return {
+    updateContext,
+    completedSnapshots,
+    validSnapshot,
+    parseImport,
+    previewImport,
+    compareSnapshots,
+    MAX_IMPORT_BYTES
+  };
 });
 
 
@@ -2650,9 +2801,37 @@ window.MwiGuildCreditVersion = "1.2.9";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialImport: "导入 JSON",
+      trialImportFile: "选择试炼历史 JSON 文件",
+      trialImportHint:
+        "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；重复或冲突记录会跳过，不覆盖已有数据。",
+      trialImportReading: "正在读取文件…",
+      trialImportPreview: "导入预览",
+      trialImportSummary: "新增 {added} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项",
+      trialImportStatus_new: "新增",
+      trialImportStatus_duplicate: "重复，跳过",
+      trialImportStatus_conflict: "内容不同，保留已有记录",
+      trialImportMemberCount: "{count} 位成员",
+      trialImportConfirm: "确认导入 {count} 项",
+      trialImportCancel: "取消",
+      trialImportTooLarge: "文件过大，请选择不超过 10 MB 的 JSON 文件。",
+      trialImportInvalidJson: "文件不是有效 JSON，或包含不安全的字段。请检查文件内容。",
+      trialImportInvalidFile: "格式不支持。请选择本插件导出的文件，或符合手动整理格式的文件（1–1,000 项记录）。",
+      trialImportInvalidRecord: "第 {index} 项记录格式有误：请检查日期、成员、项目标识和非负统计数值；本次未导入。",
+      trialImportDuplicateKey: "第 {index} 项记录与文件内另一项使用相同标识，请先删除重复项；本次未导入。",
+      trialImportReadFailed: "无法读取文件，请重新选择。",
+      trialImportComplete: "已导入 {added} 项，跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。",
+      trialImportSaveFailed: "保存失败，未留下本次新增记录。已有数据保持不变；请检查浏览器存储空间后重试。",
+      trialImportPartial: "保存失败，本次仍有 {added} 项记录已写入。已有记录未覆盖；重试会跳过已保存项。",
+      trialUnknownDate: "日期未注明",
+      trialUnknownGuild: "公会未注明",
+      trialManualSource: "手动整理",
+      trialSourceMessageTime: "原始消息时间：{time}",
+      trialAutomaticSource: "游戏采集",
+      trialManualDescription: "手动整理 · {date} · 未提供的公会点数、层数与成员 ID 保持未知。",
       trialHistoryHint:
-        "试炼结束后，打开游戏中的“统计”即可自动归档本次返回的全部已完成项目。记录保存在当前浏览器，按服务器和角色隔离；未查看的往期统计无法补回。",
-      trialHistoryEmpty: "暂无记录。请在试炼结束后打开一次生活或战斗试炼的“统计”。",
+        "试炼结束后，打开游戏中的“统计”即可自动归档本次返回的全部已完成项目。记录保存在当前浏览器，按服务器和角色隔离；未采集的往期数据可通过手动整理文件导入。",
+      trialHistoryEmpty: "暂无记录。可导入历史文件，或在试炼结束后打开游戏中的“统计”。",
       trialSavedCount: "已保存 {count} 项试炼记录。",
       trialSaveFailed: "部分记录尚未保存到浏览器。请先导出备份，再检查浏览器存储空间；当前页面仍保留待保存数据。",
       trialLoadFailed: "部分本地记录读取失败，已保留原数据。当前仅显示可读取的记录。",
@@ -3117,9 +3296,42 @@ window.MwiGuildCreditVersion = "1.2.9";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialImport: "Import JSON",
+      trialImportFile: "Choose a trial history JSON file",
+      trialImportHint:
+        "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Duplicates and conflicts are skipped; existing records are preserved.",
+      trialImportReading: "Reading file…",
+      trialImportPreview: "Import preview",
+      trialImportSummary: "{added} new · {duplicates} duplicates · {conflicts} conflicts",
+      trialImportStatus_new: "New",
+      trialImportStatus_duplicate: "Duplicate, skipped",
+      trialImportStatus_conflict: "Different content; keep existing",
+      trialImportMemberCount: "{count} members",
+      trialImportConfirm: "Import {count} records",
+      trialImportCancel: "Cancel",
+      trialImportTooLarge: "Choose a JSON file no larger than 10 MB.",
+      trialImportInvalidJson: "Invalid JSON or unsafe fields. Check the file contents.",
+      trialImportInvalidFile:
+        "Unsupported format. Choose an exported history or manual transcript file with 1–1,000 records.",
+      trialImportInvalidRecord:
+        "Record {index} is invalid. Check its date, members, trial identifier and non-negative numeric statistics. Nothing was imported.",
+      trialImportDuplicateKey:
+        "Record {index} repeats an identifier in this file. Remove the duplicate first. Nothing was imported.",
+      trialImportReadFailed: "The file could not be read. Choose it again.",
+      trialImportComplete: "Imported {added}; skipped {duplicates} duplicates and {conflicts} conflicts.",
+      trialImportSaveFailed:
+        "Saving failed. No new records from this attempt remain. Existing data was preserved. Check browser storage space and retry.",
+      trialImportPartial:
+        "Saving failed; {added} records from this attempt remain saved. Existing records were not overwritten. Retrying skips saved records.",
+      trialUnknownDate: "Date unspecified",
+      trialUnknownGuild: "Guild unspecified",
+      trialManualSource: "Manual transcript",
+      trialSourceMessageTime: "Original message time: {time}",
+      trialAutomaticSource: "Game capture",
+      trialManualDescription: "Manual transcript · {date} · Missing points, tiers and member IDs remain unknown.",
       trialHistoryHint:
-        "After a trial ends, open the game’s Stats to archive every completed trial in its response. Records stay in this browser, separated by server and character. Past stats that were never viewed cannot be recovered.",
-      trialHistoryEmpty: "No records yet. Open skilling or combat trial Stats after a trial ends.",
+        "After a trial ends, open the game’s Stats to archive every completed trial in its response. Records stay in this browser, separated by server and character. Past results can also be imported from manual transcripts.",
+      trialHistoryEmpty: "No records yet. Import a history file or open the game’s Stats after a trial ends.",
       trialSavedCount: "{count} trial records saved.",
       trialSaveFailed:
         "Some records could not be saved. Export a backup before checking browser storage space; unsaved data is still available on this page.",
@@ -5053,9 +5265,51 @@ window.MwiGuildCreditVersion = "1.2.9";
         failed = true;
       }
       return {
-        records: records.sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)),
+        records: records.sort(trialHistoryApi.compareSnapshots),
         failed
       };
+    }
+
+    function importTrialHistory(incoming) {
+      const written = [];
+      let duplicates = 0;
+      let conflicts = 0;
+      try {
+        const validated = trialHistoryApi.parseImport(JSON.stringify({ schemaVersion: 2, records: incoming }));
+        for (const record of validated) {
+          const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+          const previous = storage.getItem(key);
+          if (previous !== null) {
+            let existing;
+            try {
+              existing = JSON.parse(previous);
+            } catch (_) {
+              existing = { key: record.key };
+            }
+            const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
+            if (status === "duplicate") duplicates += 1;
+            else conflicts += 1;
+            continue;
+          }
+          const text = JSON.stringify(record);
+          storage.setItem(key, text);
+          written.push({ key, text });
+        }
+        return { status: "imported", added: written.length, duplicates, conflicts };
+      } catch (_) {
+        let retained = 0;
+        // Roll back only values inserted by this attempt. Never remove a record
+        // that another page has since updated, or any pre-existing user data.
+        for (const { key, text } of written) {
+          try {
+            if (storage.getItem(key) === text) storage.removeItem(key);
+            if (storage.getItem(key) !== null) retained += 1;
+          } catch (_) {
+            retained += 1;
+          }
+        }
+        return { status: retained ? "partial" : "failed", added: retained, duplicates, conflicts };
+      }
     }
 
     function saveTrialSnapshot(record) {
@@ -5437,6 +5691,7 @@ window.MwiGuildCreditVersion = "1.2.9";
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
       saveTrialSnapshot,
+      importTrialHistory,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,
@@ -7045,6 +7300,13 @@ window.MwiGuildCreditVersion = "1.2.9";
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         @container (max-width:320px){#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-view-tab{font-size:11px}}
+        #mwi-credit-optimizer .mwi-trial-import{margin:16px 0;padding:12px 0;border-top:1px solid #454760;border-bottom:1px solid #454760;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:#f0d39b;line-height:1.5;overflow-wrap:anywhere;margin:8px 0}
+        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]:empty{display:none}
+        #mwi-credit-optimizer .mwi-trial-import-preview h3{margin:16px 0 8px;font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-import-list{list-style:none;padding:0;margin:12px 0;max-height:480px;overflow-y:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-import-list li{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid #454760;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-import-list span{color:#c4c7df;line-height:1.5}
         #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{color:#c4c7df;line-height:1.6;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-notice{color:#f0d39b;line-height:1.5}
         #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:16px 0}
@@ -8831,10 +9093,23 @@ window.MwiGuildCreditVersion = "1.2.9";
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  function createTrialHistoryView({ document, pageWindow, t, escapeHtml, pluginStorage, getBridge, getPanel }) {
+  function createTrialHistoryView({
+    document,
+    pageWindow,
+    t,
+    escapeHtml,
+    pluginStorage,
+    trialHistoryApi,
+    getBridge,
+    getPanel
+  }) {
     let selectedKey = "";
     let records = [];
     let loadFailed = false;
+    let importPreview = null;
+    let importNotice = null;
+    let importBusy = false;
+    let importRevision = 0;
     const unsaved = new Map();
     const date = (value) =>
       new Date(value).toLocaleString(undefined, {
@@ -8858,9 +9133,7 @@ window.MwiGuildCreditVersion = "1.2.9";
       loadFailed = loaded.failed;
       const merged = new Map(loaded.records.map((record) => [record.key, record]));
       for (const [key, record] of unsaved) merged.set(key, record);
-      records = Array.from(merged.values()).sort(
-        (a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)
-      );
+      records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
     }
 
     function capture() {
@@ -8872,6 +9145,91 @@ window.MwiGuildCreditVersion = "1.2.9";
       reload();
     }
 
+    function recordDate(record) {
+      return record.trialDate || (record.weekStartAt ? date(record.weekStartAt) : t("trialUnknownDate"));
+    }
+
+    function renderImport() {
+      const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
+      const count = (status) => preview.filter((entry) => entry.status === status).length;
+      const summary = { added: count("new"), duplicates: count("duplicate"), conflicts: count("conflict") };
+      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialImport"))}" aria-busy="${importBusy}">
+        <button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
+        <p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p>
+        <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
+      if (importPreview) {
+        markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
+          <p class="mwi-trial-meta">${escapeHtml(importPreview.name)}<br>${escapeHtml(t("trialImportSummary", summary))}</p>
+          <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
+          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!summary.added || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added }))}</button>
+          <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
+      }
+      return markup + "</section>";
+    }
+
+    async function readImport(file, panel) {
+      if (!file) return;
+      const revision = ++importRevision;
+      importPreview = null;
+      importNotice = null;
+      importBusy = true;
+      refresh(panel);
+      try {
+        if (file.size > trialHistoryApi.MAX_IMPORT_BYTES)
+          throw Object.assign(new Error(), { code: "trialImportTooLarge" });
+        const text = await file.text();
+        if (revision !== importRevision) return;
+        importPreview = { name: file.name, records: trialHistoryApi.parseImport(text) };
+      } catch (error) {
+        if (revision !== importRevision) return;
+        importNotice = {
+          key:
+            typeof error.code === "string" && error.code.startsWith("trialImport")
+              ? error.code
+              : "trialImportReadFailed",
+          values: { index: error.recordIndex || "—" }
+        };
+      }
+      if (revision !== importRevision) return;
+      importBusy = false;
+      refresh(panel);
+      const next =
+        panel.querySelector('[data-role="trial-import-confirm"]:not(:disabled)') ||
+        panel.querySelector('[data-role="trial-import-cancel"]') ||
+        panel.querySelector('[data-role="trial-import-status"]');
+      next?.focus();
+    }
+
+    function confirmImport(panel) {
+      if (!importPreview || importBusy) return;
+      // Pending automatic captures also count as existing; never replace them
+      // with an imported copy while browser storage is unavailable.
+      capture();
+      const plan = trialHistoryApi.previewImport(importPreview.records, records);
+      const additions = plan.filter((entry) => entry.status === "new").map((entry) => entry.record);
+      const result = additions.length
+        ? pluginStorage.importTrialHistory(additions)
+        : { status: "imported", added: 0, duplicates: 0, conflicts: 0 };
+      result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
+      result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
+      if (result.status === "imported") {
+        if (result.added) selectedKey = additions[0].key;
+        importPreview = null;
+      }
+      importNotice = {
+        key:
+          result.status === "imported"
+            ? "trialImportComplete"
+            : result.status === "partial"
+              ? "trialImportPartial"
+              : "trialImportSaveFailed",
+        values: result
+      };
+      refresh(panel);
+      panel.querySelector('[data-role="trial-import-status"]')?.focus();
+    }
+
     function refresh(panel) {
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
@@ -8880,6 +9238,7 @@ window.MwiGuildCreditVersion = "1.2.9";
       selectedKey = selected?.key || "";
       let markup = `<p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p>
         <p class="mwi-trial-notice" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p>`;
+      markup += renderImport();
       if (!selected) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
@@ -8887,12 +9246,15 @@ window.MwiGuildCreditVersion = "1.2.9";
       markup += `<div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
         .map(
           (record, index) =>
-            `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${date(record.weekStartAt)} · ${record.guildName} · ${trialName(record)}`)}</option>`
+            `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")} · ${trialName(record)}`)}</option>`
         )
         .join("")}</select></label>
         <button type="button" data-role="trial-export">${escapeHtml(t("trialExport"))}</button></div>
         <h3 class="mwi-trial-title">${escapeHtml(trialName(selected))}</h3>
-        <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
+        <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(selected.source === "manual" ? t("trialManualDescription", { date: recordDate(selected) }) : t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
+      if (selected.source === "manual" && typeof selected.sourceTimestamp === "string") {
+        markup += `<p class="mwi-trial-meta">${escapeHtml(t("trialSourceMessageTime", { time: selected.sourceTimestamp }))}</p>`;
+      }
       const fields =
         selected.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
       const rows = [...selected.rows].sort((a, b) => {
@@ -8902,7 +9264,7 @@ window.MwiGuildCreditVersion = "1.2.9";
         }
         return String(a.characterId).localeCompare(String(b.characterId));
       });
-      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.characterId]?.name || t("trialFormerMember"))}<small>ID ${escapeHtml(row.characterId)}</small></th>${fields.map((field) => `<td>${escapeHtml(number(row[field]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(row[field] ?? 0))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details>`;
       host.innerHTML = markup;
     }
@@ -8910,7 +9272,7 @@ window.MwiGuildCreditVersion = "1.2.9";
     function exportHistory() {
       capture();
       const url = pageWindow.URL.createObjectURL(
-        new pageWindow.Blob([JSON.stringify({ schemaVersion: 1, records }, null, 2)], { type: "application/json" })
+        new pageWindow.Blob([JSON.stringify({ schemaVersion: 2, records }, null, 2)], { type: "application/json" })
       );
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -8924,12 +9286,27 @@ window.MwiGuildCreditVersion = "1.2.9";
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
       host.addEventListener("change", (event) => {
+        if (event.target.dataset.role === "trial-import-file") {
+          void readImport(event.target.files?.[0], panel);
+          return;
+        }
         if (event.target.dataset.role !== "trial-select") return;
         selectedKey = records[Number(event.target.value)]?.key || "";
         refresh(panel);
         host.querySelector('[data-role="trial-select"]')?.focus();
       });
       host.addEventListener("click", (event) => {
+        if (event.target.closest('[data-role="trial-import-open"]'))
+          host.querySelector('[data-role="trial-import-file"]').click();
+        if (event.target.closest('[data-role="trial-import-confirm"]')) confirmImport(panel);
+        if (event.target.closest('[data-role="trial-import-cancel"]')) {
+          importRevision += 1;
+          importPreview = null;
+          importBusy = false;
+          importNotice = null;
+          refresh(panel);
+          host.querySelector('[data-role="trial-import-open"]')?.focus();
+        }
         if (event.target.closest('[data-role="trial-export"]')) exportHistory();
       });
     }
@@ -8944,6 +9321,7 @@ window.MwiGuildCreditVersion = "1.2.9";
       capture();
     }
     function dispose() {
+      importRevision += 1;
       const bridge = getBridge();
       if (bridge?.onTrialStatsUpdated === onStats) bridge.onTrialStatsUpdated = null;
     }
@@ -12964,6 +13342,7 @@ window.MwiGuildCreditVersion = "1.2.9";
     t,
     escapeHtml,
     pluginStorage,
+    trialHistoryApi,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

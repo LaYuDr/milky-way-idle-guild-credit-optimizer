@@ -75,6 +75,7 @@
   }
 
   function validSnapshot(value) {
+    if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
       value.schemaVersion === 1 &&
@@ -92,5 +93,155 @@
     );
   }
 
-  return { updateContext, completedSnapshots, validSnapshot };
+  const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+  const isObject = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
+  const isText = (value) => typeof value === "string" && value.length > 0 && value.length <= 500;
+  const isMetric = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const validDate = (value) =>
+    value === null ||
+    (typeof value === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      Number.isFinite(Date.parse(value)) &&
+      new Date(value).toISOString().slice(0, 10) === value);
+
+  function validManualSnapshot(value) {
+    return Boolean(
+      value &&
+      value.schemaVersion === 2 &&
+      value.source === "manual" &&
+      isText(value.recordId) &&
+      value.key === JSON.stringify(["manual", value.recordId]) &&
+      value.guildId === null &&
+      (value.guildName === null || isText(value.guildName)) &&
+      value.weekStartAt === null &&
+      validDate(value.trialDate) &&
+      value.capturedAt === null &&
+      isText(value.trialHrid) &&
+      ["combat", "skilling"].includes(value.kind) &&
+      isObject(value.party) &&
+      value.party.done === true &&
+      isObject(value.members) &&
+      Array.isArray(value.rows) &&
+      value.rows.length > 0 &&
+      value.rows.every(
+        (row) =>
+          isObject(row) &&
+          row.trialHrid === value.trialHrid &&
+          row.characterId === null &&
+          isText(row.memberKey) &&
+          Object.hasOwn(value.members, row.memberKey) &&
+          isText(value.members[row.memberKey]?.name)
+      )
+    );
+  }
+
+  function snapshotTime(record) {
+    return record.weekStartAt || (record.trialDate ? Date.parse(record.trialDate) : 0);
+  }
+
+  function compareSnapshots(a, b) {
+    return snapshotTime(b) - snapshotTime(a) || a.trialHrid.localeCompare(b.trialHrid);
+  }
+
+  function importError(code, index) {
+    const error = new Error(code);
+    error.code = code;
+    if (index !== undefined) error.recordIndex = index + 1;
+    throw error;
+  }
+
+  function parseImport(text) {
+    if (typeof text !== "string" || text.length > MAX_IMPORT_BYTES) importError("trialImportTooLarge");
+    let value;
+    try {
+      value = JSON.parse(text.replace(/^\uFEFF/, ""), (key, item) => {
+        if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("unsafe key");
+        return item;
+      });
+    } catch (_) {
+      importError("trialImportInvalidJson");
+    }
+    if (
+      !isObject(value) ||
+      ![1, 2].includes(value.schemaVersion) ||
+      !Array.isArray(value.records) ||
+      !value.records.length ||
+      value.records.length > 1000
+    )
+      importError("trialImportInvalidFile");
+    const keys = new Set();
+    for (const [index, record] of value.records.entries()) {
+      if (
+        !validSnapshot(record) ||
+        !isObject(record.members) ||
+        !isObject(record.party) ||
+        !isText(record.trialHrid) ||
+        record.rows.length > 1000 ||
+        !(record.points === null || isMetric(record.points)) ||
+        !(
+          record.party.highestTier === undefined ||
+          record.party.highestTier === null ||
+          isMetric(record.party.highestTier)
+        )
+      )
+        importError("trialImportInvalidRecord", index);
+      if (
+        record.schemaVersion === 1 &&
+        (!isText(record.guildId) || !isText(record.guildName) || record.capturedAt <= 0 || record.source === "manual")
+      )
+        importError("trialImportInvalidRecord", index);
+      const fields =
+        record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+      const memberKeys = new Set();
+      for (const row of record.rows) {
+        const id = record.source === "manual" ? row.memberKey : row.characterId;
+        if (
+          !(isText(id) || (Number.isSafeInteger(id) && id > 0)) ||
+          memberKeys.has(String(id)) ||
+          fields.some((field) => !(record.schemaVersion === 1 && row[field] === undefined) && !isMetric(row[field]))
+        )
+          importError("trialImportInvalidRecord", index);
+        memberKeys.add(String(id));
+        const member = record.members[id];
+        if (member !== undefined && (!isObject(member) || !isText(member.name)))
+          importError("trialImportInvalidRecord", index);
+      }
+      if (keys.has(record.key)) importError("trialImportDuplicateKey", index);
+      keys.add(record.key);
+    }
+    return value.records;
+  }
+
+  function contentSignature(value) {
+    if (Array.isArray(value)) return `[${value.map(contentSignature).join(",")}]`;
+    if (isObject(value))
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${contentSignature(value[key])}`)
+        .join(",")}}`;
+    return JSON.stringify(value);
+  }
+
+  function previewImport(incoming, existing) {
+    const byKey = new Map(existing.map((record) => [record.key, record]));
+    return incoming.map((record) => {
+      const previous = byKey.get(record.key);
+      const status = !previous
+        ? "new"
+        : contentSignature(previous) === contentSignature(record)
+          ? "duplicate"
+          : "conflict";
+      return { record, status };
+    });
+  }
+
+  return {
+    updateContext,
+    completedSnapshots,
+    validSnapshot,
+    parseImport,
+    previewImport,
+    compareSnapshots,
+    MAX_IMPORT_BYTES
+  };
 });

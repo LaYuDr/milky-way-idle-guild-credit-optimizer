@@ -229,9 +229,51 @@
         failed = true;
       }
       return {
-        records: records.sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid)),
+        records: records.sort(trialHistoryApi.compareSnapshots),
         failed
       };
+    }
+
+    function importTrialHistory(incoming) {
+      const written = [];
+      let duplicates = 0;
+      let conflicts = 0;
+      try {
+        const validated = trialHistoryApi.parseImport(JSON.stringify({ schemaVersion: 2, records: incoming }));
+        for (const record of validated) {
+          const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+          const previous = storage.getItem(key);
+          if (previous !== null) {
+            let existing;
+            try {
+              existing = JSON.parse(previous);
+            } catch (_) {
+              existing = { key: record.key };
+            }
+            const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
+            if (status === "duplicate") duplicates += 1;
+            else conflicts += 1;
+            continue;
+          }
+          const text = JSON.stringify(record);
+          storage.setItem(key, text);
+          written.push({ key, text });
+        }
+        return { status: "imported", added: written.length, duplicates, conflicts };
+      } catch (_) {
+        let retained = 0;
+        // Roll back only values inserted by this attempt. Never remove a record
+        // that another page has since updated, or any pre-existing user data.
+        for (const { key, text } of written) {
+          try {
+            if (storage.getItem(key) === text) storage.removeItem(key);
+            if (storage.getItem(key) !== null) retained += 1;
+          } catch (_) {
+            retained += 1;
+          }
+        }
+        return { status: retained ? "partial" : "failed", added: retained, duplicates, conflicts };
+      }
     }
 
     function saveTrialSnapshot(record) {
@@ -613,6 +655,7 @@
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
       saveTrialSnapshot,
+      importTrialHistory,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,

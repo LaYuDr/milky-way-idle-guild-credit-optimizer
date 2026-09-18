@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.10] - 2026-09-18
+
+### Changed
+
+- 新增独立公会试炼历史视图与历史数据迁移，完善中英文文案、样式、测试台和回归测试。
+
 ## [1.2.9] - 2026-09-18
 
 ### Changed

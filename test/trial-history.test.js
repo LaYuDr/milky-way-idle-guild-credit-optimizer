@@ -75,7 +75,8 @@ function storageFixture(values = new Map(), character = "1", hostname = "www.mil
     },
     key: (i) => Array.from(values.keys())[i],
     getItem: (key) => values.get(key) || null,
-    setItem: (key, value) => values.set(key, value)
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key)
   };
   const plugin = storageApi.createPluginStorage({
     storage,
@@ -149,4 +150,128 @@ test("正式消息桥接被动接收统计，并在界面尚未启动时保留�
   socket.receive({ type: "guild_updated", guild: null });
   socket.receive(message);
   assert.equal(bridge.pendingTrialSnapshots.length, 1);
+});
+
+function manualFixture() {
+  return {
+    schemaVersion: 2,
+    source: "manual",
+    recordId: "sample-milking",
+    key: '["manual","sample-milking"]',
+    guildId: null,
+    guildName: null,
+    weekStartAt: null,
+    trialDate: null,
+    capturedAt: null,
+    trialHrid: "/guild_skilling/milking",
+    kind: "skilling",
+    points: null,
+    party: { done: true, highestTier: null },
+    rows: [{ trialHrid: "/guild_skilling/milking", characterId: null, memberKey: "entry-1", workDone: 85470 }],
+    members: { "entry-1": { name: "5321" } },
+    sourceNote: "09-10; extra tokens retained"
+  };
+}
+const importText = (records, schemaVersion = 2) => JSON.stringify({ schemaVersion, records });
+test("导入兼容旧导出和手动整理格式，缺失信息保持未知，名称可为纯数字", () => {
+  const manual = manualFixture();
+  assert.ok(api.validSnapshot(manual));
+  assert.deepEqual(api.parseImport("\uFEFF" + importText([manual])), [manual]);
+  const { context, message } = fixture();
+  const records = api.completedSnapshots(context, message, now);
+  assert.deepEqual(api.parseImport(importText(records, 1)), records);
+  assert.equal(api.parseImport(importText([manual]))[0].rows[0].characterId, null);
+});
+test("导入完整验证，非法日期、负数、缺字段、重复成员和不安全键全部拒绝", () => {
+  for (const change of [
+    (record) => {
+      record.trialDate = "2026-02-30";
+    },
+    (record) => {
+      record.rows[0].workDone = -1;
+    },
+    (record) => {
+      record.rows[0].workDone = "85470";
+    },
+    (record) => {
+      delete record.rows[0].workDone;
+    },
+    (record) => {
+      record.rows.push({ ...record.rows[0] });
+    },
+    (record) => {
+      record.members = null;
+    },
+    (record) => {
+      record.key = "fake";
+    },
+    (record) => {
+      record.guildId = "made-up";
+    }
+  ]) {
+    const record = manualFixture();
+    change(record);
+    assert.throws(
+      () => api.parseImport(importText([record])),
+      (error) => error.code === "trialImportInvalidRecord" && error.recordIndex === 1
+    );
+  }
+  assert.throws(() => api.parseImport('{"__proto__":{}}'), /trialImportInvalidJson/);
+  assert.throws(() => api.parseImport("broken"), /trialImportInvalidJson/);
+  assert.throws(() => api.parseImport(importText([])), /trialImportInvalidFile/);
+  assert.throws(() => api.parseImport(importText([manualFixture()], 99)), /trialImportInvalidFile/);
+  assert.throws(() => api.parseImport(importText([manualFixture(), manualFixture()])), /trialImportDuplicateKey/);
+  assert.throws(() => api.parseImport(" ".repeat(api.MAX_IMPORT_BYTES + 1)), /trialImportTooLarge/);
+});
+test("导入预览区分新增、同内容重复和同键冲突，不依赖对象键顺序", () => {
+  const record = manualFixture();
+  const reordered = Object.fromEntries(Object.entries(record).reverse());
+  assert.equal(api.previewImport([record], [reordered])[0].status, "duplicate");
+  const changed = { ...record, points: 10 };
+  assert.equal(api.previewImport([changed], [record])[0].status, "conflict");
+  assert.equal(api.previewImport([record], [])[0].status, "new");
+  assert.deepEqual(record, manualFixture());
+});
+
+test("导入落盘重新检查重复与冲突，绝不覆盖已有记录或其他角色数据", () => {
+  const { plugin, values } = storageFixture();
+  const record = manualFixture();
+  assert.deepEqual(plugin.importTrialHistory([record]), { status: "imported", added: 1, duplicates: 0, conflicts: 0 });
+  assert.deepEqual(plugin.importTrialHistory([record]), { status: "imported", added: 0, duplicates: 1, conflicts: 0 });
+  assert.deepEqual(plugin.importTrialHistory([{ ...record, points: 100 }]), {
+    status: "imported",
+    added: 0,
+    duplicates: 0,
+    conflicts: 1
+  });
+  assert.equal(plugin.loadTrialHistory().records[0].points, null);
+  assert.equal(storageFixture(values, "another").plugin.loadTrialHistory().records.length, 0);
+  assert.deepEqual(storageFixture(values).plugin.loadTrialHistory().records, [record]);
+});
+test("导入整批先验证，写入失败撤回本次新增；撤回失败如实报告部分保存", () => {
+  const record = manualFixture();
+  const second = { ...record, recordId: "second", key: '["manual","second"]' };
+  const { plugin, storage, values } = storageFixture();
+  assert.equal(plugin.importTrialHistory([record, { ...second, trialDate: "invalid" }]).status, "failed");
+  assert.equal(values.size, 0);
+  const write = storage.setItem;
+  storage.setItem = (key, text) => {
+    if (values.size) throw new Error("quota");
+    write(key, text);
+  };
+  assert.equal(plugin.importTrialHistory([record, second]).status, "failed");
+  assert.equal(values.size, 0);
+  storage.removeItem = () => {
+    throw new Error("blocked");
+  };
+  assert.equal(plugin.importTrialHistory([record, second]).status, "partial");
+  assert.equal(values.size, 1);
+});
+
+test("已有游戏导出的零值省略字段仍可导入，保留原始结构", () => {
+  const { context, message } = fixture();
+  const [record] = api.completedSnapshots(context, message, now);
+  delete record.rows[0].workDone;
+  assert.deepEqual(api.parseImport(importText([record], 1)), [record]);
+  assert.throws(() => api.parseImport(importText([{ ...record, source: "manual" }])), /trialImportInvalidRecord/);
 });
