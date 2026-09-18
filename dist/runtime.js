@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.10";
+window.MwiGuildCreditVersion = "1.2.11";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -682,12 +682,95 @@ window.MwiGuildCreditVersion = "1.2.10";
 });
 
 
-// SOURCE: src/trial-history.js
+// SOURCE: src/runtime/config.js
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildTrialHistory = api;
+  root.MwiGuildCreditConfig = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const CREDIT_TYPES = [
+    ["/items/green_guild_credit", "#42c59f"],
+    ["/items/brown_guild_credit", "#c58a42"],
+    ["/items/white_guild_credit", "#e8e9ef"],
+    ["/items/blue_guild_credit", "#4c99e8"],
+    ["/items/purple_guild_credit", "#9567da"],
+    ["/items/red_guild_credit", "#df4c5a"],
+    ["/items/silver_guild_credit", "#c4cad5"],
+    ["/items/gold_guild_credit", "#d8a33c"]
+  ];
+
+  const GUILD_TOKEN_CREDIT_CONVERSIONS = [
+    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/brown_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 },
+    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
+    { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
+    { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
+    { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
+  ];
+  const UPDATE_SCRIPT_URL =
+    "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
+  const FALLBACK_UPDATE_SCRIPT_URL =
+    "https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
+  const FALLBACK_INSTALL_URL =
+    "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
+
+  return {
+    UPDATE_SOURCES: [
+      { url: UPDATE_SCRIPT_URL, installUrl: UPDATE_SCRIPT_URL },
+      { url: FALLBACK_UPDATE_SCRIPT_URL, installUrl: FALLBACK_INSTALL_URL }
+    ],
+    FALLBACK_INSTALL_URL,
+    PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
+    UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
+    GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
+    GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
+    MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
+    MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
+    MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
+    MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
+    MARKETPLACE_SNAPSHOT_ORIGINS: [
+      "https://www.milkywayidle.com",
+      "https://www.milkywayidlecn.com",
+      "https://q7.nainai.eu.org"
+    ],
+    MARKETPLACE_SNAPSHOT_MAX_AGE_MS: 15 * 60 * 1000,
+    MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS: 60 * 1000,
+    MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS: 10 * 60 * 1000,
+    UPDATE_CHECK_TIMEOUT_MS: 8000,
+    SHOW_ALL_CREDIT_TOKEN_TOGGLE: false,
+    PRICE_REFERENCES: { a: {}, b: {} },
+    GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES: [20, 40, 50, 60, 80, 100],
+    GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE: 2.5,
+    RENDERED_MARKUP_PROPERTY: "__mwiGuildCreditRenderedMarkup",
+    TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
+    PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
+    DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
+    CREDIT_TYPES,
+    GUILD_TOKEN_CREDIT_CONVERSIONS,
+    SELLER_TAX_RATE: 0.05,
+    GUILD_SHRINE_NAME_KEYS: {
+      "/guild_shrines/force": "shrineForce",
+      "/guild_shrines/tempo": "shrineTempo",
+      "/guild_shrines/spirit": "shrineSpirit",
+      "/guild_shrines/rarity": "shrineRarity",
+      "/guild_shrines/scholar": "shrineScholar"
+    }
+  };
+});
+
+
+// SOURCE: src/trial-history.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./runtime/config.js") : root.MwiGuildCreditConfig
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialHistory = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (config) {
   "use strict";
 
   function objectData(value) {
@@ -789,6 +872,25 @@ window.MwiGuildCreditVersion = "1.2.10";
       Number.isFinite(Date.parse(value)) &&
       new Date(value).toISOString().slice(0, 10) === value);
 
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  function weekNumber(weekStartAt) {
+    return Math.floor((weekStartAt - config.GUILD_TRIAL_FIRST_START_AT) / WEEK_MS) + 1;
+  }
+
+  // Calendar dates are interpreted in UTC, independent of browser timezone.
+  // Never infer a year from the current clock or a yearless chat timestamp.
+  function normalizeSnapshot(record) {
+    if (record?.schemaVersion !== 2 || typeof record.trialDate !== "string") return record;
+    const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(record.trialDate);
+    if (!match) return record;
+    const trialDate = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+    if (!validDate(trialDate)) return record;
+    const weekStartAt =
+      config.GUILD_TRIAL_FIRST_START_AT +
+      Math.floor((Date.parse(trialDate) - config.GUILD_TRIAL_FIRST_START_AT) / WEEK_MS) * WEEK_MS;
+    return { ...record, trialDate, weekStartAt: record.weekStartAt === null ? weekStartAt : record.weekStartAt };
+  }
+
   function validManualSnapshot(value) {
     return Boolean(
       value &&
@@ -798,8 +900,12 @@ window.MwiGuildCreditVersion = "1.2.10";
       value.key === JSON.stringify(["manual", value.recordId]) &&
       value.guildId === null &&
       (value.guildName === null || isText(value.guildName)) &&
-      value.weekStartAt === null &&
       validDate(value.trialDate) &&
+      (value.trialDate === null
+        ? value.weekStartAt === null
+        : Date.parse(value.trialDate) >= config.GUILD_TRIAL_FIRST_START_AT &&
+          (value.weekStartAt === null ||
+            value.weekStartAt === normalizeSnapshot({ ...value, weekStartAt: null }).weekStartAt)) &&
       value.capturedAt === null &&
       isText(value.trialHrid) &&
       ["combat", "skilling"].includes(value.kind) &&
@@ -855,6 +961,7 @@ window.MwiGuildCreditVersion = "1.2.10";
     )
       importError("trialImportInvalidFile");
     const keys = new Set();
+    value.records = value.records.map(normalizeSnapshot);
     for (const [index, record] of value.records.entries()) {
       if (
         !validSnapshot(record) ||
@@ -908,14 +1015,22 @@ window.MwiGuildCreditVersion = "1.2.10";
   }
 
   function previewImport(incoming, existing) {
-    const byKey = new Map(existing.map((record) => [record.key, record]));
-    return incoming.map((record) => {
+    const byKey = new Map(existing.map((record) => [record.key, normalizeSnapshot(record)]));
+    return incoming.map(normalizeSnapshot).map((record) => {
       const previous = byKey.get(record.key);
-      const status = !previous
+      let status = !previous
         ? "new"
         : contentSignature(previous) === contentSignature(record)
           ? "duplicate"
           : "conflict";
+      if (status === "conflict" && validManualSnapshot(previous) && validManualSnapshot(record)) {
+        const withoutDate = (value) => contentSignature({ ...value, trialDate: null, weekStartAt: null });
+        if (withoutDate(previous) === withoutDate(record)) {
+          if (previous.trialDate === null && record.trialDate !== null) status = "dated";
+          // Reimporting an older file must not erase known dates.
+          else if (previous.trialDate !== null && record.trialDate === null) status = "duplicate";
+        }
+      }
       return { record, status };
     });
   }
@@ -927,6 +1042,8 @@ window.MwiGuildCreditVersion = "1.2.10";
     parseImport,
     previewImport,
     compareSnapshots,
+    normalizeSnapshot,
+    weekNumber,
     MAX_IMPORT_BYTES
   };
 });
@@ -2804,11 +2921,12 @@ window.MwiGuildCreditVersion = "1.2.10";
       trialImport: "导入 JSON",
       trialImportFile: "选择试炼历史 JSON 文件",
       trialImportHint:
-        "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；重复或冲突记录会跳过，不覆盖已有数据。",
+        "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；可补全未知日期及周次，重复或统计冲突记录会跳过。",
       trialImportReading: "正在读取文件…",
       trialImportPreview: "导入预览",
-      trialImportSummary: "新增 {added} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项",
+      trialImportSummary: "新增 {added} 项 · 补全周次 {dated} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项",
       trialImportStatus_new: "新增",
+      trialImportStatus_dated: "补全日期与周次",
       trialImportStatus_duplicate: "重复，跳过",
       trialImportStatus_conflict: "内容不同，保留已有记录",
       trialImportMemberCount: "{count} 位成员",
@@ -2820,9 +2938,10 @@ window.MwiGuildCreditVersion = "1.2.10";
       trialImportInvalidRecord: "第 {index} 项记录格式有误：请检查日期、成员、项目标识和非负统计数值；本次未导入。",
       trialImportDuplicateKey: "第 {index} 项记录与文件内另一项使用相同标识，请先删除重复项；本次未导入。",
       trialImportReadFailed: "无法读取文件，请重新选择。",
-      trialImportComplete: "已导入 {added} 项，跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。",
-      trialImportSaveFailed: "保存失败，未留下本次新增记录。已有数据保持不变；请检查浏览器存储空间后重试。",
-      trialImportPartial: "保存失败，本次仍有 {added} 项记录已写入。已有记录未覆盖；重试会跳过已保存项。",
+      trialImportComplete:
+        "已导入 {added} 项，补全周次 {dated} 项，跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。",
+      trialImportSaveFailed: "保存失败，本次更改已撤回；请检查浏览器存储空间后重试。",
+      trialImportPartial: "保存失败，本次仍保留新增 {added} 项、补全周次 {dated} 项。重试会跳过已保存项。",
       trialUnknownDate: "日期未注明",
       trialUnknownGuild: "公会未注明",
       trialManualSource: "手动整理",
@@ -3299,11 +3418,12 @@ window.MwiGuildCreditVersion = "1.2.10";
       trialImport: "Import JSON",
       trialImportFile: "Choose a trial history JSON file",
       trialImportHint:
-        "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Duplicates and conflicts are skipped; existing records are preserved.",
+        "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Missing dates and weeks can be filled in; duplicates and statistics conflicts are skipped.",
       trialImportReading: "Reading file…",
       trialImportPreview: "Import preview",
-      trialImportSummary: "{added} new · {duplicates} duplicates · {conflicts} conflicts",
+      trialImportSummary: "{added} new · {dated} dates filled · {duplicates} duplicates · {conflicts} conflicts",
       trialImportStatus_new: "New",
+      trialImportStatus_dated: "Fill in date and week",
       trialImportStatus_duplicate: "Duplicate, skipped",
       trialImportStatus_conflict: "Different content; keep existing",
       trialImportMemberCount: "{count} members",
@@ -3318,11 +3438,12 @@ window.MwiGuildCreditVersion = "1.2.10";
       trialImportDuplicateKey:
         "Record {index} repeats an identifier in this file. Remove the duplicate first. Nothing was imported.",
       trialImportReadFailed: "The file could not be read. Choose it again.",
-      trialImportComplete: "Imported {added}; skipped {duplicates} duplicates and {conflicts} conflicts.",
+      trialImportComplete:
+        "Imported {added}; filled {dated} dates; skipped {duplicates} duplicates and {conflicts} conflicts.",
       trialImportSaveFailed:
-        "Saving failed. No new records from this attempt remain. Existing data was preserved. Check browser storage space and retry.",
+        "Saving failed. Changes from this attempt were rolled back. Check browser storage space and retry.",
       trialImportPartial:
-        "Saving failed; {added} records from this attempt remain saved. Existing records were not overwritten. Retrying skips saved records.",
+        "Saving failed; {added} new records and {dated} date updates remain saved. Retrying skips saved records.",
       trialUnknownDate: "Date unspecified",
       trialUnknownGuild: "Guild unspecified",
       trialManualSource: "Manual transcript",
@@ -4952,87 +5073,6 @@ window.MwiGuildCreditVersion = "1.2.10";
 });
 
 
-// SOURCE: src/runtime/config.js
-(function (root, factory) {
-  const api = factory();
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildCreditConfig = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  "use strict";
-
-  const CREDIT_TYPES = [
-    ["/items/green_guild_credit", "#42c59f"],
-    ["/items/brown_guild_credit", "#c58a42"],
-    ["/items/white_guild_credit", "#e8e9ef"],
-    ["/items/blue_guild_credit", "#4c99e8"],
-    ["/items/purple_guild_credit", "#9567da"],
-    ["/items/red_guild_credit", "#df4c5a"],
-    ["/items/silver_guild_credit", "#c4cad5"],
-    ["/items/gold_guild_credit", "#d8a33c"]
-  ];
-
-  const GUILD_TOKEN_CREDIT_CONVERSIONS = [
-    { creditItemHrid: "/items/green_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/brown_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/white_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/blue_guild_credit", guildTokenCount: 1, creditCount: 10 },
-    { creditItemHrid: "/items/purple_guild_credit", guildTokenCount: 1, creditCount: 1 },
-    { creditItemHrid: "/items/red_guild_credit", guildTokenCount: 1, creditCount: 1 },
-    { creditItemHrid: "/items/silver_guild_credit", guildTokenCount: 10, creditCount: 1 },
-    { creditItemHrid: "/items/gold_guild_credit", guildTokenCount: 60, creditCount: 1 }
-  ];
-  const UPDATE_SCRIPT_URL =
-    "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
-  const FALLBACK_UPDATE_SCRIPT_URL =
-    "https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
-  const FALLBACK_INSTALL_URL =
-    "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
-
-  return {
-    UPDATE_SOURCES: [
-      { url: UPDATE_SCRIPT_URL, installUrl: UPDATE_SCRIPT_URL },
-      { url: FALLBACK_UPDATE_SCRIPT_URL, installUrl: FALLBACK_INSTALL_URL }
-    ],
-    FALLBACK_INSTALL_URL,
-    PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
-    UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
-    GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
-    GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
-    MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
-    MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
-    MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
-    MARKETPLACE_SNAPSHOT_PATH: "/game_data/marketplace.json",
-    MARKETPLACE_SNAPSHOT_ORIGINS: [
-      "https://www.milkywayidle.com",
-      "https://www.milkywayidlecn.com",
-      "https://q7.nainai.eu.org"
-    ],
-    MARKETPLACE_SNAPSHOT_MAX_AGE_MS: 15 * 60 * 1000,
-    MARKETPLACE_SNAPSHOT_REFRESH_COOLDOWN_MS: 60 * 1000,
-    MARKETPLACE_SNAPSHOT_FORBIDDEN_BACKOFF_MS: 10 * 60 * 1000,
-    UPDATE_CHECK_TIMEOUT_MS: 8000,
-    SHOW_ALL_CREDIT_TOKEN_TOGGLE: false,
-    PRICE_REFERENCES: { a: {}, b: {} },
-    GUILD_TOKEN_BUDGET_SNAP_PERCENTAGES: [20, 40, 50, 60, 80, 100],
-    GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE: 2.5,
-    RENDERED_MARKUP_PROPERTY: "__mwiGuildCreditRenderedMarkup",
-    TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
-    PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
-    DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
-    CREDIT_TYPES,
-    GUILD_TOKEN_CREDIT_CONVERSIONS,
-    SELLER_TAX_RATE: 0.05,
-    GUILD_SHRINE_NAME_KEYS: {
-      "/guild_shrines/force": "shrineForce",
-      "/guild_shrines/tempo": "shrineTempo",
-      "/guild_shrines/spirit": "shrineSpirit",
-      "/guild_shrines/rarity": "shrineRarity",
-      "/guild_shrines/scholar": "shrineScholar"
-    }
-  };
-});
-
-
 // SOURCE: src/runtime/storage.js
 (function (root, factory) {
   const api = factory();
@@ -5254,7 +5294,7 @@ window.MwiGuildCreditVersion = "1.2.10";
           const key = storage.key(index);
           if (!key || !key.startsWith(trialHistoryPrefix())) continue;
           try {
-            const record = JSON.parse(storage.getItem(key));
+            const record = trialHistoryApi.normalizeSnapshot(JSON.parse(storage.getItem(key)));
             if (trialHistoryApi.validSnapshot(record)) records.push(record);
             else failed = true;
           } catch (_) {
@@ -5288,27 +5328,40 @@ window.MwiGuildCreditVersion = "1.2.10";
             }
             const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
             if (status === "duplicate") duplicates += 1;
-            else conflicts += 1;
-            continue;
+            else if (status !== "dated") conflicts += 1;
+            if (status !== "dated") continue;
           }
           const text = JSON.stringify(record);
           storage.setItem(key, text);
-          written.push({ key, text });
+          written.push({ key, text, previous });
         }
-        return { status: "imported", added: written.length, duplicates, conflicts };
+        return {
+          status: "imported",
+          added: written.filter((entry) => entry.previous === null).length,
+          dated: written.filter((entry) => entry.previous !== null).length,
+          duplicates,
+          conflicts
+        };
       } catch (_) {
-        let retained = 0;
-        // Roll back only values inserted by this attempt. Never remove a record
-        // that another page has since updated, or any pre-existing user data.
-        for (const { key, text } of written) {
+        let added = 0;
+        let dated = 0;
+        // Restore only our own writes, including the exact pre-import value
+        // when enriching a date. Do not overwrite another page's newer write.
+        for (const { key, text, previous } of written) {
+          let retained = false;
           try {
-            if (storage.getItem(key) === text) storage.removeItem(key);
-            if (storage.getItem(key) !== null) retained += 1;
+            if (storage.getItem(key) === text) {
+              if (previous === null) storage.removeItem(key);
+              else storage.setItem(key, previous);
+            }
+            retained = storage.getItem(key) !== previous;
           } catch (_) {
-            retained += 1;
+            retained = true;
           }
+          if (retained && previous === null) added += 1;
+          else if (retained) dated += 1;
         }
-        return { status: retained ? "partial" : "failed", added: retained, duplicates, conflicts };
+        return { status: added + dated ? "partial" : "failed", added, dated, duplicates, conflicts };
       }
     }
 
@@ -9146,13 +9199,26 @@ window.MwiGuildCreditVersion = "1.2.10";
     }
 
     function recordDate(record) {
-      return record.trialDate || (record.weekStartAt ? date(record.weekStartAt) : t("trialUnknownDate"));
+      if (record.weekStartAt) {
+        const start = new Date(record.weekStartAt);
+        const week = t("guildPointWeekWithDate", {
+          count: trialHistoryApi.weekNumber(record.weekStartAt),
+          date: `${start.getUTCMonth() + 1}/${start.getUTCDate()}`
+        });
+        return record.trialDate ? `${week} · ${record.trialDate}` : week;
+      }
+      return record.trialDate || t("trialUnknownDate");
     }
 
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
       const count = (status) => preview.filter((entry) => entry.status === status).length;
-      const summary = { added: count("new"), duplicates: count("duplicate"), conflicts: count("conflict") };
+      const summary = {
+        added: count("new"),
+        dated: count("dated"),
+        duplicates: count("duplicate"),
+        conflicts: count("conflict")
+      };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialImport"))}" aria-busy="${importBusy}">
         <button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
@@ -9162,7 +9228,7 @@ window.MwiGuildCreditVersion = "1.2.10";
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
           <p class="mwi-trial-meta">${escapeHtml(importPreview.name)}<br>${escapeHtml(t("trialImportSummary", summary))}</p>
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
-          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!summary.added || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added }))}</button>
+          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
       }
       return markup + "</section>";
@@ -9207,14 +9273,14 @@ window.MwiGuildCreditVersion = "1.2.10";
       // with an imported copy while browser storage is unavailable.
       capture();
       const plan = trialHistoryApi.previewImport(importPreview.records, records);
-      const additions = plan.filter((entry) => entry.status === "new").map((entry) => entry.record);
+      const additions = plan.filter((entry) => ["new", "dated"].includes(entry.status)).map((entry) => entry.record);
       const result = additions.length
         ? pluginStorage.importTrialHistory(additions)
-        : { status: "imported", added: 0, duplicates: 0, conflicts: 0 };
+        : { status: "imported", added: 0, dated: 0, duplicates: 0, conflicts: 0 };
       result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
       result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
       if (result.status === "imported") {
-        if (result.added) selectedKey = additions[0].key;
+        if (result.added + result.dated) selectedKey = additions[0].key;
         importPreview = null;
       }
       importNotice = {

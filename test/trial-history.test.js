@@ -173,6 +173,112 @@ function manualFixture() {
   };
 }
 const importText = (records, schemaVersion = 2) => JSON.stringify({ schemaVersion, records });
+test("手动日期按周五归周，兼容非补零日期且不依赖当前年份", () => {
+  for (const [input, date, start, ordinal] of [
+    ["2026-9-3", "2026-09-03", "2026-08-28", 8],
+    ["2026-9-10", "2026-09-10", "2026-09-04", 9],
+    ["2026-9-4", "2026-09-04", "2026-09-04", 9],
+    ["2026-07-10", "2026-07-10", "2026-07-10", 1]
+  ]) {
+    const record = { ...manualFixture(), trialDate: input };
+    const [parsed] = api.parseImport(importText([record]));
+    assert.equal(parsed.trialDate, date);
+    assert.equal(parsed.weekStartAt, Date.parse(start));
+    assert.equal(api.weekNumber(parsed.weekStartAt), ordinal);
+    assert.equal(parsed.key, record.key);
+    assert.deepEqual(parsed.rows, record.rows);
+    assert.deepEqual(api.parseImport(importText([parsed])), [parsed]);
+  }
+  for (const trialDate of ["9-10", "2026-2-30", "2026-07-09"]) {
+    assert.throws(() => api.parseImport(importText([{ ...manualFixture(), trialDate }])), /trialImportInvalidRecord/);
+  }
+  assert.throws(
+    () =>
+      api.parseImport(
+        importText([
+          {
+            ...manualFixture(),
+            trialDate: "2026-09-03",
+            weekStartAt: Date.parse("2026-09-04")
+          }
+        ])
+      ),
+    /trialImportInvalidRecord/
+  );
+});
+
+test("已导入未知日期可补全周次，但不同统计或已有日期仍为冲突", () => {
+  const old = manualFixture();
+  const [dated] = api.parseImport(importText([{ ...old, trialDate: "2026-9-3" }]));
+  assert.equal(api.previewImport([dated], [old])[0].status, "dated");
+  assert.equal(api.previewImport([dated], [{ ...old, points: 1 }])[0].status, "conflict");
+  const [otherWeek] = api.parseImport(importText([{ ...old, trialDate: "2026-9-10" }]));
+  assert.equal(api.previewImport([otherWeek], [dated])[0].status, "conflict");
+  assert.equal(api.previewImport([old], [dated])[0].status, "duplicate");
+  const { plugin, values } = storageFixture();
+  plugin.importTrialHistory([old]);
+  assert.equal(plugin.importTrialHistory([dated]).dated, 1);
+  assert.equal(values.size, 1);
+  assert.deepEqual(plugin.loadTrialHistory().records, [dated]);
+  assert.equal(plugin.importTrialHistory([dated]).duplicates, 1);
+  assert.equal(plugin.importTrialHistory([old]).duplicates, 1);
+  assert.deepEqual(plugin.loadTrialHistory().records, [dated]);
+});
+
+test("补全日期后批量写入失败会恢复原始记录", () => {
+  const old = manualFixture();
+  const [dated] = api.parseImport(importText([{ ...old, trialDate: "2026-9-3" }]));
+  const second = { ...old, recordId: "second", key: '["manual","second"]' };
+  const { plugin, storage, values } = storageFixture();
+  plugin.importTrialHistory([old]);
+  const original = Array.from(values.entries());
+  const write = storage.setItem;
+  storage.setItem = (key, text) => {
+    if (key.includes("second")) throw new Error("quota");
+    write(key, text);
+  };
+  assert.equal(plugin.importTrialHistory([dated, second]).status, "failed");
+  assert.deepEqual(Array.from(values.entries()), original);
+});
+
+test("旧版已知日期记录读取时归周，保留存储原文且再次导入不冲突", () => {
+  const old = { ...manualFixture(), trialDate: "2026-09-03" };
+  const { plugin, values } = storageFixture();
+  plugin.importTrialHistory([old]);
+  const key = Array.from(values.keys())[0];
+  values.set(key, JSON.stringify(old));
+  const [dated] = plugin.loadTrialHistory().records;
+  assert.equal(dated.weekStartAt, Date.parse("2026-08-28"));
+  assert.equal(values.get(key), JSON.stringify(old));
+  assert.equal(plugin.importTrialHistory([dated]).duplicates, 1);
+});
+
+test("补全周次撤回失败会明确报告，损坏已有条目不被覆盖", () => {
+  const old = manualFixture();
+  const [dated] = api.parseImport(importText([{ ...old, trialDate: "2026-09-10" }]));
+  const second = { ...old, recordId: "second", key: '["manual","second"]' };
+  const { plugin, storage, values } = storageFixture();
+  plugin.importTrialHistory([old]);
+  const write = storage.setItem;
+  let writes = 0;
+  storage.setItem = (key, text) => {
+    if (writes++ > 0) throw new Error("quota");
+    write(key, text);
+  };
+  assert.deepEqual(plugin.importTrialHistory([dated, second]), {
+    status: "partial",
+    added: 0,
+    dated: 1,
+    duplicates: 0,
+    conflicts: 0
+  });
+  assert.deepEqual(plugin.loadTrialHistory().records, [dated]);
+  const key = Array.from(values.keys())[0];
+  values.set(key, "{");
+  assert.equal(plugin.importTrialHistory([dated]).conflicts, 1);
+  assert.equal(values.get(key), "{");
+});
+
 test("导入兼容旧导出和手动整理格式，缺失信息保持未知，名称可为纯数字", () => {
   const manual = manualFixture();
   assert.ok(api.validSnapshot(manual));
@@ -236,11 +342,24 @@ test("导入预览区分新增、同内容重复和同键冲突，不依赖对�
 test("导入落盘重新检查重复与冲突，绝不覆盖已有记录或其他角色数据", () => {
   const { plugin, values } = storageFixture();
   const record = manualFixture();
-  assert.deepEqual(plugin.importTrialHistory([record]), { status: "imported", added: 1, duplicates: 0, conflicts: 0 });
-  assert.deepEqual(plugin.importTrialHistory([record]), { status: "imported", added: 0, duplicates: 1, conflicts: 0 });
+  assert.deepEqual(plugin.importTrialHistory([record]), {
+    status: "imported",
+    added: 1,
+    dated: 0,
+    duplicates: 0,
+    conflicts: 0
+  });
+  assert.deepEqual(plugin.importTrialHistory([record]), {
+    status: "imported",
+    added: 0,
+    dated: 0,
+    duplicates: 1,
+    conflicts: 0
+  });
   assert.deepEqual(plugin.importTrialHistory([{ ...record, points: 100 }]), {
     status: "imported",
     added: 0,
+    dated: 0,
     duplicates: 0,
     conflicts: 1
   });

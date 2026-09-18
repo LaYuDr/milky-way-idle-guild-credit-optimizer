@@ -76,6 +76,7 @@ const header = `// ==UserScript==
 const SOURCE_FILES = [
   "src/market-data.js",
   "src/market-dom.js",
+  "src/runtime/config.js",
   "src/trial-history.js",
   "src/bridge.js",
   "src/item-name-catalog.js",
@@ -84,7 +85,6 @@ const SOURCE_FILES = [
   "src/localization.js",
   "src/core.js",
   "src/shrine-guide.js",
-  "src/runtime/config.js",
   "src/runtime/storage.js",
   "src/runtime/scheduler.js",
   "src/runtime/game-state.js",

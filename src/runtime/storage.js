@@ -218,7 +218,7 @@
           const key = storage.key(index);
           if (!key || !key.startsWith(trialHistoryPrefix())) continue;
           try {
-            const record = JSON.parse(storage.getItem(key));
+            const record = trialHistoryApi.normalizeSnapshot(JSON.parse(storage.getItem(key)));
             if (trialHistoryApi.validSnapshot(record)) records.push(record);
             else failed = true;
           } catch (_) {
@@ -252,27 +252,40 @@
             }
             const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
             if (status === "duplicate") duplicates += 1;
-            else conflicts += 1;
-            continue;
+            else if (status !== "dated") conflicts += 1;
+            if (status !== "dated") continue;
           }
           const text = JSON.stringify(record);
           storage.setItem(key, text);
-          written.push({ key, text });
+          written.push({ key, text, previous });
         }
-        return { status: "imported", added: written.length, duplicates, conflicts };
+        return {
+          status: "imported",
+          added: written.filter((entry) => entry.previous === null).length,
+          dated: written.filter((entry) => entry.previous !== null).length,
+          duplicates,
+          conflicts
+        };
       } catch (_) {
-        let retained = 0;
-        // Roll back only values inserted by this attempt. Never remove a record
-        // that another page has since updated, or any pre-existing user data.
-        for (const { key, text } of written) {
+        let added = 0;
+        let dated = 0;
+        // Restore only our own writes, including the exact pre-import value
+        // when enriching a date. Do not overwrite another page's newer write.
+        for (const { key, text, previous } of written) {
+          let retained = false;
           try {
-            if (storage.getItem(key) === text) storage.removeItem(key);
-            if (storage.getItem(key) !== null) retained += 1;
+            if (storage.getItem(key) === text) {
+              if (previous === null) storage.removeItem(key);
+              else storage.setItem(key, previous);
+            }
+            retained = storage.getItem(key) !== previous;
           } catch (_) {
-            retained += 1;
+            retained = true;
           }
+          if (retained && previous === null) added += 1;
+          else if (retained) dated += 1;
         }
-        return { status: retained ? "partial" : "failed", added: retained, duplicates, conflicts };
+        return { status: added + dated ? "partial" : "failed", added, dated, duplicates, conflicts };
       }
     }
 

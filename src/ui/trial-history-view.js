@@ -58,13 +58,26 @@
     }
 
     function recordDate(record) {
-      return record.trialDate || (record.weekStartAt ? date(record.weekStartAt) : t("trialUnknownDate"));
+      if (record.weekStartAt) {
+        const start = new Date(record.weekStartAt);
+        const week = t("guildPointWeekWithDate", {
+          count: trialHistoryApi.weekNumber(record.weekStartAt),
+          date: `${start.getUTCMonth() + 1}/${start.getUTCDate()}`
+        });
+        return record.trialDate ? `${week} · ${record.trialDate}` : week;
+      }
+      return record.trialDate || t("trialUnknownDate");
     }
 
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
       const count = (status) => preview.filter((entry) => entry.status === status).length;
-      const summary = { added: count("new"), duplicates: count("duplicate"), conflicts: count("conflict") };
+      const summary = {
+        added: count("new"),
+        dated: count("dated"),
+        duplicates: count("duplicate"),
+        conflicts: count("conflict")
+      };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialImport"))}" aria-busy="${importBusy}">
         <button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
@@ -74,7 +87,7 @@
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
           <p class="mwi-trial-meta">${escapeHtml(importPreview.name)}<br>${escapeHtml(t("trialImportSummary", summary))}</p>
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
-          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!summary.added || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added }))}</button>
+          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
       }
       return markup + "</section>";
@@ -119,14 +132,14 @@
       // with an imported copy while browser storage is unavailable.
       capture();
       const plan = trialHistoryApi.previewImport(importPreview.records, records);
-      const additions = plan.filter((entry) => entry.status === "new").map((entry) => entry.record);
+      const additions = plan.filter((entry) => ["new", "dated"].includes(entry.status)).map((entry) => entry.record);
       const result = additions.length
         ? pluginStorage.importTrialHistory(additions)
-        : { status: "imported", added: 0, duplicates: 0, conflicts: 0 };
+        : { status: "imported", added: 0, dated: 0, duplicates: 0, conflicts: 0 };
       result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
       result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
       if (result.status === "imported") {
-        if (result.added) selectedKey = additions[0].key;
+        if (result.added + result.dated) selectedKey = additions[0].key;
         importPreview = null;
       }
       importNotice = {

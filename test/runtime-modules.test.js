@@ -60,6 +60,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   for (const file of requiredModules) assert.ok(files.includes(file), `missing module entry ${file}`);
   const userscriptIndex = files.indexOf("src/userscript.js");
   assert.ok(requiredModules.every((file) => files.indexOf(file) < userscriptIndex));
+  assert.ok(files.indexOf("src/runtime/config.js") < files.indexOf("src/trial-history.js"));
   assert.ok(files.indexOf("src/ui/upgrade-view.js") < files.indexOf("src/ui/settings-view.js"));
   assert.ok(files.indexOf("src/ui/settings-view.js") < files.indexOf("src/ui/panel-shell.js"));
   for (const file of files) assert.equal(fs.existsSync(path.join(root, file)), true, `missing ${file}`);

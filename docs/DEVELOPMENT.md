@@ -462,15 +462,24 @@ The importer accepts exported envelopes with `schemaVersion: 1` or `2` and
 a non-empty `records` array (up to 1,000 records, 1,000 members per record,
 and a 10 MB file). Game captures retain record schema version 1. Import
 validates every record before writing, previews new/duplicate/conflicting
-keys, and rechecks storage on confirmation. Existing keys are never replaced;
-write failures roll back only this attempt's new values. If rollback itself
-fails, the UI reports how many new records remain.
+keys, and rechecks storage on confirmation. For otherwise identical manual
+records, unknown dates can be filled in after preview and confirmation.
+Known dates and statistics conflicts are never replaced; an older undated
+copy is treated as a duplicate. Write failures restore this attempt's exact
+previous values, unless another page has since changed them. If rollback
+itself fails, the UI reports remaining additions and date updates.
 
 Manual transcripts use record schema version 2 and `source: "manual"`.
 They have a stable `recordId` and `key = JSON.stringify(["manual", recordId])`,
 separate from automatic capture keys. Missing `guildId`, `weekStartAt`,
 `capturedAt` and member `characterId` are explicitly `null`. A known trial
 calendar date is stored as `trialDate: "YYYY-MM-DD"`; otherwise use `null`.
+Non-padded full dates such as `2026-9-3` are normalized. A known date derives
+`weekStartAt` using UTC calendar arithmetic and `GUILD_TRIAL_FIRST_START_AT`
+(2026-07-10): September 3 is week 8 (August 28), September 10 is week 9
+(September 4). Explicit conflicting week starts and dates before week 1 are
+rejected. No year is inferred from a yearless timestamp. Existing dated
+records with null week starts are normalized on read without changing keys.
 `guildName` may be a name or `null`. Each row has a unique `memberKey` mapped
 to `members[memberKey].name`, a matching `trialHrid`, and numeric non-negative
 `workDone` (skilling) or `damageDealt`, `healingDone`, and

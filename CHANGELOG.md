@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.11] - 2026-09-18
+
+### Changed
+
+- 完善公会试炼历史的导入导出、存储兼容与界面展示，修正构建入口并补充回归测试。
+
 ## [1.2.10] - 2026-09-18
 
 ### Changed
