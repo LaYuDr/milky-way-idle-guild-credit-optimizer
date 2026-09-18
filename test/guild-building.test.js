@@ -120,7 +120,10 @@ function renderGuildPointForecast(harness, history) {
     ...core.buildGuildConstructionPlan([], planning.budget),
     planning
   };
-  return harness.view.renderGuildPointForecast(history, plan, data.definitions());
+  return (
+    harness.view.renderGuildPointPlanning(plan, data.definitions(), history) +
+    harness.view.renderGuildPointForecast(history)
+  );
 }
 
 test("公会建筑规则覆盖 28 座建筑与神龛的 1 至 20 级", () => {
@@ -1008,6 +1011,11 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
   for (const key of [
     "guildConstruction",
     "guildPointBudget",
+    "guildPointStatisticsHeading",
+    "buildingCatalogCurrentLevel",
+    "buildingCatalogPlannedLevel",
+    "buildingCatalogUnknownLevel",
+    "buildingCatalogUnknownPlannedLevel",
     "guildPointTrend",
     "guildPointTrendHint",
     "guildPointAutoSaved",

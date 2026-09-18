@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.11";
+window.MwiGuildCreditVersion = "1.2.12";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1045,6 +1045,177 @@ window.MwiGuildCreditVersion = "1.2.11";
     normalizeSnapshot,
     weekNumber,
     MAX_IMPORT_BYTES
+  };
+});
+
+
+// SOURCE: src/trial-analytics.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialAnalytics = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  const COMBAT_FIELDS = ["damageDealt", "healingDone", "premitigatedDamageTaken"];
+  const fields = (record) => (record.kind === "combat" ? COMBAT_FIELDS : ["workDone"]);
+  const scopeKey = (record) =>
+    record.guildId !== null && record.guildId !== undefined
+      ? JSON.stringify(["guild", String(record.guildId)])
+      : JSON.stringify(["manual", record.guildName || null]);
+  function metricValue(record, row, field) {
+    const value = row[field];
+    if (value === undefined && record.schemaVersion === 1) return 0;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  function entries(record) {
+    const names = record.rows.map((row) => record.members?.[row.memberKey ?? row.characterId]?.name || "");
+    const counts = new Map();
+    names.forEach((name) => counts.set(name, (counts.get(name) || 0) + 1));
+    return record.rows.map((row, index) => {
+      const name = names[index];
+      const hasId = row.characterId !== null && row.characterId !== undefined && row.characterId !== "";
+      const match = hasId
+        ? "id"
+        : name && counts.get(name) === 1 && !/^(前成员|former member)$/i.test(name)
+          ? "name"
+          : "isolated";
+      const identity = JSON.stringify([
+        scopeKey(record),
+        match,
+        match === "id" ? String(row.characterId) : match === "name" ? name : [record.key, row.memberKey ?? index]
+      ]);
+      return {
+        identity,
+        name,
+        match,
+        row,
+        values: Object.fromEntries(fields(record).map((field) => [field, metricValue(record, row, field)]))
+      };
+    });
+  }
+  function summary(rows, field) {
+    const values = rows
+      .map((entry) => entry.values[field])
+      .filter((value) => typeof value === "number")
+      .sort((a, b) => a - b);
+    const total = values.length ? values.reduce((a, b) => a + b, 0) : null;
+    const n = values.length;
+    return {
+      count: rows.length,
+      known: n,
+      total,
+      mean: n ? total / n : null,
+      median: n ? (values[Math.floor((n - 1) / 2)] + values[Math.floor(n / 2)]) / 2 : null,
+      top5Share: total > 0 ? values.slice(-5).reduce((a, b) => a + b, 0) / total : null
+    };
+  }
+  function ranking(rows, field) {
+    const total = summary(rows, field).total;
+    const sorted = rows
+      .slice()
+      .sort((a, b) => (b.values[field] ?? -1) - (a.values[field] ?? -1) || a.name.localeCompare(b.name));
+    let rank = null,
+      previous = null;
+    return sorted.map((entry, index) => {
+      const value = entry.values[field] ?? null;
+      if (value !== null && (index === 0 || value !== previous)) rank = index + 1;
+      previous = value;
+      return {
+        ...entry,
+        value,
+        rank: value === null ? null : rank,
+        share: total > 0 && value !== null ? value / total : null
+      };
+    });
+  }
+  function scoped(records, selected) {
+    return records.filter((record) => scopeKey(record) === scopeKey(selected));
+  }
+  function timeline(records, selected) {
+    const weeks = new Map();
+    if (!selected.weekStartAt) return { records: [], ambiguousWeeks: 0 };
+    for (const record of scoped(records, selected)) {
+      if (record.trialHrid !== selected.trialHrid || !record.weekStartAt || record.weekStartAt > selected.weekStartAt)
+        continue;
+      const group = weeks.get(record.weekStartAt) || [];
+      group.push(record);
+      weeks.set(record.weekStartAt, group);
+    }
+    // Selecting a record explicitly resolves its own week, never other weeks.
+    weeks.set(selected.weekStartAt, [selected]);
+    return {
+      records: [...weeks.values()]
+        .filter((group) => group.length === 1)
+        .map((group) => group[0])
+        .sort((a, b) => a.weekStartAt - b.weekStartAt),
+      ambiguousWeeks: [...weeks.values()].filter((group) => group.length > 1).length
+    };
+  }
+  function comparison(records, selected, field, mode = "all", start = 0) {
+    const timelineResult = timeline(records, selected);
+    const selectedRecords = timelineResult.records.filter((record) => record.weekStartAt >= start);
+    const lists = selectedRecords.map(entries);
+    let shared = new Set(lists[0]?.map((entry) => entry.identity) || []);
+    for (const list of lists.slice(1)) {
+      const ids = new Set(list.map((entry) => entry.identity));
+      shared = new Set([...shared].filter((id) => ids.has(id)));
+    }
+    return {
+      ambiguousWeeks: timelineResult.ambiguousWeeks,
+      sharedCount: shared.size,
+      points: selectedRecords.map((record, index) => ({
+        record,
+        stats: summary(
+          mode === "shared" ? lists[index].filter((entry) => shared.has(entry.identity)) : lists[index],
+          field
+        )
+      }))
+    };
+  }
+  function change(before, after) {
+    return {
+      absolute: before === null || after === null ? null : after - before,
+      percent: before > 0 && after !== null ? (after - before) / before : null
+    };
+  }
+  function members(records) {
+    const map = new Map();
+    for (const record of [...records].sort((a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0)))
+      for (const entry of entries(record)) map.set(entry.identity, entry);
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  function memberHistory(records, identity, field) {
+    return [...records]
+      .sort((a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0) || a.trialHrid.localeCompare(b.trialHrid))
+      .flatMap((record) => {
+        const metric = fields(record).includes(field) ? field : fields(record)[0];
+        const entry = ranking(entries(record), metric).find((entry) => entry.identity === identity);
+        return entry ? [{ record, entry, field: metric }] : [];
+      });
+  }
+  function coverage(record, identity) {
+    const entry = entries(record).find((entry) => entry.identity === identity);
+    if (!entry) return { state: "absent", entry: null };
+    const values = Object.values(entry.values);
+    return {
+      state: values.some((v) => v > 0) ? "positive" : values.some((v) => v === null) ? "unknown" : "zero",
+      entry
+    };
+  }
+  return {
+    fields,
+    scopeKey,
+    metricValue,
+    entries,
+    summary,
+    ranking,
+    scoped,
+    timeline,
+    comparison,
+    change,
+    members,
+    memberHistory,
+    coverage
   };
 });
 
@@ -2622,6 +2793,11 @@ window.MwiGuildCreditVersion = "1.2.11";
       invalidGuildPointBudget: "请输入不小于 0 的整数。",
       guildPointTrend: "每周公会点数",
       guildPointOverview: "公会点数与预算",
+      guildPointStatisticsHeading: "点数统计与历史",
+      buildingCatalogCurrentLevel: "当前 {current} 级",
+      buildingCatalogUnknownPlannedLevel: "未读取 · 按 {current} → {target} 级规划",
+      buildingCatalogPlannedLevel: "{current} → {target} 级 · 已加入",
+      buildingCatalogUnknownLevel: "未读取 · 按 0 级规划",
       guildPointPlanningHeading: "建设预算",
       guildPointStartingBalance: "自定起始点数",
       guildPointFollowBalance: "跟随游戏余额",
@@ -2918,6 +3094,80 @@ window.MwiGuildCreditVersion = "1.2.11";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      analysisTitle: "试炼数据分析",
+      analysisOverview: "单次试炼概览",
+      analysisRanking: "成员贡献排行",
+      analysisComparison: "同项目跨周对比",
+      analysisMember: "成员历史表现",
+      analysisCoverage: "成员记录分布",
+      analysisScatter: "战斗贡献分布",
+      analysisScope: "公会范围",
+      analysisProject: "试炼项目",
+      analysisWeek: "试炼周 / 记录",
+      analysisMetric: "分析指标",
+      analysisSearch: "搜索成员",
+      analysisSearchPlaceholder: "输入成员名筛选排行、记录分布和散点",
+      analysisRecordedMembers: "记录人数",
+      analysisTotalMetric: "{metric}合计",
+      analysisMean: "人均值",
+      analysisMedian: "中位数",
+      analysisKnown: "{count} 位成员中仅 {known} 位有该指标；合计、人均和中位数按已知值计算。",
+      analysisShow: "显示范围",
+      analysisTop10: "前 10 名",
+      analysisAll: "全部成员",
+      analysisTop5: "前 5 位成员贡献占比",
+      analysisRankingHint: "占比分母为本次全部已知成员数值之和，搜索不会改变排名和占比。点击姓名查看历史。",
+      analysisNoMembers: "没有匹配成员，请调整搜索内容。",
+      analysisNoRatio: "无法计算占比 / 增幅",
+      analysisNeedTwo: "至少需要两个不同试炼周的同项目记录，才能比较变化。",
+      analysisMissing: "该指标暂无已知数值。",
+      analysisFrom: "起始周",
+      analysisCohort: "成员范围",
+      analysisAllRecorded: "各周全部已记录成员",
+      analysisShared: "所选各周都有记录的成员",
+      analysisMeasure: "对比数值",
+      analysisMeasure_count: "记录人数",
+      analysisMeasure_total: "总量",
+      analysisMeasure_mean: "人均值",
+      analysisMeasure_median: "中位数",
+      analysisCompareHint:
+        "仅比较当前项目，截至所选记录所在周。人数、层数和参与时长可能不同，增长不等同于实力提升。缺少的周不补零。",
+      analysisSharedCount: "共同成员 {count} 位。",
+      analysisAmbiguousWeeks: "有 {count} 周存在多份同项目记录，已从对比中排除；当前周使用你选定的记录。",
+      analysisChange: "相对起始周变化",
+      analysisComparisonData: "各周数值明细",
+      analysisOpenMember: "查看 {name} 的历史表现",
+      analysisMatch_id: "角色 ID 匹配",
+      analysisMatch_name: "同名匹配",
+      analysisMatch_isolated: "身份不明确，仅此条记录",
+      analysisMemberHint: "不同项目分别解释；下方变化只与此前同项目记录比较。没有记录不表示缺席。",
+      analysisMemberTrend: "{trial} · {metric}历史",
+      analysisMemberData: "成员逐次明细",
+      analysisRecord: "日期与项目",
+      analysisValues: "记录数值",
+      analysisRankShare: "指标 / 名次 · 占比",
+      analysisPrevious: "相对此前同项目",
+      analysisCoverageHint: "按已保存记录展示，不是出勤率。战斗任一指标大于零记为有贡献；全部已知且为零才记为零。",
+      analysisCell_positive: "有贡献",
+      analysisCell_zero: "明确为零",
+      analysisCell_unknown: "数值未知",
+      analysisCell_absent: "无记录",
+      analysisPrev: "上一页",
+      analysisNext: "下一页",
+      analysisMemberPages: "成员页",
+      analysisRecordPages: "记录页",
+      analysisCombatOnly: "选择战斗试炼后显示输出与治疗／抗伤分布。生活工作量不与战斗数值混算。",
+      analysisYAxis: "纵轴指标",
+      analysisScatterHint:
+        "每个点代表一位成员；悬停或键盘聚焦查看数值，点击查看成员历史。重叠点可用 Tab 逐一查看，不根据位置判定职业或强弱。",
+      analysisPointHint: "悬停或聚焦散点查看成员数值。",
+      analysisMethod: "统计口径与数据限制",
+      analysisMethodText:
+        "只分析已保存的成员明细，原表占比不参与计算。零值与缺失值分开处理；总量为零时不计算占比，基期为零时不计算增幅。不同项目不合并评分。",
+      analysisUnknownGuild:
+        "当前为公会未注明的手动记录组；跨记录比较仅在这些数据来自同一公会时有意义，请勿混入其他公会数据。",
+      analysisIdentityHint:
+        "优先按角色 ID 关联；无 ID 时按完全相同的姓名匹配并标注。重名或前成员不跨记录合并，疑似拼写错误不自动修正。",
       trialImport: "导入 JSON",
       trialImportFile: "选择试炼历史 JSON 文件",
       trialImportHint:
@@ -3101,6 +3351,11 @@ window.MwiGuildCreditVersion = "1.2.11";
       invalidGuildPointBudget: "Enter a whole number of 0 or more.",
       guildPointTrend: "Weekly Guild Points",
       guildPointOverview: "Guild points & budget",
+      guildPointStatisticsHeading: "Points & history",
+      buildingCatalogCurrentLevel: "Current level {current}",
+      buildingCatalogUnknownPlannedLevel: "Unread · Plan level {current} → {target}",
+      buildingCatalogPlannedLevel: "Level {current} → {target} · In plan",
+      buildingCatalogUnknownLevel: "Unread · Plan from level 0",
       guildPointPlanningHeading: "Construction budget",
       guildPointStartingBalance: "Custom starting points",
       guildPointFollowBalance: "Use game balance",
@@ -3415,6 +3670,85 @@ window.MwiGuildCreditVersion = "1.2.11";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      analysisTitle: "Trial analytics",
+      analysisOverview: "Trial overview",
+      analysisRanking: "Member contributions",
+      analysisComparison: "Compare the same trial across weeks",
+      analysisMember: "Member history",
+      analysisCoverage: "Member record coverage",
+      analysisScatter: "Combat contribution distribution",
+      analysisScope: "Guild scope",
+      analysisProject: "Trial",
+      analysisWeek: "Week / record",
+      analysisMetric: "Metric",
+      analysisSearch: "Find a member",
+      analysisSearchPlaceholder: "Filter ranks, coverage and scatter by name",
+      analysisRecordedMembers: "Recorded members",
+      analysisTotalMetric: "Total {metric}",
+      analysisMean: "Mean",
+      analysisMedian: "Median",
+      analysisKnown: "Only {known} of {count} members have this metric. Totals, mean and median use known values.",
+      analysisShow: "Show",
+      analysisTop10: "Top 10",
+      analysisAll: "All members",
+      analysisTop5: "Top 5 members' share",
+      analysisRankingHint:
+        "Shares use all known values in this trial. Search does not change ranks or shares. Select a name to see history.",
+      analysisNoMembers: "No matching members. Adjust the search.",
+      analysisNoRatio: "Ratio unavailable",
+      analysisNeedTwo: "Comparison needs the same trial from at least two different weeks.",
+      analysisMissing: "No known values for this metric.",
+      analysisFrom: "Starting week",
+      analysisCohort: "Member cohort",
+      analysisAllRecorded: "All recorded members each week",
+      analysisShared: "Members recorded in every selected week",
+      analysisMeasure: "Compare",
+      analysisMeasure_count: "Recorded members",
+      analysisMeasure_total: "Total",
+      analysisMeasure_mean: "Mean",
+      analysisMeasure_median: "Median",
+      analysisCompareHint:
+        "Same trial only, through the selected week. Roster, tier and time may differ; growth is not a strength rating. Missing weeks are not zero.",
+      analysisSharedCount: "{count} members in common.",
+      analysisAmbiguousWeeks:
+        "Excluded {count} ambiguous weeks with multiple records for this trial. The current week uses your selected record.",
+      analysisChange: "Change from the starting week",
+      analysisComparisonData: "Weekly values",
+      analysisOpenMember: "View history for {name}",
+      analysisMatch_id: "Matched by character ID",
+      analysisMatch_name: "Matched by exact name",
+      analysisMatch_isolated: "Unresolved identity; this record only",
+      analysisMemberHint:
+        "Interpret each trial separately. Changes compare earlier records of the same trial. No record does not mean absence.",
+      analysisMemberTrend: "{trial} · {metric} history",
+      analysisMemberData: "Member record details",
+      analysisRecord: "Date and trial",
+      analysisValues: "Recorded values",
+      analysisRankShare: "Metric / rank · share",
+      analysisPrevious: "Change from prior same trial",
+      analysisCoverageHint:
+        "Coverage of saved records, not attendance. Combat is positive when any metric is positive; zero requires all metrics to be known and zero.",
+      analysisCell_positive: "Positive",
+      analysisCell_zero: "Zero",
+      analysisCell_unknown: "Unknown",
+      analysisCell_absent: "No record",
+      analysisPrev: "Previous",
+      analysisNext: "Next",
+      analysisMemberPages: "Member page",
+      analysisRecordPages: "Record page",
+      analysisCombatOnly:
+        "Select a combat trial to see damage versus healing or damage taken. Skilling work is analyzed separately.",
+      analysisYAxis: "Vertical axis",
+      analysisScatterHint:
+        "Each point is a member. Hover or focus for values; select for history. Use Tab to inspect overlapping points. Positions do not assign roles or strength.",
+      analysisPointHint: "Hover or focus a point to inspect values.",
+      analysisMethod: "Methods and data limits",
+      analysisMethodText:
+        "Calculations use saved member rows, not imported percentages. Missing values differ from zero. Zero totals have no shares; zero baselines have no percentage growth. Different trials are not scored together.",
+      analysisUnknownGuild:
+        "This group contains manual records without a guild. Cross-record comparisons are meaningful only if they belong to the same guild.",
+      analysisIdentityHint:
+        "Identity uses character IDs first; ID-less records match exact names and are labeled. Duplicate or former-member names stay separate. Suspected typos are not corrected.",
       trialImport: "Import JSON",
       trialImportFile: "Choose a trial history JSON file",
       trialImportHint:
@@ -7349,6 +7683,69 @@ window.MwiGuildCreditVersion = "1.2.11";
   "use strict";
 
   const PANEL_STYLES = `
+        #mwi-credit-optimizer .mwi-analysis-nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
+        #mwi-credit-optimizer .mwi-analysis-nav button{font-size:13px;background:#343753;color:#d6dfff;padding:8px 10px;min-height:34px}
+        #mwi-credit-optimizer .mwi-analysis-nav button:hover{background:#454b70;color:#fff}
+        #mwi-credit-optimizer .mwi-analysis-section h3{scroll-margin-top:16px}
+        #mwi-credit-optimizer .mwi-trial-analytics{--analysis-accent:#75dec5;--analysis-blue:#aebdff;min-width:0;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-analysis-heading{font-size:21px;margin:24px 0 18px;line-height:1.3}
+        #mwi-credit-optimizer .mwi-analysis-section{min-width:0;margin:28px 0;padding-top:20px;border-top:1px solid #50536e}
+        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:17px;margin:0 0 16px}
+        #mwi-credit-optimizer .mwi-analysis-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
+        #mwi-credit-optimizer .mwi-analysis-controls label{display:grid;gap:6px;flex:1 1 180px;min-width:0;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-controls select,#mwi-credit-optimizer .mwi-analysis-controls input{width:100%;min-width:0;max-width:100%;height:38px;font-size:14px}
+        #mwi-credit-optimizer .mwi-analysis-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+        #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3){grid-column:span 2}
+        #mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 3}
+        #mwi-credit-optimizer .mwi-analysis-method{margin:12px 0;color:#c4c7df;line-height:1.6}
+        #mwi-credit-optimizer .mwi-analysis-method summary{cursor:pointer;padding:8px 0;color:#aebdff}
+        #mwi-credit-optimizer .mwi-analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin:0;padding:12px 0}
+        #mwi-credit-optimizer .mwi-analysis-summary dt{color:#c4c7df;line-height:1.5;margin-bottom:8px}
+        #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:22px;font-weight:650;margin:0;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-analysis-ranking{padding:0;margin:12px 0;list-style:none;max-height:520px;overflow:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-analysis-ranking li{display:grid;grid-template-columns:28px minmax(140px,1.2fr) minmax(80px,2fr) minmax(85px,.8fr) minmax(70px,.7fr);align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid #3b3e58}
+        #mwi-credit-optimizer .mwi-analysis-ranking strong,#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{text-align:right;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-analysis-rank{color:#c4c7df}
+        #mwi-credit-optimizer button.mwi-analysis-member{background:transparent;color:#aebdff;text-align:left;padding:6px 2px;min-height:32px;height:auto;white-space:normal;overflow-wrap:anywhere;font:inherit;line-height:1.4;border-radius:3px}
+        #mwi-credit-optimizer button.mwi-analysis-member:hover{text-decoration:underline;text-underline-offset:3px;color:#dbe2ff;background:#343753}
+        #mwi-credit-optimizer .mwi-analysis-track{height:10px;background:#343750;overflow:hidden;border-radius:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-analysis-track i{display:block;height:100%;background:var(--analysis-accent)}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars{display:grid;gap:18px;margin:24px 0}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars>div{display:grid;grid-template-columns:70px 1fr 120px;gap:16px;align-items:center}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars>div:first-child i{background:var(--analysis-blue)}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars strong{text-align:right}
+        #mwi-credit-optimizer .mwi-analysis-change{font-size:16px;margin:20px 0}
+        #mwi-credit-optimizer .mwi-analysis-change span{color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-line{display:block;width:100%;height:auto;max-height:320px;overflow:visible}
+        #mwi-credit-optimizer .mwi-analysis-line text{fill:#c4c7df;font:12px system-ui,sans-serif}
+        #mwi-credit-optimizer .mwi-analysis-line path{fill:none;stroke:var(--analysis-accent);stroke-width:2.5}
+        #mwi-credit-optimizer .mwi-analysis-line circle{fill:var(--analysis-accent)}
+        #mwi-credit-optimizer .mwi-analysis-gridline{stroke:#50536e;stroke-width:1}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll{max-height:440px;max-width:100%;overflow:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll th{font-weight:500}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll th:first-child{min-width:150px}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll thead th{position:sticky;top:0;background:#272940;z-index:1}
+        #mwi-credit-optimizer .mwi-analysis-legend{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+        #mwi-credit-optimizer .mwi-analysis-cell{display:inline-block;padding:6px 10px;min-width:68px;text-align:center;border-radius:3px;font-size:12px}
+        #mwi-credit-optimizer .mwi-analysis-cell.positive{background:#254940;color:#b7f7e7}
+        #mwi-credit-optimizer .mwi-analysis-cell.zero{background:#383d63;color:#d6dfff}
+        #mwi-credit-optimizer .mwi-analysis-cell.unknown{background:#55462b;color:#ffe1a4}
+        #mwi-credit-optimizer .mwi-analysis-cell.absent{color:#c4c7df;outline:1px dashed #6c6f8c;outline-offset:-1px}
+        #mwi-credit-optimizer .mwi-analysis-pager{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+        #mwi-credit-optimizer .mwi-analysis-pager button{min-height:34px}
+        #mwi-credit-optimizer .mwi-analysis-pager button:disabled{opacity:.55;cursor:default}
+        #mwi-credit-optimizer .mwi-analysis-scatter{position:relative;padding:36px 36px 60px 85px;margin:16px 0}
+        #mwi-credit-optimizer .mwi-analysis-plot{height:300px;position:relative;border-left:1px solid #9196b7;border-bottom:1px solid #9196b7;background:linear-gradient(0deg,transparent calc(50% - .5px),#454962 50%,transparent calc(50% + .5px))}
+        #mwi-credit-optimizer .mwi-analysis-x-label{position:absolute;bottom:0;left:50%;transform:translateX(-50%);color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-y-label{position:absolute;top:0;left:0;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-y-tick{position:absolute;right:calc(100% + 12px);transform:translateY(50%);white-space:nowrap;font-size:12px;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-x-tick{position:absolute;top:calc(100% + 15px);transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#c4c7df}
+        #mwi-credit-optimizer button.mwi-analysis-dot{position:absolute;width:16px;height:16px;min-height:0;min-width:0;padding:0;border-radius:50%;background:#75dec5;border:2px solid #23253c;transform:translate(-50%,50%);cursor:pointer}
+        #mwi-credit-optimizer button.mwi-analysis-dot:hover,#mwi-credit-optimizer button.mwi-analysis-dot:focus-visible,#mwi-credit-optimizer button.mwi-analysis-dot.selected{background:#e9ce88;z-index:2;outline:2px solid #e9ce88;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-analysis-point-detail{min-height:44px;color:#e9ce88;line-height:1.6;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-analytics :is(button,select,input,summary,[tabindex]):focus-visible{outline:2px solid #92efdb;outline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-analytics ::selection{background:#456a72;color:#fff}
+        @container (max-width:700px){#mwi-credit-optimizer .mwi-analysis-filters{grid-template-columns:1fr 1fr}#mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3),#mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 2}#mwi-credit-optimizer .mwi-analysis-summary{grid-template-columns:1fr 1fr}#mwi-credit-optimizer .mwi-analysis-ranking li{grid-template-columns:24px minmax(80px,1fr) minmax(65px,1fr);gap:8px}#mwi-credit-optimizer .mwi-analysis-ranking .mwi-analysis-track{display:none}#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{grid-column:3;font-size:12px}#mwi-credit-optimizer .mwi-analysis-compare-bars>div{grid-template-columns:48px 1fr 80px;gap:8px}#mwi-credit-optimizer .mwi-analysis-scatter{padding-left:68px;padding-right:28px}}
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
@@ -7420,38 +7817,38 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-construction-status{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;padding:7px 9px;border-left:3px solid #43c4ad;background:#242b40;color:#dfe9f4}
         #mwi-credit-optimizer .mwi-construction-status[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-construction-status>span{min-width:0}
-        #mwi-credit-optimizer .mwi-construction-status button{flex:0 0 auto;min-height:28px;padding:3px 8px}
+        #mwi-credit-optimizer .mwi-construction-status button{flex:0 0 auto;min-height:36px;padding:3px 8px}
         #mwi-credit-optimizer .mwi-field-error{color:#ff9ca3!important}
         /* One ledger: observed points, planning inputs, and construction outcomes. */
-        #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;margin:0 0 12px;border:1px solid #474969;border-radius:10px;background:#24263d;overflow:hidden}
+        #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;margin:24px 0 0;border:1px solid #474969;border-radius:10px;background:#24263d;overflow:hidden}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 14px 0}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading>span:first-child{display:grid;gap:5px;min-width:0}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-heading h4{margin:0;color:#f4f5ff;font-size:14px}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-heading small{color:#b8bdd7;font-size:10px;line-height:1.5}
-        #mwi-credit-optimizer .mwi-guild-point-autosaved{flex:0 0 auto;padding:3px 0;color:#a2ddce;font-size:10px;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading h4{margin:0;color:#f4f5ff;font-size:16px}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading small{color:#b8bdd7;font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-guild-point-autosaved{flex:0 0 auto;padding:3px 0;color:#a2ddce;font-size:12px;white-space:nowrap}
         #mwi-credit-optimizer .mwi-guild-point-autosaved[data-source="cache"]{color:#e4c88c}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 12px;padding:16px 14px}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 12px;padding:16px 14px}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{display:grid;align-content:start;gap:5px;min-width:0}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:#b8bdd7;font-size:11px;line-height:1.4}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{color:#f4f5ff;font-size:19px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.3;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:#b8bdd7;font-size:12px;line-height:1.4}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{color:#f4f5ff;font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.3;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="next-week-guild-point-forecast"]{color:#9ee6d6}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="up"] strong{color:#9ee6d6}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="down"] strong{color:#ffb0b9}
-        #mwi-credit-optimizer .mwi-guild-point-planning{padding:14px;border-top:1px solid #41455f;background:#202238}
-        #mwi-credit-optimizer .mwi-guild-point-planning h4{margin:0 0 12px;color:#eef0fb;font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-planning{padding:16px;margin-bottom:20px;border:1px solid #41455f;border-radius:8px;background:#202238}
+        #mwi-credit-optimizer .mwi-guild-point-planning h4{margin:0 0 12px;color:#eef0fb;font-size:16px}
         #mwi-credit-optimizer .mwi-guild-point-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         #mwi-credit-optimizer .mwi-guild-point-controls input{background:#171a2b;color:#f1f3ff;border-color:#606682;color-scheme:dark}
         #mwi-credit-optimizer .mwi-guild-point-controls input::placeholder{color:#a9afc6}
         #mwi-credit-optimizer .mwi-guild-point-controls input:focus-visible{outline:2px solid #91dacb;outline-offset:2px}
-        #mwi-credit-optimizer .mwi-guild-point-planning-options{grid-column:1/-1;min-width:0;color:#b8bdd7;font-size:11px}
+        #mwi-credit-optimizer .mwi-guild-point-planning-options{grid-column:1/-1;min-width:0;color:#b8bdd7;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-planning-options summary{padding:7px 0;cursor:pointer}
         #mwi-credit-optimizer .mwi-guild-point-planning-options>label{display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,1fr);align-items:center;gap:8px;padding-top:8px;color:#dce0f1}
         #mwi-credit-optimizer .mwi-guild-point-planning-options label small{grid-column:1/-1}
-        #mwi-credit-optimizer .mwi-guild-point-controls>label,#mwi-credit-optimizer .mwi-construction-budget-input{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;align-items:start;gap:6px;min-width:0;color:#dce0f1;font-size:11px}
-        #mwi-credit-optimizer .mwi-construction-budget-input label{display:grid;gap:6px;color:#dce0f1;font-size:11px;font-weight:400}
-        #mwi-credit-optimizer .mwi-construction-budget-input input{width:100%;min-width:0;height:40px;border-color:#7778b4;font-variant-numeric:tabular-nums;font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-controls>label,#mwi-credit-optimizer .mwi-construction-budget-input{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;align-items:start;gap:6px;min-width:0;color:#dce0f1;font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-budget-input label{display:grid;gap:6px;color:#dce0f1;font-size:12px;font-weight:400}
+        #mwi-credit-optimizer .mwi-construction-budget-input input{width:100%;min-width:0;height:40px;border-color:#7778b4;font-variant-numeric:tabular-nums;font-size:14px}
         #mwi-credit-optimizer .mwi-construction-budget-input input::placeholder{color:#a9afc6;opacity:1}
-        #mwi-credit-optimizer .mwi-construction-budget-input>small,#mwi-credit-optimizer .mwi-guild-point-controls label small{min-width:0;color:#adb5cf;font-size:10px;line-height:1.5;white-space:normal}
+        #mwi-credit-optimizer .mwi-construction-budget-input>small,#mwi-credit-optimizer .mwi-guild-point-controls label small{min-width:0;color:#adb5cf;font-size:12px;line-height:1.5;white-space:normal}
         #mwi-credit-optimizer .mwi-construction-budget-input .mwi-field-error{color:#ffb0b9}
         #mwi-credit-optimizer .mwi-guild-point-week-stepper{width:100%;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-week-stepper input{flex:1;width:0;min-width:0;padding:4px 8px;text-align:left}
@@ -7460,26 +7857,26 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
         #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-budget>div{min-width:0;padding:0;background:transparent}
         #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric{align-content:start;gap:5px}
-        #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric small{color:#b8bdd7;font-size:10px;line-height:1.4}
-        #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric strong{color:#eef0fb;font:600 16px/1.4 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric small{color:#b8bdd7;font-size:12px;line-height:1.4}
+        #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric strong{color:#eef0fb;font:600 22px/1.4 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric[data-state="danger"] strong{color:#ffb0b9}
-        #mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1;display:block;min-width:0;color:#b8bdd7;font-size:10px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1;display:block;min-width:0;color:#b8bdd7;font-size:12px;line-height:1.5}
         #mwi-credit-optimizer .mwi-construction-budget[data-over-budget="true"] .mwi-construction-budget-summary{color:#e4c88c}
         #mwi-credit-optimizer .mwi-guild-point-eta{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:baseline;gap:4px 10px;margin-top:12px;padding-top:10px;border-top:1px solid #3b405b}
-        #mwi-credit-optimizer .mwi-guild-point-eta small{color:#b8bdd7;font-size:11px}
-        #mwi-credit-optimizer .mwi-guild-point-eta strong{color:#e4c88c;font:600 13px/1.4 system-ui,sans-serif}
-        #mwi-credit-optimizer .mwi-guild-point-eta span{grid-column:1/-1;min-width:0;color:#adb5cf;font-size:10px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-guild-point-eta small{color:#b8bdd7;font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-eta strong{color:#e4c88c;font:600 16px/1.4 system-ui,sans-serif}
+        #mwi-credit-optimizer .mwi-guild-point-eta span{grid-column:1/-1;min-width:0;color:#adb5cf;font-size:12px;line-height:1.5}
         #mwi-credit-optimizer .mwi-guild-point-forecast-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-status{min-width:0;margin:0;color:#b8bdd7;font-size:10px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-status{min-width:0;margin:0;color:#b8bdd7;font-size:12px;line-height:1.5}
         #mwi-credit-optimizer .mwi-guild-point-history-actions{display:flex;flex-wrap:wrap;flex:0 0 auto;gap:6px}
-        #mwi-credit-optimizer .mwi-guild-point-history-actions button{min-height:30px;padding:4px 8px;border:1px solid #535975;background:transparent;color:#cbd1e7;font-size:10px}
+        #mwi-credit-optimizer .mwi-guild-point-history-actions button{min-height:36px;padding:4px 8px;border:1px solid #535975;background:transparent;color:#cbd1e7;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-history-actions button[data-role="reset-guild-point-history"]{border-color:transparent;color:#d7b4bb}
-        #mwi-credit-optimizer .mwi-guild-point-history{border-top:1px solid #38635d;color:#c5d9d5;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-history{border-top:1px solid #38635d;color:#c5d9d5;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-history summary{padding:6px 9px;cursor:pointer;user-select:none}
         #mwi-credit-optimizer .mwi-guild-point-manual-form{border-top:1px solid #38635d;background:#203330}
-        #mwi-credit-optimizer .mwi-guild-point-table-scroll{max-height:310px;overflow:auto;overscroll-behavior:contain}
-        #mwi-credit-optimizer .mwi-guild-point-history table{width:100%;min-width:330px;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
-        #mwi-credit-optimizer .mwi-guild-point-history th,#mwi-credit-optimizer .mwi-guild-point-history td{box-sizing:border-box;padding:5px 8px;border-bottom:1px solid #36534f;text-align:left}
+        #mwi-credit-optimizer .mwi-guild-point-table-scroll{overflow:auto;overscroll-behavior:contain}
+        #mwi-credit-optimizer .mwi-guild-point-history table{width:100%;min-width:430px;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-guild-point-history th,#mwi-credit-optimizer .mwi-guild-point-history td{box-sizing:border-box;padding:10px 12px;border-bottom:1px solid #36534f;text-align:left}
         #mwi-credit-optimizer .mwi-guild-point-history thead th{position:sticky;top:0;z-index:1;background:#29443f;color:#abd5cd;font-weight:600}
         #mwi-credit-optimizer .mwi-guild-point-history th:first-child{width:31%}
         #mwi-credit-optimizer .mwi-guild-point-history th:nth-child(2){width:42%}
@@ -7488,18 +7885,18 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-guild-point-history tbody td{background:#24273d}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-source="manual"] :is(th,td){background:#253b3a}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-current-week="true"] :is(th,td){border-top:1px solid #67b9a9;background:#1d3534}
-        #mwi-credit-optimizer .mwi-guild-point-current-label{display:block;margin-top:2px;color:#77f3d0;font-size:8px;font-weight:700}
-        #mwi-credit-optimizer .mwi-guild-point-history input{box-sizing:border-box;width:100%;min-width:0;height:29px;padding:3px 7px;border:1px solid #4d6966;border-radius:4px;background:#171a2b;color:#eef5ff;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
+        #mwi-credit-optimizer .mwi-guild-point-current-label{display:block;margin-top:2px;color:#77f3d0;font-size:12px;font-weight:700}
+        #mwi-credit-optimizer .mwi-guild-point-history input{box-sizing:border-box;width:100%;min-width:0;height:36px;padding:5px 7px;border:1px solid #4d6966;border-radius:4px;background:#171a2b;color:#eef5ff;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}
         #mwi-credit-optimizer .mwi-guild-point-history input::placeholder{color:#9ea9bd;opacity:1}
-        #mwi-credit-optimizer .mwi-guild-point-readonly{display:block;padding:4px 7px;color:#dffff7;font:700 11px ui-monospace,SFMono-Regular,Menlo,monospace}
+        #mwi-credit-optimizer .mwi-guild-point-readonly{display:block;padding:4px 7px;color:#dffff7;font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace}
         #mwi-credit-optimizer .mwi-guild-point-tracked-value{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-tracked-value .mwi-guild-point-readonly{min-width:0;padding-inline-start:0}
-        #mwi-credit-optimizer .mwi-guild-point-tracked-value button{flex:0 0 auto;min-height:25px;padding:2px 7px;border-color:#655f79;background:#34344c;color:#e8e9f8;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-tracked-value button{flex:0 0 auto;min-height:32px;padding:2px 7px;border-color:#655f79;background:#34344c;color:#e8e9f8;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-source="trackedEditing"] :is(th,td){background:#3b3428}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr[data-source="manualOverride"] :is(th,td){background:#3a3037}
         #mwi-credit-optimizer .mwi-guild-point-history td small{color:#91bbb4}
         #mwi-credit-optimizer .mwi-guild-point-manual-footer{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:8px 9px}
-        #mwi-credit-optimizer .mwi-guild-point-manual-footer button{flex:0 0 auto;min-height:29px;padding:4px 9px;font-size:9px}
+        #mwi-credit-optimizer .mwi-guild-point-manual-footer button{flex:0 0 auto;min-height:36px;padding:4px 9px;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-manual-hint,#mwi-credit-optimizer .mwi-guild-point-history-empty{min-width:0;margin:0;color:#91bbb4;line-height:1.4}
         #mwi-credit-optimizer .mwi-guild-point-dialog-layer{position:fixed;z-index:80;inset:0;display:grid;place-items:center;padding:16px;background:#0d101bc7;overscroll-behavior:contain}
         #mwi-credit-optimizer .mwi-guild-point-dialog{display:grid;width:min(410px,calc(100vw - 32px));max-height:calc(100dvh - 32px);grid-template-columns:34px minmax(0,1fr);gap:10px;padding:16px;border-radius:12px;background:#292a43;box-shadow:0 18px 48px #070812cc;color:#eef5ff;overflow:auto}
@@ -7508,8 +7905,8 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-guild-point-dialog-copy{display:grid;gap:7px;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-dialog-copy h4{margin:0;color:#fff4cc;font-size:14px;line-height:1.3}
         #mwi-credit-optimizer .mwi-guild-point-dialog-copy p,#mwi-credit-optimizer .mwi-guild-point-dialog-copy small{margin:0;line-height:1.5;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-guild-point-dialog-copy p{color:#eef1fb;font-size:11px}
-        #mwi-credit-optimizer .mwi-guild-point-dialog-copy small{color:#bbc3d8;font-size:10px}
+        #mwi-credit-optimizer .mwi-guild-point-dialog-copy p{color:#eef1fb;font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-dialog-copy small{color:#bbc3d8;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-dialog-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:7px;margin-top:4px}
         #mwi-credit-optimizer .mwi-guild-point-dialog-actions button{min-height:34px;padding:6px 11px}
         #mwi-credit-optimizer .mwi-guild-point-dialog-actions .mwi-guild-point-dialog-confirm{background:#73572c;color:#fff4cc}
@@ -7522,43 +7919,43 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-construction-queue-heading small{line-height:1.35}
         #mwi-credit-optimizer .mwi-construction-queue-meta{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px;min-width:0}
         #mwi-credit-optimizer .mwi-construction-actions{display:flex;align-items:center;gap:4px;margin:0}
-        #mwi-credit-optimizer .mwi-construction-actions>button{flex:0 0 auto;min-height:28px;padding:3px 8px;font-size:10px}
+        #mwi-credit-optimizer .mwi-construction-actions>button{flex:0 0 auto;min-height:36px;padding:3px 8px;font-size:12px}
         #mwi-credit-optimizer .mwi-construction-more{position:relative}
         #mwi-credit-optimizer .mwi-construction-more[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-construction-more summary{display:grid;place-items:center;width:30px;height:28px;border:1px solid #555875;border-radius:4px;background:#343650;color:#fff;font-weight:700;cursor:pointer;list-style:none}
         #mwi-credit-optimizer .mwi-construction-more summary::-webkit-details-marker{display:none}
         #mwi-credit-optimizer .mwi-construction-more[open] summary{border-color:#8589b5;background:#41435f}
         #mwi-credit-optimizer .mwi-construction-more>div{position:absolute;top:32px;right:0;z-index:12;width:max-content;padding:4px;border:1px solid #5e4250;border-radius:5px;background:#25263d;box-shadow:0 8px 20px #10111ccc}
-        #mwi-credit-optimizer .mwi-construction-more button{min-height:30px;padding:4px 9px;background:#5a3340;color:#ffd5d9;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-more button{min-height:36px;padding:4px 9px;background:#5a3340;color:#ffd5d9;white-space:nowrap}
         #mwi-credit-optimizer .mwi-construction-empty{display:grid;justify-items:start;gap:3px;padding:14px 10px;border-bottom:1px solid #3f4160;color:#d7d9ed}
         #mwi-credit-optimizer .mwi-construction-empty strong{font-size:12px}
-        #mwi-credit-optimizer .mwi-construction-empty small{color:#aeb1d3;font-size:10px}
-        #mwi-credit-optimizer .mwi-construction-rail{position:relative;display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none}
+        #mwi-credit-optimizer .mwi-construction-empty small{color:#aeb1d3;font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-rail{position:relative;display:grid;gap:12px;margin:12px 0 0;padding:0;list-style:none}
         #mwi-credit-optimizer .mwi-construction-group{overflow:visible;border:1px solid #4b4d68;border-left:3px solid #777aa4;border-radius:6px;background:#292a43}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="within"]{border-left-color:#43c4ad}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="partial"]{border-left-color:#d8a33c}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="outside"]{border-left-color:#e65d68}
-        #mwi-credit-optimizer .mwi-construction-row{display:grid;grid-template-columns:32px 40px minmax(112px,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:5px 7px;padding:7px 8px 7px 0}
+        #mwi-credit-optimizer .mwi-construction-row{display:grid;grid-template-columns:32px 40px minmax(0,1fr) minmax(84px,.55fr);grid-template-rows:auto auto;align-items:center;gap:10px;padding:12px 12px 12px 0}
         #mwi-credit-optimizer .mwi-construction-drag-handle{grid-column:1;grid-row:1/3;align-self:stretch;width:32px;min-width:32px;min-height:58px;border-radius:4px 0 0 4px!important}
         #mwi-credit-optimizer .mwi-construction-building-icon{grid-column:2;grid-row:1;display:grid;place-items:center;width:40px;height:40px}
         #mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:38px;height:38px}
         #mwi-credit-optimizer .mwi-construction-identity{grid-column:3;grid-row:1;display:grid;gap:2px;min-width:0}
-        #mwi-credit-optimizer .mwi-construction-identity strong{overflow:hidden;color:#fff;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-construction-identity small{overflow:hidden;color:#aeb1d3;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-identity strong{color:#fff;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-construction-identity small{color:#b8bdd7;font-size:12px;white-space:normal;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-construction-cost{grid-column:4;grid-row:1;display:grid;justify-items:end;gap:1px;min-width:68px;text-align:right}
-        #mwi-credit-optimizer .mwi-construction-cost small{color:#aeb1d3;font-size:8px}
-        #mwi-credit-optimizer .mwi-construction-cost strong{color:#ffe09a;font:700 12px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-construction-cost em{color:#aeb1d3;font-size:8px;font-style:normal;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-cost small{color:#aeb1d3;font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-cost strong{color:#ffe09a;font:700 16px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-construction-cost em{color:#aeb1d3;font-size:12px;font-style:normal;white-space:normal;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="within"] .mwi-construction-cost em{color:#77f3d0}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="partial"] .mwi-construction-cost em{color:#ffd17c}
         #mwi-credit-optimizer .mwi-construction-group[data-budget-state="outside"] .mwi-construction-cost em{color:#ff9ca3}
         #mwi-credit-optimizer .mwi-construction-row-actions{grid-column:2/-1;grid-row:2;display:flex;align-items:end;flex-wrap:wrap;gap:4px;min-width:0}
-        #mwi-credit-optimizer .mwi-construction-target{display:flex;align-items:center;gap:5px;min-width:104px;color:#aeb1d3;font-size:9px}
-        #mwi-credit-optimizer .mwi-construction-target select{width:82px;min-width:0;min-height:30px;padding:3px 6px}
-        #mwi-credit-optimizer .mwi-construction-row-actions button{min-height:30px;padding:3px 7px}
+        #mwi-credit-optimizer .mwi-construction-target{display:flex;align-items:center;gap:5px;min-width:104px;color:#aeb1d3;font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-target select{width:82px;min-width:0;min-height:36px;padding:3px 6px}
+        #mwi-credit-optimizer .mwi-construction-row-actions button{min-height:36px;padding:3px 7px}
         #mwi-credit-optimizer .mwi-construction-level-button{min-width:34px;background:#43c4ad;color:#10201f}
         #mwi-credit-optimizer .mwi-construction-order-actions{display:flex;gap:4px;margin-left:auto}
-        #mwi-credit-optimizer .mwi-construction-order-actions .mwi-icon-button{min-height:30px}
+        #mwi-credit-optimizer .mwi-construction-order-actions .mwi-icon-button{min-height:36px}
         #mwi-credit-optimizer .mwi-construction-expand,#mwi-credit-optimizer .mwi-construction-remove{width:32px;min-width:32px;padding:0!important;background:#343650;color:#fff}
         #mwi-credit-optimizer .mwi-construction-remove{background:#5a3340;color:#ffd5d9;font-size:18px}
         #mwi-credit-optimizer .mwi-construction-group-steps[hidden]{display:none!important}
@@ -7571,24 +7968,24 @@ window.MwiGuildCreditVersion = "1.2.11";
         #mwi-credit-optimizer .mwi-building-picker[data-open="true"] .mwi-building-picker-toggle{border-radius:6px 6px 0 0!important;border-bottom:1px solid #3f4160;background:#30324f!important}
         #mwi-credit-optimizer .mwi-building-picker-plus{display:grid;place-items:center;width:26px;height:26px;border:1px solid #43c4ad;border-radius:5px;background:#245149;color:#dffff7;font-size:17px}
         #mwi-credit-optimizer .mwi-building-picker-toggle>span:nth-child(2){display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0}
-        #mwi-credit-optimizer .mwi-building-picker-toggle strong{font-size:12px}
+        #mwi-credit-optimizer .mwi-building-picker-toggle strong{font-size:14px}
         #mwi-credit-optimizer .mwi-building-picker-chevron{color:#aeb1d3}
-        #mwi-credit-optimizer .mwi-building-level-status{padding:2px 6px;border:1px solid #80663f;border-radius:999px;background:#3b3323;color:#ffd17c!important;font-size:9px!important}
+        #mwi-credit-optimizer .mwi-building-level-status{padding:2px 6px;border:1px solid #80663f;border-radius:999px;background:#3b3323;color:#ffd17c!important;font-size:12px!important}
         #mwi-credit-optimizer .mwi-building-level-status[data-complete="true"]{border-color:#4d7d73;background:#203d3a;color:#bff6ea!important}
         #mwi-credit-optimizer .mwi-building-picker-body[hidden]{display:none!important}
         #mwi-credit-optimizer .mwi-building-picker-body{min-width:0}
         #mwi-credit-optimizer .mwi-building-pane-heading{padding:8px 9px}
-        #mwi-credit-optimizer .mwi-building-pane-heading>span>h4{margin:0;color:#fff;font-size:12px}
-        #mwi-credit-optimizer .mwi-building-pane-heading input{min-height:30px}
+        #mwi-credit-optimizer .mwi-building-pane-heading>span>h4{margin:0;color:#fff;font-size:14px}
+        #mwi-credit-optimizer .mwi-building-pane-heading input{min-height:36px}
         #mwi-credit-optimizer .mwi-building-categories{padding:6px 7px}
-        #mwi-credit-optimizer .mwi-building-grid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:5px;padding:7px}
-        #mwi-credit-optimizer .mwi-building-tile{min-height:48px;padding:5px!important}
+        #mwi-credit-optimizer .mwi-building-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:8px;padding:12px}
+        #mwi-credit-optimizer .mwi-building-tile{grid-template-columns:40px minmax(0,1fr);align-items:center;justify-items:start;gap:10px;aspect-ratio:auto;min-height:76px;padding:10px!important;text-align:left}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{outline:1px solid #77f3d0;outline-offset:-3px}
         #mwi-credit-optimizer .mwi-building-tile:focus-visible{outline:2px solid #fff;outline-offset:1px}
-        #mwi-credit-optimizer .mwi-building-icon{width:min(70%,42px);height:min(70%,42px)}
+        #mwi-credit-optimizer .mwi-building-icon{width:40px;height:40px}
         @container (min-width:720px){#mwi-credit-optimizer .mwi-construction-layout{grid-template-columns:minmax(0,1fr);align-items:start}#mwi-credit-optimizer .mwi-construction-layout[data-picker-open="true"]{grid-template-columns:minmax(360px,1.12fr) minmax(300px,.88fr)}#mwi-credit-optimizer .mwi-construction-queue-pane{position:static;top:auto}}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-construction-budget{grid-template-columns:repeat(3,minmax(0,1fr))}#mwi-credit-optimizer .mwi-construction-budget-input{grid-column:1/-1}#mwi-credit-optimizer .mwi-construction-budget-summary{grid-column:1/-1}#mwi-credit-optimizer .mwi-guild-point-controls{grid-template-columns:minmax(0,1fr)}#mwi-credit-optimizer .mwi-guild-point-controls output{grid-column:1}#mwi-credit-optimizer .mwi-guild-point-forecast-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#mwi-credit-optimizer .mwi-guild-point-eta{grid-template-columns:auto minmax(0,1fr)}#mwi-credit-optimizer .mwi-guild-point-eta span{grid-column:1/-1}#mwi-credit-optimizer .mwi-guild-point-forecast-footer{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-guild-point-history-actions{justify-content:flex-end}#mwi-credit-optimizer .mwi-guild-point-manual-footer{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-guild-point-manual-footer button{align-self:flex-end}#mwi-credit-optimizer .mwi-construction-queue-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-construction-queue-meta{justify-content:space-between}#mwi-credit-optimizer .mwi-construction-actions{margin-left:auto}}
-        @container (max-width:400px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:30px 36px minmax(0,1fr) auto;gap:5px;padding-right:6px}#mwi-credit-optimizer .mwi-construction-drag-handle{width:30px;min-width:30px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{min-width:58px}#mwi-credit-optimizer .mwi-construction-target{min-width:96px}#mwi-credit-optimizer .mwi-construction-target select{width:70px}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}}
+        @container (max-width:600px){#mwi-credit-optimizer .mwi-construction-row{grid-template-columns:28px 36px minmax(0,1fr);gap:8px;padding-right:10px}#mwi-credit-optimizer .mwi-construction-drag-handle{grid-row:1/4;width:28px;min-width:28px}#mwi-credit-optimizer .mwi-construction-building-icon{width:36px;height:36px}#mwi-credit-optimizer .mwi-construction-building-icon .mwi-building-icon{width:34px;height:34px}#mwi-credit-optimizer .mwi-construction-cost{grid-column:2/-1;grid-row:2;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;text-align:left}#mwi-credit-optimizer .mwi-construction-row-actions{grid-row:3}#mwi-credit-optimizer .mwi-building-pane-heading{align-items:stretch;flex-direction:column}#mwi-credit-optimizer .mwi-building-pane-heading input{width:100%}#mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-budget{grid-template-columns:repeat(2,minmax(0,1fr))}#mwi-credit-optimizer .mwi-guild-point-planning .mwi-construction-metric:last-of-type{grid-column:1/-1}#mwi-credit-optimizer .mwi-guild-point-forecast-grid{grid-template-columns:minmax(0,1fr)}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group,#mwi-credit-optimizer .mwi-building-picker-toggle{transition:none}}
         #mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"]{border-color:#d8a33c!important;background:linear-gradient(135deg,#493f2a,#353147)!important;color:#fff4d4!important;box-shadow:0 0 0 1px #d8a33c33}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="mixed"] .mwi-token-credit-plan-indicator{border-color:#ffd17c;background:#ffd17c;color:#332814}#mwi-credit-optimizer .mwi-material-copy{flex:1 1 auto}#mwi-credit-optimizer .mwi-material-exchange-mode{flex:0 0 auto;min-height:26px!important;padding:4px 7px!important;border:1px solid #66698f!important;border-radius:999px!important;background:#353653!important;color:#dfe1f4!important;font-size:10px;line-height:1.1;white-space:nowrap}#mwi-credit-optimizer .mwi-material-exchange-mode:hover{border-color:#77f3d0!important}#mwi-credit-optimizer .mwi-material-exchange-mode[data-active="true"]{border-color:#43c4ad!important;background:#245149!important;color:#dffff7!important;box-shadow:0 0 0 1px #43c4ad22}
         /* Compact shrine planner and aligned result rows. */
@@ -7656,11 +8053,50 @@ window.MwiGuildCreditVersion = "1.2.11";
         @container (max-width:650px){#mwi-credit-optimizer .mwi-token-budget{grid-template-columns:minmax(0,1fr) auto}#mwi-credit-optimizer .mwi-token-budget-heading{grid-column:1;grid-row:1}#mwi-credit-optimizer .mwi-token-budget-inputs{grid-column:1/-1;grid-row:2}#mwi-credit-optimizer .mwi-token-budget-available{grid-column:2;grid-row:1;align-self:start;justify-self:end}}
         @container (max-width:400px){#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:76px}#mwi-credit-optimizer .mwi-token-budget-inputs label>span{display:none}#mwi-credit-optimizer .mwi-token-budget-percent{min-width:34px;padding-inline:4px}}
         @container (max-width:520px){
-          #mwi-credit-optimizer .mwi-guild-point-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
-          #mwi-credit-optimizer .mwi-guild-point-controls .mwi-construction-budget-input{grid-column:auto}
+          #mwi-credit-optimizer .mwi-guild-point-controls{grid-template-columns:minmax(0,1fr)}
+          #mwi-credit-optimizer .mwi-guild-point-controls .mwi-construction-budget-input{grid-column:1/-1}
           #mwi-credit-optimizer .mwi-guild-point-controls output{grid-column:1/-1}
           #mwi-credit-optimizer .mwi-guild-point-forecast-heading{flex-wrap:wrap}
         }
+        /* Construction uses readable task roles independently of other compact plugin views. */
+        #mwi-credit-optimizer .mwi-building-grid{max-height:460px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#777aa4 #24253c}
+        #mwi-credit-optimizer .mwi-building-pane-heading small{font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-building-pane-heading input,#mwi-credit-optimizer .mwi-construction-target select{background:#171a2b;color:#eef0fb;border:1px solid #7778b4;color-scheme:dark}
+        #mwi-credit-optimizer .mwi-guild-point-controls output,#mwi-credit-optimizer .mwi-construction-budget-summary{font-size:14px;line-height:1.55}
+        #mwi-credit-optimizer .mwi-guild-point-history tbody tr:hover :is(th,td){background:#303d4a}
+
+        #mwi-credit-optimizer [data-role="construction-view"]{font-size:14px;line-height:1.55}
+        #mwi-credit-optimizer .mwi-construction-planning-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;margin-bottom:16px}
+        #mwi-credit-optimizer .mwi-construction-planning-heading h4{margin:0}
+        #mwi-credit-optimizer .mwi-construction-planning-heading>span{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;color:#b8bdd7}
+        #mwi-credit-optimizer .mwi-construction-planning-heading small{font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-planning-heading strong{font-size:22px;color:#eef0fb;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-building-tile-copy{display:grid;min-width:0;gap:4px}
+        #mwi-credit-optimizer .mwi-building-tile-name{position:static;width:auto;height:auto;overflow:visible;clip-path:none;white-space:normal;overflow-wrap:anywhere;font-size:14px;line-height:1.45;font-weight:600}
+        #mwi-credit-optimizer .mwi-building-tile-level{font-size:12px;line-height:1.45;color:#c4c8e1;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-building-tile[data-level-known="false"] .mwi-building-tile-level{color:#ffd17c}
+        #mwi-credit-optimizer .mwi-building-tile[data-planned="true"] .mwi-building-tile-level{color:#9ee6d6}
+        #mwi-credit-optimizer .mwi-construction-queue h4{font-size:16px}
+        #mwi-credit-optimizer .mwi-construction-queue-heading small{font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-construction-step{min-height:42px;gap:10px}
+        #mwi-credit-optimizer .mwi-construction-step-copy small{font-size:12px}
+        #mwi-credit-optimizer .mwi-construction-step-cost{font-size:14px}
+        #mwi-credit-optimizer .mwi-budget-cutoff{font-size:12px;line-height:1.5;padding:8px 12px}
+        #mwi-credit-optimizer .mwi-guild-point-history{font-size:14px;line-height:1.55}
+        #mwi-credit-optimizer .mwi-guild-point-history summary{padding:12px 14px}
+        #mwi-credit-optimizer .mwi-guild-point-history td small{font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-tracked-value{flex-wrap:wrap}
+        #mwi-credit-optimizer .mwi-guild-point-controls>label,#mwi-credit-optimizer .mwi-construction-budget-input label{font-size:14px}
+        #mwi-credit-optimizer .mwi-guild-point-controls input,#mwi-credit-optimizer .mwi-building-pane-heading input,#mwi-credit-optimizer .mwi-construction-target select{font-size:14px}
+        #mwi-credit-optimizer .mwi-building-categories{flex-wrap:wrap;overflow:visible}
+        #mwi-credit-optimizer .mwi-building-categories button{font-size:14px;min-height:36px}
+        #mwi-credit-optimizer .mwi-construction-target{flex-wrap:wrap;min-width:0;font-size:14px}
+        #mwi-credit-optimizer .mwi-construction-row-actions{align-items:center;gap:8px}
+        #mwi-credit-optimizer .mwi-construction-row-actions button{font-size:14px}
+        #mwi-credit-optimizer .mwi-construction-remove{font-size:20px}
+        #mwi-credit-optimizer .mwi-guild-point-manual-hint{font-size:12px}
+        #mwi-credit-optimizer .mwi-guild-point-eta{grid-template-columns:minmax(0,1fr)}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-heading,#mwi-credit-optimizer .mwi-guild-point-forecast-footer{flex-wrap:wrap}
         /* Shrine route workspace: one visual signature, compact utility controls, and explicit overflow safety. */
         #mwi-credit-optimizer{
           --mwi-void:#171827;
@@ -8478,8 +8914,7 @@ window.MwiGuildCreditVersion = "1.2.11";
       return `<div class="mwi-guild-point-eta" data-status="${eta.status}"><small>${escapeHtml(t("constructionEta"))}</small><strong data-role="construction-eta">${escapeHtml(copy[0])}</strong><span data-role="construction-eta-detail">${escapeHtml(copy[1])}</span></div>`;
     }
 
-    function renderGuildPointForecast(historySummary, plan, definitions = null) {
-      const budgetMarkup = definitions ? renderGuildBuildingBudget(plan, definitions) : "";
+    function renderGuildPointForecast(historySummary) {
       const history = guildPointForecastBasis(historySummary);
       const currentWeekPoints = state.guildPointSummary && state.guildPointSummary.currentWeekPoints;
       const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints) && currentWeekPoints > 0;
@@ -8496,7 +8931,6 @@ window.MwiGuildCreditVersion = "1.2.11";
       const forecastText = Number.isFinite(history.effectiveForecastPoints)
         ? formatNumber(history.effectiveForecastPoints)
         : "-";
-      const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
       const status = !state.guildPointSummary
         ? t("guildPointHistoryUnavailable")
         : history.hasConflict
@@ -8517,7 +8951,7 @@ window.MwiGuildCreditVersion = "1.2.11";
         : predictsCurrentWeek
           ? "predictedCurrentWeekGuildPoints"
           : "latestWeeklyGuildPoints";
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointOverview"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointOverview"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div><div class="mwi-guild-point-planning"><h4>${escapeHtml(t("guildPointPlanningHeading"))}</h4>${renderGuildPointForecastControls(plan)}${budgetMarkup}${renderGuildPointEta(plan, history)}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -8718,7 +9152,7 @@ window.MwiGuildCreditVersion = "1.2.11";
           ? t("buildingTileDefaultZeroLabel", { building: label })
           : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
       const atMaxLevel = !plan && liveLevel >= definition.maxLevel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(levelKnown)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -8798,11 +9232,17 @@ window.MwiGuildCreditVersion = "1.2.11";
       return `<section class="mwi-construction-queue" aria-label="${escapeHtml(t("constructionQueue"))}"><div class="mwi-construction-queue-heading"><span><h4>${escapeHtml(t("constructionQueue"))}</h4><small id="mwi-construction-sort-hint">${escapeHtml(t("constructionQueueDragHint"))}</small></span><span class="mwi-construction-queue-meta"><small>${escapeHtml(t("constructionSummary", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</small>${renderGuildConstructionActions(plan)}</span></div>${groups.length ? `<ol class="mwi-construction-rail" data-role="construction-sort-list">${groups.join("")}</ol>` : `<div class="mwi-construction-empty"><strong>${escapeHtml(t("constructionQueueEmptyTitle"))}</strong><small>${escapeHtml(t("constructionQueueEmpty"))}</small></div>`}</section>`;
     }
 
+    function renderGuildPointPlanning(plan, definitions, historySummary) {
+      const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
+      return `<section class="mwi-guild-point-planning" aria-label="${escapeHtml(t("guildPointPlanningHeading"))}"><div class="mwi-construction-planning-heading"><h4>${escapeHtml(t("guildPointPlanningHeading"))}</h4><span><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></span></div>${renderGuildPointForecastControls(plan)}${renderGuildBuildingBudget(plan, definitions)}${renderGuildPointEta(plan, historySummary)}</section>`;
+    }
+
     function renderGuildConstruction(plan, definitions, historySummary) {
       const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
       const levels = guildBuildingLevelSnapshot(definitions);
       const spriteBaseHref = guildBuildingSpriteBaseHref();
-      return `${renderGuildPointForecast(historySummary, plan, definitions)}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>`;
+      const budget = renderGuildPointPlanning(plan, definitions, historySummary);
+      return `${budget}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>${renderGuildPointForecast(historySummary)}`;
     }
 
     function applyGuildBuildingFilters(results) {
@@ -9119,6 +9559,7 @@ window.MwiGuildCreditVersion = "1.2.11";
       guildPointPlanningBudget,
       guildPointEta,
       renderGuildPointForecast,
+      renderGuildPointPlanning,
       syncGuildPointHistory,
       refreshGuildConstructionBudgetPreview,
       refreshGuildConstruction,
@@ -9153,6 +9594,8 @@ window.MwiGuildCreditVersion = "1.2.11";
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    analyticsApi,
+    analyticsViewApi,
     getBridge,
     getPanel
   }) {
@@ -9209,6 +9652,18 @@ window.MwiGuildCreditVersion = "1.2.11";
       }
       return record.trialDate || t("trialUnknownDate");
     }
+
+    const analytics = analyticsViewApi.createTrialAnalyticsView({
+      api: analyticsApi,
+      t,
+      escapeHtml,
+      trialName,
+      recordDate,
+      onSelectRecord(key) {
+        selectedKey = key;
+        refresh(getPanel());
+      }
+    });
 
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
@@ -9309,6 +9764,7 @@ window.MwiGuildCreditVersion = "1.2.11";
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
+      markup += analytics.render(records, selected);
       markup += `<div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
         .map(
           (record, index) =>
@@ -9330,7 +9786,7 @@ window.MwiGuildCreditVersion = "1.2.11";
         }
         return String(a.characterId).localeCompare(String(b.characterId));
       });
-      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(row[field] ?? 0))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(analyticsApi.metricValue(selected, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details>`;
       host.innerHTML = markup;
     }
@@ -9351,6 +9807,7 @@ window.MwiGuildCreditVersion = "1.2.11";
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      analytics.bind(host);
       host.addEventListener("change", (event) => {
         if (event.target.dataset.role === "trial-import-file") {
           void readImport(event.target.files?.[0], panel);
@@ -9394,6 +9851,406 @@ window.MwiGuildCreditVersion = "1.2.11";
     return { start, dispose, bind, refresh };
   }
   return { createTrialHistoryView };
+});
+
+
+// SOURCE: src/ui/trial-analytics-view.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialAnalyticsView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  // Extend the incumbent guild panel: scoped filters, comparable statistics,
+  // full-width ranks and charts with inspectable tables. Minimum design width
+  // is 900px; smaller panels retain contained scrolling and usable controls.
+  function createTrialAnalyticsView({ api, t, escapeHtml: esc, trialName, recordDate, onSelectRecord }) {
+    let records = [],
+      selected = null,
+      host = null,
+      group = [],
+      people = [];
+    const state = {
+      metric: "workDone",
+      query: "",
+      limit: "10",
+      cohort: "all",
+      measure: "total",
+      start: "",
+      member: "",
+      y: "healingDone",
+      memberPage: 0,
+      recordPage: 0
+    };
+    const text = (key, values) => esc(t(key, values));
+    const num = (value) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+        : "—";
+    const pct = (value) =>
+      value === null || value === undefined
+        ? t("analysisNoRatio")
+        : (value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
+    const axisNum = (value) => value.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 });
+    const metricName = (field) => t(`trialField_${field}`);
+    const week = (record) =>
+      record.weekStartAt
+        ? `${new Date(record.weekStartAt).getUTCMonth() + 1}/${new Date(record.weekStartAt).getUTCDate()}`
+        : t("trialUnknownDate");
+    const option = (value, label, current) =>
+      `<option value="${esc(String(value))}"${String(value) === String(current) ? " selected" : ""}>${esc(label)}</option>`;
+    const select = (role, label, options) =>
+      `<label>${text(label)}<select data-analysis="${role}">${options}</select></label>`;
+    const personName = (entry) => entry.name || t("trialFormerMember");
+    const matchLabel = (entry) => t(`analysisMatch_${entry.match}`);
+    const memberButton = (entry, body) =>
+      `<button type="button" class="mwi-analysis-member" data-analysis-member="${esc(entry.identity)}" aria-label="${text("analysisOpenMember", { name: personName(entry) })}">${body || esc(personName(entry))}</button>`;
+    const section = (id, title, content) =>
+      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}">${text(title)}</h3>${content}</section>`;
+    const scrollTable = (caption, headers, rows) =>
+      `<div class="mwi-analysis-table-scroll" role="region" tabindex="0" aria-label="${esc(caption)}"><table class="mwi-trial-table"><caption>${esc(caption)}</caption><thead><tr>${headers.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    const matches = (entry) => personName(entry).toLocaleLowerCase().includes(state.query.toLocaleLowerCase());
+
+    function chart(points, label) {
+      if (points.length < 2) return `<p class="mwi-trial-help">${text("analysisNeedTwo")}</p>`;
+      const finite = points.filter((p) => p.value !== null);
+      if (!finite.length) return `<p>${text("analysisMissing")}</p>`;
+      const max = Math.max(...finite.map((p) => p.value), 1);
+      if (points.length === 2)
+        return `<div class="mwi-analysis-compare-bars" role="img" aria-label="${esc(label)}">${points.map((p) => `<div><span>${esc(p.label)}</span><div class="mwi-analysis-track"><i style="width:${p.value === null ? 0 : (p.value / max) * 100}%"></i></div><strong>${num(p.value)}</strong></div>`).join("")}</div>`;
+      const minTime = points[0].time,
+        span = points.at(-1).time - minTime || 1;
+      const x = (p) => 64 + ((p.time - minTime) / span) * 672,
+        y = (p) => 190 - (p.value / max) * 156;
+      const paths = [];
+      let path = "";
+      for (const p of points) {
+        if (p.value === null) {
+          if (path) paths.push(path);
+          path = "";
+        } else path += `${path ? " L" : "M"}${x(p)} ${y(p)}`;
+      }
+      if (path) paths.push(path);
+      const stride = Math.max(1, Math.ceil(points.length / 6));
+      return `<svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
+        ${[0, 0.5, 1].map((f) => `<line x1="64" x2="736" y1="${190 - f * 156}" y2="${190 - f * 156}" class="mwi-analysis-gridline"/><text x="56" y="${194 - f * 156}" text-anchor="end">${axisNum(max * f)}</text>`).join("")}
+        ${paths.map((d) => `<path d="${d}"/>`).join("")}
+        ${finite.map((p) => `<circle cx="${x(p)}" cy="${y(p)}" r="4"><title>${esc(p.label)}: ${num(p.value)}</title></circle>`).join("")}
+        ${points
+          .filter((p, i) => i % stride === 0 || i === points.length - 1)
+          .map((p) => `<text x="${x(p)}" y="220" text-anchor="middle">${esc(p.label)}</text>`)
+          .join("")}</svg>`;
+    }
+
+    function overview() {
+      const entries = api.entries(selected),
+        stats = api.summary(entries, state.metric);
+      const items = [
+        [t("analysisRecordedMembers"), stats.count],
+        [t("analysisTotalMetric", { metric: metricName(state.metric) }), stats.total],
+        [t("analysisMean"), stats.mean],
+        [t("analysisMedian"), stats.median]
+      ];
+      let markup = `<dl class="mwi-analysis-summary">${items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${num(value)}</dd></div>`).join("")}</dl>`;
+      if (selected.kind === "combat")
+        markup += `<p class="mwi-trial-meta">${api
+          .fields(selected)
+          .map((field) => `${esc(metricName(field))}: <strong>${num(api.summary(entries, field).total)}</strong>`)
+          .join(" · ")}</p>`;
+      if (stats.known !== stats.count)
+        markup += `<p class="mwi-trial-notice">${text("analysisKnown", { known: stats.known, count: stats.count })}</p>`;
+      return section("overview", "analysisOverview", markup);
+    }
+    function ranks() {
+      const ranked = api.ranking(api.entries(selected), state.metric),
+        stats = api.summary(ranked, state.metric);
+      const found = ranked.filter(matches),
+        displayed = state.limit === "all" ? found : found.slice(0, 10);
+      const max = Math.max(...ranked.map((r) => r.value ?? 0), 1);
+      const controls = `<div class="mwi-analysis-controls">${select("limit", "analysisShow", option("10", t("analysisTop10"), state.limit) + option("all", t("analysisAll"), state.limit))}<p>${text("analysisTop5")}: <strong>${esc(pct(stats.top5Share))}</strong></p></div>`;
+      return section(
+        "ranking",
+        "analysisRanking",
+        controls +
+          `<p class="mwi-trial-help">${text("analysisRankingHint")}</p><ol class="mwi-analysis-ranking" aria-label="${text("analysisRanking")}">${displayed.map((entry) => `<li><span class="mwi-analysis-rank">${entry.rank ?? "—"}</span>${memberButton(entry)}<div class="mwi-analysis-track" aria-hidden="true"><i style="width:${entry.value === null ? 0 : (entry.value / max) * 100}%"></i></div><strong>${num(entry.value)}</strong><span>${esc(pct(entry.share))}</span></li>`).join("")}</ol>${!displayed.length ? `<p>${text("analysisNoMembers")}</p>` : ""}`
+      );
+    }
+    function compare() {
+      const timeline = api.timeline(records, selected);
+      if (!timeline.records.some((r) => String(r.weekStartAt) === state.start))
+        state.start = String(timeline.records[0]?.weekStartAt || "");
+      const result = api.comparison(records, selected, state.metric, state.cohort, Number(state.start));
+      const points = result.points,
+        statsKeys = ["count", "total", "mean", "median"];
+      let markup = `<div class="mwi-analysis-controls">${select("start", "analysisFrom", timeline.records.map((r) => option(r.weekStartAt, recordDate(r), state.start)).join(""))}${select("cohort", "analysisCohort", option("all", t("analysisAllRecorded"), state.cohort) + option("shared", t("analysisShared"), state.cohort))}${select("measure", "analysisMeasure", statsKeys.map((key) => option(key, t(`analysisMeasure_${key}`), state.measure)).join(""))}</div>`;
+      markup += `<p class="mwi-trial-help">${text("analysisCompareHint")}${state.cohort === "shared" ? " " + text("analysisSharedCount", { count: result.sharedCount }) : ""}</p>`;
+      if (result.ambiguousWeeks)
+        markup += `<p class="mwi-trial-notice">${text("analysisAmbiguousWeeks", { count: result.ambiguousWeeks })}</p>`;
+      if (points.length < 2)
+        return section("comparison", "analysisComparison", markup + `<p>${text("analysisNeedTwo")}</p>`);
+      const diff = api.change(points[0].stats[state.measure], points.at(-1).stats[state.measure]);
+      markup += `<p class="mwi-analysis-change">${text("analysisChange")}: <strong>${diff.absolute > 0 ? "+" : ""}${num(diff.absolute)}</strong> <span>(${diff.percent > 0 ? "+" : ""}${esc(pct(diff.percent))})</span></p>`;
+      markup += chart(
+        points.map((p) => ({ time: p.record.weekStartAt, label: week(p.record), value: p.stats[state.measure] })),
+        t("analysisComparison")
+      );
+      markup += scrollTable(
+        t("analysisComparisonData"),
+        [t("analysisWeek"), ...statsKeys.map((key) => t(`analysisMeasure_${key}`))],
+        points.map(
+          ({ record, stats }) =>
+            `<tr><th scope="row">${esc(recordDate(record))}</th>${statsKeys.map((key) => `<td>${num(stats[key])}</td>`).join("")}</tr>`
+        )
+      );
+      return section("comparison", "analysisComparison", markup);
+    }
+    function member() {
+      if (!people.some((p) => p.identity === state.member)) state.member = people[0]?.identity || "";
+      const entry = people.find((p) => p.identity === state.member);
+      const history = api.memberHistory(group, state.member, state.metric);
+      let markup = `<div class="mwi-analysis-controls">${select("member", "trialMember", people.map((p) => option(p.identity, `${personName(p)} · ${matchLabel(p)}`, state.member)).join(""))}</div>`;
+      if (!entry) return section("member", "analysisMember", markup + `<p>${text("analysisNoMembers")}</p>`);
+      markup += `<p class="mwi-trial-help">${esc(matchLabel(entry))} · ${text("analysisMemberHint")}</p>`;
+      const same = history.filter(
+        (h) =>
+          h.record.trialHrid === selected.trialHrid &&
+          h.record.weekStartAt &&
+          h.record.weekStartAt <= selected.weekStartAt
+      );
+      // Avoid connecting two alternative records for one week as a trend.
+      const timeCounts = new Map();
+      same.forEach((h) => timeCounts.set(h.record.weekStartAt, (timeCounts.get(h.record.weekStartAt) || 0) + 1));
+      const unique = same.filter((h) => timeCounts.get(h.record.weekStartAt) === 1);
+      markup += chart(
+        unique.map((h) => ({ time: h.record.weekStartAt, label: week(h.record), value: h.entry.value })),
+        t("analysisMemberTrend", { trial: trialName(selected), metric: metricName(state.metric) })
+      );
+      markup += `<p class="mwi-trial-meta">${text("analysisMemberTrend", { trial: trialName(selected), metric: metricName(state.metric) })}</p>`;
+      const recordCounts = new Map();
+      const groupKey = (h) => JSON.stringify([h.record.trialHrid, h.record.weekStartAt]);
+      history.forEach((h) => recordCounts.set(groupKey(h), (recordCounts.get(groupKey(h)) || 0) + 1));
+      const lastByProject = new Map();
+      const rows = history.map((h) => {
+        const previous = lastByProject.get(h.record.trialHrid);
+        const delta =
+          previous?.record.weekStartAt &&
+          h.record.weekStartAt > previous.record.weekStartAt &&
+          recordCounts.get(groupKey(previous)) === 1 &&
+          recordCounts.get(groupKey(h)) === 1
+            ? api.change(previous.entry.value, h.entry.value)
+            : null;
+        lastByProject.set(h.record.trialHrid, h);
+        return `<tr><th scope="row">${esc(recordDate(h.record))}<small>${esc(trialName(h.record))}</small></th><td>${api
+          .fields(h.record)
+          .map((field) => `${esc(metricName(field))}: ${num(h.entry.values[field])}`)
+          .join(
+            "<br>"
+          )}</td><td>${esc(metricName(h.field))}<br>${h.entry.rank ?? "—"} · ${esc(pct(h.entry.share))}</td><td>${delta ? `${delta.absolute > 0 ? "+" : ""}${num(delta.absolute)}<br>${delta.percent > 0 ? "+" : ""}${esc(pct(delta.percent))}` : "—"}</td></tr>`;
+      });
+      markup += scrollTable(
+        t("analysisMemberData"),
+        [t("analysisRecord"), t("analysisValues"), t("analysisRankShare"), t("analysisPrevious")],
+        rows
+      );
+      return section("member", "analysisMember", markup);
+    }
+    function coverage() {
+      const filtered = people.filter(matches),
+        sorted = [...group].sort(
+          (a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0) || a.trialHrid.localeCompare(b.trialHrid)
+        );
+      const memberPages = Math.max(1, Math.ceil(filtered.length / 20)),
+        recordPages = Math.max(1, Math.ceil(sorted.length / 8));
+      state.memberPage = Math.min(state.memberPage, memberPages - 1);
+      state.recordPage = Math.min(state.recordPage, recordPages - 1);
+      const shownMembers = filtered.slice(state.memberPage * 20, state.memberPage * 20 + 20),
+        shownRecords = sorted.slice(state.recordPage * 8, state.recordPage * 8 + 8);
+      let markup = `<p class="mwi-trial-help">${text("analysisCoverageHint")}</p><div class="mwi-analysis-legend">${["positive", "zero", "unknown", "absent"].map((s) => `<span class="mwi-analysis-cell ${s}">${text(`analysisCell_${s}`)}</span>`).join("")}</div>`;
+      const pager = (role, page, pages, label) =>
+        `<div class="mwi-analysis-pager"><span>${text(label)} ${page + 1}/${pages}</span><button type="button" data-analysis-page="${role}" data-step="-1"${page === 0 ? " disabled" : ""} aria-label="${text("analysisPrev")} ${text(label)}">${text("analysisPrev")}</button><button type="button" data-analysis-page="${role}" data-step="1"${page >= pages - 1 ? " disabled" : ""} aria-label="${text("analysisNext")} ${text(label)}">${text("analysisNext")}</button></div>`;
+      markup += `<div class="mwi-analysis-controls">${pager("memberPage", state.memberPage, memberPages, "analysisMemberPages")}${pager("recordPage", state.recordPage, recordPages, "analysisRecordPages")}</div>`;
+      markup += scrollTable(
+        t("analysisCoverage"),
+        [t("trialMember"), ...shownRecords.map((r) => `${week(r)} ${trialName(r)}`)],
+        shownMembers.map(
+          (entry) =>
+            `<tr><th scope="row">${memberButton(entry)}</th>${shownRecords
+              .map((record) => {
+                const cell = api.coverage(record, entry.identity);
+                const hint = cell.entry
+                  ? api
+                      .fields(record)
+                      .map((field) => `${metricName(field)}: ${num(cell.entry.values[field])}`)
+                      .join(" · ")
+                  : t("analysisCell_absent");
+                return `<td><span class="mwi-analysis-cell ${cell.state}" tabindex="0" title="${esc(recordDate(record) + " · " + hint)}" aria-label="${esc(personName(entry) + " · " + recordDate(record) + " · " + trialName(record) + " · " + hint)}">${text(`analysisCell_${cell.state}`)}</span></td>`;
+              })
+              .join("")}</tr>`
+        )
+      );
+      if (!shownMembers.length) markup += `<p>${text("analysisNoMembers")}</p>`;
+      return section("coverage", "analysisCoverage", markup);
+    }
+    function scatter() {
+      if (selected.kind !== "combat")
+        return section("scatter", "analysisScatter", `<p class="mwi-trial-help">${text("analysisCombatOnly")}</p>`);
+      const entries = api
+        .entries(selected)
+        .filter(matches)
+        .filter((e) => e.values.damageDealt !== null && e.values[state.y] !== null);
+      const maxX = Math.max(...entries.map((e) => e.values.damageDealt), 1),
+        maxY = Math.max(...entries.map((e) => e.values[state.y]), 1);
+      let markup = `<div class="mwi-analysis-controls">${select("y", "analysisYAxis", ["healingDone", "premitigatedDamageTaken"].map((field) => option(field, metricName(field), state.y)).join(""))}</div><p class="mwi-trial-help">${text("analysisScatterHint")}</p>`;
+      if (!entries.length) return section("scatter", "analysisScatter", markup + `<p>${text("analysisNoMembers")}</p>`);
+      markup += `<div class="mwi-analysis-scatter"><span class="mwi-analysis-y-label">${esc(metricName(state.y))}</span><div class="mwi-analysis-plot" role="group" aria-label="${text("analysisScatter")}">${[0, 0.5, 1].map((f) => `<span class="mwi-analysis-y-tick" style="bottom:${f * 100}%">${axisNum(maxY * f)}</span><span class="mwi-analysis-x-tick" style="left:${f * 100}%">${axisNum(maxX * f)}</span>`).join("")}${entries
+        .map((entry) => {
+          const info = `${personName(entry)} · ${api
+            .fields(selected)
+            .map((field) => `${metricName(field)}: ${num(entry.values[field])}`)
+            .join(" · ")}`;
+          return `<button type="button" class="mwi-analysis-dot${entry.identity === state.member ? " selected" : ""}" style="left:${(entry.values.damageDealt / maxX) * 100}%;bottom:${(entry.values[state.y] / maxY) * 100}%" data-analysis-member="${esc(entry.identity)}" data-analysis-point="${esc(info)}" aria-label="${esc(info)}" title="${esc(info)}"></button>`;
+        })
+        .join(
+          ""
+        )}</div><span class="mwi-analysis-x-label">${esc(metricName("damageDealt"))}</span></div><p class="mwi-analysis-point-detail" data-analysis-detail aria-live="polite">${text("analysisPointHint")}</p>`;
+      return section("scatter", "analysisScatter", markup);
+    }
+    function content() {
+      group = api.scoped(records, selected);
+      people = api.members(group);
+      if (!api.fields(selected).includes(state.metric)) state.metric = api.fields(selected)[0];
+      const scopes = [...new Map(records.map((r) => [api.scopeKey(r), r])).values()];
+      const projects = [...new Map(group.map((r) => [r.trialHrid, r])).values()];
+      const same = group.filter((r) => r.trialHrid === selected.trialHrid);
+      const filters = `<div class="mwi-analysis-controls mwi-analysis-filters">${select("guild", "analysisScope", scopes.map((r) => option(api.scopeKey(r), r.guildName || (r.guildId ? String(r.guildId) : t("trialUnknownGuild")), api.scopeKey(selected))).join(""))}${select("project", "analysisProject", projects.map((r) => option(r.trialHrid, trialName(r), selected.trialHrid)).join(""))}${select("record", "analysisWeek", same.map((r) => option(r.key, recordDate(r), selected.key)).join(""))}${select(
+        "metric",
+        "analysisMetric",
+        api
+          .fields(selected)
+          .map((field) => option(field, metricName(field), state.metric))
+          .join("")
+      )}<label>${text("analysisSearch")}<input type="search" data-analysis="query" value="${esc(state.query)}" placeholder="${text("analysisSearchPlaceholder")}"></label></div>`;
+      const notes = `<details class="mwi-analysis-method"><summary>${text("analysisMethod")}</summary><p>${text("analysisMethodText")}</p>${selected.guildId === null ? `<p>${text("analysisUnknownGuild")}</p>` : ""}<p>${text("analysisIdentityHint")}</p></details>`;
+      const nav = `<nav class="mwi-analysis-nav" aria-label="${text("analysisTitle")}">${[
+        ["overview", "analysisOverview"],
+        ["ranking", "analysisRanking"],
+        ["comparison", "analysisComparison"],
+        ["member", "analysisMember"],
+        ["coverage", "analysisCoverage"],
+        ["scatter", "analysisScatter"]
+      ]
+        .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
+        .join("")}</nav>`;
+      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+    }
+    function render(nextRecords, nextSelected) {
+      records = nextRecords;
+      selected = nextSelected;
+      return `<div class="mwi-trial-analytics" data-role="trial-analytics">${content()}</div>`;
+    }
+    function focusAndReveal(target) {
+      if (!target) return;
+      const navigation = host.closest("#mwi-credit-optimizer")?.querySelector(".mwi-view-tabs-shell");
+      target.style.scrollMarginTop = `${(navigation?.getBoundingClientRect().height || 48) + 16}px`;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: "start" });
+    }
+    function refresh(focusRole, identity) {
+      const root = host?.querySelector('[data-role="trial-analytics"]');
+      if (!root) return;
+      root.innerHTML = content();
+      if (identity) {
+        const target = root.querySelector('[data-analysis="member"]');
+        focusAndReveal(target);
+      } else if (focusRole) root.querySelector(`[data-analysis="${focusRole}"]`)?.focus();
+    }
+    function bind(parent) {
+      host = parent;
+      let composing = false;
+      host.addEventListener("change", (event) => {
+        const role = event.target.dataset.analysis;
+        if (!role) return;
+        if (role === "query" && composing) return;
+        const value = event.target.value;
+        if (["guild", "project", "record"].includes(role)) {
+          const record =
+            role === "record"
+              ? records.find((r) => r.key === value)
+              : role === "guild"
+                ? records.find((r) => api.scopeKey(r) === value)
+                : group.find((r) => r.trialHrid === value && r.weekStartAt === selected.weekStartAt) ||
+                  group.find((r) => r.trialHrid === value);
+          if (record) {
+            state.start = "";
+            state.recordPage = 0;
+            onSelectRecord(record.key);
+            host.querySelector(`[data-analysis="${role}"]`)?.focus();
+          }
+          return;
+        }
+        if (Object.hasOwn(state, role)) {
+          state[role] = value;
+          if (role === "query") state.memberPage = 0;
+          refresh(role);
+        }
+      });
+      const applySearch = (event) => {
+        if (event.target.dataset.analysis !== "query") return;
+        if (composing || event.isComposing) return;
+        state.query = event.target.value;
+        state.memberPage = 0;
+        const start = event.target.selectionStart;
+        refresh("query");
+        const input = host.querySelector('[data-analysis="query"]');
+        if (start !== null) {
+          try {
+            input.setSelectionRange(start, start);
+          } catch (_) {
+            /* Search inputs may not support selection. */
+          }
+        }
+      };
+      host.addEventListener("input", applySearch);
+      host.addEventListener("compositionstart", (event) => {
+        if (event.target.dataset.analysis === "query") composing = true;
+      });
+      host.addEventListener("compositionend", (event) => {
+        if (event.target.dataset.analysis !== "query") return;
+        composing = false;
+        applySearch(event);
+      });
+      host.addEventListener("click", (event) => {
+        const jump = event.target.closest("[data-analysis-jump]");
+        if (jump) {
+          const heading = host.querySelector(`#mwi-analysis-${jump.dataset.analysisJump}`);
+          if (heading) {
+            heading.tabIndex = -1;
+            focusAndReveal(heading);
+          }
+        }
+        const button = event.target.closest("[data-analysis-member]");
+        if (button) {
+          state.member = button.dataset.analysisMember;
+          refresh(null, true);
+        }
+        const pager = event.target.closest("[data-analysis-page]");
+        if (pager) {
+          state[pager.dataset.analysisPage] += Number(pager.dataset.step);
+          refresh();
+          host.querySelector(`[data-analysis-page="${pager.dataset.analysisPage}"]:not(:disabled)`)?.focus();
+        }
+      });
+      const point = (event) => {
+        const button = event.target.closest("[data-analysis-point]");
+        const output = host.querySelector("[data-analysis-detail]");
+        if (button && output) output.textContent = button.dataset.analysisPoint;
+      };
+      host.addEventListener("focusin", point);
+      host.addEventListener("mouseover", point);
+    }
+    return { render, bind };
+  }
+  return { createTrialAnalyticsView };
 });
 
 
@@ -12756,6 +13613,8 @@ window.MwiGuildCreditVersion = "1.2.11";
   const panelShellApi = window.MwiGuildCreditPanelShell;
   const trialHistoryApi = window.MwiGuildTrialHistory;
   const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
+  const analyticsApi = window.MwiGuildTrialAnalytics;
+  const analyticsViewApi = window.MwiGuildTrialAnalyticsView;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
     !core ||
@@ -12782,7 +13641,9 @@ window.MwiGuildCreditVersion = "1.2.11";
     !panelShellApi ||
     !creditViewApi ||
     !trialHistoryApi ||
-    !trialHistoryViewApi
+    !trialHistoryViewApi ||
+    !analyticsApi ||
+    !analyticsViewApi
   )
     return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
@@ -13409,6 +14270,8 @@ window.MwiGuildCreditVersion = "1.2.11";
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    analyticsApi,
+    analyticsViewApi,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

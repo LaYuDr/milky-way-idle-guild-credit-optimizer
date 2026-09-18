@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.12] - 2026-09-18
+
+### Changed
+
+- 新增公会试炼历史分析视图与统计指标，整合建设页入口，完善双语界面、测试台和回归测试。
+
 ## [1.2.11] - 2026-09-18
 
 ### Changed

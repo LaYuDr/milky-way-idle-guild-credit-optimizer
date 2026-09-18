@@ -24,6 +24,8 @@
   const panelShellApi = window.MwiGuildCreditPanelShell;
   const trialHistoryApi = window.MwiGuildTrialHistory;
   const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
+  const analyticsApi = window.MwiGuildTrialAnalytics;
+  const analyticsViewApi = window.MwiGuildTrialAnalyticsView;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
     !core ||
@@ -50,7 +52,9 @@
     !panelShellApi ||
     !creditViewApi ||
     !trialHistoryApi ||
-    !trialHistoryViewApi
+    !trialHistoryViewApi ||
+    !analyticsApi ||
+    !analyticsViewApi
   )
     return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
@@ -677,6 +681,8 @@
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    analyticsApi,
+    analyticsViewApi,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

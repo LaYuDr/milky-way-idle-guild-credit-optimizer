@@ -12,6 +12,8 @@
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    analyticsApi,
+    analyticsViewApi,
     getBridge,
     getPanel
   }) {
@@ -68,6 +70,18 @@
       }
       return record.trialDate || t("trialUnknownDate");
     }
+
+    const analytics = analyticsViewApi.createTrialAnalyticsView({
+      api: analyticsApi,
+      t,
+      escapeHtml,
+      trialName,
+      recordDate,
+      onSelectRecord(key) {
+        selectedKey = key;
+        refresh(getPanel());
+      }
+    });
 
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
@@ -168,6 +182,7 @@
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
+      markup += analytics.render(records, selected);
       markup += `<div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
         .map(
           (record, index) =>
@@ -189,7 +204,7 @@
         }
         return String(a.characterId).localeCompare(String(b.characterId));
       });
-      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(row[field] ?? 0))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(analyticsApi.metricValue(selected, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details>`;
       host.innerHTML = markup;
     }
@@ -210,6 +225,7 @@
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      analytics.bind(host);
       host.addEventListener("change", (event) => {
         if (event.target.dataset.role === "trial-import-file") {
           void readImport(event.target.files?.[0], panel);

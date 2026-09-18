@@ -323,7 +323,7 @@
     document.body.dataset.sidebarLayout = "wide";
     const english = searchParams.get("locale") === "en";
     const sidebarWidth = Number(searchParams.get("sidebarWidth"));
-    if (Number.isFinite(sidebarWidth) && sidebarWidth >= 320 && sidebarWidth <= 1200) {
+    if (Number.isFinite(sidebarWidth) && sidebarWidth >= 320 && sidebarWidth <= 1800) {
       document.querySelectorAll(".test-sidebar-wrapper").forEach((wrapper) => {
         wrapper.style.width = `${sidebarWidth}px`;
       });
@@ -1482,11 +1482,21 @@
           maximumWidth: visibleBuildingTiles.length
             ? Math.max(...visibleBuildingTiles.map((tile) => elementRect(tile).width))
             : 0,
-          maximumAspectRatioError: visibleBuildingTiles.length
-            ? Math.max(
-                ...visibleBuildingTiles.map((tile) => Math.abs(elementRect(tile).width / elementRect(tile).height - 1))
-              )
-            : 0
+          readableNames: visibleBuildingTiles.every((tile) => {
+            const name = tile.querySelector(".mwi-building-tile-name");
+            return (
+              name &&
+              elementIsVisible(name) &&
+              getComputedStyle(name).clipPath === "none" &&
+              parseFloat(getComputedStyle(name).fontSize) >= 14 &&
+              name.clientWidth > 20 &&
+              name.scrollWidth <= name.clientWidth + 2 &&
+              name.scrollHeight <= name.clientHeight + 2
+            );
+          }),
+          visibleLevels: visibleBuildingTiles.every((tile) =>
+            elementIsVisible(tile.querySelector(".mwi-building-tile-level"))
+          )
         },
         catalog: {
           tileCount: buildingTiles.length,
@@ -1532,6 +1542,28 @@
           planningSummary: normalizedText(root.querySelector(".mwi-guild-point-controls output")),
           exportDisabled: Boolean(root.querySelector('[data-role="export-guild-point-history"]')?.disabled),
           resetDisabled: Boolean(root.querySelector('[data-role="reset-guild-point-history"]')?.disabled)
+        },
+        readability: {
+          primaryText: Array.from(
+            root.querySelectorAll(
+              ".mwi-construction-identity strong,.mwi-construction-target,.mwi-guild-point-controls>label,.mwi-construction-budget-input label"
+            )
+          ).every((element) => parseFloat(getComputedStyle(element).fontSize) >= 14),
+          secondaryText: Array.from(
+            root.querySelectorAll(
+              ".mwi-construction-cost small,.mwi-construction-cost em,.mwi-construction-identity small,.mwi-guild-point-history td small"
+            )
+          ).every((element) => parseFloat(getComputedStyle(element).fontSize) >= 12),
+          historyTable:
+            parseFloat(getComputedStyle(root.querySelector(".mwi-guild-point-history table")).fontSize) >= 14,
+          budgetBeforeQueue: Boolean(
+            root.querySelector(".mwi-guild-point-planning").compareDocumentPosition(layout) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+          ),
+          queueBeforeStatistics: Boolean(
+            layout.compareDocumentPosition(root.querySelector(".mwi-guild-point-forecast")) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+          )
         },
         focus: activeConstructionControl(root),
         horizontalOverflow,
@@ -3148,9 +3180,9 @@
             record.rows.some((row) => row.workDone === 123456789.125 && row.additionalStatistic === 7)
           ),
           memberNamesEscaped: !host.querySelector("tbody b"),
-          detailTable: host.querySelectorAll("tbody tr").length === 2,
+          detailTable: host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 2,
           fullRawRecord: Boolean(host.querySelector(".mwi-trial-raw pre")),
-          selectedCombat: host.querySelectorAll("thead th").length === 4,
+          selectedCombat: host.querySelectorAll('[data-role="trial-stats-table"] thead th').length === 4,
           zeroPanelOverflow: panel.scrollWidth <= panel.clientWidth,
           keyboardFocusableScroller: host.querySelector(".mwi-trial-table-scroll").tabIndex === 0
         }
@@ -3164,6 +3196,151 @@
       window.__mwiTrialHistoryAuditReady = runTrialHistoryAudit().then((report) => {
         document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
         document.body.dataset.trialHistoryAuditReady = "true";
+        return report;
+      });
+    }
+
+    async function runTrialAnalyticsAudit() {
+      document.getElementById("close-exchange-modal").click();
+      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
+      document.querySelector('[data-mwi-credit-tab="true"]').click();
+      panel.querySelector('[data-role="view-trials"]').click();
+      const empty = !panel.querySelector('[data-role="trial-analytics"]');
+      const make = (id, date, members, kind = "skilling") => {
+        const trialHrid = kind === "combat" ? "/guild_combat/badger" : "/guild_skilling/milking";
+        return {
+          schemaVersion: 2,
+          source: "manual",
+          recordId: id,
+          key: JSON.stringify(["manual", id]),
+          guildId: null,
+          guildName: "Analytics Fixture",
+          trialDate: date,
+          weekStartAt: null,
+          capturedAt: null,
+          kind,
+          trialHrid,
+          points: null,
+          party: { done: true, highestTier: null },
+          rows: members.map(([_name, value], index) => ({
+            memberKey: String(index),
+            characterId: null,
+            trialHrid,
+            ...(kind === "combat"
+              ? { damageDealt: value, healingDone: value / 2, premitigatedDamageTaken: value * 2 }
+              : { workDone: value })
+          })),
+          members: Object.fromEntries(members.map(([name], index) => [String(index), { name }]))
+        };
+      };
+      const records = [
+        make("analytics-1", "2026-08-28", [
+          ["Alpha", 10],
+          ["Beta", 20],
+          ["Zero", 0]
+        ]),
+        make("analytics-2", "2026-09-04", [
+          ["Alpha", 20],
+          ["Gamma", 30],
+          ["Zero", 0]
+        ]),
+        make("analytics-3", "2026-09-11", [
+          ["Alpha", 30],
+          ["Beta", 50],
+          ["Zero", 0]
+        ]),
+        make(
+          "analytics-combat",
+          "2026-09-11",
+          [
+            ["Alpha", 100],
+            ["Zero", 0]
+          ],
+          "combat"
+        )
+      ];
+      const input = panel.querySelector('[data-role="trial-import-file"]');
+      const files = new DataTransfer();
+      files.items.add(
+        new File([JSON.stringify({ schemaVersion: 2, records })], "analytics-fixture.json", {
+          type: "application/json"
+        })
+      );
+      input.files = files.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitFor(() => panel.querySelector('[data-role="trial-import-confirm"]'));
+      panel.querySelector('[data-role="trial-import-confirm"]').click();
+      const choose = (role, value) => {
+        const control = panel.querySelector(`[data-analysis="${role}"]`);
+        control.value = value;
+        control.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      choose("record", records[2].key);
+      const checks = {
+        emptyState: empty,
+        sixSections: panel.querySelectorAll("[data-analysis-section]").length === 6,
+        summary: panel.querySelector(".mwi-analysis-summary dd").textContent === "3",
+        multiWeekLine: Boolean(panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-line'))
+      };
+      choose("cohort", "shared");
+      const comparisonRows = panel.querySelectorAll('[data-analysis-section="comparison"] tbody tr');
+      checks.sharedCohort =
+        comparisonRows.length === 3 &&
+        [...comparisonRows].every((row) => row.children[1].textContent === "2") &&
+        comparisonRows[2].children[2].textContent === "30";
+      checks.coverageZero = Boolean(panel.querySelector('[data-analysis-section="coverage"] td .zero'));
+      checks.coverageAbsent = Boolean(panel.querySelector('[data-analysis-section="coverage"] td .absent'));
+      const query = panel.querySelector('[data-analysis="query"]');
+      query.value = "Alpha";
+      query.dispatchEvent(new Event("input", { bubbles: true }));
+      checks.search = panel.querySelectorAll(".mwi-analysis-ranking li").length === 1;
+      const composingInput = panel.querySelector('[data-analysis="query"]');
+      composingInput.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      composingInput.value = "测试";
+      composingInput.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true, data: "测试" }));
+      checks.imePreserved =
+        composingInput.isConnected && panel.querySelector('[data-analysis="query"]') === composingInput;
+      composingInput.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "测试" }));
+      checks.imeApplied =
+        panel.querySelectorAll(".mwi-analysis-ranking li").length === 0 &&
+        panel.querySelector('[data-analysis="query"]').value === "测试";
+      const restoreQuery = panel.querySelector('[data-analysis="query"]');
+      restoreQuery.value = "Alpha";
+      restoreQuery.dispatchEvent(new Event("input", { bubbles: true }));
+      panel.querySelector(".mwi-analysis-ranking [data-analysis-member]").click();
+      checks.memberHistory = panel.querySelectorAll('[data-analysis-section="member"] tbody tr').length === 4;
+      const clear = panel.querySelector('[data-analysis="query"]');
+      clear.value = "";
+      clear.dispatchEvent(new Event("input", { bubbles: true }));
+      choose("record", records[0].key);
+      checks.singleWeekNoChart =
+        !panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-line') &&
+        !panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-compare-bars');
+      choose("project", "/guild_combat/badger");
+      choose("metric", "healingDone");
+      choose("y", "premitigatedDamageTaken");
+      const point = panel.querySelector(".mwi-analysis-dot");
+      point.focus();
+      checks.scatter = panel.querySelectorAll(".mwi-analysis-dot").length === 2;
+      checks.focusDetails = panel.querySelector("[data-analysis-detail]").textContent.includes("Alpha");
+      panel.querySelector('[data-analysis-jump="scatter"]').click();
+      checks.jumpVisible =
+        panel.querySelector("#mwi-analysis-scatter").getBoundingClientRect().top >=
+        panel.querySelector(".mwi-view-tabs-shell").getBoundingClientRect().bottom;
+      checks.healingMetric = panel.querySelector(".mwi-analysis-ranking strong").textContent === "50";
+      checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
+      const saved = Object.entries(localStorage)
+        .filter(([key]) => key.startsWith("mwi-guild-trial-history-v1:"))
+        .map(([, value]) => JSON.parse(value));
+      checks.readOnly =
+        saved.length === 4 && saved.find((record) => record.recordId === "analytics-3").rows[0].workDone === 30;
+      return { width: sidebarWidth, checks };
+    }
+    if (searchParams.has("trialAnalyticsAudit")) {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith("mwi-guild-trial-history-v1:")) localStorage.removeItem(key);
+      window.__mwiTrialAnalyticsAuditReady = runTrialAnalyticsAudit().then((report) => {
+        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
         return report;
       });
     }

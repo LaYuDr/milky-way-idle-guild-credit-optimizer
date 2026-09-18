@@ -39,6 +39,8 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.equal(files.at(-1), "src/userscript.js");
   const requiredModules = [
     "src/trial-history.js",
+    "src/trial-analytics.js",
+    "src/ui/trial-analytics-view.js",
     "src/ui/trial-history-view.js",
     "src/runtime/config.js",
     "src/runtime/storage.js",

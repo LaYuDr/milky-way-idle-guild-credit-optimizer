@@ -475,8 +475,7 @@
       return `<div class="mwi-guild-point-eta" data-status="${eta.status}"><small>${escapeHtml(t("constructionEta"))}</small><strong data-role="construction-eta">${escapeHtml(copy[0])}</strong><span data-role="construction-eta-detail">${escapeHtml(copy[1])}</span></div>`;
     }
 
-    function renderGuildPointForecast(historySummary, plan, definitions = null) {
-      const budgetMarkup = definitions ? renderGuildBuildingBudget(plan, definitions) : "";
+    function renderGuildPointForecast(historySummary) {
       const history = guildPointForecastBasis(historySummary);
       const currentWeekPoints = state.guildPointSummary && state.guildPointSummary.currentWeekPoints;
       const hasCurrentWeekPoints = Number.isSafeInteger(currentWeekPoints) && currentWeekPoints > 0;
@@ -493,7 +492,6 @@
       const forecastText = Number.isFinite(history.effectiveForecastPoints)
         ? formatNumber(history.effectiveForecastPoints)
         : "-";
-      const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
       const status = !state.guildPointSummary
         ? t("guildPointHistoryUnavailable")
         : history.hasConflict
@@ -514,7 +512,7 @@
         : predictsCurrentWeek
           ? "predictedCurrentWeekGuildPoints"
           : "latestWeeklyGuildPoints";
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointOverview"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointOverview"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></div><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div><div class="mwi-guild-point-planning"><h4>${escapeHtml(t("guildPointPlanningHeading"))}</h4>${renderGuildPointForecastControls(plan)}${budgetMarkup}${renderGuildPointEta(plan, history)}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4><small>${escapeHtml(t("guildPointTrendHint"))}</small></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid"><div><small>${escapeHtml(t(currentWeekLabel))}</small><strong data-role="latest-weekly-guild-points">${latestPoints}</strong></div><div data-trend="${Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown"}"><small>${escapeHtml(t("weeklyGuildPointGrowth"))}</small><strong data-role="weekly-guild-point-growth">${growthText}</strong></div><div data-source="${history.forecastSource}"><small>${escapeHtml(t("nextWeekGuildPointForecast"))}</small><strong data-role="next-week-guild-point-forecast">${forecastText}</strong></div></div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -715,7 +713,7 @@
           ? t("buildingTileDefaultZeroLabel", { building: label })
           : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
       const atMaxLevel = !plan && liveLevel >= definition.maxLevel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-level-badge" data-level-known="${String(levelKnown)}">${currentLabel}</span>${plan ? `<span class="mwi-building-target-badge">${formatNumber(plan.targetLevel)}</span>` : ""}<span class="mwi-building-tile-name">${escapeHtml(label)}</span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -795,11 +793,17 @@
       return `<section class="mwi-construction-queue" aria-label="${escapeHtml(t("constructionQueue"))}"><div class="mwi-construction-queue-heading"><span><h4>${escapeHtml(t("constructionQueue"))}</h4><small id="mwi-construction-sort-hint">${escapeHtml(t("constructionQueueDragHint"))}</small></span><span class="mwi-construction-queue-meta"><small>${escapeHtml(t("constructionSummary", { buildings: formatNumber(plan.plans.length), steps: formatNumber(plan.steps.length) }))}</small>${renderGuildConstructionActions(plan)}</span></div>${groups.length ? `<ol class="mwi-construction-rail" data-role="construction-sort-list">${groups.join("")}</ol>` : `<div class="mwi-construction-empty"><strong>${escapeHtml(t("constructionQueueEmptyTitle"))}</strong><small>${escapeHtml(t("constructionQueueEmpty"))}</small></div>`}</section>`;
     }
 
+    function renderGuildPointPlanning(plan, definitions, historySummary) {
+      const currentPoints = state.guildPointSummary ? formatNumber(state.guildPointSummary.availablePoints) : "-";
+      return `<section class="mwi-guild-point-planning" aria-label="${escapeHtml(t("guildPointPlanningHeading"))}"><div class="mwi-construction-planning-heading"><h4>${escapeHtml(t("guildPointPlanningHeading"))}</h4><span><small>${escapeHtml(t("currentAvailableGuildPoints"))}</small><strong data-role="current-available-guild-points">${currentPoints}</strong></span></div>${renderGuildPointForecastControls(plan)}${renderGuildBuildingBudget(plan, definitions)}${renderGuildPointEta(plan, historySummary)}</section>`;
+    }
+
     function renderGuildConstruction(plan, definitions, historySummary) {
       const plansByHrid = new Map(state.buildingPlans.map((entry) => [entry.buildingHrid, entry]));
       const levels = guildBuildingLevelSnapshot(definitions);
       const spriteBaseHref = guildBuildingSpriteBaseHref();
-      return `${renderGuildPointForecast(historySummary, plan, definitions)}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>`;
+      const budget = renderGuildPointPlanning(plan, definitions, historySummary);
+      return `${budget}<div class="mwi-construction-layout" data-picker-open="${String(constructionUi.pickerOpen)}"><div class="mwi-construction-queue-pane">${renderGuildConstructionQueue(plan, definitions, spriteBaseHref)}</div>${renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref)}</div>${renderGuildPointForecast(historySummary)}`;
     }
 
     function applyGuildBuildingFilters(results) {
@@ -1116,6 +1120,7 @@
       guildPointPlanningBudget,
       guildPointEta,
       renderGuildPointForecast,
+      renderGuildPointPlanning,
       syncGuildPointHistory,
       refreshGuildConstructionBudgetPreview,
       refreshGuildConstruction,

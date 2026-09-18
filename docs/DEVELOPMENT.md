@@ -239,8 +239,8 @@ from the fixture's completed week count instead of a date-sensitive constant.
 The forecast-lookback control is initially hidden under Forecast settings,
 while the planning horizon remains visible. The audit opens the settings,
 checks that they stay open while stepping values and rerendering, then closes
-them again. The final fixture contains 28 visible square
-catalog tiles, three collapsed building groups in
+them again. The final fixture contains 28 visible named
+catalog entries, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.
 
@@ -253,13 +253,20 @@ await window.__mwiConstructionAuditReady;
 
 For every width, require zero panel horizontal overflow, no reported element
 overflow or control overlap, 28 game sprite icons, 3 read and 25 default-zero
-levels, square tile geometry, and no visible per-level steps in the final
+levels, readable catalog names and visible levels, and no visible per-level steps in the final
 collapsed sample. Use the reported panel rectangle and computed
 `gridTemplateColumns`; the requested sidebar width is not the plugin's actual
 content width, and entering the wide two-column layout can legitimately make
 the catalog column count smaller than the preceding single-column width. Also
-inspect `interactions.checks`: every value must be `true`. Run additional
-English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
+inspect `interactions.checks`: every value must be `true`.
+
+The `cards.readableNames`, `cards.visibleLevels`, and all `readability` fields
+must be true. These check a 14px minimum for primary text and the history table,
+a 12px minimum for secondary text, and the budget / queue / statistics reading
+order. The catalog scrolls within a 460px maximum height; the weekly table
+retains all rows with a contained horizontal scroller on narrow panels.
+
+Run additional English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
 
 ```text
 http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
@@ -496,3 +503,43 @@ statistics, export/re-import and reload. Repeat preview and result states at
 320, 360, 420, 460, 480, 520, 560, 610, 720, 900 and 1200 pixels, plus English
 at 320, 610 and 900. Keep user-provided transcripts outside the repository and
 use synthetic data for committed fixtures.
+
+### Trial analytics
+
+`src/trial-analytics.js` owns pure summaries, competition ranks, identity,
+same-trial comparison cohorts, member history and coverage states.
+`src/ui/trial-analytics-view.js` renders the six analysis sections; it never
+writes storage. `trial-history-view` owns record selection and persistence.
+The analytics modules are explicit build inputs and are wired in userscript.
+
+Identity uses guild-scoped character IDs. ID-less records use exact names;
+among ID-less entries, duplicate names in one record, empty names and
+former-member placeholders are isolated to their record. Named manual guilds
+and unassigned records are separate from captured guild IDs. The UI warns
+about unassigned guild scope.
+No fuzzy correction or ID-to-name identity merging is performed.
+
+Summaries exclude unknown metrics from total/mean/median and show the known
+count. Official schema v1 omitted zero fields retain the protocol's zero
+semantics; explicit null stays unknown. Zero totals have no shares, zero
+baselines have no percentage growth. Coverage distinguishes positive, zero,
+unknown and absent, without treating absence as nonattendance. Combat coverage
+is positive if any metric is positive; zero requires all metrics known and zero.
+Comparisons use one project and guild, at or before the selected week. Multiple
+records for a non-selected week are excluded with a warning; the selected
+record explicitly resolves its own week. Common cohorts intersect identities
+across all selected weeks. Missing weeks are not synthesized as zero.
+
+Open `test-harness.html?trialAnalyticsAudit=1&resetState=1&sidebarWidth=900`
+and await `window.__mwiTrialAnalyticsAuditReady`; require every check true.
+The synthetic import covers six sections, three-week lines, common members,
+single-week states, member-name substring search, IME composition, member
+history, zero and missing coverage, combat metric switching, keyboard point details,
+visible section jumps and unchanged stored records. Run alongside
+`trialHistoryAudit` and the documented eleven-width layout matrix, including
+English 320/610/900. The design baseline is sidebar 900px; also inspect actual
+panel widths at 1200 and 1500 (the harness accepts up to 1800). Record actual
+widths, not only query parameters. Tables scroll within their own regions.
+Test search, range/cohort selection, coverage paging and long metric values;
+compare tooltip/table values with pure calculations. User transcripts remain
+outside Git and are never fixtures or build inputs.
