@@ -1512,7 +1512,22 @@
           }),
           visibleLevels: visibleBuildingTiles.every((tile) =>
             elementIsVisible(tile.querySelector(".mwi-building-tile-level"))
-          )
+          ),
+          readableNextLevelCosts: visibleBuildingTiles.every((tile) => {
+            const cost = tile.querySelector(".mwi-building-tile-cost");
+            return (
+              cost &&
+              elementIsVisible(cost) &&
+              parseFloat(getComputedStyle(cost).fontSize) >= 12 &&
+              cost.scrollWidth <= cost.clientWidth + 2 &&
+              cost.scrollHeight <= cost.clientHeight + 2
+            );
+          }),
+          defaultZeroLabels: visibleBuildingTiles
+            .filter((tile) => tile.dataset.levelKnown === "false" && tile.dataset.planned === "false")
+            .every((tile) =>
+              /当前 0 级|Current level 0/.test(tile.querySelector(".mwi-building-tile-level")?.textContent || "")
+            )
         },
         catalog: {
           tileCount: buildingTiles.length,

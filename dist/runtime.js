@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.15";
+window.MwiGuildCreditVersion = "1.2.16";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2644,7 +2644,7 @@ window.MwiGuildCreditVersion = "1.2.15";
     },
     { hrid: "/guild_buildings/armory", nameKey: "buildingArmory", category: "combat", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/dining_room", nameKey: "buildingDiningRoom", category: "combat", costMultiplier: 0.5 },
-    { hrid: "/guild_buildings/observatory", nameKey: "buildingObservatory", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/observatory", nameKey: "buildingObservatory", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_shrines/tempo", nameKey: "shrineTempo", category: "shrine", costMultiplier: 1 },
     { hrid: "/guild_shrines/spirit", nameKey: "shrineSpirit", category: "shrine", costMultiplier: 1 },
     { hrid: "/guild_shrines/force", nameKey: "shrineForce", category: "shrine", costMultiplier: 1 },
@@ -2806,9 +2806,11 @@ window.MwiGuildCreditVersion = "1.2.15";
       guildPointOverview: "公会点数与预算",
       guildPointStatisticsHeading: "点数统计与历史",
       buildingCatalogCurrentLevel: "当前 {current} 级",
-      buildingCatalogUnknownPlannedLevel: "未读取 · 按 {current} → {target} 级规划",
+      buildingCatalogUnknownPlannedLevel: "{current} → {target} 级 · 已加入",
       buildingCatalogPlannedLevel: "{current} → {target} 级 · 已加入",
-      buildingCatalogUnknownLevel: "未读取 · 按 0 级规划",
+      buildingCatalogUnknownLevel: "当前 {current} 级",
+      buildingCatalogNextLevelCost: "升至 {level} 级：{points} 点",
+      buildingCatalogNextLevelCostUnavailable: "下一级点数未提供",
       guildPointPlanningHeading: "建设预算",
       guildPointStartingBalance: "自定起始点数",
       guildPointFollowBalance: "跟随游戏余额",
@@ -2937,7 +2939,7 @@ window.MwiGuildCreditVersion = "1.2.15";
       notPlanned: "未计划",
       buildingTileLabel: "{building}，当前 {current} 级，目标 {target}",
       buildingTileAddLabel: "添加 {building}，当前 {current} 级",
-      buildingTileDefaultZeroLabel: "添加 {building}；未读取到等级，按 0 级规划",
+      buildingTileDefaultZeroLabel: "添加 {building}，当前 0 级",
       buildingTilePlannedLabel: "定位到 {building} 的施工行，目标 {target} 级",
       buildingTileMaxLabel: "{building} 已满级，不能加入计划",
       cancel: "取消",
@@ -3107,6 +3109,8 @@ window.MwiGuildCreditVersion = "1.2.15";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialGuide: "采集与导入说明",
+      trialRecordDetails: "原始记录明细",
       analysisTitle: "试炼数据分析",
       analysisCollapse: "折叠",
       analysisExpand: "展开",
@@ -3376,9 +3380,11 @@ window.MwiGuildCreditVersion = "1.2.15";
       guildPointOverview: "Guild points & budget",
       guildPointStatisticsHeading: "Points & history",
       buildingCatalogCurrentLevel: "Current level {current}",
-      buildingCatalogUnknownPlannedLevel: "Unread · Plan level {current} → {target}",
+      buildingCatalogUnknownPlannedLevel: "Level {current} → {target} · In plan",
       buildingCatalogPlannedLevel: "Level {current} → {target} · In plan",
-      buildingCatalogUnknownLevel: "Unread · Plan from level 0",
+      buildingCatalogUnknownLevel: "Current level {current}",
+      buildingCatalogNextLevelCost: "Level {level}: {points} points",
+      buildingCatalogNextLevelCostUnavailable: "Next-level cost unavailable",
       guildPointPlanningHeading: "Construction budget",
       guildPointStartingBalance: "Custom starting points",
       guildPointFollowBalance: "Use game balance",
@@ -3518,7 +3524,7 @@ window.MwiGuildCreditVersion = "1.2.15";
       notPlanned: "Not planned",
       buildingTileLabel: "{building}, current level {current}, target {target}",
       buildingTileAddLabel: "Add {building}, current level {current}",
-      buildingTileDefaultZeroLabel: "Add {building}; level unavailable, planning from level 0",
+      buildingTileDefaultZeroLabel: "Add {building}, current level 0",
       buildingTilePlannedLabel: "Go to {building} in the plan, target level {target}",
       buildingTileMaxLabel: "{building} is at maximum level and cannot be added",
       cancel: "Cancel",
@@ -3694,6 +3700,8 @@ window.MwiGuildCreditVersion = "1.2.15";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialGuide: "Capture & import help",
+      trialRecordDetails: "Original record details",
       analysisTitle: "Trial analytics",
       analysisCollapse: "Collapse",
       analysisExpand: "Expand",
@@ -7760,102 +7768,11 @@ window.MwiGuildCreditVersion = "1.2.15";
   "use strict";
 
   const PANEL_STYLES = `
-        #mwi-credit-optimizer button.mwi-analysis-toggle{display:flex;align-items:center;gap:12px;width:100%;min-height:40px;padding:6px 0;border:0;border-radius:3px;background:transparent;color:inherit;font:inherit;text-align:left}
-        #mwi-credit-optimizer button.mwi-analysis-toggle:hover{background:#343753;color:#fff}
-        #mwi-credit-optimizer .mwi-analysis-toggle-action{margin-left:auto;flex-shrink:0;font-size:13px;font-weight:400;color:#aebdff}
-        #mwi-credit-optimizer .mwi-analysis-toggle svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
-        #mwi-credit-optimizer .mwi-analysis-toggle[aria-expanded="false"] svg{transform:rotate(-90deg)}
-        #mwi-credit-optimizer [id^="mwi-analysis-body-"][hidden]{display:none!important}
         #mwi-credit-optimizer [data-analysis-collapse-status]:empty{display:none}
-        #mwi-credit-optimizer .mwi-analysis-nav{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
-        #mwi-credit-optimizer .mwi-analysis-nav button{font-size:13px;background:#343753;color:#d6dfff;padding:8px 10px;min-height:34px}
-        #mwi-credit-optimizer .mwi-analysis-nav button:hover{background:#454b70;color:#fff}
-        #mwi-credit-optimizer .mwi-analysis-section h3{scroll-margin-top:16px}
-        #mwi-credit-optimizer .mwi-trial-analytics{--analysis-accent:#75dec5;--analysis-blue:#aebdff;min-width:0;font-variant-numeric:tabular-nums}
-        #mwi-credit-optimizer .mwi-analysis-heading{font-size:21px;margin:24px 0 18px;line-height:1.3}
-        #mwi-credit-optimizer .mwi-analysis-section{min-width:0;margin:28px 0;padding-top:20px;border-top:1px solid #50536e}
-        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:17px;margin:0 0 16px}
-        #mwi-credit-optimizer .mwi-analysis-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
-        #mwi-credit-optimizer .mwi-analysis-controls label{display:grid;gap:6px;flex:1 1 180px;min-width:0;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-controls select,#mwi-credit-optimizer .mwi-analysis-controls input{width:100%;min-width:0;max-width:100%;height:38px;font-size:14px}
-        #mwi-credit-optimizer .mwi-analysis-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
-        #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3){grid-column:span 2}
-        #mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 3}
-        #mwi-credit-optimizer .mwi-analysis-method{margin:12px 0;color:#c4c7df;line-height:1.6}
-        #mwi-credit-optimizer .mwi-analysis-method summary{cursor:pointer;padding:8px 0;color:#aebdff}
-        #mwi-credit-optimizer .mwi-analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin:0;padding:12px 0}
-        #mwi-credit-optimizer .mwi-analysis-summary dt{color:#c4c7df;line-height:1.5;margin-bottom:8px}
-        #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:22px;font-weight:650;margin:0;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-analysis-ranking{padding:0;margin:12px 0;list-style:none;max-height:520px;overflow:auto;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-analysis-ranking li{display:grid;grid-template-columns:28px minmax(140px,1.2fr) minmax(80px,2fr) minmax(85px,.8fr) minmax(70px,.7fr);align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid #3b3e58}
-        #mwi-credit-optimizer .mwi-analysis-ranking strong,#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{text-align:right;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-analysis-rank{color:#c4c7df}
-        #mwi-credit-optimizer button.mwi-analysis-member{background:transparent;color:#aebdff;text-align:left;padding:6px 2px;min-height:32px;height:auto;white-space:normal;overflow-wrap:anywhere;font:inherit;line-height:1.4;border-radius:3px}
-        #mwi-credit-optimizer button.mwi-analysis-member:hover{text-decoration:underline;text-underline-offset:3px;color:#dbe2ff;background:#343753}
-        #mwi-credit-optimizer .mwi-analysis-track{height:10px;background:#343750;overflow:hidden;border-radius:2px;min-width:0}
-        #mwi-credit-optimizer .mwi-analysis-track i{display:block;height:100%;background:var(--analysis-accent)}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars{display:grid;gap:18px;margin:24px 0}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars>div{display:grid;grid-template-columns:70px 1fr 120px;gap:16px;align-items:center}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars>div:first-child i{background:var(--analysis-blue)}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars strong{text-align:right}
-        #mwi-credit-optimizer .mwi-analysis-change{font-size:16px;margin:20px 0}
-        #mwi-credit-optimizer .mwi-analysis-change span{color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-line{display:block;width:100%;height:auto;max-height:320px;overflow:visible}
-        #mwi-credit-optimizer .mwi-analysis-line text{fill:#c4c7df;font:12px system-ui,sans-serif}
-        #mwi-credit-optimizer .mwi-analysis-line path{fill:none;stroke:var(--analysis-accent);stroke-width:2.5}
-        #mwi-credit-optimizer .mwi-analysis-line circle{fill:var(--analysis-accent)}
-        #mwi-credit-optimizer .mwi-analysis-gridline{stroke:#50536e;stroke-width:1}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll{max-height:440px;max-width:100%;overflow:auto;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll th{font-weight:500}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll th:first-child{min-width:150px}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll thead th{position:sticky;top:0;background:#272940;z-index:1}
-        #mwi-credit-optimizer .mwi-analysis-legend{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
-        #mwi-credit-optimizer .mwi-analysis-cell{display:inline-block;padding:6px 10px;min-width:68px;text-align:center;border-radius:3px;font-size:12px}
-        #mwi-credit-optimizer .mwi-analysis-cell.positive{background:#254940;color:#b7f7e7}
-        #mwi-credit-optimizer .mwi-analysis-cell.zero{background:#383d63;color:#d6dfff}
-        #mwi-credit-optimizer .mwi-analysis-cell.unknown{background:#55462b;color:#ffe1a4}
-        #mwi-credit-optimizer .mwi-analysis-cell.absent{color:#c4c7df;outline:1px dashed #6c6f8c;outline-offset:-1px}
-        #mwi-credit-optimizer .mwi-analysis-pager{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-        #mwi-credit-optimizer .mwi-analysis-pager button{min-height:34px}
-        #mwi-credit-optimizer .mwi-analysis-pager button:disabled{opacity:.55;cursor:default}
-        #mwi-credit-optimizer .mwi-analysis-scatter{position:relative;padding:36px 36px 60px 85px;margin:16px 0}
-        #mwi-credit-optimizer .mwi-analysis-plot{height:300px;position:relative;border-left:1px solid #9196b7;border-bottom:1px solid #9196b7;background:linear-gradient(0deg,transparent calc(50% - .5px),#454962 50%,transparent calc(50% + .5px))}
-        #mwi-credit-optimizer .mwi-analysis-x-label{position:absolute;bottom:0;left:50%;transform:translateX(-50%);color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-y-label{position:absolute;top:0;left:0;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-y-tick{position:absolute;right:calc(100% + 12px);transform:translateY(50%);white-space:nowrap;font-size:12px;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-x-tick{position:absolute;top:calc(100% + 15px);transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#c4c7df}
-        #mwi-credit-optimizer button.mwi-analysis-dot{position:absolute;width:16px;height:16px;min-height:0;min-width:0;padding:0;border-radius:50%;background:#75dec5;border:2px solid #23253c;transform:translate(-50%,50%);cursor:pointer}
-        #mwi-credit-optimizer button.mwi-analysis-dot:hover,#mwi-credit-optimizer button.mwi-analysis-dot:focus-visible,#mwi-credit-optimizer button.mwi-analysis-dot.selected{background:#e9ce88;z-index:2;outline:2px solid #e9ce88;outline-offset:2px}
-        #mwi-credit-optimizer .mwi-analysis-point-detail{min-height:44px;color:#e9ce88;line-height:1.6;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-analytics :is(button,select,input,summary,[tabindex]):focus-visible{outline:2px solid #92efdb;outline-offset:3px}
-        #mwi-credit-optimizer .mwi-trial-analytics ::selection{background:#456a72;color:#fff}
-        @container (max-width:700px){#mwi-credit-optimizer .mwi-analysis-filters{grid-template-columns:1fr 1fr}#mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3),#mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 2}#mwi-credit-optimizer .mwi-analysis-summary{grid-template-columns:1fr 1fr}#mwi-credit-optimizer .mwi-analysis-ranking li{grid-template-columns:24px minmax(80px,1fr) minmax(65px,1fr);gap:8px}#mwi-credit-optimizer .mwi-analysis-ranking .mwi-analysis-track{display:none}#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{grid-column:3;font-size:12px}#mwi-credit-optimizer .mwi-analysis-compare-bars>div{grid-template-columns:48px 1fr 80px;gap:8px}#mwi-credit-optimizer .mwi-analysis-scatter{padding-left:68px;padding-right:28px}}
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
         @container (max-width:320px){#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-view-tab{font-size:11px}}
-        #mwi-credit-optimizer .mwi-trial-import{margin:16px 0;padding:12px 0;border-top:1px solid #454760;border-bottom:1px solid #454760;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:#f0d39b;line-height:1.5;overflow-wrap:anywhere;margin:8px 0}
-        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]:empty{display:none}
-        #mwi-credit-optimizer .mwi-trial-import-preview h3{margin:16px 0 8px;font-size:14px}
-        #mwi-credit-optimizer .mwi-trial-import-list{list-style:none;padding:0;margin:12px 0;max-height:480px;overflow-y:auto;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-trial-import-list li{display:grid;gap:4px;padding:10px 0;border-bottom:1px solid #454760;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-import-list span{color:#c4c7df;line-height:1.5}
-        #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{color:#c4c7df;line-height:1.6;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-notice{color:#f0d39b;line-height:1.5}
-        #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:16px 0}
-        #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:6px;flex:1 1 240px;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:36px}
-        #mwi-credit-optimizer .mwi-trial-title{margin:20px 0 8px;font-size:16px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-table-scroll{max-width:100%;overflow-x:auto;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-        #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:10px 8px;text-align:right;border-bottom:1px solid #454760;white-space:nowrap}
-        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-table small{display:block;color:#c4c7df;font-weight:normal}
-        #mwi-credit-optimizer .mwi-trial-raw{margin:18px 0;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0}
-        #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.5}
         #mwi-credit-optimizer [data-role="trials-view"] :focus-visible{outline:2px solid #77e1cb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;gap:2px;background:transparent}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:28px;min-width:28px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
         #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
@@ -8435,8 +8352,7 @@ window.MwiGuildCreditVersion = "1.2.15";
         #mwi-credit-optimizer .mwi-building-icon-fallback svg{padding:3px;fill:none;stroke:var(--build-muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
         #mwi-credit-optimizer .mwi-building-tile-copy{display:grid;gap:2px;min-width:0}
         #mwi-credit-optimizer .mwi-building-tile-name{font-size:14px;font-weight:500;line-height:1.4;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-building-tile-level{font-size:12px;font-weight:400;line-height:1.4;color:var(--build-muted);overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-building-tile[data-level-known="false"] .mwi-building-tile-level{color:var(--build-warning)}
+        #mwi-credit-optimizer .mwi-building-tile-level,#mwi-credit-optimizer .mwi-building-tile-cost{font-size:12px;font-weight:400;line-height:1.4;color:var(--build-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"] .mwi-building-tile-level{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;margin-top:20px;padding-top:14px;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
@@ -8480,6 +8396,152 @@ window.MwiGuildCreditVersion = "1.2.15";
           #mwi-credit-optimizer .mwi-construction-metric strong,#mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{font-size:18px}
         }
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group{transition:none}}
+
+          /* Trial workspace inherits the construction page's compact visual system. */
+        #mwi-credit-optimizer [data-role="trials-view"]{--trial-surface:#24273b;--trial-field:#191c2e;--trial-line:#41465f;--trial-text:#edf0fa;--trial-muted:#b7bfd4;--trial-accent:#91dfcb;--trial-warning:#e9c487;--trial-danger:#ffa7b5;container-type:inline-size;container-name:mwi-trials;color:var(--trial-text);font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-color:#66708b var(--trial-surface)}
+        #mwi-credit-optimizer [data-role="trials-view"] :is(input,select){width:100%;min-width:0;max-width:100%;padding:4px 8px;border:1px solid #626b86;border-radius:5px;background:var(--trial-field);color:var(--trial-text);color-scheme:dark;font:14px system-ui,sans-serif;caret-color:var(--trial-accent)}
+        #mwi-credit-optimizer [data-role="trials-view"] input::placeholder{color:var(--trial-muted);opacity:1}
+        #mwi-credit-optimizer [data-role="trials-view"] button{min-height:30px;padding:4px 8px;border-radius:4px;background:#34394f;color:var(--trial-text);font-size:12px}
+        #mwi-credit-optimizer [data-role="trials-view"] button:hover{background:#454e68}
+        #mwi-credit-optimizer [data-role="trials-view"] button:disabled{opacity:.45;cursor:default}
+        #mwi-credit-optimizer [data-role="trials-view"] :is(button,input,select,summary,[tabindex]):focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
+        #mwi-credit-optimizer [data-role="trials-view"] ::selection{background:#34685e;color:#fff}
+        #mwi-credit-optimizer .mwi-trial-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px}
+        #mwi-credit-optimizer .mwi-trial-heading{flex:1 1 180px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-heading h2{margin:0;font-size:16px;font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-toolbar .mwi-trial-controls{margin:0}
+        #mwi-credit-optimizer .mwi-trial-heading .mwi-trial-notice{margin:4px 0 0}
+        #mwi-credit-optimizer .mwi-trial-notice[data-state="saved"]{color:var(--trial-muted)}
+        #mwi-credit-optimizer button[data-role="trial-import-open"],#mwi-credit-optimizer button[data-role="trial-import-confirm"]{background:#34514e;color:#d5f7ed}
+        #mwi-credit-optimizer button[data-role="trial-import-open"]:hover,#mwi-credit-optimizer button[data-role="trial-import-confirm"]:hover{background:#41675f}
+        #mwi-credit-optimizer .mwi-trial-guide{margin-top:6px;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-trial-guide summary{width:fit-content;padding:5px 0;cursor:pointer}
+        #mwi-credit-optimizer .mwi-trial-guide p{max-width:75ch}
+        #mwi-credit-optimizer .mwi-trial-import-preview{padding:2px 12px 10px;margin-top:10px;border-radius:6px;background:var(--trial-surface)}
+        #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
+        #mwi-credit-optimizer .mwi-analysis-context{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
+        #mwi-credit-optimizer .mwi-analysis-context .mwi-trial-meta{margin:0}
+        #mwi-credit-optimizer .mwi-analysis-sections{display:grid;grid-template-columns:minmax(0,1fr);gap:0 20px}
+        #mwi-credit-optimizer .mwi-analysis-controls p{margin:0;padding:6px 0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-analysis-controls p strong{color:var(--trial-text)}
+        #mwi-credit-optimizer .mwi-analysis-chart-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
+        #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
+        #mwi-credit-optimizer .mwi-trial-record-detail{margin-top:8px;padding-top:14px;border-top:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-record-detail h2{font-size:16px;font-weight:650;margin:0 0 8px}
+
+        #mwi-credit-optimizer button.mwi-analysis-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 0;border:0;border-radius:3px;background:transparent;color:inherit;font:inherit;text-align:left}
+        #mwi-credit-optimizer button.mwi-analysis-toggle:hover{background:#343753;color:#fff}
+        #mwi-credit-optimizer .mwi-analysis-toggle-action{margin-left:auto;flex-shrink:0;font-size:12px;font-weight:400;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-analysis-toggle svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+        #mwi-credit-optimizer .mwi-analysis-toggle[aria-expanded="false"] svg{transform:rotate(-90deg)}
+        #mwi-credit-optimizer [id^="mwi-analysis-body-"][hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-analysis-nav{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 0;padding:8px 0;border-top:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-analysis-nav button{font-size:12px;background:transparent;color:var(--trial-muted);padding:5px 8px;min-height:30px}
+        #mwi-credit-optimizer .mwi-analysis-nav button:hover{background:var(--trial-surface);color:var(--trial-text)}
+        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:16px;margin:0 0 6px;font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-analytics{--analysis-accent:var(--trial-accent);--analysis-blue:#aebdff;min-width:0;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-analysis-heading{font-size:16px;font-weight:650;margin:0;line-height:1.4}
+        #mwi-credit-optimizer .mwi-analysis-section{min-width:0;margin:0;padding:6px 0 12px;border-top:1px solid var(--trial-line);container-type:inline-size}
+        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:16px;margin:0 0 6px;font-weight:650}
+        #mwi-credit-optimizer .mwi-analysis-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px 12px;margin:8px 0}
+        #mwi-credit-optimizer .mwi-analysis-controls label{display:grid;gap:4px;flex:1 1 150px;min-width:0;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-analysis-controls select,#mwi-credit-optimizer .mwi-analysis-controls input{width:100%;min-width:0;max-width:100%;height:34px;font-size:14px}
+        #mwi-credit-optimizer .mwi-analysis-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin:10px 0 6px}
+        #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3){grid-column:auto}
+        #mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 2}
+        #mwi-credit-optimizer .mwi-analysis-method{margin:0;color:var(--trial-muted);font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-analysis-method summary{cursor:pointer;padding:6px 0;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0;padding:12px;background:var(--trial-surface);border-radius:6px}
+        #mwi-credit-optimizer .mwi-analysis-summary dt{color:var(--trial-muted);font-size:12px;line-height:1.4;margin-bottom:4px}
+        #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:20px;font-weight:650;line-height:1.3;margin:0;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-analysis-ranking{padding:0;margin:8px 0 0;list-style:none;max-height:420px;overflow:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-analysis-ranking li{display:grid;grid-template-columns:24px minmax(100px,1.3fr) minmax(40px,1fr) minmax(85px,.8fr) minmax(55px,.5fr);align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-analysis-ranking strong,#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{text-align:right;overflow-wrap:anywhere;font-size:14px;font-weight:500}
+        #mwi-credit-optimizer .mwi-analysis-rank{color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer button.mwi-analysis-member{background:transparent;color:var(--trial-accent);text-align:left;padding:4px 2px;min-height:30px;height:auto;white-space:normal;overflow-wrap:anywhere;font:inherit;font-size:14px;line-height:1.4;border-radius:3px}
+        #mwi-credit-optimizer button.mwi-analysis-member:hover{text-decoration:underline;text-underline-offset:3px;color:#dbe2ff;background:#343753}
+        #mwi-credit-optimizer .mwi-analysis-track{height:6px;background:#343b52;overflow:hidden;border-radius:2px;min-width:0}
+        #mwi-credit-optimizer .mwi-analysis-track i{display:block;height:100%;background:var(--analysis-accent)}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars{display:grid;gap:12px;margin:12px 0}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars>div{display:grid;grid-template-columns:64px minmax(0,1fr) minmax(72px,auto);gap:10px;align-items:center}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars>div:first-child i{background:var(--analysis-blue)}
+        #mwi-credit-optimizer .mwi-analysis-compare-bars strong{text-align:right}
+        #mwi-credit-optimizer .mwi-analysis-change{font-size:14px;margin:10px 0}
+        #mwi-credit-optimizer .mwi-analysis-change span{color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-analysis-line{display:block;width:100%;min-width:640px;height:auto;max-height:260px;overflow:visible}
+        #mwi-credit-optimizer .mwi-analysis-line text{fill:var(--trial-muted);font:16px system-ui,sans-serif}
+        #mwi-credit-optimizer .mwi-analysis-line path{fill:none;stroke:var(--analysis-accent);stroke-width:2.5}
+        #mwi-credit-optimizer .mwi-analysis-line circle{fill:var(--analysis-accent)}
+        #mwi-credit-optimizer .mwi-analysis-gridline{stroke:#50536e;stroke-width:1}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll{max-height:360px;max-width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll th{font-weight:500}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll th:first-child{min-width:130px}
+        #mwi-credit-optimizer .mwi-analysis-table-scroll thead th{position:sticky;top:0;background:#30364b;z-index:1}
+        #mwi-credit-optimizer .mwi-analysis-legend{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+        #mwi-credit-optimizer .mwi-analysis-cell{display:inline-block;padding:4px 8px;min-width:60px;text-align:center;border-radius:3px;font-size:12px}
+        #mwi-credit-optimizer .mwi-analysis-cell.positive{background:#254940;color:#b7f7e7}
+        #mwi-credit-optimizer .mwi-analysis-cell.zero{background:#383d63;color:#d6dfff}
+        #mwi-credit-optimizer .mwi-analysis-cell.unknown{background:#55462b;color:#ffe1a4}
+        #mwi-credit-optimizer .mwi-analysis-cell.absent{color:#c4c7df;outline:1px dashed #6c6f8c;outline-offset:-1px}
+        #mwi-credit-optimizer .mwi-analysis-pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-analysis-pager button{min-height:30px}
+        #mwi-credit-optimizer .mwi-analysis-pager button:disabled{opacity:.55;cursor:default}
+        #mwi-credit-optimizer .mwi-analysis-scatter{position:relative;padding:32px 36px 48px 78px;margin:10px 0}
+        #mwi-credit-optimizer .mwi-analysis-plot{height:230px;position:relative;border-left:1px solid #7e8aa7;border-bottom:1px solid #7e8aa7;background:linear-gradient(0deg,transparent calc(50% - .5px),#41465f 50%,transparent calc(50% + .5px))}
+        #mwi-credit-optimizer .mwi-analysis-x-label{position:absolute;bottom:0;left:50%;transform:translateX(-50%);color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-y-label{position:absolute;top:0;left:0;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-y-tick{position:absolute;right:calc(100% + 12px);transform:translateY(50%);white-space:nowrap;font-size:12px;color:#c4c7df}
+        #mwi-credit-optimizer .mwi-analysis-x-tick{position:absolute;top:calc(100% + 15px);transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#c4c7df}
+        #mwi-credit-optimizer button.mwi-analysis-dot{position:absolute;width:16px;height:16px;min-height:0;min-width:0;padding:0;border-radius:50%;background:#75dec5;border:2px solid #23253c;transform:translate(-50%,50%);cursor:pointer}
+        #mwi-credit-optimizer button.mwi-analysis-dot:hover,#mwi-credit-optimizer button.mwi-analysis-dot:focus-visible,#mwi-credit-optimizer button.mwi-analysis-dot.selected{background:#e9ce88;z-index:2;outline:2px solid #e9ce88;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-analysis-point-detail{min-height:34px;margin:8px 0;color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-analytics :is(button,select,input,summary,[tabindex]):focus-visible{outline:2px solid #92efdb;outline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-analytics ::selection{background:#456a72;color:#fff}
+        #mwi-credit-optimizer .mwi-trial-import{margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--trial-line);min-width:0}
+        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}
+        #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]:empty{display:none}
+        #mwi-credit-optimizer .mwi-trial-import-preview h3{margin:12px 0 6px;font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-import-list{list-style:none;padding:0;margin:8px 0;max-height:320px;overflow-y:auto;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-import-list li{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 12px;padding:8px 0;border-bottom:1px solid var(--trial-line);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-import-list span{color:var(--trial-muted);font-size:12px;line-height:1.4}
+        #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{margin:6px 0;color:var(--trial-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-notice{margin:6px 0;color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px 8px;margin:8px 0}
+        #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
+        #mwi-credit-optimizer .mwi-trial-title{margin:10px 0 4px;font-size:14px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-table-scroll{max-width:100%;max-height:480px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.45}
+        #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
+        #mwi-credit-optimizer .mwi-trial-raw{margin:10px 0;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
+        @container (max-width:650px){
+          #mwi-credit-optimizer .mwi-analysis-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+          #mwi-credit-optimizer .mwi-analysis-ranking li{grid-template-columns:24px minmax(60px,1fr) minmax(60px,auto);gap:4px 8px}
+          #mwi-credit-optimizer .mwi-analysis-ranking .mwi-analysis-track{display:none}
+          #mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{grid-column:3;font-size:12px;color:var(--trial-muted)}
+          #mwi-credit-optimizer .mwi-analysis-scatter{padding-left:64px;padding-right:28px}
+          #mwi-credit-optimizer .mwi-analysis-compare-bars>div{grid-template-columns:48px minmax(0,1fr) minmax(60px,auto);gap:8px}
+        }
+        @container mwi-trials (max-width:460px){
+          #mwi-credit-optimizer .mwi-analysis-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+          #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3),#mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:1/-1}
+          #mwi-credit-optimizer .mwi-analysis-controls label{flex-basis:120px}
+          #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:18px}
+          #mwi-credit-optimizer .mwi-trial-import-list{max-height:280px}
+          #mwi-credit-optimizer .mwi-trial-import-list li{grid-template-columns:minmax(0,1fr)}
+          #mwi-credit-optimizer .mwi-analysis-plot{height:200px}
+        }
+        @container mwi-trials (min-width:1100px){
+          #mwi-credit-optimizer .mwi-analysis-sections{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+          #mwi-credit-optimizer .mwi-analysis-section{grid-column:1/-1}
+          #mwi-credit-optimizer .mwi-analysis-section:is([data-analysis-section="ranking"],[data-analysis-section="comparison"]){grid-column:auto}
+        }
 
   `;
 
@@ -9243,7 +9305,18 @@ window.MwiGuildCreditVersion = "1.2.15";
           ? t("buildingTileDefaultZeroLabel", { building: label })
           : t("buildingTileAddLabel", { building: label, current: formatNumber(liveLevel) });
       const atMaxLevel = !plan && liveLevel >= definition.maxLevel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span></span></button>`;
+      const nextLevelCost = core.aggregateGuildBuildingLevelCosts(definition.levelCosts, liveLevel, liveLevel + 1);
+      const costLabel =
+        liveLevel >= definition.maxLevel
+          ? t("buildingMaxLevel")
+          : nextLevelCost.status === "ok"
+            ? t("buildingCatalogNextLevelCost", {
+                level: formatNumber(liveLevel + 1),
+                points: formatNumber(nextLevelCost.totalCost)
+              })
+            : t("buildingCatalogNextLevelCostUnavailable");
+      const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -9702,6 +9775,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let importNotice = null;
     let importBusy = false;
     let importRevision = 0;
+    let guideOpen = false;
     const unsaved = new Map();
     const date = (value) =>
       new Date(value).toLocaleString(undefined, {
@@ -9773,10 +9847,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
-        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
-        <p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p>
+        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
@@ -9856,15 +9930,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (!host) return;
       const selected = records.find((record) => record.key === selectedKey) || records[0];
       selectedKey = selected?.key || "";
-      let markup = `<p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p>
-        <p class="mwi-trial-notice" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p>`;
-      markup += renderImport();
+      let markup = renderImport();
       if (!selected) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
       markup += analytics.render(records, selected);
-      markup += `<div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
+      markup += `<section class="mwi-trial-record-detail" aria-label="${escapeHtml(t("trialRecordDetails"))}"><h2>${escapeHtml(t("trialRecordDetails"))}</h2><div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
         .map(
           (record, index) =>
             `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")} · ${trialName(record)}`)}</option>`
@@ -9885,7 +9957,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         return String(a.characterId).localeCompare(String(b.characterId));
       });
       markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(analyticsApi.metricValue(selected, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-        <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details>`;
+        <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details></section>`;
       host.innerHTML = markup;
     }
 
@@ -9906,6 +9978,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
       analytics.bind(host);
+      host.addEventListener(
+        "toggle",
+        (event) => {
+          if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
+        },
+        true
+      );
       host.addEventListener("change", (event) => {
         if (event.target.dataset.role === "trial-import-file") {
           void readImport(event.target.files?.[0], panel);
@@ -9959,9 +10038,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   root.MwiGuildTrialAnalyticsView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  // Extend the incumbent guild panel: scoped filters, comparable statistics,
-  // full-width ranks and charts with inspectable tables. Minimum design width
-  // is 900px; smaller panels retain contained scrolling and usable controls.
+  // Inherit the construction workspace: compact controls, readable figures,
+  // continuous sections, and contained scrolling for wide data and charts.
   function createTrialAnalyticsView({
     api,
     t,
@@ -10041,14 +10119,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
       if (path) paths.push(path);
       const stride = Math.max(1, Math.ceil(points.length / 6));
-      return `<svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
+      return `<div class="mwi-analysis-chart-scroll" role="region" tabindex="0" aria-label="${esc(label)}"><svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
         ${[0, 0.5, 1].map((f) => `<line x1="64" x2="736" y1="${190 - f * 156}" y2="${190 - f * 156}" class="mwi-analysis-gridline"/><text x="56" y="${194 - f * 156}" text-anchor="end">${axisNum(max * f)}</text>`).join("")}
         ${paths.map((d) => `<path d="${d}"/>`).join("")}
         ${finite.map((p) => `<circle cx="${x(p)}" cy="${y(p)}" r="4"><title>${esc(p.label)}: ${num(p.value)}</title></circle>`).join("")}
         ${points
           .filter((p, i) => i % stride === 0 || i === points.length - 1)
           .map((p) => `<text x="${x(p)}" y="220" text-anchor="middle">${esc(p.label)}</text>`)
-          .join("")}</svg>`;
+          .join("")}</svg></div>`;
     }
 
     function overview() {
@@ -10250,7 +10328,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       ]
         .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
         .join("")}</nav>`;
-      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p>${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+      return `<div class="mwi-analysis-context"><h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2><p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p></div>${filters}${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p><div class="mwi-analysis-sections">${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}</div>`;
     }
     function setCollapsed(id, value) {
       const button = host?.querySelector(`[data-analysis-toggle="${id}"]`);

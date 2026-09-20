@@ -74,7 +74,7 @@
     },
     { hrid: "/guild_buildings/armory", nameKey: "buildingArmory", category: "combat", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/dining_room", nameKey: "buildingDiningRoom", category: "combat", costMultiplier: 0.5 },
-    { hrid: "/guild_buildings/observatory", nameKey: "buildingObservatory", category: "combat", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/observatory", nameKey: "buildingObservatory", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_shrines/tempo", nameKey: "shrineTempo", category: "shrine", costMultiplier: 1 },
     { hrid: "/guild_shrines/spirit", nameKey: "shrineSpirit", category: "shrine", costMultiplier: 1 },
     { hrid: "/guild_shrines/force", nameKey: "shrineForce", category: "shrine", costMultiplier: 1 },

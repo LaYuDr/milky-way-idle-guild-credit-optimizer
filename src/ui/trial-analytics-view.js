@@ -4,9 +4,8 @@
   root.MwiGuildTrialAnalyticsView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  // Extend the incumbent guild panel: scoped filters, comparable statistics,
-  // full-width ranks and charts with inspectable tables. Minimum design width
-  // is 900px; smaller panels retain contained scrolling and usable controls.
+  // Inherit the construction workspace: compact controls, readable figures,
+  // continuous sections, and contained scrolling for wide data and charts.
   function createTrialAnalyticsView({
     api,
     t,
@@ -86,14 +85,14 @@
       }
       if (path) paths.push(path);
       const stride = Math.max(1, Math.ceil(points.length / 6));
-      return `<svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
+      return `<div class="mwi-analysis-chart-scroll" role="region" tabindex="0" aria-label="${esc(label)}"><svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
         ${[0, 0.5, 1].map((f) => `<line x1="64" x2="736" y1="${190 - f * 156}" y2="${190 - f * 156}" class="mwi-analysis-gridline"/><text x="56" y="${194 - f * 156}" text-anchor="end">${axisNum(max * f)}</text>`).join("")}
         ${paths.map((d) => `<path d="${d}"/>`).join("")}
         ${finite.map((p) => `<circle cx="${x(p)}" cy="${y(p)}" r="4"><title>${esc(p.label)}: ${num(p.value)}</title></circle>`).join("")}
         ${points
           .filter((p, i) => i % stride === 0 || i === points.length - 1)
           .map((p) => `<text x="${x(p)}" y="220" text-anchor="middle">${esc(p.label)}</text>`)
-          .join("")}</svg>`;
+          .join("")}</svg></div>`;
     }
 
     function overview() {
@@ -295,7 +294,7 @@
       ]
         .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
         .join("")}</nav>`;
-      return `<h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2>${filters}<p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p>${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p>${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}`;
+      return `<div class="mwi-analysis-context"><h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2><p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p></div>${filters}${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p><div class="mwi-analysis-sections">${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}</div>`;
     }
     function setCollapsed(id, value) {
       const button = host?.querySelector(`[data-analysis-toggle="${id}"]`);

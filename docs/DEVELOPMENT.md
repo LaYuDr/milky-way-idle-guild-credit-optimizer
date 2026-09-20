@@ -223,8 +223,10 @@ http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebar
 
 Repeat the construction audit at the same eleven widths. It also verifies the
 queue-first planning flow against a deterministic `3 / 28` partial-level
-live frame. Missing records remain visibly marked as unread, but resolve to
-level `0` for planning. The audit adds three known-level buildings, directly
+live frame. Missing records show current level `0` in catalog tiles, while
+the level-coverage summary and internal known-level flag preserve their unread status.
+Each tile also shows the cost of upgrading its current level by one (or maximum-level status).
+The audit adds three known-level buildings, directly
 adds one unread building as `0 -> 1` without a manual-level prompt, checks inline target editing, collapsed step
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
 search focus, focus visibility after rerenders, and the full weekly-point edit
@@ -260,7 +262,8 @@ content width, and entering the wide two-column layout can legitimately make
 the catalog column count smaller than the preceding single-column width. Also
 inspect `interactions.checks`: every value must be `true`.
 
-The `cards.readableNames`, `cards.visibleLevels`, and all `readability` fields
+The `cards.readableNames`, `cards.visibleLevels`, `cards.readableNextLevelCosts`,
+`cards.defaultZeroLabels`, and all `readability` fields
 must be true. These check a 14px minimum for primary text and the history table,
 a 12px minimum for secondary text, and the budget / queue / statistics reading
 order. The catalog scrolls within a 340px maximum height; the weekly table

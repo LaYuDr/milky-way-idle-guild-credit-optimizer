@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.16] - 2026-09-21
+
+### Changed
+
+- 优化公会建设与试炼分析界面、建筑数据和双语展示，补充测试台验证。
+
 ## [1.2.15] - 2026-09-20
 
 ### Changed
