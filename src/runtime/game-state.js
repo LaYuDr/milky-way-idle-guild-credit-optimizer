@@ -109,11 +109,15 @@
         return false;
       const previous = state.guildPointSummary;
       const guildId = String(source.guildID || source.guildId || source.id || (previous && previous.guildId) || "");
-      const sourceCurrentWeekPoints = Number(
-        source.currentWeekGuildPoints ?? source.currentWeekPoints ?? source.weeklyGuildPoints
-      );
-      if (Number.isSafeInteger(sourceCurrentWeekPoints) && sourceCurrentWeekPoints >= 0)
-        currentWeekGuildPoints = sourceCurrentWeekPoints;
+      const guildChanged = previous?.guildId && guildId && previous.guildId !== guildId;
+      const sourceWeekStartAt = guildWeekStartTimestamp(source.currentWeekStartAt);
+      if (!guildChanged && sourceWeekStartAt && state.guildWeekStartAt && sourceWeekStartAt < state.guildWeekStartAt)
+        return false;
+      if (guildChanged) {
+        currentWeekGuildPoints = undefined;
+        state.guildWeekStartAt = null;
+      }
+      const weekChanged = setGuildWeekStartAtFrom(source);
       state.guildPointSummaryObservedAt = Date.now();
       state.guildPointSummaryCached = false;
       if (
@@ -123,7 +127,7 @@
         previous.availablePoints === availablePoints &&
         previous.currentWeekPoints === currentWeekGuildPoints
       )
-        return false;
+        return weekChanged;
       state.guildPointSummary = {
         guildId,
         lifetimePoints,
@@ -136,16 +140,20 @@
     function setGuildWeekStartAtFrom(source) {
       if (!source || typeof source !== "object") return false;
       const weekStartAt = guildWeekStartTimestamp(source.currentWeekStartAt);
-      const sourceCurrentWeekPoints = Number(
-        source.currentWeekGuildPoints ??
-          source.currentWeekPoints ??
-          source.weeklyGuildPoints ??
-          source.guildPointsEarned ??
-          (weekStartAt ? source.guildPoints : NaN)
-      );
+      if (weekStartAt && state.guildWeekStartAt && weekStartAt < state.guildWeekStartAt) return false;
+      // Only explicitly weekly fields identify trial progress. guildPoints is
+      // the spendable balance, even when the same object contains a week date.
+      const rawPoints = source.currentWeekGuildPoints ?? source.currentWeekPoints ?? source.weeklyGuildPoints;
+      const sourceCurrentWeekPoints =
+        typeof rawPoints === "number" || (typeof rawPoints === "string" && rawPoints.trim()) ? Number(rawPoints) : NaN;
       let changed = false;
       if (weekStartAt && weekStartAt !== state.guildWeekStartAt) {
         state.guildWeekStartAt = weekStartAt;
+        currentWeekGuildPoints = undefined;
+        if (state.guildPointSummary) {
+          state.guildPointSummary = { ...state.guildPointSummary };
+          delete state.guildPointSummary.currentWeekPoints;
+        }
         changed = true;
       }
       if (Number.isSafeInteger(sourceCurrentWeekPoints) && sourceCurrentWeekPoints >= 0) {

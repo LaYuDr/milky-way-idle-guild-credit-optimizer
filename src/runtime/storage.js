@@ -8,7 +8,7 @@
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
   const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const LEGACY_GUILD_TRIAL_FIRST_START_AT = Date.parse("2026-07-13T00:00:00Z");
-  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 6;
+  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 7;
 
   function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
     const values =
@@ -170,7 +170,7 @@
     };
   }
 
-  function guildPointStateFromSnapshot(value) {
+  function guildPointStateFromSnapshot(value, now = Date.now()) {
     const snapshot = normalizeGuildPointSnapshot(value);
     if (!snapshot)
       return {
@@ -183,7 +183,9 @@
     return {
       guildPointSummary: {
         ...summary,
-        ...(Number.isSafeInteger(currentWeekPoints) ? { currentWeekPoints } : {})
+        ...(Number.isSafeInteger(currentWeekPoints) && now >= weekStartAt && now < weekStartAt + GUILD_POINT_WEEK_MS
+          ? { currentWeekPoints }
+          : {})
       },
       guildWeekStartAt: weekStartAt,
       guildPointSummaryObservedAt: observedAt,
@@ -483,7 +485,13 @@
             stored.schemaVersion,
             config.GUILD_TRIAL_FIRST_START_AT
           ),
-          guildPointSnapshot: normalizeGuildPointSnapshot(stored.guildPointSnapshot)
+          // Older snapshots may have copied the available balance into weekly
+          // progress. Preserve all other data and wait for a fresh weekly read.
+          guildPointSnapshot: normalizeGuildPointSnapshot(
+            stored.guildPointSnapshot && !(Number(stored.schemaVersion) >= 7)
+              ? { ...stored.guildPointSnapshot, currentWeekPoints: null }
+              : stored.guildPointSnapshot
+          )
         };
       } catch (_) {
         return fallback;

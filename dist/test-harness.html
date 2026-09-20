@@ -1671,6 +1671,11 @@
         normalizedText(panel.querySelector('[data-role="guild-point-planning-summary"]'));
       budgetInput.value = "8000";
       budgetInput.dispatchEvent(new Event("input", { bubbles: true }));
+      const settingsBeforeBudgetCommit = panel.querySelector(".mwi-guild-point-planning-options summary");
+      const pickerBeforeBudgetCommit = panel.querySelector('[data-role="toggle-building-picker"]');
+      budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
+      audit.budgetCommitPreservesControls =
+        settingsBeforeBudgetCommit.isConnected && pickerBeforeBudgetCommit.isConnected;
       await waitFor(() => compactNumber(planningSummaryText()).includes("8000"));
       audit.liveBudget = {
         customSummary: planningSummaryText(),
@@ -1905,6 +1910,7 @@
           compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("2") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
+        budgetCommitPreservesControls: audit.budgetCommitPreservesControls,
         customBudgetUpdatesWithoutChangingGameBalance:
           compactNumber(audit.liveBudget.customSummary).includes("8000") &&
           compactNumber(audit.liveBudget.actualBalance) === "244" &&
@@ -2025,7 +2031,7 @@
         reportedKnownCount: Number(panel.querySelector(".mwi-building-level-status")?.dataset.knownCount || 0),
         omittedLevelBadges: omittedTiles.map((tile) => ({
           buildingHrid: tile.dataset.buildingHrid,
-          level: normalizedText(tile.querySelector(".mwi-building-level-badge")),
+          level: tile.dataset.currentLevel,
           known: tile.dataset.levelKnown === "true"
         })),
         pendingStartForm: Boolean(panel.querySelector('[data-role="pending-building-start"]'))

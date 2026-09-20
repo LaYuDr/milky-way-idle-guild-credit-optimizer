@@ -8,6 +8,7 @@ const data = require("../src/guild-building-data.js");
 const core = require("../src/core.js");
 const config = require("../src/runtime/config.js");
 const constructionViewApi = require("../src/ui/construction-view.js");
+const gameStateApi = require("../src/runtime/game-state.js");
 
 const GUILD_TRIAL_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -394,6 +395,26 @@ test("建设页将本周 0 显示为历史预测而非实际周样本", () => {
   assert.doesNotMatch(markup, /data-role="(?:latest-weekly-guild-points|current-week-guild-points)">0<\/strong>/);
   assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
   assert.match(markup, /data-role="current-week-guild-points">\d+<\/strong>/);
+});
+
+test("余额更新后建设页仍将真实零值显示为预测，缺失本周点数显示未知", () => {
+  const harness = createConstructionHarness();
+  const adapter = gameStateApi.createGameStateAdapter(harness.state);
+  const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
+  const weekStartAt = firstTrial + Math.floor((Date.now() - firstTrial) / GUILD_TRIAL_WEEK_MS) * GUILD_TRIAL_WEEK_MS;
+  const balance = { guildID: "guild-1", lifetimeGuildPoints: 65000, guildPoints: 633, currentWeekStartAt: weekStartAt };
+  adapter.setGuildPointSummaryFrom(balance);
+  let markup = renderGuildPointForecast(harness, harness.view.guildPointHistorySummary());
+  assert.match(markup, /data-source="currentUnavailable" data-current-week="true"/);
+  assert.match(markup, /data-role="current-week-guild-points">-<\/strong>/);
+  adapter.setGuildWeekStartAtFrom({ currentWeekStartAt: weekStartAt, currentWeekGuildPoints: 0 });
+  adapter.setGuildPointSummaryFrom(balance);
+  adapter.setGuildWeekStartAtFrom(balance);
+  markup = renderGuildPointForecast(harness, harness.view.guildPointHistorySummary());
+  assert.match(markup, /predictedCurrentWeekGuildPoints/);
+  assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
+  assert.doesNotMatch(markup, /data-role="(?:latest-weekly-guild-points|current-week-guild-points)">633<\/strong>/);
+  assert.deepEqual(harness.state.guildPointHistory.weeks, []);
 });
 
 test("当前周实际点数以只读行显示在历史表最上方", () => {

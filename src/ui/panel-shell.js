@@ -691,10 +691,13 @@
           const parsed = guildPointBudgetInputValue(event.target);
           setGuildPointBudgetValidity(panel, event.target, parsed.valid);
           if (!parsed.valid) return;
+          const needsPreview = state.manualGuildPoints !== parsed.value;
           state.manualGuildPoints = parsed.value;
           clearConstructionNotice(panel);
           persistGuildBuildingPlannerState();
-          refreshConstructionAndFocus(panel, { role: "guild-point-budget" }, null);
+          // Input already refreshed the preview. Preserve the control receiving
+          // the blur/click so committing a budget does not swallow that click.
+          if (needsPreview) refreshGuildConstructionBudgetPreview(panel);
           return;
         }
         if (event.target.matches('[data-role="building-search"]')) {

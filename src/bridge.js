@@ -392,6 +392,17 @@
       const endCharacterItems = value.endCharacterItems;
       const lifetimeGuildPoints = Number(value.lifetimeGuildPoints);
       const guildPoints = Number(value.guildPoints);
+      const guildWeekStartAt = weekStartTimestamp(value.currentWeekStartAt);
+      const guildId = String(value.guildID || value.guildId || value.id || bridge.guildPointSummary?.guildId || "");
+      const hasGuildBalance =
+        Number.isSafeInteger(lifetimeGuildPoints) &&
+        lifetimeGuildPoints >= 0 &&
+        Number.isSafeInteger(guildPoints) &&
+        guildPoints >= 0;
+      const guildChanged =
+        hasGuildBalance && bridge.guildPointSummary?.guildId && guildId && bridge.guildPointSummary.guildId !== guildId;
+      const staleGuildWeek =
+        !guildChanged && guildWeekStartAt && bridge.guildWeekStartAt && guildWeekStartAt < bridge.guildWeekStartAt;
       if (itemDetails && typeof itemDetails === "object") bridge.itemDetails = itemDetails;
       if (guildBuffDetails && typeof guildBuffDetails === "object") bridge.guildBuffDetails = guildBuffDetails;
       if (guildBuffLevels && typeof guildBuffLevels === "object") bridge.guildBuffLevels = guildBuffLevels;
@@ -423,20 +434,17 @@
         characterItemsChanged = true;
         characterItemsSource = "incremental";
       }
-      if (
-        Number.isSafeInteger(lifetimeGuildPoints) &&
-        lifetimeGuildPoints >= 0 &&
-        Number.isSafeInteger(guildPoints) &&
-        guildPoints >= 0
-      ) {
+      if (guildChanged || (!staleGuildWeek && guildWeekStartAt && guildWeekStartAt !== bridge.guildWeekStartAt)) {
+        bridge.guildCurrentWeekPoints = null;
+        bridge.guildWeekStartAt = guildWeekStartAt;
+        if (bridge.guildPointSummary) {
+          bridge.guildPointSummary = { ...bridge.guildPointSummary };
+          delete bridge.guildPointSummary.currentWeekPoints;
+        }
+      }
+      if (hasGuildBalance && !staleGuildWeek) {
         bridge.guildPointSummary = {
-          guildId: String(
-            value.guildID ||
-              value.guildId ||
-              value.id ||
-              (bridge.guildPointSummary && bridge.guildPointSummary.guildId) ||
-              ""
-          ),
+          guildId,
           lifetimePoints: lifetimeGuildPoints,
           availablePoints: guildPoints,
           ...(Number.isSafeInteger(bridge.guildCurrentWeekPoints)
@@ -444,16 +452,13 @@
             : {})
         };
       }
-      const guildWeekStartAt = weekStartTimestamp(value.currentWeekStartAt);
-      if (guildWeekStartAt) bridge.guildWeekStartAt = guildWeekStartAt;
-      const currentWeekGuildPoints = Number(
-        value.currentWeekGuildPoints ??
-          value.currentWeekPoints ??
-          value.weeklyGuildPoints ??
-          value.guildPointsEarned ??
-          (guildWeekStartAt ? value.guildPoints : NaN)
-      );
-      if (Number.isSafeInteger(currentWeekGuildPoints) && currentWeekGuildPoints >= 0) {
+      // A balance is never a weekly earning, including on dated guild objects.
+      const rawWeekPoints = value.currentWeekGuildPoints ?? value.currentWeekPoints ?? value.weeklyGuildPoints;
+      const currentWeekGuildPoints =
+        typeof rawWeekPoints === "number" || (typeof rawWeekPoints === "string" && rawWeekPoints.trim())
+          ? Number(rawWeekPoints)
+          : NaN;
+      if (!staleGuildWeek && Number.isSafeInteger(currentWeekGuildPoints) && currentWeekGuildPoints >= 0) {
         bridge.guildCurrentWeekPoints = currentWeekGuildPoints;
         if (bridge.guildPointSummary)
           bridge.guildPointSummary = { ...bridge.guildPointSummary, currentWeekPoints: currentWeekGuildPoints };

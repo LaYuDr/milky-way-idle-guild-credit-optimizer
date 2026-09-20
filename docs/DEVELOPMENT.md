@@ -263,8 +263,16 @@ inspect `interactions.checks`: every value must be `true`.
 The `cards.readableNames`, `cards.visibleLevels`, and all `readability` fields
 must be true. These check a 14px minimum for primary text and the history table,
 a 12px minimum for secondary text, and the budget / queue / statistics reading
-order. The catalog scrolls within a 460px maximum height; the weekly table
+order. The catalog scrolls within a 340px maximum height; the weekly table
 retains all rows with a contained horizontal scroller on narrow panels.
+
+The compact construction workspace uses two budget columns and a queue/catalog
+split at a container width of 720px. Queue controls reflow using the queue pane's
+own container width, so the wide page's narrower column remains usable. Main
+text stays at least 14px and secondary text at least 12px. Sort arrows have a
+shaft; the adjacent disclosure control uses a chevron. Check both expanded and
+collapsed steps, forecast settings, and history. Full-snapshot audits read the
+catalog's numeric `data-current-level`, independently of translated level copy.
 
 Run additional English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
 

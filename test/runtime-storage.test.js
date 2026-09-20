@@ -242,7 +242,7 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     }
   });
   const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
-  assert.equal(raw.schemaVersion, 6);
+  assert.equal(raw.schemaVersion, 7);
   assert.equal(raw.guildPointForecastWeeks, 8);
   assert.equal(raw.guildPointPlanningWeeks, 4);
   assert.deepEqual(raw.guildPointHistory.weeks, [
@@ -305,6 +305,70 @@ test("公会点数快照恢复为缓存状态且保留缺失的本周点数", ()
       guildPointSummaryCached: true
     }
   );
+});
+
+test("旧版本周点数缓存失效但余额、历史与施工计划保留", () => {
+  const storage = memoryStorage();
+  const pluginStorage = createStorage(storage);
+  const key = "mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7";
+  const weekStartAt = Date.parse("2026-09-18T00:00:00Z");
+  const previousWeek = weekStartAt - 7 * 24 * 60 * 60 * 1000;
+  const stored = {
+    schemaVersion: 6,
+    plans: [{ buildingHrid: buildingDataApi.definitions()[0].hrid, startLevel: 0, targetLevel: 1 }],
+    manualGuildPoints: 500,
+    guildPointHistory: {
+      guildId: "guild-7",
+      lastObservation: null,
+      weeks: [{ weekStartAt: previousWeek, earnedPoints: 9000, complete: true, observedAt: weekStartAt }],
+      manualWeeks: []
+    },
+    guildPointSnapshot: {
+      guildId: "guild-7",
+      lifetimePoints: 100000,
+      availablePoints: 633,
+      currentWeekPoints: 633,
+      weekStartAt,
+      observedAt: weekStartAt + 1000
+    }
+  };
+  storage.setItem(key, JSON.stringify(stored));
+  const loaded = pluginStorage.loadSavedGuildBuildingPlannerState();
+  assert.deepEqual(loaded.guildPointSnapshot, { ...stored.guildPointSnapshot, currentWeekPoints: null });
+  assert.deepEqual(loaded.guildPointHistory, stored.guildPointHistory);
+  assert.deepEqual(loaded.plans, stored.plans);
+  assert.equal(loaded.manualGuildPoints, 500);
+  assert.deepEqual(JSON.parse(storage.value(key)), stored);
+  storage.setItem(
+    key,
+    JSON.stringify({
+      ...stored,
+      schemaVersion: 7,
+      guildPointSnapshot: { ...stored.guildPointSnapshot, currentWeekPoints: 0 }
+    })
+  );
+  assert.equal(pluginStorage.loadSavedGuildBuildingPlannerState().guildPointSnapshot.currentWeekPoints, 0);
+});
+
+test("缓存本周点数只在对应周恢复，跨周保留余额但不冒充本周进度", () => {
+  const weekStartAt = Date.parse("2026-09-18T00:00:00Z");
+  const snapshot = {
+    guildId: "guild-7",
+    lifetimePoints: 100000,
+    availablePoints: 633,
+    currentWeekPoints: 9000,
+    weekStartAt,
+    observedAt: weekStartAt + 1000
+  };
+  assert.equal(
+    storageApi.guildPointStateFromSnapshot(snapshot, weekStartAt + 1000).guildPointSummary.currentWeekPoints,
+    9000
+  );
+  const nextWeek = storageApi.guildPointStateFromSnapshot(snapshot, weekStartAt + 7 * 24 * 60 * 60 * 1000);
+  assert.equal(nextWeek.guildPointSummary.currentWeekPoints, undefined);
+  assert.equal(nextWeek.guildPointSummary.availablePoints, 633);
+  assert.equal(nextWeek.guildPointSummary.lifetimePoints, 100000);
+  assert.equal(nextWeek.guildPointSummaryCached, true);
 });
 
 test("UI 与市场缓存持久化只写既有键并保留缓存修订", () => {
