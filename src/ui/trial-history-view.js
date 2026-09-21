@@ -84,6 +84,7 @@
         <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
+        <div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div>
         <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
@@ -203,6 +204,20 @@
       }
     }
 
+    function renderChoices(kind, entries, current) {
+      const label = t(kind === "week" ? "trialChooseWeek" : "trialChooseProject");
+      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${escapeHtml(name)}</button>`).join("")}</div></div>`;
+    }
+
+    function revealChoice(button) {
+      if (!button) return;
+      const rail = button.parentElement;
+      const bounds = rail.getBoundingClientRect();
+      const item = button.getBoundingClientRect();
+      if (item.left < bounds.left + 4) rail.scrollLeft += item.left - bounds.left - 4;
+      else if (item.right > bounds.right - 4) rail.scrollLeft += item.right - bounds.right + 4;
+    }
+
     function refresh(panel) {
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
@@ -227,9 +242,14 @@
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
-      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : "trialByProject"))}</button>`).join("")}</div><div class="mwi-trial-controls">`;
+      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : "trialByProject"))}</button>`).join("")}</div>`;
       if (mode === "week") {
-        markup += `<label>${escapeHtml(t("trialChooseWeek"))}<select data-role="trial-week">${weeks.map((entry) => `<option value="${entry.key}"${entry.key === selectedWeek ? " selected" : ""}>${escapeHtml(weekLabel(entry))}</option>`).join("")}</select></label></div></div>`;
+        markup +=
+          renderChoices(
+            "week",
+            weeks.map((entry) => ({ key: entry.key, label: weekLabel(entry) })),
+            selectedWeek
+          ) + "</div>";
         for (const [kind, size] of [
           ["skilling", 4],
           ["combat", 2]
@@ -244,7 +264,12 @@
           markup += renderRail(kind, t(kind === "combat" ? "trialCombat" : "trialSkilling"), columns.join(""), kind);
         }
       } else {
-        markup += `<label>${escapeHtml(t("trialChooseProject"))}<select data-role="trial-project">${projects.map((entry) => `<option value="${escapeHtml(entry.key)}"${entry.key === selectedProject ? " selected" : ""}>${escapeHtml(trialName(entry.records[0]))}</option>`).join("")}</select></label></div></div>`;
+        markup +=
+          renderChoices(
+            "project",
+            projects.map((entry) => ({ key: entry.key, label: trialName(entry.records[0]) })),
+            selectedProject
+          ) + "</div>";
         const timeline = trialHistoryApi.historyWeeks(project.records);
         markup += renderRail(
           "timeline",
@@ -258,11 +283,13 @@
       }
       host.innerHTML = markup;
       for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
-      if (!resetScroll)
-        for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
-          const position = scroll.get(el.dataset.trialScrollId);
-          if (position) [el.scrollLeft, el.scrollTop] = position;
-        }
+      for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
+        const position = scroll.get(el.dataset.trialScrollId);
+        if (position && (!resetScroll || el.dataset.trialScrollId.startsWith("choice-")))
+          [el.scrollLeft, el.scrollTop] = position;
+      }
+      if (resetScroll || !scroll.has(`choice-${mode}`))
+        revealChoice(host.querySelector('[data-trial-choice][aria-pressed="true"]'));
       resetScroll = false;
       updateScrollButtons(host);
     }
@@ -299,16 +326,33 @@
           void readImport(event.target.files?.[0], panel);
           return;
         }
-        const role = event.target.dataset.role;
-        if (role === "trial-week") selectedWeek = event.target.value;
-        else if (role === "trial-project") selectedProject = event.target.value;
-        else return;
-        resetScroll = true;
-        refresh(panel);
-        host.querySelector(`[data-role="${role}"]`)?.focus();
+      });
+      host.addEventListener("keydown", (event) => {
+        const button = event.target.closest("[data-trial-choice]");
+        if (!button || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const buttons = [...button.parentElement.querySelectorAll("[data-trial-choice]")];
+        const current = buttons.indexOf(button);
+        const index =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? buttons.length - 1
+              : Math.max(0, Math.min(buttons.length - 1, current + (event.key === "ArrowRight" ? 1 : -1)));
+        buttons[index].click();
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const choice = event.target.closest("[data-trial-choice]");
+        if (choice) {
+          if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
+          else selectedProject = choice.value;
+          resetScroll = true;
+          refresh(panel);
+          const active = host.querySelector('[data-trial-choice][aria-pressed="true"]');
+          active?.focus({ preventScroll: true });
+          revealChoice(active);
+        }
         const modeButton = event.target.closest("[data-trial-mode]");
         if (modeButton) {
           mode = modeButton.dataset.trialMode;

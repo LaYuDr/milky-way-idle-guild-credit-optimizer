@@ -526,6 +526,10 @@ use synthetic data for committed fixtures.
 
 `src/ui/trial-history-view.js` renders saved records and original member statistics
 in two display modes: weekly projects and a horizontally scrollable project history.
+Week and project selectors are horizontal rows of directly clickable buttons.
+All options render at once, with overflow contained in the selector; the active
+choice is highlighted and revealed on selection. Arrow keys and Home/End select
+adjacent or endpoint options. Background refresh preserves selector scroll position.
 There are no derived analytics, charts, rankings, growth rates or scores.
 `historyWeeks` groups by trial week number (Friday-based) newest first, puts unknown
 weeks last and retains all records. `historyProjects` groups by kind and project

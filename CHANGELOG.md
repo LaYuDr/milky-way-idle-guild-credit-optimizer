@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.19] - 2026-09-21
+
+### Changed
+
+- 优化试炼历史选择器与说明文案，增强键盘操作和横向滚动体验，并同步测试夹具。
+
 ## [1.2.18] - 2026-09-21
 
 ### Changed

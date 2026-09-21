@@ -654,6 +654,8 @@
         #mwi-credit-optimizer .mwi-trial-guide{margin-top:6px;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-guide summary{width:fit-content;padding:5px 0;cursor:pointer}
         #mwi-credit-optimizer .mwi-trial-guide p{max-width:75ch}
+        #mwi-credit-optimizer .mwi-trial-purpose{margin:12px 0;color:var(--trial-muted);font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-purpose p{margin:6px 0}
         #mwi-credit-optimizer .mwi-trial-import-preview{padding:2px 12px 10px;margin-top:10px;border-radius:6px;background:var(--trial-surface)}
         #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
@@ -681,7 +683,11 @@
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
         #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px 24px;margin:0 0 20px}
-        #mwi-credit-optimizer .mwi-trial-display-controls>.mwi-trial-controls{flex:1 1 240px;margin:0;max-width:440px}
+        #mwi-credit-optimizer .mwi-trial-choice-field{flex:1 1 360px;display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 2px 8px}
+        #mwi-credit-optimizer .mwi-trial-choices button{flex:0 0 auto;white-space:nowrap;min-height:34px;padding:6px 12px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-choices button:hover{background:var(--trial-surface);color:var(--trial-text)}
+        #mwi-credit-optimizer .mwi-trial-choices button[aria-pressed="true"]{border-color:var(--trial-accent);background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--trial-field);border-radius:6px}
         #mwi-credit-optimizer .mwi-trial-mode button{min-height:34px;background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-mode button[aria-pressed="true"]{background:#34514e;color:#d5f7ed}

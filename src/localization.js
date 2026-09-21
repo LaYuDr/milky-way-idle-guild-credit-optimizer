@@ -427,6 +427,10 @@
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
       trialGuide: "说明",
+      trialDisplayNotice:
+        "目前仅提供数据收集与展示，暂不支持数据分析。如有分析需求，可导出数据交给 AI，并说明你希望了解的问题或呈现的效果。",
+      trialFeedbackNotice:
+        "也欢迎加入 QQ 群 437320340，分享你与 AI 的分析对话或结果，帮助我了解大家的实际需求，为后续开发提供参考。感谢你的支持！",
       trialDisplayMode: "历史数据展示方式",
       trialByWeek: "按周查看",
       trialByProject: "按项目查看",
@@ -948,6 +952,10 @@
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
       trialGuide: "Help",
+      trialDisplayNotice:
+        "This feature currently collects and displays data; it does not provide analysis. For analysis, export your data and share it with an AI, explaining the questions you want answered or the results you would like to see.",
+      trialFeedbackNotice:
+        "You are also welcome to join QQ group 437320340 and share your AI conversations or results. This helps me understand what you need and plan future development. Thank you for your support!",
       trialDisplayMode: "History display mode",
       trialByWeek: "By week",
       trialByProject: "By trial",

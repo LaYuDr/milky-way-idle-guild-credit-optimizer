@@ -3280,16 +3280,18 @@
         send({ ...message, guildTrialStatList: [{ trialHrid: milk, characterId: 101, workDone: value }] });
       }
       const choose = (role, value) => {
-        const input = host.querySelector(`[data-role="${role}"]`);
-        input.value = value;
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+        const group = host.querySelector(`[data-role="${role}"]`);
+        [...group.querySelectorAll("button")].find((button) => button.value === value).click();
       };
       choose("trial-week", "9");
       checks.weekSelection =
         host.querySelectorAll("[data-trial-record]").length === 1 &&
         host.querySelector("tbody td").textContent === "222.5";
       checks.missingSlots = host.querySelectorAll("[data-trial-empty]").length === 5;
-      checks.weekFocus = document.activeElement === host.querySelector('[data-role="trial-week"]');
+      checks.directWeekChoices =
+        host.querySelectorAll('[data-role="trial-week"] button').length === 3 && !host.querySelector("select");
+      checks.weekFocus =
+        document.activeElement === host.querySelector('[data-role="trial-week"] [aria-pressed="true"]');
       host.querySelector('[data-trial-mode="project"]').click();
       choose("trial-project", JSON.stringify(["skilling", milk]));
       checks.newestToOldest =
@@ -3304,12 +3306,14 @@
       checks.scrollTowardOlder = timeline.scrollWidth <= timeline.clientWidth || timeline.scrollLeft > beforeScroll;
       checks.keyboardFocusableScroller = timeline.tabIndex === 0;
       choose("trial-project", JSON.stringify(["combat", combats[0]]));
+      checks.directProjectChoices =
+        host.querySelectorAll('[data-role="trial-project"] button').length === 6 && !host.querySelector("select");
       checks.projectSwitch =
         host.querySelectorAll("[data-trial-week]").length === 1 && host.querySelectorAll("thead th").length === 4;
       checks.switchResetsScroll = host.querySelector("#mwi-trial-rail-timeline").scrollLeft === 0;
       const before = JSON.stringify(saved());
       host.querySelector('[data-trial-mode="week"]').click();
-      checks.weekPreserved = host.querySelector('[data-role="trial-week"]').value === "9";
+      checks.weekPreserved = host.querySelector('[data-role="trial-week"] [aria-pressed="true"]').value === "9";
       choose("trial-week", "10");
       checks.viewReadOnly = JSON.stringify(saved()) === before;
       checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
