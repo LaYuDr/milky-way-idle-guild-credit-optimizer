@@ -535,7 +535,9 @@ Weekly layout uses four parallel skilling columns above two parallel combat colu
 missing records use unnamed placeholders because the saved data cannot identify
 uncaptured projects. Project history places newer weeks on the left. Native horizontal
 scrolling, focusable regions and left/right buttons keep both modes accessible.
-Original member order and numeric precision are preserved. Expanded raw records
+Original member order and numeric precision are preserved. Member tables expand
+to their full row count with no fixed height or internal vertical scrolling;
+wide tables still scroll horizontally. Expanded raw records
 and scroll positions survive background refreshes; changing the week/project resets
 horizontal scrolling. Unknown weeks remain selectable and appear last in project mode.
 `src/trial-history.js` owns record validation and metric display semantics: official

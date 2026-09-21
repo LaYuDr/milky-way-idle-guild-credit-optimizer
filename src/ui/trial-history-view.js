@@ -21,6 +21,7 @@
     let resetScroll = false;
     let resizeObserver = null;
     let records = [];
+    let multipleGuilds = false;
     let loadFailed = false;
     let importPreview = null;
     let importNotice = null;
@@ -28,14 +29,6 @@
     let importRevision = 0;
     let guideOpen = false;
     const unsaved = new Map();
-    const date = (value) =>
-      new Date(value).toLocaleString(undefined, {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
     const trialName = (record) => {
       const key = String(record.trialDetail?.skillHrid || record.trialHrid)
         .split("/")
@@ -51,6 +44,10 @@
       const merged = new Map(loaded.records.map((record) => [record.key, record]));
       for (const [key, record] of unsaved) merged.set(key, record);
       records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
+      multipleGuilds =
+        new Set(
+          records.map((record) => JSON.stringify([record.guildId, record.guildId == null ? record.guildName : null]))
+        ).size > 1;
     }
 
     function capture() {
@@ -174,24 +171,25 @@
       });
     }
 
-    function renderRecord(record) {
+    function renderRecord(record, showIdentity) {
       const fields =
         record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       // Keep source order and exact numeric values; this is a record viewer, not a ranking.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
-        <p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}<br>${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}<br>${escapeHtml(record.source === "manual" ? t("trialManualDescription", { date: recordDate(record) }) : t("trialCaptured", { time: date(record.capturedAt) }))}</p>
-        ${record.source === "manual" && typeof record.sourceTimestamp === "string" ? `<p class="mwi-trial-meta">${escapeHtml(t("trialSourceMessageTime", { time: record.sourceTimestamp }))}</p>` : ""}
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row">${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}${row.characterId == null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
+        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
     function renderColumn(title, items, attributes = "") {
-      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length > 1 ? `<p class="mwi-trial-help">${escapeHtml(t("trialSeparateRecords", { count: items.length }))}</p>` : ""}${items.length ? items.map(renderRecord).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+      const showIdentity = items.length > 1 || multipleGuilds;
+      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
     function renderRail(id, title, columns, kind, timeline = false) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}">${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><p class="mwi-trial-help">${escapeHtml(t(timeline ? "trialTimelineHint" : "trialWeeklyScrollHint"))}</p><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${timeline ? " hidden" : ""}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.17";
+window.MwiGuildCreditVersion = "1.2.18";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -2982,18 +2982,15 @@ window.MwiGuildCreditVersion = "1.2.17";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
-      trialGuide: "采集与导入说明",
+      trialGuide: "说明",
       trialDisplayMode: "历史数据展示方式",
       trialByWeek: "按周查看",
       trialByProject: "按项目查看",
-      trialChooseWeek: "选择试炼周",
-      trialChooseProject: "选择试炼项目",
+      trialChooseWeek: "周次",
+      trialChooseProject: "项目",
       trialUnknownWeek: "周次不明",
       trialUnrecordedProject: "未记录项目",
-      trialMissingRecord: "暂无记录，查看游戏试炼统计或导入历史 JSON 后显示。",
-      trialSeparateRecords: "此处有 {count} 份记录，按公会与来源分别展示。",
-      trialWeeklyScrollHint: "项目并列展示，左右滑动可查看完整数据。",
-      trialTimelineHint: "左侧较新，向右查看更早的周次；周次不明的记录放在最后。",
+      trialMissingRecord: "暂无记录",
       trialScrollLeft: "向左查看",
       trialScrollRight: "向右查看",
       trialNewer: "较新周次",
@@ -3026,24 +3023,21 @@ window.MwiGuildCreditVersion = "1.2.17";
       trialUnknownDate: "日期未注明",
       trialUnknownGuild: "公会未注明",
       trialManualSource: "手动整理",
-      trialSourceMessageTime: "原始消息时间：{time}",
       trialAutomaticSource: "游戏采集",
-      trialManualDescription: "手动整理 · {date} · 未提供的公会点数、层数与成员 ID 保持未知。",
       trialHistoryHint:
         "试炼结束后，打开游戏中的“统计”即可自动归档本次返回的全部已完成项目。记录保存在当前浏览器，按服务器和角色隔离；未采集的往期数据可通过手动整理文件导入。",
       trialHistoryEmpty: "暂无记录。可导入历史文件，或在试炼结束后打开游戏中的“统计”。",
-      trialSavedCount: "已保存 {count} 项试炼记录。",
+      trialSavedCount: "{count} 条记录",
       trialSaveFailed: "部分记录尚未保存到浏览器。请先导出备份，再检查浏览器存储空间；当前页面仍保留待保存数据。",
       trialLoadFailed: "部分本地记录读取失败，已保留原数据。当前仅显示可读取的记录。",
       trialExport: "导出全部 JSON",
       trialSkilling: "生活试炼",
       trialCombat: "战斗试炼",
-      trialSummary: "{count} 位成员 · {points} 公会点数 · 最高第 {tier} 层",
-      trialCaptured: "统计读取于 {time}",
+      trialSummary: "{count} 人 · {points} 点 · {tier} 层",
       trialStatsTable: "成员试炼统计",
       trialMember: "成员",
       trialFormerMember: "名称未读取",
-      trialRaw: "查看完整原始记录",
+      trialRaw: "原始记录",
       trialField_workDone: "工作量",
       trialField_damageDealt: "造成伤害",
       trialField_healingDone: "治疗量",
@@ -3509,18 +3503,15 @@ window.MwiGuildCreditVersion = "1.2.17";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
-      trialGuide: "Capture & import help",
+      trialGuide: "Help",
       trialDisplayMode: "History display mode",
       trialByWeek: "By week",
       trialByProject: "By trial",
-      trialChooseWeek: "Choose a trial week",
-      trialChooseProject: "Choose a trial",
+      trialChooseWeek: "Week",
+      trialChooseProject: "Trial",
       trialUnknownWeek: "Unknown week",
       trialUnrecordedProject: "Unrecorded trial",
-      trialMissingRecord: "No record yet. Open the game's trial statistics or import a history JSON file.",
-      trialSeparateRecords: "{count} records shown separately by guild and source.",
-      trialWeeklyScrollHint: "Trials are side by side. Scroll horizontally to view all data.",
-      trialTimelineHint: "Newest on the left; scroll right for older weeks. Undated records come last.",
+      trialMissingRecord: "No record",
       trialScrollLeft: "Scroll left",
       trialScrollRight: "Scroll right",
       trialNewer: "Newer weeks",
@@ -3558,13 +3549,11 @@ window.MwiGuildCreditVersion = "1.2.17";
       trialUnknownDate: "Date unspecified",
       trialUnknownGuild: "Guild unspecified",
       trialManualSource: "Manual transcript",
-      trialSourceMessageTime: "Original message time: {time}",
       trialAutomaticSource: "Game capture",
-      trialManualDescription: "Manual transcript · {date} · Missing points, tiers and member IDs remain unknown.",
       trialHistoryHint:
         "After a trial ends, open the game’s Stats to archive every completed trial in its response. Records stay in this browser, separated by server and character. Past results can also be imported from manual transcripts.",
       trialHistoryEmpty: "No records yet. Import a history file or open the game’s Stats after a trial ends.",
-      trialSavedCount: "{count} trial records saved.",
+      trialSavedCount: "{count} records",
       trialSaveFailed:
         "Some records could not be saved. Export a backup before checking browser storage space; unsaved data is still available on this page.",
       trialLoadFailed:
@@ -3572,12 +3561,11 @@ window.MwiGuildCreditVersion = "1.2.17";
       trialExport: "Export all JSON",
       trialSkilling: "Skilling trial",
       trialCombat: "Combat trial",
-      trialSummary: "{count} members · {points} Guild Points · Highest tier {tier}",
-      trialCaptured: "Stats captured at {time}",
+      trialSummary: "{count} members · {points} points · Tier {tier}",
       trialStatsTable: "Member trial statistics",
       trialMember: "Member",
       trialFormerMember: "Name unavailable",
-      trialRaw: "View complete raw record",
+      trialRaw: "Raw record",
       trialField_workDone: "Work done",
       trialField_damageDealt: "Damage dealt",
       trialField_healingDone: "Healing done",
@@ -8143,7 +8131,7 @@ window.MwiGuildCreditVersion = "1.2.17";
         #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px 8px;margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
-        #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;max-height:480px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
         #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.45}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
@@ -8160,7 +8148,7 @@ window.MwiGuildCreditVersion = "1.2.17";
         #mwi-credit-optimizer .mwi-trial-group{min-width:0;margin:0 0 24px}
         #mwi-credit-optimizer .mwi-trial-group-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
         #mwi-credit-optimizer .mwi-trial-group-header h3{margin:0;font-size:16px;font-weight:650}
-        #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap}
+        #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
         #mwi-credit-optimizer .mwi-trial-rail{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 0 12px}
         #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:16px}
         #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(240px,1fr))}
@@ -9407,6 +9395,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let resetScroll = false;
     let resizeObserver = null;
     let records = [];
+    let multipleGuilds = false;
     let loadFailed = false;
     let importPreview = null;
     let importNotice = null;
@@ -9414,14 +9403,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let importRevision = 0;
     let guideOpen = false;
     const unsaved = new Map();
-    const date = (value) =>
-      new Date(value).toLocaleString(undefined, {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
-      });
     const trialName = (record) => {
       const key = String(record.trialDetail?.skillHrid || record.trialHrid)
         .split("/")
@@ -9437,6 +9418,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const merged = new Map(loaded.records.map((record) => [record.key, record]));
       for (const [key, record] of unsaved) merged.set(key, record);
       records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
+      multipleGuilds =
+        new Set(
+          records.map((record) => JSON.stringify([record.guildId, record.guildId == null ? record.guildName : null]))
+        ).size > 1;
     }
 
     function capture() {
@@ -9560,24 +9545,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
     }
 
-    function renderRecord(record) {
+    function renderRecord(record, showIdentity) {
       const fields =
         record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       // Keep source order and exact numeric values; this is a record viewer, not a ranking.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
-        <p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}<br>${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}<br>${escapeHtml(record.source === "manual" ? t("trialManualDescription", { date: recordDate(record) }) : t("trialCaptured", { time: date(record.capturedAt) }))}</p>
-        ${record.source === "manual" && typeof record.sourceTimestamp === "string" ? `<p class="mwi-trial-meta">${escapeHtml(t("trialSourceMessageTime", { time: record.sourceTimestamp }))}</p>` : ""}
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row">${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}${row.characterId == null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
+        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
     function renderColumn(title, items, attributes = "") {
-      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length > 1 ? `<p class="mwi-trial-help">${escapeHtml(t("trialSeparateRecords", { count: items.length }))}</p>` : ""}${items.length ? items.map(renderRecord).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+      const showIdentity = items.length > 1 || multipleGuilds;
+      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
     function renderRail(id, title, columns, kind, timeline = false) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}">${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><p class="mwi-trial-help">${escapeHtml(t(timeline ? "trialTimelineHint" : "trialWeeklyScrollHint"))}</p><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${timeline ? " hidden" : ""}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.18] - 2026-09-21
+
+### Changed
+
+- 优化原始试炼历史页面的显示、文案与样式，补充开发文档说明。
+
 ## [1.2.17] - 2026-09-21
 
 ### Changed
