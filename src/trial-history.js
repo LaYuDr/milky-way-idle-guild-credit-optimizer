@@ -168,6 +168,41 @@
     return snapshotTime(b) - snapshotTime(a) || a.trialHrid.localeCompare(b.trialHrid);
   }
 
+  function historyProjectKey(record) {
+    return JSON.stringify([record.kind, record.trialHrid]);
+  }
+
+  // Group records for display only: never combine member rows or discard duplicates.
+  function historyProjects(records) {
+    const groups = new Map();
+    for (const record of records) {
+      const key = historyProjectKey(record);
+      if (!groups.has(key)) groups.set(key, { key, kind: record.kind, records: [] });
+      groups.get(key).records.push(record);
+    }
+    return [...groups.values()].sort(
+      (a, b) => Number(a.kind === "combat") - Number(b.kind === "combat") || a.key.localeCompare(b.key)
+    );
+  }
+
+  function historyWeeks(records) {
+    const groups = new Map();
+    for (const record of records) {
+      const normalized = normalizeSnapshot(record);
+      const ordinal = normalized.weekStartAt ? weekNumber(normalized.weekStartAt) : null;
+      const key = ordinal === null ? "unknown" : String(ordinal);
+      if (!groups.has(key))
+        groups.set(key, {
+          key,
+          weekNumber: ordinal,
+          weekStartAt: ordinal === null ? null : config.GUILD_TRIAL_FIRST_START_AT + (ordinal - 1) * WEEK_MS,
+          records: []
+        });
+      groups.get(key).records.push(record);
+    }
+    return [...groups.values()].sort((a, b) => (b.weekNumber ?? -1) - (a.weekNumber ?? -1));
+  }
+
   function importError(code, index) {
     const error = new Error(code);
     error.code = code;
@@ -248,6 +283,13 @@
     return JSON.stringify(value);
   }
 
+  // Official v1 statistics omit zero fields; explicit null and manual gaps stay unknown.
+  function metricValue(record, row, field) {
+    const value = row[field];
+    if (value === undefined && record.schemaVersion === 1) return 0;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
   function previewImport(incoming, existing) {
     const byKey = new Map(existing.map((record) => [record.key, normalizeSnapshot(record)]));
     return incoming.map(normalizeSnapshot).map((record) => {
@@ -270,6 +312,10 @@
   }
 
   return {
+    historyProjectKey,
+    historyProjects,
+    historyWeeks,
+    metricValue,
     updateContext,
     completedSnapshots,
     validSnapshot,

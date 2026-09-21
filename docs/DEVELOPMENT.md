@@ -466,10 +466,12 @@ Await `window.__mwiTrialHistoryAuditReady` and require every `checks` value
 to be true. Run the eleven-width matrix above and English passes at 320,
 610, and 900. The fixture sends the official bridge event with a guild snapshot,
 member names and a full `guild_trial_stats_updated` response, then checks the
-fourth tab, empty state, both trial kinds, exact values, duplicate and empty
-responses, escaped member names and a contained horizontal table scroller.
+fourth tab, empty state, six parallel projects (four skilling above two combat),
+exact values, duplicate and empty responses, escaped member names, missing
+project slots, week switching, project switching, newest-to-oldest columns,
+scroll buttons, focus, unchanged stored records and contained horizontal scrolling.
 Also export JSON and reload without `trialHistoryAudit` or `resetState` to
-verify that both records survive. Fixture storage is confined to localhost.
+verify that all eight fixture records survive. Fixture storage is confined to localhost.
 
 The protocol was checked against the official CN frontend on 2026-09-18
 (`main.bdda2571.chunk.js`): opening Stats calls `get_guild_trial_stats`; the
@@ -520,48 +522,25 @@ statistics, export/re-import and reload. Repeat preview and result states at
 at 320, 610 and 900. Keep user-provided transcripts outside the repository and
 use synthetic data for committed fixtures.
 
-### Trial analytics
+### Trial record display
 
-`src/trial-analytics.js` owns pure summaries, competition ranks, identity,
-same-trial comparison cohorts, member history and coverage states.
-`src/ui/trial-analytics-view.js` renders the six analysis sections; it never
-writes trial data. `trial-history-view` owns record selection and persistence.
-Each analysis heading is a native button with `aria-expanded`/`aria-controls`.
-Collapsed sections are hidden from focus navigation and retain their controls.
-A separate server/character-scoped UI preference stores validated section IDs;
-failed preference writes keep this page usable and report the failure.
-Section navigation and member links open their target before moving focus.
-The analytics modules are explicit build inputs and are wired in userscript.
+`src/ui/trial-history-view.js` renders saved records and original member statistics
+in two display modes: weekly projects and a horizontally scrollable project history.
+There are no derived analytics, charts, rankings, growth rates or scores.
+`historyWeeks` groups by trial week number (Friday-based) newest first, puts unknown
+weeks last and retains all records. `historyProjects` groups by kind and project
+HRID without combining member rows. Multiple records retain their guild/source
+labels; the UI never resolves conflicts by silently selecting a winner.
+Weekly layout uses four parallel skilling columns above two parallel combat columns;
+missing records use unnamed placeholders because the saved data cannot identify
+uncaptured projects. Project history places newer weeks on the left. Native horizontal
+scrolling, focusable regions and left/right buttons keep both modes accessible.
+Original member order and numeric precision are preserved. Expanded raw records
+and scroll positions survive background refreshes; changing the week/project resets
+horizontal scrolling. Unknown weeks remain selectable and appear last in project mode.
+`src/trial-history.js` owns record validation and metric display semantics: official
+schema v1 omitted zero fields display as zero; explicit null and manual missing
+fields remain unknown. The history audit also checks that analysis controls are absent.
 
-Identity uses guild-scoped character IDs. ID-less records use exact names;
-among ID-less entries, duplicate names in one record, empty names and
-former-member placeholders are isolated to their record. Named manual guilds
-and unassigned records are separate from captured guild IDs. The UI warns
-about unassigned guild scope.
-No fuzzy correction or ID-to-name identity merging is performed.
-
-Summaries exclude unknown metrics from total/mean/median and show the known
-count. Official schema v1 omitted zero fields retain the protocol's zero
-semantics; explicit null stays unknown. Zero totals have no shares, zero
-baselines have no percentage growth. Coverage distinguishes positive, zero,
-unknown and absent, without treating absence as nonattendance. Combat coverage
-is positive if any metric is positive; zero requires all metrics known and zero.
-Comparisons use one project and guild, at or before the selected week. Multiple
-records for a non-selected week are excluded with a warning; the selected
-record explicitly resolves its own week. Common cohorts intersect identities
-across all selected weeks. Missing weeks are not synthesized as zero.
-
-Open `test-harness.html?trialAnalyticsAudit=1&resetState=1&sidebarWidth=900`
-and await `window.__mwiTrialAnalyticsAuditReady`; require every check true.
-The synthetic import covers six sections, three-week lines, common members,
-single-week states, member-name substring search, IME composition, member
-history, zero and missing coverage, combat metric switching, keyboard point details,
-visible section jumps, independent collapse, preserved preferences, automatic
-expansion on navigation/member selection and unchanged stored trial records. Run alongside
-`trialHistoryAudit` and the documented eleven-width layout matrix, including
-English 320/610/900. The design baseline is sidebar 900px; also inspect actual
-panel widths at 1200 and 1500 (the harness accepts up to 1800). Record actual
-widths, not only query parameters. Tables scroll within their own regions.
-Test search, range/cohort selection, coverage paging and long metric values;
-compare tooltip/table values with pure calculations. User transcripts remain
-outside Git and are never fixtures or build inputs.
+Removed feature details and source recovery steps are preserved in
+[Trial analytics restore guide](TRIAL_ANALYTICS_RESTORE.md).

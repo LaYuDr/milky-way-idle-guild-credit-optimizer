@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.16";
+window.MwiGuildCreditVersion = "1.2.17";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -726,8 +726,6 @@ window.MwiGuildCreditVersion = "1.2.16";
     FALLBACK_INSTALL_URL,
     PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
-    TRIAL_ANALYTICS_UI_STORAGE_KEY: "mwi-trial-analytics-ui-v1",
-    TRIAL_ANALYTICS_SECTIONS: ["overview", "ranking", "comparison", "member", "coverage", "scatter"],
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
@@ -936,6 +934,41 @@ window.MwiGuildCreditVersion = "1.2.16";
     return snapshotTime(b) - snapshotTime(a) || a.trialHrid.localeCompare(b.trialHrid);
   }
 
+  function historyProjectKey(record) {
+    return JSON.stringify([record.kind, record.trialHrid]);
+  }
+
+  // Group records for display only: never combine member rows or discard duplicates.
+  function historyProjects(records) {
+    const groups = new Map();
+    for (const record of records) {
+      const key = historyProjectKey(record);
+      if (!groups.has(key)) groups.set(key, { key, kind: record.kind, records: [] });
+      groups.get(key).records.push(record);
+    }
+    return [...groups.values()].sort(
+      (a, b) => Number(a.kind === "combat") - Number(b.kind === "combat") || a.key.localeCompare(b.key)
+    );
+  }
+
+  function historyWeeks(records) {
+    const groups = new Map();
+    for (const record of records) {
+      const normalized = normalizeSnapshot(record);
+      const ordinal = normalized.weekStartAt ? weekNumber(normalized.weekStartAt) : null;
+      const key = ordinal === null ? "unknown" : String(ordinal);
+      if (!groups.has(key))
+        groups.set(key, {
+          key,
+          weekNumber: ordinal,
+          weekStartAt: ordinal === null ? null : config.GUILD_TRIAL_FIRST_START_AT + (ordinal - 1) * WEEK_MS,
+          records: []
+        });
+      groups.get(key).records.push(record);
+    }
+    return [...groups.values()].sort((a, b) => (b.weekNumber ?? -1) - (a.weekNumber ?? -1));
+  }
+
   function importError(code, index) {
     const error = new Error(code);
     error.code = code;
@@ -1016,6 +1049,13 @@ window.MwiGuildCreditVersion = "1.2.16";
     return JSON.stringify(value);
   }
 
+  // Official v1 statistics omit zero fields; explicit null and manual gaps stay unknown.
+  function metricValue(record, row, field) {
+    const value = row[field];
+    if (value === undefined && record.schemaVersion === 1) return 0;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
   function previewImport(incoming, existing) {
     const byKey = new Map(existing.map((record) => [record.key, normalizeSnapshot(record)]));
     return incoming.map(normalizeSnapshot).map((record) => {
@@ -1038,6 +1078,10 @@ window.MwiGuildCreditVersion = "1.2.16";
   }
 
   return {
+    historyProjectKey,
+    historyProjects,
+    historyWeeks,
+    metricValue,
     updateContext,
     completedSnapshots,
     validSnapshot,
@@ -1047,177 +1091,6 @@ window.MwiGuildCreditVersion = "1.2.16";
     normalizeSnapshot,
     weekNumber,
     MAX_IMPORT_BYTES
-  };
-});
-
-
-// SOURCE: src/trial-analytics.js
-(function (root, factory) {
-  const api = factory();
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildTrialAnalytics = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  "use strict";
-  const COMBAT_FIELDS = ["damageDealt", "healingDone", "premitigatedDamageTaken"];
-  const fields = (record) => (record.kind === "combat" ? COMBAT_FIELDS : ["workDone"]);
-  const scopeKey = (record) =>
-    record.guildId !== null && record.guildId !== undefined
-      ? JSON.stringify(["guild", String(record.guildId)])
-      : JSON.stringify(["manual", record.guildName || null]);
-  function metricValue(record, row, field) {
-    const value = row[field];
-    if (value === undefined && record.schemaVersion === 1) return 0;
-    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
-  }
-  function entries(record) {
-    const names = record.rows.map((row) => record.members?.[row.memberKey ?? row.characterId]?.name || "");
-    const counts = new Map();
-    names.forEach((name) => counts.set(name, (counts.get(name) || 0) + 1));
-    return record.rows.map((row, index) => {
-      const name = names[index];
-      const hasId = row.characterId !== null && row.characterId !== undefined && row.characterId !== "";
-      const match = hasId
-        ? "id"
-        : name && counts.get(name) === 1 && !/^(前成员|former member)$/i.test(name)
-          ? "name"
-          : "isolated";
-      const identity = JSON.stringify([
-        scopeKey(record),
-        match,
-        match === "id" ? String(row.characterId) : match === "name" ? name : [record.key, row.memberKey ?? index]
-      ]);
-      return {
-        identity,
-        name,
-        match,
-        row,
-        values: Object.fromEntries(fields(record).map((field) => [field, metricValue(record, row, field)]))
-      };
-    });
-  }
-  function summary(rows, field) {
-    const values = rows
-      .map((entry) => entry.values[field])
-      .filter((value) => typeof value === "number")
-      .sort((a, b) => a - b);
-    const total = values.length ? values.reduce((a, b) => a + b, 0) : null;
-    const n = values.length;
-    return {
-      count: rows.length,
-      known: n,
-      total,
-      mean: n ? total / n : null,
-      median: n ? (values[Math.floor((n - 1) / 2)] + values[Math.floor(n / 2)]) / 2 : null,
-      top5Share: total > 0 ? values.slice(-5).reduce((a, b) => a + b, 0) / total : null
-    };
-  }
-  function ranking(rows, field) {
-    const total = summary(rows, field).total;
-    const sorted = rows
-      .slice()
-      .sort((a, b) => (b.values[field] ?? -1) - (a.values[field] ?? -1) || a.name.localeCompare(b.name));
-    let rank = null,
-      previous = null;
-    return sorted.map((entry, index) => {
-      const value = entry.values[field] ?? null;
-      if (value !== null && (index === 0 || value !== previous)) rank = index + 1;
-      previous = value;
-      return {
-        ...entry,
-        value,
-        rank: value === null ? null : rank,
-        share: total > 0 && value !== null ? value / total : null
-      };
-    });
-  }
-  function scoped(records, selected) {
-    return records.filter((record) => scopeKey(record) === scopeKey(selected));
-  }
-  function timeline(records, selected) {
-    const weeks = new Map();
-    if (!selected.weekStartAt) return { records: [], ambiguousWeeks: 0 };
-    for (const record of scoped(records, selected)) {
-      if (record.trialHrid !== selected.trialHrid || !record.weekStartAt || record.weekStartAt > selected.weekStartAt)
-        continue;
-      const group = weeks.get(record.weekStartAt) || [];
-      group.push(record);
-      weeks.set(record.weekStartAt, group);
-    }
-    // Selecting a record explicitly resolves its own week, never other weeks.
-    weeks.set(selected.weekStartAt, [selected]);
-    return {
-      records: [...weeks.values()]
-        .filter((group) => group.length === 1)
-        .map((group) => group[0])
-        .sort((a, b) => a.weekStartAt - b.weekStartAt),
-      ambiguousWeeks: [...weeks.values()].filter((group) => group.length > 1).length
-    };
-  }
-  function comparison(records, selected, field, mode = "all", start = 0) {
-    const timelineResult = timeline(records, selected);
-    const selectedRecords = timelineResult.records.filter((record) => record.weekStartAt >= start);
-    const lists = selectedRecords.map(entries);
-    let shared = new Set(lists[0]?.map((entry) => entry.identity) || []);
-    for (const list of lists.slice(1)) {
-      const ids = new Set(list.map((entry) => entry.identity));
-      shared = new Set([...shared].filter((id) => ids.has(id)));
-    }
-    return {
-      ambiguousWeeks: timelineResult.ambiguousWeeks,
-      sharedCount: shared.size,
-      points: selectedRecords.map((record, index) => ({
-        record,
-        stats: summary(
-          mode === "shared" ? lists[index].filter((entry) => shared.has(entry.identity)) : lists[index],
-          field
-        )
-      }))
-    };
-  }
-  function change(before, after) {
-    return {
-      absolute: before === null || after === null ? null : after - before,
-      percent: before > 0 && after !== null ? (after - before) / before : null
-    };
-  }
-  function members(records) {
-    const map = new Map();
-    for (const record of [...records].sort((a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0)))
-      for (const entry of entries(record)) map.set(entry.identity, entry);
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }
-  function memberHistory(records, identity, field) {
-    return [...records]
-      .sort((a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0) || a.trialHrid.localeCompare(b.trialHrid))
-      .flatMap((record) => {
-        const metric = fields(record).includes(field) ? field : fields(record)[0];
-        const entry = ranking(entries(record), metric).find((entry) => entry.identity === identity);
-        return entry ? [{ record, entry, field: metric }] : [];
-      });
-  }
-  function coverage(record, identity) {
-    const entry = entries(record).find((entry) => entry.identity === identity);
-    if (!entry) return { state: "absent", entry: null };
-    const values = Object.values(entry.values);
-    return {
-      state: values.some((v) => v > 0) ? "positive" : values.some((v) => v === null) ? "unknown" : "zero",
-      entry
-    };
-  }
-  return {
-    fields,
-    scopeKey,
-    metricValue,
-    entries,
-    summary,
-    ranking,
-    scoped,
-    timeline,
-    comparison,
-    change,
-    members,
-    memberHistory,
-    coverage
   };
 });
 
@@ -3110,84 +2983,21 @@ window.MwiGuildCreditVersion = "1.2.16";
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
       trialGuide: "采集与导入说明",
-      trialRecordDetails: "原始记录明细",
-      analysisTitle: "试炼数据分析",
-      analysisCollapse: "折叠",
-      analysisExpand: "展开",
-      analysisCollapseSaveFailed: "折叠状态暂时无法保存，当前页面仍有效。",
-      analysisOverview: "单次试炼概览",
-      analysisRanking: "成员贡献排行",
-      analysisComparison: "同项目跨周对比",
-      analysisMember: "成员历史表现",
-      analysisCoverage: "成员记录分布",
-      analysisScatter: "战斗贡献分布",
-      analysisScope: "公会范围",
-      analysisProject: "试炼项目",
-      analysisWeek: "试炼周 / 记录",
-      analysisMetric: "分析指标",
-      analysisSearch: "搜索成员",
-      analysisSearchPlaceholder: "输入成员名筛选排行、记录分布和散点",
-      analysisRecordedMembers: "记录人数",
-      analysisTotalMetric: "{metric}合计",
-      analysisMean: "人均值",
-      analysisMedian: "中位数",
-      analysisKnown: "{count} 位成员中仅 {known} 位有该指标；合计、人均和中位数按已知值计算。",
-      analysisShow: "显示范围",
-      analysisTop10: "前 10 名",
-      analysisAll: "全部成员",
-      analysisTop5: "前 5 位成员贡献占比",
-      analysisRankingHint: "占比分母为本次全部已知成员数值之和，搜索不会改变排名和占比。点击姓名查看历史。",
-      analysisNoMembers: "没有匹配成员，请调整搜索内容。",
-      analysisNoRatio: "无法计算占比 / 增幅",
-      analysisNeedTwo: "至少需要两个不同试炼周的同项目记录，才能比较变化。",
-      analysisMissing: "该指标暂无已知数值。",
-      analysisFrom: "起始周",
-      analysisCohort: "成员范围",
-      analysisAllRecorded: "各周全部已记录成员",
-      analysisShared: "所选各周都有记录的成员",
-      analysisMeasure: "对比数值",
-      analysisMeasure_count: "记录人数",
-      analysisMeasure_total: "总量",
-      analysisMeasure_mean: "人均值",
-      analysisMeasure_median: "中位数",
-      analysisCompareHint:
-        "仅比较当前项目，截至所选记录所在周。人数、层数和参与时长可能不同，增长不等同于实力提升。缺少的周不补零。",
-      analysisSharedCount: "共同成员 {count} 位。",
-      analysisAmbiguousWeeks: "有 {count} 周存在多份同项目记录，已从对比中排除；当前周使用你选定的记录。",
-      analysisChange: "相对起始周变化",
-      analysisComparisonData: "各周数值明细",
-      analysisOpenMember: "查看 {name} 的历史表现",
-      analysisMatch_id: "角色 ID 匹配",
-      analysisMatch_name: "同名匹配",
-      analysisMatch_isolated: "身份不明确，仅此条记录",
-      analysisMemberHint: "不同项目分别解释；下方变化只与此前同项目记录比较。没有记录不表示缺席。",
-      analysisMemberTrend: "{trial} · {metric}历史",
-      analysisMemberData: "成员逐次明细",
-      analysisRecord: "日期与项目",
-      analysisValues: "记录数值",
-      analysisRankShare: "指标 / 名次 · 占比",
-      analysisPrevious: "相对此前同项目",
-      analysisCoverageHint: "按已保存记录展示，不是出勤率。战斗任一指标大于零记为有贡献；全部已知且为零才记为零。",
-      analysisCell_positive: "有贡献",
-      analysisCell_zero: "明确为零",
-      analysisCell_unknown: "数值未知",
-      analysisCell_absent: "无记录",
-      analysisPrev: "上一页",
-      analysisNext: "下一页",
-      analysisMemberPages: "成员页",
-      analysisRecordPages: "记录页",
-      analysisCombatOnly: "选择战斗试炼后显示输出与治疗／抗伤分布。生活工作量不与战斗数值混算。",
-      analysisYAxis: "纵轴指标",
-      analysisScatterHint:
-        "每个点代表一位成员；悬停或键盘聚焦查看数值，点击查看成员历史。重叠点可用 Tab 逐一查看，不根据位置判定职业或强弱。",
-      analysisPointHint: "悬停或聚焦散点查看成员数值。",
-      analysisMethod: "统计口径与数据限制",
-      analysisMethodText:
-        "只分析已保存的成员明细，原表占比不参与计算。零值与缺失值分开处理；总量为零时不计算占比，基期为零时不计算增幅。不同项目不合并评分。",
-      analysisUnknownGuild:
-        "当前为公会未注明的手动记录组；跨记录比较仅在这些数据来自同一公会时有意义，请勿混入其他公会数据。",
-      analysisIdentityHint:
-        "优先按角色 ID 关联；无 ID 时按完全相同的姓名匹配并标注。重名或前成员不跨记录合并，疑似拼写错误不自动修正。",
+      trialDisplayMode: "历史数据展示方式",
+      trialByWeek: "按周查看",
+      trialByProject: "按项目查看",
+      trialChooseWeek: "选择试炼周",
+      trialChooseProject: "选择试炼项目",
+      trialUnknownWeek: "周次不明",
+      trialUnrecordedProject: "未记录项目",
+      trialMissingRecord: "暂无记录，查看游戏试炼统计或导入历史 JSON 后显示。",
+      trialSeparateRecords: "此处有 {count} 份记录，按公会与来源分别展示。",
+      trialWeeklyScrollHint: "项目并列展示，左右滑动可查看完整数据。",
+      trialTimelineHint: "左侧较新，向右查看更早的周次；周次不明的记录放在最后。",
+      trialScrollLeft: "向左查看",
+      trialScrollRight: "向右查看",
+      trialNewer: "较新周次",
+      trialOlder: "较旧周次",
       trialDataTransfer: "试炼数据导入与导出",
       trialImport: "导入 JSON",
       trialImportFile: "选择试炼历史 JSON 文件",
@@ -3225,7 +3035,6 @@ window.MwiGuildCreditVersion = "1.2.16";
       trialSavedCount: "已保存 {count} 项试炼记录。",
       trialSaveFailed: "部分记录尚未保存到浏览器。请先导出备份，再检查浏览器存储空间；当前页面仍保留待保存数据。",
       trialLoadFailed: "部分本地记录读取失败，已保留原数据。当前仅显示可读取的记录。",
-      trialChoose: "选择历史试炼",
       trialExport: "导出全部 JSON",
       trialSkilling: "生活试炼",
       trialCombat: "战斗试炼",
@@ -3701,89 +3510,21 @@ window.MwiGuildCreditVersion = "1.2.16";
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
       trialGuide: "Capture & import help",
-      trialRecordDetails: "Original record details",
-      analysisTitle: "Trial analytics",
-      analysisCollapse: "Collapse",
-      analysisExpand: "Expand",
-      analysisCollapseSaveFailed: "Could not save collapsed sections. Your choices still apply on this page.",
-      analysisOverview: "Trial overview",
-      analysisRanking: "Member contributions",
-      analysisComparison: "Compare the same trial across weeks",
-      analysisMember: "Member history",
-      analysisCoverage: "Member record coverage",
-      analysisScatter: "Combat contribution distribution",
-      analysisScope: "Guild scope",
-      analysisProject: "Trial",
-      analysisWeek: "Week / record",
-      analysisMetric: "Metric",
-      analysisSearch: "Find a member",
-      analysisSearchPlaceholder: "Filter ranks, coverage and scatter by name",
-      analysisRecordedMembers: "Recorded members",
-      analysisTotalMetric: "Total {metric}",
-      analysisMean: "Mean",
-      analysisMedian: "Median",
-      analysisKnown: "Only {known} of {count} members have this metric. Totals, mean and median use known values.",
-      analysisShow: "Show",
-      analysisTop10: "Top 10",
-      analysisAll: "All members",
-      analysisTop5: "Top 5 members' share",
-      analysisRankingHint:
-        "Shares use all known values in this trial. Search does not change ranks or shares. Select a name to see history.",
-      analysisNoMembers: "No matching members. Adjust the search.",
-      analysisNoRatio: "Ratio unavailable",
-      analysisNeedTwo: "Comparison needs the same trial from at least two different weeks.",
-      analysisMissing: "No known values for this metric.",
-      analysisFrom: "Starting week",
-      analysisCohort: "Member cohort",
-      analysisAllRecorded: "All recorded members each week",
-      analysisShared: "Members recorded in every selected week",
-      analysisMeasure: "Compare",
-      analysisMeasure_count: "Recorded members",
-      analysisMeasure_total: "Total",
-      analysisMeasure_mean: "Mean",
-      analysisMeasure_median: "Median",
-      analysisCompareHint:
-        "Same trial only, through the selected week. Roster, tier and time may differ; growth is not a strength rating. Missing weeks are not zero.",
-      analysisSharedCount: "{count} members in common.",
-      analysisAmbiguousWeeks:
-        "Excluded {count} ambiguous weeks with multiple records for this trial. The current week uses your selected record.",
-      analysisChange: "Change from the starting week",
-      analysisComparisonData: "Weekly values",
-      analysisOpenMember: "View history for {name}",
-      analysisMatch_id: "Matched by character ID",
-      analysisMatch_name: "Matched by exact name",
-      analysisMatch_isolated: "Unresolved identity; this record only",
-      analysisMemberHint:
-        "Interpret each trial separately. Changes compare earlier records of the same trial. No record does not mean absence.",
-      analysisMemberTrend: "{trial} · {metric} history",
-      analysisMemberData: "Member record details",
-      analysisRecord: "Date and trial",
-      analysisValues: "Recorded values",
-      analysisRankShare: "Metric / rank · share",
-      analysisPrevious: "Change from prior same trial",
-      analysisCoverageHint:
-        "Coverage of saved records, not attendance. Combat is positive when any metric is positive; zero requires all metrics to be known and zero.",
-      analysisCell_positive: "Positive",
-      analysisCell_zero: "Zero",
-      analysisCell_unknown: "Unknown",
-      analysisCell_absent: "No record",
-      analysisPrev: "Previous",
-      analysisNext: "Next",
-      analysisMemberPages: "Member page",
-      analysisRecordPages: "Record page",
-      analysisCombatOnly:
-        "Select a combat trial to see damage versus healing or damage taken. Skilling work is analyzed separately.",
-      analysisYAxis: "Vertical axis",
-      analysisScatterHint:
-        "Each point is a member. Hover or focus for values; select for history. Use Tab to inspect overlapping points. Positions do not assign roles or strength.",
-      analysisPointHint: "Hover or focus a point to inspect values.",
-      analysisMethod: "Methods and data limits",
-      analysisMethodText:
-        "Calculations use saved member rows, not imported percentages. Missing values differ from zero. Zero totals have no shares; zero baselines have no percentage growth. Different trials are not scored together.",
-      analysisUnknownGuild:
-        "This group contains manual records without a guild. Cross-record comparisons are meaningful only if they belong to the same guild.",
-      analysisIdentityHint:
-        "Identity uses character IDs first; ID-less records match exact names and are labeled. Duplicate or former-member names stay separate. Suspected typos are not corrected.",
+      trialDisplayMode: "History display mode",
+      trialByWeek: "By week",
+      trialByProject: "By trial",
+      trialChooseWeek: "Choose a trial week",
+      trialChooseProject: "Choose a trial",
+      trialUnknownWeek: "Unknown week",
+      trialUnrecordedProject: "Unrecorded trial",
+      trialMissingRecord: "No record yet. Open the game's trial statistics or import a history JSON file.",
+      trialSeparateRecords: "{count} records shown separately by guild and source.",
+      trialWeeklyScrollHint: "Trials are side by side. Scroll horizontally to view all data.",
+      trialTimelineHint: "Newest on the left; scroll right for older weeks. Undated records come last.",
+      trialScrollLeft: "Scroll left",
+      trialScrollRight: "Scroll right",
+      trialNewer: "Newer weeks",
+      trialOlder: "Older weeks",
       trialDataTransfer: "Trial data import and export",
       trialImport: "Import JSON",
       trialImportFile: "Choose a trial history JSON file",
@@ -3828,7 +3569,6 @@ window.MwiGuildCreditVersion = "1.2.16";
         "Some records could not be saved. Export a backup before checking browser storage space; unsaved data is still available on this page.",
       trialLoadFailed:
         "Some local records could not be read. Their stored data was preserved; only readable records are shown.",
-      trialChoose: "Choose a past trial",
       trialExport: "Export all JSON",
       trialSkilling: "Skilling trial",
       trialCombat: "Combat trial",
@@ -5658,34 +5398,6 @@ window.MwiGuildCreditVersion = "1.2.16";
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
     }
 
-    function normalizeTrialAnalysisSections(value) {
-      return Array.isArray(value)
-        ? [...new Set(value.filter((id) => config.TRIAL_ANALYTICS_SECTIONS.includes(id)))]
-        : [];
-    }
-
-    function loadTrialAnalysisCollapsed() {
-      try {
-        return normalizeTrialAnalysisSections(
-          JSON.parse(storage.getItem(`${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`))
-        );
-      } catch (_) {
-        return [];
-      }
-    }
-
-    function saveTrialAnalysisCollapsed(value) {
-      try {
-        storage.setItem(
-          `${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`,
-          JSON.stringify(normalizeTrialAnalysisSections(value))
-        );
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
     function loadTrialHistory() {
       const records = [];
       let failed = false;
@@ -6152,8 +5864,6 @@ window.MwiGuildCreditVersion = "1.2.16";
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
-      loadTrialAnalysisCollapsed,
-      saveTrialAnalysisCollapsed,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,
@@ -7768,7 +7478,6 @@ window.MwiGuildCreditVersion = "1.2.16";
   "use strict";
 
   const PANEL_STYLES = `
-        #mwi-credit-optimizer [data-analysis-collapse-status]:empty{display:none}
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
@@ -8419,85 +8128,9 @@ window.MwiGuildCreditVersion = "1.2.16";
         #mwi-credit-optimizer .mwi-trial-guide p{max-width:75ch}
         #mwi-credit-optimizer .mwi-trial-import-preview{padding:2px 12px 10px;margin-top:10px;border-radius:6px;background:var(--trial-surface)}
         #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
-        #mwi-credit-optimizer .mwi-analysis-context{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
-        #mwi-credit-optimizer .mwi-analysis-context .mwi-trial-meta{margin:0}
-        #mwi-credit-optimizer .mwi-analysis-sections{display:grid;grid-template-columns:minmax(0,1fr);gap:0 20px}
-        #mwi-credit-optimizer .mwi-analysis-controls p{margin:0;padding:6px 0;font-size:12px;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-analysis-controls p strong{color:var(--trial-text)}
-        #mwi-credit-optimizer .mwi-analysis-chart-scroll{max-width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
-        #mwi-credit-optimizer .mwi-trial-record-detail{margin-top:8px;padding-top:14px;border-top:1px solid var(--trial-line)}
-        #mwi-credit-optimizer .mwi-trial-record-detail h2{font-size:16px;font-weight:650;margin:0 0 8px}
 
-        #mwi-credit-optimizer button.mwi-analysis-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 0;border:0;border-radius:3px;background:transparent;color:inherit;font:inherit;text-align:left}
-        #mwi-credit-optimizer button.mwi-analysis-toggle:hover{background:#343753;color:#fff}
-        #mwi-credit-optimizer .mwi-analysis-toggle-action{margin-left:auto;flex-shrink:0;font-size:12px;font-weight:400;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-analysis-toggle svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
-        #mwi-credit-optimizer .mwi-analysis-toggle[aria-expanded="false"] svg{transform:rotate(-90deg)}
-        #mwi-credit-optimizer [id^="mwi-analysis-body-"][hidden]{display:none!important}
-        #mwi-credit-optimizer .mwi-analysis-nav{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 0;padding:8px 0;border-top:1px solid var(--trial-line)}
-        #mwi-credit-optimizer .mwi-analysis-nav button{font-size:12px;background:transparent;color:var(--trial-muted);padding:5px 8px;min-height:30px}
-        #mwi-credit-optimizer .mwi-analysis-nav button:hover{background:var(--trial-surface);color:var(--trial-text)}
-        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:16px;margin:0 0 6px;font-weight:650}
-        #mwi-credit-optimizer .mwi-trial-analytics{--analysis-accent:var(--trial-accent);--analysis-blue:#aebdff;min-width:0;font-variant-numeric:tabular-nums}
-        #mwi-credit-optimizer .mwi-analysis-heading{font-size:16px;font-weight:650;margin:0;line-height:1.4}
-        #mwi-credit-optimizer .mwi-analysis-section{min-width:0;margin:0;padding:6px 0 12px;border-top:1px solid var(--trial-line);container-type:inline-size}
-        #mwi-credit-optimizer .mwi-analysis-section h3{font-size:16px;margin:0 0 6px;font-weight:650}
-        #mwi-credit-optimizer .mwi-analysis-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px 12px;margin:8px 0}
-        #mwi-credit-optimizer .mwi-analysis-controls label{display:grid;gap:4px;flex:1 1 150px;min-width:0;color:var(--trial-muted);font-size:12px}
-        #mwi-credit-optimizer .mwi-analysis-controls select,#mwi-credit-optimizer .mwi-analysis-controls input{width:100%;min-width:0;max-width:100%;height:34px;font-size:14px}
-        #mwi-credit-optimizer .mwi-analysis-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin:10px 0 6px}
-        #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3){grid-column:auto}
-        #mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:span 2}
-        #mwi-credit-optimizer .mwi-analysis-method{margin:0;color:var(--trial-muted);font-size:12px;line-height:1.5}
-        #mwi-credit-optimizer .mwi-analysis-method summary{cursor:pointer;padding:6px 0;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0;padding:12px;background:var(--trial-surface);border-radius:6px}
-        #mwi-credit-optimizer .mwi-analysis-summary dt{color:var(--trial-muted);font-size:12px;line-height:1.4;margin-bottom:4px}
-        #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:20px;font-weight:650;line-height:1.3;margin:0;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-analysis-ranking{padding:0;margin:8px 0 0;list-style:none;max-height:420px;overflow:auto;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-analysis-ranking li{display:grid;grid-template-columns:24px minmax(100px,1.3fr) minmax(40px,1fr) minmax(85px,.8fr) minmax(55px,.5fr);align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--trial-line)}
-        #mwi-credit-optimizer .mwi-analysis-ranking strong,#mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{text-align:right;overflow-wrap:anywhere;font-size:14px;font-weight:500}
-        #mwi-credit-optimizer .mwi-analysis-rank{color:var(--trial-muted);font-size:12px}
-        #mwi-credit-optimizer button.mwi-analysis-member{background:transparent;color:var(--trial-accent);text-align:left;padding:4px 2px;min-height:30px;height:auto;white-space:normal;overflow-wrap:anywhere;font:inherit;font-size:14px;line-height:1.4;border-radius:3px}
-        #mwi-credit-optimizer button.mwi-analysis-member:hover{text-decoration:underline;text-underline-offset:3px;color:#dbe2ff;background:#343753}
-        #mwi-credit-optimizer .mwi-analysis-track{height:6px;background:#343b52;overflow:hidden;border-radius:2px;min-width:0}
-        #mwi-credit-optimizer .mwi-analysis-track i{display:block;height:100%;background:var(--analysis-accent)}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars{display:grid;gap:12px;margin:12px 0}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars>div{display:grid;grid-template-columns:64px minmax(0,1fr) minmax(72px,auto);gap:10px;align-items:center}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars>div:first-child i{background:var(--analysis-blue)}
-        #mwi-credit-optimizer .mwi-analysis-compare-bars strong{text-align:right}
-        #mwi-credit-optimizer .mwi-analysis-change{font-size:14px;margin:10px 0}
-        #mwi-credit-optimizer .mwi-analysis-change span{color:var(--trial-muted);font-size:12px}
-        #mwi-credit-optimizer .mwi-analysis-line{display:block;width:100%;min-width:640px;height:auto;max-height:260px;overflow:visible}
-        #mwi-credit-optimizer .mwi-analysis-line text{fill:var(--trial-muted);font:16px system-ui,sans-serif}
-        #mwi-credit-optimizer .mwi-analysis-line path{fill:none;stroke:var(--analysis-accent);stroke-width:2.5}
-        #mwi-credit-optimizer .mwi-analysis-line circle{fill:var(--analysis-accent)}
-        #mwi-credit-optimizer .mwi-analysis-gridline{stroke:#50536e;stroke-width:1}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll{max-height:360px;max-width:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll th{font-weight:500}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll th:first-child{min-width:130px}
-        #mwi-credit-optimizer .mwi-analysis-table-scroll thead th{position:sticky;top:0;background:#30364b;z-index:1}
-        #mwi-credit-optimizer .mwi-analysis-legend{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-        #mwi-credit-optimizer .mwi-analysis-cell{display:inline-block;padding:4px 8px;min-width:60px;text-align:center;border-radius:3px;font-size:12px}
-        #mwi-credit-optimizer .mwi-analysis-cell.positive{background:#254940;color:#b7f7e7}
-        #mwi-credit-optimizer .mwi-analysis-cell.zero{background:#383d63;color:#d6dfff}
-        #mwi-credit-optimizer .mwi-analysis-cell.unknown{background:#55462b;color:#ffe1a4}
-        #mwi-credit-optimizer .mwi-analysis-cell.absent{color:#c4c7df;outline:1px dashed #6c6f8c;outline-offset:-1px}
-        #mwi-credit-optimizer .mwi-analysis-pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-analysis-pager button{min-height:30px}
-        #mwi-credit-optimizer .mwi-analysis-pager button:disabled{opacity:.55;cursor:default}
-        #mwi-credit-optimizer .mwi-analysis-scatter{position:relative;padding:32px 36px 48px 78px;margin:10px 0}
-        #mwi-credit-optimizer .mwi-analysis-plot{height:230px;position:relative;border-left:1px solid #7e8aa7;border-bottom:1px solid #7e8aa7;background:linear-gradient(0deg,transparent calc(50% - .5px),#41465f 50%,transparent calc(50% + .5px))}
-        #mwi-credit-optimizer .mwi-analysis-x-label{position:absolute;bottom:0;left:50%;transform:translateX(-50%);color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-y-label{position:absolute;top:0;left:0;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-y-tick{position:absolute;right:calc(100% + 12px);transform:translateY(50%);white-space:nowrap;font-size:12px;color:#c4c7df}
-        #mwi-credit-optimizer .mwi-analysis-x-tick{position:absolute;top:calc(100% + 15px);transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#c4c7df}
-        #mwi-credit-optimizer button.mwi-analysis-dot{position:absolute;width:16px;height:16px;min-height:0;min-width:0;padding:0;border-radius:50%;background:#75dec5;border:2px solid #23253c;transform:translate(-50%,50%);cursor:pointer}
-        #mwi-credit-optimizer button.mwi-analysis-dot:hover,#mwi-credit-optimizer button.mwi-analysis-dot:focus-visible,#mwi-credit-optimizer button.mwi-analysis-dot.selected{background:#e9ce88;z-index:2;outline:2px solid #e9ce88;outline-offset:2px}
-        #mwi-credit-optimizer .mwi-analysis-point-detail{min-height:34px;margin:8px 0;color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-analytics :is(button,select,input,summary,[tabindex]):focus-visible{outline:2px solid #92efdb;outline-offset:3px}
-        #mwi-credit-optimizer .mwi-trial-analytics ::selection{background:#456a72;color:#fff}
         #mwi-credit-optimizer .mwi-trial-import{margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--trial-line);min-width:0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]:empty{display:none}
@@ -8510,8 +8143,7 @@ window.MwiGuildCreditVersion = "1.2.16";
         #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px 8px;margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
-        #mwi-credit-optimizer .mwi-trial-title{margin:10px 0 4px;font-size:14px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-table-scroll{max-width:100%;max-height:480px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;max-height:480px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
         #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.45}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
@@ -8520,27 +8152,30 @@ window.MwiGuildCreditVersion = "1.2.16";
         #mwi-credit-optimizer .mwi-trial-raw{margin:10px 0;min-width:0}
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
-        @container (max-width:650px){
-          #mwi-credit-optimizer .mwi-analysis-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
-          #mwi-credit-optimizer .mwi-analysis-ranking li{grid-template-columns:24px minmax(60px,1fr) minmax(60px,auto);gap:4px 8px}
-          #mwi-credit-optimizer .mwi-analysis-ranking .mwi-analysis-track{display:none}
-          #mwi-credit-optimizer .mwi-analysis-ranking li>span:last-child{grid-column:3;font-size:12px;color:var(--trial-muted)}
-          #mwi-credit-optimizer .mwi-analysis-scatter{padding-left:64px;padding-right:28px}
-          #mwi-credit-optimizer .mwi-analysis-compare-bars>div{grid-template-columns:48px minmax(0,1fr) minmax(60px,auto);gap:8px}
-        }
+        #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px 24px;margin:0 0 20px}
+        #mwi-credit-optimizer .mwi-trial-display-controls>.mwi-trial-controls{flex:1 1 240px;margin:0;max-width:440px}
+        #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--trial-field);border-radius:6px}
+        #mwi-credit-optimizer .mwi-trial-mode button{min-height:34px;background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-mode button[aria-pressed="true"]{background:#34514e;color:#d5f7ed}
+        #mwi-credit-optimizer .mwi-trial-group{min-width:0;margin:0 0 24px}
+        #mwi-credit-optimizer .mwi-trial-group-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
+        #mwi-credit-optimizer .mwi-trial-group-header h3{margin:0;font-size:16px;font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap}
+        #mwi-credit-optimizer .mwi-trial-rail{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 0 12px}
+        #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:16px}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(240px,1fr))}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,minmax(480px,1fr))}
+        #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:320px;justify-content:start}
+        #mwi-credit-optimizer .mwi-trial-timeline[data-kind="combat"]{grid-auto-columns:520px}
+        #mwi-credit-optimizer .mwi-trial-column{min-width:0;border-top:1px solid var(--trial-line);padding-top:12px}
+        #mwi-credit-optimizer .mwi-trial-column h4{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--trial-accent);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-record{min-width:0}
+        #mwi-credit-optimizer .mwi-trial-record+.mwi-trial-record{border-top:1px solid var(--trial-line);margin-top:16px;padding-top:8px}
+        #mwi-credit-optimizer .mwi-trial-record .mwi-trial-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-empty{margin:0;padding:12px 0;min-height:120px;max-width:32ch;color:var(--trial-muted);font-size:12px;line-height:1.5}
         @container mwi-trials (max-width:460px){
-          #mwi-credit-optimizer .mwi-analysis-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
-          #mwi-credit-optimizer .mwi-analysis-filters label:nth-child(3),#mwi-credit-optimizer .mwi-analysis-filters label:last-child{grid-column:1/-1}
-          #mwi-credit-optimizer .mwi-analysis-controls label{flex-basis:120px}
-          #mwi-credit-optimizer .mwi-analysis-summary dd{font-size:18px}
           #mwi-credit-optimizer .mwi-trial-import-list{max-height:280px}
           #mwi-credit-optimizer .mwi-trial-import-list li{grid-template-columns:minmax(0,1fr)}
-          #mwi-credit-optimizer .mwi-analysis-plot{height:200px}
-        }
-        @container mwi-trials (min-width:1100px){
-          #mwi-credit-optimizer .mwi-analysis-sections{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
-          #mwi-credit-optimizer .mwi-analysis-section{grid-column:1/-1}
-          #mwi-credit-optimizer .mwi-analysis-section:is([data-analysis-section="ranking"],[data-analysis-section="comparison"]){grid-column:auto}
         }
 
   `;
@@ -9763,12 +9398,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
-    analyticsApi,
-    analyticsViewApi,
     getBridge,
     getPanel
   }) {
-    let selectedKey = "";
+    let mode = "week";
+    let selectedWeek = "";
+    let selectedProject = "";
+    let resetScroll = false;
+    let resizeObserver = null;
     let records = [];
     let loadFailed = false;
     let importPreview = null;
@@ -9822,20 +9459,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
       return record.trialDate || t("trialUnknownDate");
     }
-
-    const analytics = analyticsViewApi.createTrialAnalyticsView({
-      api: analyticsApi,
-      t,
-      escapeHtml,
-      trialName,
-      recordDate,
-      collapsedSections: pluginStorage.loadTrialAnalysisCollapsed(),
-      onCollapsedChange: pluginStorage.saveTrialAnalysisCollapsed,
-      onSelectRecord(key) {
-        selectedKey = key;
-        refresh(getPanel());
-      }
-    });
 
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
@@ -9908,7 +9531,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
       result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
       if (result.status === "imported") {
-        if (result.added + result.dated) selectedKey = additions[0].key;
+        if (result.added + result.dated) {
+          selectedWeek = trialHistoryApi.historyWeeks([additions[0]])[0].key;
+          selectedProject = trialHistoryApi.historyProjectKey(additions[0]);
+          resetScroll = true;
+        }
         importPreview = null;
       }
       importNotice = {
@@ -9924,41 +9551,108 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       panel.querySelector('[data-role="trial-import-status"]')?.focus();
     }
 
+    function weekLabel(week) {
+      if (week.weekNumber === null) return t("trialUnknownWeek");
+      const start = new Date(week.weekStartAt);
+      return t("guildPointWeekWithDate", {
+        count: week.weekNumber,
+        date: `${start.getUTCMonth() + 1}/${start.getUTCDate()}`
+      });
+    }
+
+    function renderRecord(record) {
+      const fields =
+        record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+      const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
+      // Keep source order and exact numeric values; this is a record viewer, not a ranking.
+      return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
+        <p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}<br>${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}<br>${escapeHtml(record.source === "manual" ? t("trialManualDescription", { date: recordDate(record) }) : t("trialCaptured", { time: date(record.capturedAt) }))}</p>
+        ${record.source === "manual" && typeof record.sourceTimestamp === "string" ? `<p class="mwi-trial-meta">${escapeHtml(t("trialSourceMessageTime", { time: record.sourceTimestamp }))}</p>` : ""}
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row">${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}${row.characterId == null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
+    }
+
+    function renderColumn(title, items, attributes = "") {
+      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length > 1 ? `<p class="mwi-trial-help">${escapeHtml(t("trialSeparateRecords", { count: items.length }))}</p>` : ""}${items.length ? items.map(renderRecord).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+    }
+
+    function renderRail(id, title, columns, kind, timeline = false) {
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}">${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><p class="mwi-trial-help">${escapeHtml(t(timeline ? "trialTimelineHint" : "trialWeeklyScrollHint"))}</p><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+    }
+
+    function updateScrollButtons(host) {
+      for (const button of host.querySelectorAll("[data-trial-scroll]")) {
+        const rail = host.querySelector(`#mwi-trial-rail-${button.dataset.trialScroll}`);
+        button.disabled =
+          !rail ||
+          (button.dataset.step === "-1"
+            ? rail.scrollLeft <= 1
+            : rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - 1);
+      }
+    }
+
     function refresh(panel) {
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
-      const selected = records.find((record) => record.key === selectedKey) || records[0];
-      selectedKey = selected?.key || "";
+      const scroll = new Map(
+        [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+          el.dataset.trialScrollId,
+          [el.scrollLeft, el.scrollTop]
+        ])
+      );
+      const openRecords = new Set(
+        [...host.querySelectorAll("[data-trial-raw][open]")].map((el) => el.dataset.trialRaw)
+      );
+      const weeks = trialHistoryApi.historyWeeks(records);
+      const projects = trialHistoryApi.historyProjects(records);
+      const week = weeks.find((entry) => entry.key === selectedWeek) || weeks[0];
+      const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
+      selectedWeek = week?.key || "";
+      selectedProject = project?.key || "";
       let markup = renderImport();
-      if (!selected) {
+      if (!records.length) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
-      markup += analytics.render(records, selected);
-      markup += `<section class="mwi-trial-record-detail" aria-label="${escapeHtml(t("trialRecordDetails"))}"><h2>${escapeHtml(t("trialRecordDetails"))}</h2><div class="mwi-trial-controls"><label>${escapeHtml(t("trialChoose"))}<select data-role="trial-select">${records
-        .map(
-          (record, index) =>
-            `<option value="${index}"${record.key === selectedKey ? " selected" : ""}>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")} · ${trialName(record)}`)}</option>`
-        )
-        .join("")}</select></label></div>
-        <h3 class="mwi-trial-title">${escapeHtml(trialName(selected))}</h3>
-        <p class="mwi-trial-meta">${escapeHtml(t(selected.kind === "combat" ? "trialCombat" : "trialSkilling"))} · ${escapeHtml(t("trialSummary", { count: selected.rows.length, points: number(selected.points), tier: number(selected.party.highestTier) }))}<br>${escapeHtml(selected.source === "manual" ? t("trialManualDescription", { date: recordDate(selected) }) : t("trialCaptured", { time: date(selected.capturedAt) }))}</p>`;
-      if (selected.source === "manual" && typeof selected.sourceTimestamp === "string") {
-        markup += `<p class="mwi-trial-meta">${escapeHtml(t("trialSourceMessageTime", { time: selected.sourceTimestamp }))}</p>`;
-      }
-      const fields =
-        selected.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
-      const rows = [...selected.rows].sort((a, b) => {
-        for (const field of fields) {
-          const diff = (Number(b[field]) || 0) - (Number(a[field]) || 0);
-          if (diff) return diff;
+      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : "trialByProject"))}</button>`).join("")}</div><div class="mwi-trial-controls">`;
+      if (mode === "week") {
+        markup += `<label>${escapeHtml(t("trialChooseWeek"))}<select data-role="trial-week">${weeks.map((entry) => `<option value="${entry.key}"${entry.key === selectedWeek ? " selected" : ""}>${escapeHtml(weekLabel(entry))}</option>`).join("")}</select></label></div></div>`;
+        for (const [kind, size] of [
+          ["skilling", 4],
+          ["combat", 2]
+        ]) {
+          const columns = trialHistoryApi
+            .historyProjects(week.records.filter((record) => record.kind === kind))
+            .map((entry) =>
+              renderColumn(trialName(entry.records[0]), entry.records, `data-trial-project="${escapeHtml(entry.key)}"`)
+            );
+          while (columns.length < size)
+            columns.push(renderColumn(t("trialUnrecordedProject"), [], 'data-trial-empty="true"'));
+          markup += renderRail(kind, t(kind === "combat" ? "trialCombat" : "trialSkilling"), columns.join(""), kind);
         }
-        return String(a.characterId).localeCompare(String(b.characterId));
-      });
-      markup += `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${escapeHtml(t("trialStatsTable"))}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(t("trialStatsTable"))}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${escapeHtml(selected.members?.[row.memberKey || row.characterId]?.name || t("trialFormerMember"))}${row.characterId === null ? "" : `<small>ID ${escapeHtml(row.characterId)}</small>`}</th>${fields.map((field) => `<td>${escapeHtml(number(analyticsApi.metricValue(selected, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-        <details class="mwi-trial-raw"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(selected, null, 2))}</pre></details></section>`;
+      } else {
+        markup += `<label>${escapeHtml(t("trialChooseProject"))}<select data-role="trial-project">${projects.map((entry) => `<option value="${escapeHtml(entry.key)}"${entry.key === selectedProject ? " selected" : ""}>${escapeHtml(trialName(entry.records[0]))}</option>`).join("")}</select></label></div></div>`;
+        const timeline = trialHistoryApi.historyWeeks(project.records);
+        markup += renderRail(
+          "timeline",
+          trialName(project.records[0]),
+          timeline
+            .map((entry) => renderColumn(weekLabel(entry), entry.records, `data-trial-week="${entry.key}"`))
+            .join(""),
+          project.kind,
+          true
+        );
+      }
       host.innerHTML = markup;
+      for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
+      if (!resetScroll)
+        for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
+          const position = scroll.get(el.dataset.trialScrollId);
+          if (position) [el.scrollLeft, el.scrollTop] = position;
+        }
+      resetScroll = false;
+      updateScrollButtons(host);
     }
 
     function exportHistory() {
@@ -9977,7 +9671,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
-      analytics.bind(host);
+      if (pageWindow.ResizeObserver) {
+        resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
+        resizeObserver.observe(host);
+      }
       host.addEventListener(
         "toggle",
         (event) => {
@@ -9990,12 +9687,29 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           void readImport(event.target.files?.[0], panel);
           return;
         }
-        if (event.target.dataset.role !== "trial-select") return;
-        selectedKey = records[Number(event.target.value)]?.key || "";
+        const role = event.target.dataset.role;
+        if (role === "trial-week") selectedWeek = event.target.value;
+        else if (role === "trial-project") selectedProject = event.target.value;
+        else return;
+        resetScroll = true;
         refresh(panel);
-        host.querySelector('[data-role="trial-select"]')?.focus();
+        host.querySelector(`[data-role="${role}"]`)?.focus();
       });
+      host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const modeButton = event.target.closest("[data-trial-mode]");
+        if (modeButton) {
+          mode = modeButton.dataset.trialMode;
+          resetScroll = true;
+          refresh(panel);
+          host.querySelector(`[data-trial-mode="${mode}"]`)?.focus();
+        }
+        const scrollButton = event.target.closest("[data-trial-scroll]");
+        if (scrollButton) {
+          const rail = host.querySelector(`#mwi-trial-rail-${scrollButton.dataset.trialScroll}`);
+          rail?.scrollBy({ left: Number(scrollButton.dataset.step) * rail.clientWidth * 0.85 });
+          updateScrollButtons(host);
+        }
         if (event.target.closest('[data-role="trial-import-open"]'))
           host.querySelector('[data-role="trial-import-file"]').click();
         if (event.target.closest('[data-role="trial-import-confirm"]')) confirmImport(panel);
@@ -10022,436 +9736,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     function dispose() {
       importRevision += 1;
+      resizeObserver?.disconnect();
       const bridge = getBridge();
       if (bridge?.onTrialStatsUpdated === onStats) bridge.onTrialStatsUpdated = null;
     }
     return { start, dispose, bind, refresh };
   }
   return { createTrialHistoryView };
-});
-
-
-// SOURCE: src/ui/trial-analytics-view.js
-(function (root, factory) {
-  const api = factory();
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildTrialAnalyticsView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  "use strict";
-  // Inherit the construction workspace: compact controls, readable figures,
-  // continuous sections, and contained scrolling for wide data and charts.
-  function createTrialAnalyticsView({
-    api,
-    t,
-    escapeHtml: esc,
-    trialName,
-    recordDate,
-    onSelectRecord,
-    collapsedSections = [],
-    onCollapsedChange = () => true
-  }) {
-    const collapsed = new Set(collapsedSections);
-    let collapseSaveFailed = false;
-    let records = [],
-      selected = null,
-      host = null,
-      group = [],
-      people = [];
-    const state = {
-      metric: "workDone",
-      query: "",
-      limit: "10",
-      cohort: "all",
-      measure: "total",
-      start: "",
-      member: "",
-      y: "healingDone",
-      memberPage: 0,
-      recordPage: 0
-    };
-    const text = (key, values) => esc(t(key, values));
-    const num = (value) =>
-      typeof value === "number" && Number.isFinite(value)
-        ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-        : "—";
-    const pct = (value) =>
-      value === null || value === undefined
-        ? t("analysisNoRatio")
-        : (value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) + "%";
-    const axisNum = (value) => value.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 });
-    const metricName = (field) => t(`trialField_${field}`);
-    const week = (record) =>
-      record.weekStartAt
-        ? `${new Date(record.weekStartAt).getUTCMonth() + 1}/${new Date(record.weekStartAt).getUTCDate()}`
-        : t("trialUnknownDate");
-    const option = (value, label, current) =>
-      `<option value="${esc(String(value))}"${String(value) === String(current) ? " selected" : ""}>${esc(label)}</option>`;
-    const select = (role, label, options) =>
-      `<label>${text(label)}<select data-analysis="${role}">${options}</select></label>`;
-    const personName = (entry) => entry.name || t("trialFormerMember");
-    const matchLabel = (entry) => t(`analysisMatch_${entry.match}`);
-    const memberButton = (entry, body) =>
-      `<button type="button" class="mwi-analysis-member" data-analysis-member="${esc(entry.identity)}" aria-label="${text("analysisOpenMember", { name: personName(entry) })}">${body || esc(personName(entry))}</button>`;
-    const section = (id, title, content) =>
-      `<section class="mwi-analysis-section" data-analysis-section="${id}" aria-labelledby="mwi-analysis-${id}"><h3 id="mwi-analysis-${id}"><button type="button" class="mwi-analysis-toggle" data-analysis-toggle="${id}" aria-expanded="${!collapsed.has(id)}" aria-controls="mwi-analysis-body-${id}"><span>${text(title)}</span><span class="mwi-analysis-toggle-action" data-analysis-toggle-label>${text(collapsed.has(id) ? "analysisExpand" : "analysisCollapse")}</span><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4"/></svg></button></h3><div id="mwi-analysis-body-${id}"${collapsed.has(id) ? " hidden" : ""}>${content}</div></section>`;
-    const scrollTable = (caption, headers, rows) =>
-      `<div class="mwi-analysis-table-scroll" role="region" tabindex="0" aria-label="${esc(caption)}"><table class="mwi-trial-table"><caption>${esc(caption)}</caption><thead><tr>${headers.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
-    const matches = (entry) => personName(entry).toLocaleLowerCase().includes(state.query.toLocaleLowerCase());
-
-    function chart(points, label) {
-      if (points.length < 2) return `<p class="mwi-trial-help">${text("analysisNeedTwo")}</p>`;
-      const finite = points.filter((p) => p.value !== null);
-      if (!finite.length) return `<p>${text("analysisMissing")}</p>`;
-      const max = Math.max(...finite.map((p) => p.value), 1);
-      if (points.length === 2)
-        return `<div class="mwi-analysis-compare-bars" role="img" aria-label="${esc(label)}">${points.map((p) => `<div><span>${esc(p.label)}</span><div class="mwi-analysis-track"><i style="width:${p.value === null ? 0 : (p.value / max) * 100}%"></i></div><strong>${num(p.value)}</strong></div>`).join("")}</div>`;
-      const minTime = points[0].time,
-        span = points.at(-1).time - minTime || 1;
-      const x = (p) => 64 + ((p.time - minTime) / span) * 672,
-        y = (p) => 190 - (p.value / max) * 156;
-      const paths = [];
-      let path = "";
-      for (const p of points) {
-        if (p.value === null) {
-          if (path) paths.push(path);
-          path = "";
-        } else path += `${path ? " L" : "M"}${x(p)} ${y(p)}`;
-      }
-      if (path) paths.push(path);
-      const stride = Math.max(1, Math.ceil(points.length / 6));
-      return `<div class="mwi-analysis-chart-scroll" role="region" tabindex="0" aria-label="${esc(label)}"><svg class="mwi-analysis-line" viewBox="0 0 800 240" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>
-        ${[0, 0.5, 1].map((f) => `<line x1="64" x2="736" y1="${190 - f * 156}" y2="${190 - f * 156}" class="mwi-analysis-gridline"/><text x="56" y="${194 - f * 156}" text-anchor="end">${axisNum(max * f)}</text>`).join("")}
-        ${paths.map((d) => `<path d="${d}"/>`).join("")}
-        ${finite.map((p) => `<circle cx="${x(p)}" cy="${y(p)}" r="4"><title>${esc(p.label)}: ${num(p.value)}</title></circle>`).join("")}
-        ${points
-          .filter((p, i) => i % stride === 0 || i === points.length - 1)
-          .map((p) => `<text x="${x(p)}" y="220" text-anchor="middle">${esc(p.label)}</text>`)
-          .join("")}</svg></div>`;
-    }
-
-    function overview() {
-      const entries = api.entries(selected),
-        stats = api.summary(entries, state.metric);
-      const items = [
-        [t("analysisRecordedMembers"), stats.count],
-        [t("analysisTotalMetric", { metric: metricName(state.metric) }), stats.total],
-        [t("analysisMean"), stats.mean],
-        [t("analysisMedian"), stats.median]
-      ];
-      let markup = `<dl class="mwi-analysis-summary">${items.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${num(value)}</dd></div>`).join("")}</dl>`;
-      if (selected.kind === "combat")
-        markup += `<p class="mwi-trial-meta">${api
-          .fields(selected)
-          .map((field) => `${esc(metricName(field))}: <strong>${num(api.summary(entries, field).total)}</strong>`)
-          .join(" · ")}</p>`;
-      if (stats.known !== stats.count)
-        markup += `<p class="mwi-trial-notice">${text("analysisKnown", { known: stats.known, count: stats.count })}</p>`;
-      return section("overview", "analysisOverview", markup);
-    }
-    function ranks() {
-      const ranked = api.ranking(api.entries(selected), state.metric),
-        stats = api.summary(ranked, state.metric);
-      const found = ranked.filter(matches),
-        displayed = state.limit === "all" ? found : found.slice(0, 10);
-      const max = Math.max(...ranked.map((r) => r.value ?? 0), 1);
-      const controls = `<div class="mwi-analysis-controls">${select("limit", "analysisShow", option("10", t("analysisTop10"), state.limit) + option("all", t("analysisAll"), state.limit))}<p>${text("analysisTop5")}: <strong>${esc(pct(stats.top5Share))}</strong></p></div>`;
-      return section(
-        "ranking",
-        "analysisRanking",
-        controls +
-          `<p class="mwi-trial-help">${text("analysisRankingHint")}</p><ol class="mwi-analysis-ranking" aria-label="${text("analysisRanking")}">${displayed.map((entry) => `<li><span class="mwi-analysis-rank">${entry.rank ?? "—"}</span>${memberButton(entry)}<div class="mwi-analysis-track" aria-hidden="true"><i style="width:${entry.value === null ? 0 : (entry.value / max) * 100}%"></i></div><strong>${num(entry.value)}</strong><span>${esc(pct(entry.share))}</span></li>`).join("")}</ol>${!displayed.length ? `<p>${text("analysisNoMembers")}</p>` : ""}`
-      );
-    }
-    function compare() {
-      const timeline = api.timeline(records, selected);
-      if (!timeline.records.some((r) => String(r.weekStartAt) === state.start))
-        state.start = String(timeline.records[0]?.weekStartAt || "");
-      const result = api.comparison(records, selected, state.metric, state.cohort, Number(state.start));
-      const points = result.points,
-        statsKeys = ["count", "total", "mean", "median"];
-      let markup = `<div class="mwi-analysis-controls">${select("start", "analysisFrom", timeline.records.map((r) => option(r.weekStartAt, recordDate(r), state.start)).join(""))}${select("cohort", "analysisCohort", option("all", t("analysisAllRecorded"), state.cohort) + option("shared", t("analysisShared"), state.cohort))}${select("measure", "analysisMeasure", statsKeys.map((key) => option(key, t(`analysisMeasure_${key}`), state.measure)).join(""))}</div>`;
-      markup += `<p class="mwi-trial-help">${text("analysisCompareHint")}${state.cohort === "shared" ? " " + text("analysisSharedCount", { count: result.sharedCount }) : ""}</p>`;
-      if (result.ambiguousWeeks)
-        markup += `<p class="mwi-trial-notice">${text("analysisAmbiguousWeeks", { count: result.ambiguousWeeks })}</p>`;
-      if (points.length < 2)
-        return section("comparison", "analysisComparison", markup + `<p>${text("analysisNeedTwo")}</p>`);
-      const diff = api.change(points[0].stats[state.measure], points.at(-1).stats[state.measure]);
-      markup += `<p class="mwi-analysis-change">${text("analysisChange")}: <strong>${diff.absolute > 0 ? "+" : ""}${num(diff.absolute)}</strong> <span>(${diff.percent > 0 ? "+" : ""}${esc(pct(diff.percent))})</span></p>`;
-      markup += chart(
-        points.map((p) => ({ time: p.record.weekStartAt, label: week(p.record), value: p.stats[state.measure] })),
-        t("analysisComparison")
-      );
-      markup += scrollTable(
-        t("analysisComparisonData"),
-        [t("analysisWeek"), ...statsKeys.map((key) => t(`analysisMeasure_${key}`))],
-        points.map(
-          ({ record, stats }) =>
-            `<tr><th scope="row">${esc(recordDate(record))}</th>${statsKeys.map((key) => `<td>${num(stats[key])}</td>`).join("")}</tr>`
-        )
-      );
-      return section("comparison", "analysisComparison", markup);
-    }
-    function member() {
-      if (!people.some((p) => p.identity === state.member)) state.member = people[0]?.identity || "";
-      const entry = people.find((p) => p.identity === state.member);
-      const history = api.memberHistory(group, state.member, state.metric);
-      let markup = `<div class="mwi-analysis-controls">${select("member", "trialMember", people.map((p) => option(p.identity, `${personName(p)} · ${matchLabel(p)}`, state.member)).join(""))}</div>`;
-      if (!entry) return section("member", "analysisMember", markup + `<p>${text("analysisNoMembers")}</p>`);
-      markup += `<p class="mwi-trial-help">${esc(matchLabel(entry))} · ${text("analysisMemberHint")}</p>`;
-      const same = history.filter(
-        (h) =>
-          h.record.trialHrid === selected.trialHrid &&
-          h.record.weekStartAt &&
-          h.record.weekStartAt <= selected.weekStartAt
-      );
-      // Avoid connecting two alternative records for one week as a trend.
-      const timeCounts = new Map();
-      same.forEach((h) => timeCounts.set(h.record.weekStartAt, (timeCounts.get(h.record.weekStartAt) || 0) + 1));
-      const unique = same.filter((h) => timeCounts.get(h.record.weekStartAt) === 1);
-      markup += chart(
-        unique.map((h) => ({ time: h.record.weekStartAt, label: week(h.record), value: h.entry.value })),
-        t("analysisMemberTrend", { trial: trialName(selected), metric: metricName(state.metric) })
-      );
-      markup += `<p class="mwi-trial-meta">${text("analysisMemberTrend", { trial: trialName(selected), metric: metricName(state.metric) })}</p>`;
-      const recordCounts = new Map();
-      const groupKey = (h) => JSON.stringify([h.record.trialHrid, h.record.weekStartAt]);
-      history.forEach((h) => recordCounts.set(groupKey(h), (recordCounts.get(groupKey(h)) || 0) + 1));
-      const lastByProject = new Map();
-      const rows = history.map((h) => {
-        const previous = lastByProject.get(h.record.trialHrid);
-        const delta =
-          previous?.record.weekStartAt &&
-          h.record.weekStartAt > previous.record.weekStartAt &&
-          recordCounts.get(groupKey(previous)) === 1 &&
-          recordCounts.get(groupKey(h)) === 1
-            ? api.change(previous.entry.value, h.entry.value)
-            : null;
-        lastByProject.set(h.record.trialHrid, h);
-        return `<tr><th scope="row">${esc(recordDate(h.record))}<small>${esc(trialName(h.record))}</small></th><td>${api
-          .fields(h.record)
-          .map((field) => `${esc(metricName(field))}: ${num(h.entry.values[field])}`)
-          .join(
-            "<br>"
-          )}</td><td>${esc(metricName(h.field))}<br>${h.entry.rank ?? "—"} · ${esc(pct(h.entry.share))}</td><td>${delta ? `${delta.absolute > 0 ? "+" : ""}${num(delta.absolute)}<br>${delta.percent > 0 ? "+" : ""}${esc(pct(delta.percent))}` : "—"}</td></tr>`;
-      });
-      markup += scrollTable(
-        t("analysisMemberData"),
-        [t("analysisRecord"), t("analysisValues"), t("analysisRankShare"), t("analysisPrevious")],
-        rows
-      );
-      return section("member", "analysisMember", markup);
-    }
-    function coverage() {
-      const filtered = people.filter(matches),
-        sorted = [...group].sort(
-          (a, b) => (a.weekStartAt || 0) - (b.weekStartAt || 0) || a.trialHrid.localeCompare(b.trialHrid)
-        );
-      const memberPages = Math.max(1, Math.ceil(filtered.length / 20)),
-        recordPages = Math.max(1, Math.ceil(sorted.length / 8));
-      state.memberPage = Math.min(state.memberPage, memberPages - 1);
-      state.recordPage = Math.min(state.recordPage, recordPages - 1);
-      const shownMembers = filtered.slice(state.memberPage * 20, state.memberPage * 20 + 20),
-        shownRecords = sorted.slice(state.recordPage * 8, state.recordPage * 8 + 8);
-      let markup = `<p class="mwi-trial-help">${text("analysisCoverageHint")}</p><div class="mwi-analysis-legend">${["positive", "zero", "unknown", "absent"].map((s) => `<span class="mwi-analysis-cell ${s}">${text(`analysisCell_${s}`)}</span>`).join("")}</div>`;
-      const pager = (role, page, pages, label) =>
-        `<div class="mwi-analysis-pager"><span>${text(label)} ${page + 1}/${pages}</span><button type="button" data-analysis-page="${role}" data-step="-1"${page === 0 ? " disabled" : ""} aria-label="${text("analysisPrev")} ${text(label)}">${text("analysisPrev")}</button><button type="button" data-analysis-page="${role}" data-step="1"${page >= pages - 1 ? " disabled" : ""} aria-label="${text("analysisNext")} ${text(label)}">${text("analysisNext")}</button></div>`;
-      markup += `<div class="mwi-analysis-controls">${pager("memberPage", state.memberPage, memberPages, "analysisMemberPages")}${pager("recordPage", state.recordPage, recordPages, "analysisRecordPages")}</div>`;
-      markup += scrollTable(
-        t("analysisCoverage"),
-        [t("trialMember"), ...shownRecords.map((r) => `${week(r)} ${trialName(r)}`)],
-        shownMembers.map(
-          (entry) =>
-            `<tr><th scope="row">${memberButton(entry)}</th>${shownRecords
-              .map((record) => {
-                const cell = api.coverage(record, entry.identity);
-                const hint = cell.entry
-                  ? api
-                      .fields(record)
-                      .map((field) => `${metricName(field)}: ${num(cell.entry.values[field])}`)
-                      .join(" · ")
-                  : t("analysisCell_absent");
-                return `<td><span class="mwi-analysis-cell ${cell.state}" tabindex="0" title="${esc(recordDate(record) + " · " + hint)}" aria-label="${esc(personName(entry) + " · " + recordDate(record) + " · " + trialName(record) + " · " + hint)}">${text(`analysisCell_${cell.state}`)}</span></td>`;
-              })
-              .join("")}</tr>`
-        )
-      );
-      if (!shownMembers.length) markup += `<p>${text("analysisNoMembers")}</p>`;
-      return section("coverage", "analysisCoverage", markup);
-    }
-    function scatter() {
-      if (selected.kind !== "combat")
-        return section("scatter", "analysisScatter", `<p class="mwi-trial-help">${text("analysisCombatOnly")}</p>`);
-      const entries = api
-        .entries(selected)
-        .filter(matches)
-        .filter((e) => e.values.damageDealt !== null && e.values[state.y] !== null);
-      const maxX = Math.max(...entries.map((e) => e.values.damageDealt), 1),
-        maxY = Math.max(...entries.map((e) => e.values[state.y]), 1);
-      let markup = `<div class="mwi-analysis-controls">${select("y", "analysisYAxis", ["healingDone", "premitigatedDamageTaken"].map((field) => option(field, metricName(field), state.y)).join(""))}</div><p class="mwi-trial-help">${text("analysisScatterHint")}</p>`;
-      if (!entries.length) return section("scatter", "analysisScatter", markup + `<p>${text("analysisNoMembers")}</p>`);
-      markup += `<div class="mwi-analysis-scatter"><span class="mwi-analysis-y-label">${esc(metricName(state.y))}</span><div class="mwi-analysis-plot" role="group" aria-label="${text("analysisScatter")}">${[0, 0.5, 1].map((f) => `<span class="mwi-analysis-y-tick" style="bottom:${f * 100}%">${axisNum(maxY * f)}</span><span class="mwi-analysis-x-tick" style="left:${f * 100}%">${axisNum(maxX * f)}</span>`).join("")}${entries
-        .map((entry) => {
-          const info = `${personName(entry)} · ${api
-            .fields(selected)
-            .map((field) => `${metricName(field)}: ${num(entry.values[field])}`)
-            .join(" · ")}`;
-          return `<button type="button" class="mwi-analysis-dot${entry.identity === state.member ? " selected" : ""}" style="left:${(entry.values.damageDealt / maxX) * 100}%;bottom:${(entry.values[state.y] / maxY) * 100}%" data-analysis-member="${esc(entry.identity)}" data-analysis-point="${esc(info)}" aria-label="${esc(info)}" title="${esc(info)}"></button>`;
-        })
-        .join(
-          ""
-        )}</div><span class="mwi-analysis-x-label">${esc(metricName("damageDealt"))}</span></div><p class="mwi-analysis-point-detail" data-analysis-detail aria-live="polite">${text("analysisPointHint")}</p>`;
-      return section("scatter", "analysisScatter", markup);
-    }
-    function content() {
-      group = api.scoped(records, selected);
-      people = api.members(group);
-      if (!api.fields(selected).includes(state.metric)) state.metric = api.fields(selected)[0];
-      const scopes = [...new Map(records.map((r) => [api.scopeKey(r), r])).values()];
-      const projects = [...new Map(group.map((r) => [r.trialHrid, r])).values()];
-      const same = group.filter((r) => r.trialHrid === selected.trialHrid);
-      const filters = `<div class="mwi-analysis-controls mwi-analysis-filters">${select("guild", "analysisScope", scopes.map((r) => option(api.scopeKey(r), r.guildName || (r.guildId ? String(r.guildId) : t("trialUnknownGuild")), api.scopeKey(selected))).join(""))}${select("project", "analysisProject", projects.map((r) => option(r.trialHrid, trialName(r), selected.trialHrid)).join(""))}${select("record", "analysisWeek", same.map((r) => option(r.key, recordDate(r), selected.key)).join(""))}${select(
-        "metric",
-        "analysisMetric",
-        api
-          .fields(selected)
-          .map((field) => option(field, metricName(field), state.metric))
-          .join("")
-      )}<label>${text("analysisSearch")}<input type="search" data-analysis="query" value="${esc(state.query)}" placeholder="${text("analysisSearchPlaceholder")}"></label></div>`;
-      const notes = `<details class="mwi-analysis-method"><summary>${text("analysisMethod")}</summary><p>${text("analysisMethodText")}</p>${selected.guildId === null ? `<p>${text("analysisUnknownGuild")}</p>` : ""}<p>${text("analysisIdentityHint")}</p></details>`;
-      const nav = `<nav class="mwi-analysis-nav" aria-label="${text("analysisTitle")}">${[
-        ["overview", "analysisOverview"],
-        ["ranking", "analysisRanking"],
-        ["comparison", "analysisComparison"],
-        ["member", "analysisMember"],
-        ["coverage", "analysisCoverage"],
-        ["scatter", "analysisScatter"]
-      ]
-        .map(([id, key]) => `<button type="button" data-analysis-jump="${id}">${text(key)}</button>`)
-        .join("")}</nav>`;
-      return `<div class="mwi-analysis-context"><h2 class="mwi-analysis-heading">${text("analysisTitle")}</h2><p class="mwi-trial-meta">${esc(recordDate(selected))} · ${esc(trialName(selected))}</p></div>${filters}${notes}${nav}<p class="mwi-trial-notice" data-analysis-collapse-status role="status">${collapseSaveFailed ? text("analysisCollapseSaveFailed") : ""}</p><div class="mwi-analysis-sections">${overview()}${ranks()}${compare()}${member()}${coverage()}${scatter()}</div>`;
-    }
-    function setCollapsed(id, value) {
-      const button = host?.querySelector(`[data-analysis-toggle="${id}"]`);
-      if (!button || collapsed.has(id) === value) return;
-      if (value) collapsed.add(id);
-      else collapsed.delete(id);
-      button.setAttribute("aria-expanded", String(!value));
-      button.querySelector("[data-analysis-toggle-label]").textContent = t(
-        value ? "analysisExpand" : "analysisCollapse"
-      );
-      host.querySelector(`#mwi-analysis-body-${id}`).hidden = value;
-      collapseSaveFailed = onCollapsedChange([...collapsed]) === false;
-      const status = host.querySelector("[data-analysis-collapse-status]");
-      if (status) status.textContent = collapseSaveFailed ? t("analysisCollapseSaveFailed") : "";
-    }
-    function render(nextRecords, nextSelected) {
-      records = nextRecords;
-      selected = nextSelected;
-      return `<div class="mwi-trial-analytics" data-role="trial-analytics">${content()}</div>`;
-    }
-    function focusAndReveal(target) {
-      if (!target) return;
-      const navigation = host.closest("#mwi-credit-optimizer")?.querySelector(".mwi-view-tabs-shell");
-      target.style.scrollMarginTop = `${(navigation?.getBoundingClientRect().height || 48) + 16}px`;
-      target.focus({ preventScroll: true });
-      target.scrollIntoView({ block: "start" });
-    }
-    function refresh(focusRole, identity) {
-      const root = host?.querySelector('[data-role="trial-analytics"]');
-      if (!root) return;
-      root.innerHTML = content();
-      if (identity) {
-        const target = root.querySelector('[data-analysis="member"]');
-        focusAndReveal(target);
-      } else if (focusRole) root.querySelector(`[data-analysis="${focusRole}"]`)?.focus();
-    }
-    function bind(parent) {
-      host = parent;
-      let composing = false;
-      host.addEventListener("change", (event) => {
-        const role = event.target.dataset.analysis;
-        if (!role) return;
-        if (role === "query" && composing) return;
-        const value = event.target.value;
-        if (["guild", "project", "record"].includes(role)) {
-          const record =
-            role === "record"
-              ? records.find((r) => r.key === value)
-              : role === "guild"
-                ? records.find((r) => api.scopeKey(r) === value)
-                : group.find((r) => r.trialHrid === value && r.weekStartAt === selected.weekStartAt) ||
-                  group.find((r) => r.trialHrid === value);
-          if (record) {
-            state.start = "";
-            state.recordPage = 0;
-            onSelectRecord(record.key);
-            host.querySelector(`[data-analysis="${role}"]`)?.focus();
-          }
-          return;
-        }
-        if (Object.hasOwn(state, role)) {
-          state[role] = value;
-          if (role === "query") state.memberPage = 0;
-          refresh(role);
-        }
-      });
-      const applySearch = (event) => {
-        if (event.target.dataset.analysis !== "query") return;
-        if (composing || event.isComposing) return;
-        state.query = event.target.value;
-        state.memberPage = 0;
-        const start = event.target.selectionStart;
-        refresh("query");
-        const input = host.querySelector('[data-analysis="query"]');
-        if (start !== null) {
-          try {
-            input.setSelectionRange(start, start);
-          } catch (_) {
-            /* Search inputs may not support selection. */
-          }
-        }
-      };
-      host.addEventListener("input", applySearch);
-      host.addEventListener("compositionstart", (event) => {
-        if (event.target.dataset.analysis === "query") composing = true;
-      });
-      host.addEventListener("compositionend", (event) => {
-        if (event.target.dataset.analysis !== "query") return;
-        composing = false;
-        applySearch(event);
-      });
-      host.addEventListener("click", (event) => {
-        const toggle = event.target.closest("[data-analysis-toggle]");
-        if (toggle) setCollapsed(toggle.dataset.analysisToggle, !collapsed.has(toggle.dataset.analysisToggle));
-        const jump = event.target.closest("[data-analysis-jump]");
-        if (jump) {
-          setCollapsed(jump.dataset.analysisJump, false);
-          focusAndReveal(host.querySelector(`[data-analysis-toggle="${jump.dataset.analysisJump}"]`));
-        }
-        const button = event.target.closest("[data-analysis-member]");
-        if (button) {
-          setCollapsed("member", false);
-          state.member = button.dataset.analysisMember;
-          refresh(null, true);
-        }
-        const pager = event.target.closest("[data-analysis-page]");
-        if (pager) {
-          state[pager.dataset.analysisPage] += Number(pager.dataset.step);
-          refresh();
-          host.querySelector(`[data-analysis-page="${pager.dataset.analysisPage}"]:not(:disabled)`)?.focus();
-        }
-      });
-      const point = (event) => {
-        const button = event.target.closest("[data-analysis-point]");
-        const output = host.querySelector("[data-analysis-detail]");
-        if (button && output) output.textContent = button.dataset.analysisPoint;
-      };
-      host.addEventListener("focusin", point);
-      host.addEventListener("mouseover", point);
-    }
-    return { render, bind };
-  }
-  return { createTrialAnalyticsView };
 });
 
 
@@ -13827,8 +13118,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   const panelShellApi = window.MwiGuildCreditPanelShell;
   const trialHistoryApi = window.MwiGuildTrialHistory;
   const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
-  const analyticsApi = window.MwiGuildTrialAnalytics;
-  const analyticsViewApi = window.MwiGuildTrialAnalyticsView;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
     !core ||
@@ -13855,9 +13144,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     !panelShellApi ||
     !creditViewApi ||
     !trialHistoryApi ||
-    !trialHistoryViewApi ||
-    !analyticsApi ||
-    !analyticsViewApi
+    !trialHistoryViewApi
   )
     return;
   const pageWindow = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
@@ -14485,8 +13772,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
-    analyticsApi,
-    analyticsViewApi,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

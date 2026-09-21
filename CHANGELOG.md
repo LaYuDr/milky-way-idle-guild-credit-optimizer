@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.17] - 2026-09-21
+
+### Changed
+
+- 移除试炼历史的自动分析与评分，仅保留按周和按项目的原始数据查看；保留导入导出能力并新增分析功能恢复指南。
+
 ## [1.2.16] - 2026-09-21
 
 ### Changed

@@ -3186,20 +3186,21 @@
       const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
       document.querySelector('#test-tabs [data-mwi-credit-tab="true"]').click();
       panel.querySelector('[data-role="view-trials"]').click();
-      const empty = !panel.querySelector('[data-role="trial-select"]');
+      const host = panel.querySelector('[data-role="trials-view"]');
+      const empty = !host.querySelector('[data-role="trial-week"]');
       const send = (message) =>
         window.dispatchEvent(new CustomEvent("__mwiGuildCreditSocketMessageV1", { detail: JSON.stringify(message) }));
-      const week = "2026-09-14T00:00:00Z";
-      const milk = "/guild_skilling/milking";
-      const combat = "/guild_combat/hedgehog";
+      const skills = ["milking", "foraging", "woodcutting", "brewing"].map((name) => `/guild_skilling/${name}`);
+      const combats = ["hedgehog", "badger"].map((name) => `/guild_combat/${name}`);
+      const milk = skills[0];
       const guild = {
         id: "fixture-guild",
         name: "测试公会 / Test Guild",
-        currentWeekStartAt: week,
+        currentWeekStartAt: "2026-09-14T00:00:00Z",
         currentTrialsData: JSON.stringify({
-          skilling: { parties: { [milk]: { done: true, highestTier: 4, nextTierProgress: 0.25 } } },
-          combat: { parties: { [combat]: { done: true, highestTier: 6 } } },
-          points: { [milk]: 120, [combat]: 240 }
+          skilling: { parties: Object.fromEntries(skills.map((hrid) => [hrid, { done: true, highestTier: 4 }])) },
+          combat: { parties: Object.fromEntries(combats.map((hrid) => [hrid, { done: true, highestTier: 6 }])) },
+          points: Object.fromEntries([...skills, ...combats].map((hrid) => [hrid, 120]))
         })
       };
       const members = { 101: { name: "长名字测试成员 Alpha" }, 102: { name: "<b>原样显示</b>" } };
@@ -3207,60 +3208,112 @@
         type: "guild_trial_stats_updated",
         guildId: guild.id,
         guildTrialStatList: [
-          { trialHrid: milk, characterId: 101, workDone: 123456789.125, additionalStatistic: 7 },
-          { trialHrid: milk, characterId: 102, workDone: 0 },
-          {
-            trialHrid: combat,
-            characterId: 101,
-            damageDealt: 987654321.25,
-            healingDone: 8000,
-            premitigatedDamageTaken: 123456
-          },
-          { trialHrid: combat, characterId: 102, damageDealt: 0, healingDone: 0, premitigatedDamageTaken: 0 }
+          ...skills.flatMap((trialHrid) => [
+            { trialHrid, characterId: 101, workDone: 123456789.125, additionalStatistic: 7 },
+            { trialHrid, characterId: 102, workDone: 0 }
+          ]),
+          ...combats.flatMap((trialHrid) => [
+            {
+              trialHrid,
+              characterId: 101,
+              damageDealt: 987654321.25,
+              healingDone: 8000,
+              premitigatedDamageTaken: 123456
+            },
+            { trialHrid, characterId: 102, damageDealt: 0 }
+          ])
         ]
       };
       send({ type: "guild_updated", guild });
       send({ type: "guild_characters_updated", guildSharableCharacterMap: members });
       send(message);
-      await waitFor(() => panel.querySelectorAll('[data-role="trial-select"] option').length === 2);
+      await waitFor(() => host.querySelectorAll("[data-trial-record]").length === 6);
+      const saved = () =>
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("mwi-guild-trial-history-v1:"))
+          .sort()
+          .map((key) => JSON.parse(localStorage.getItem(key)));
       send(message);
-      const repeatCount = panel.querySelectorAll('[data-role="trial-select"] option').length;
+      const repeatCount = saved().length;
       send({ ...message, guildTrialStatList: [] });
-      const emptyResponseCount = panel.querySelectorAll('[data-role="trial-select"] option').length;
-      const keys = Object.keys(localStorage).filter((key) => key.startsWith("mwi-guild-trial-history-v1:"));
-      const records = keys.map((key) => JSON.parse(localStorage.getItem(key)));
-      const selected = panel.querySelector('[data-role="trial-select"]');
-      selected.value = String(
-        [...records]
-          .sort((a, b) => b.weekStartAt - a.weekStartAt || a.trialHrid.localeCompare(b.trialHrid))
-          .findIndex((record) => record.kind === "combat")
-      );
-      selected.dispatchEvent(new Event("change", { bubbles: true }));
-      const host = panel.querySelector('[data-role="trials-view"]');
-      const report = {
-        width: sidebarWidth,
-        rootOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth),
-        checks: {
-          fourthTab: panel.querySelectorAll(".mwi-view-tab").length === 4,
-          renamed:
-            document.querySelector('[data-mwi-credit-tab="true"]').textContent ===
-            (english ? "Guild Assistant" : "公会助手"),
-          emptyState: empty,
-          allCompletedTrials: records.length === 2,
-          repeatDeduplicated: repeatCount === 2,
-          emptyPreservesRecords: emptyResponseCount === 2,
-          rawPrecisionPreserved: records.some((record) =>
-            record.rows.some((row) => row.workDone === 123456789.125 && row.additionalStatistic === 7)
-          ),
-          memberNamesEscaped: !host.querySelector("tbody b"),
-          detailTable: host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 2,
-          fullRawRecord: Boolean(host.querySelector(".mwi-trial-raw pre")),
-          selectedCombat: host.querySelectorAll('[data-role="trial-stats-table"] thead th').length === 4,
-          zeroPanelOverflow: panel.scrollWidth <= panel.clientWidth,
-          keyboardFocusableScroller: host.querySelector(".mwi-trial-table-scroll").tabIndex === 0
-        }
+      const emptyResponseCount = saved().length;
+      const checks = {
+        fourthTab: panel.querySelectorAll(".mwi-view-tab").length === 4,
+        emptyState: empty,
+        allCompletedTrials: saved().length === 6,
+        repeatDeduplicated: repeatCount === 6,
+        emptyPreservesRecords: emptyResponseCount === 6,
+        noAnalysisControls: !host.querySelector('[data-role="trial-analytics"], [data-analysis]'),
+        fourSkilling: host.querySelectorAll('[data-trial-group="skilling"] .mwi-trial-column').length === 4,
+        twoCombat: host.querySelectorAll('[data-trial-group="combat"] .mwi-trial-column').length === 2,
+        sixMemberTables: host.querySelectorAll('[data-role="trial-stats-table"]').length === 6,
+        allMemberRows: host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12,
+        rawPrecisionPreserved:
+          host.textContent.includes("123456789.125") &&
+          saved().some((record) => record.rows.some((row) => row.additionalStatistic === 7)),
+        memberNamesEscaped: !host.querySelector("tbody b"),
+        officialOmittedZero: [...host.querySelectorAll('[data-trial-group="combat"] tbody tr:last-child')].every(
+          (row) => [...row.querySelectorAll("td")].every((td) => td.textContent === "0")
+        ),
+        fullRawRecords: host.querySelectorAll(".mwi-trial-raw pre").length === 6,
+        lifeAboveCombat:
+          host.querySelector('[data-trial-group="skilling"]').getBoundingClientRect().top <
+          host.querySelector('[data-trial-group="combat"]').getBoundingClientRect().top,
+        parallelLife:
+          new Set(
+            [...host.querySelectorAll('[data-trial-group="skilling"] .mwi-trial-column')].map((el) =>
+              Math.round(el.getBoundingClientRect().top)
+            )
+          ).size === 1,
+        parallelCombat:
+          new Set(
+            [...host.querySelectorAll('[data-trial-group="combat"] .mwi-trial-column')].map((el) =>
+              Math.round(el.getBoundingClientRect().top)
+            )
+          ).size === 1
       };
-      return report;
+      for (const [week, value] of [
+        ["2026-09-07T00:00:00Z", 222.5],
+        ["2026-08-31T00:00:00Z", 111.25]
+      ]) {
+        send({ type: "guild_updated", guild: { ...guild, currentWeekStartAt: week } });
+        send({ ...message, guildTrialStatList: [{ trialHrid: milk, characterId: 101, workDone: value }] });
+      }
+      const choose = (role, value) => {
+        const input = host.querySelector(`[data-role="${role}"]`);
+        input.value = value;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      choose("trial-week", "9");
+      checks.weekSelection =
+        host.querySelectorAll("[data-trial-record]").length === 1 &&
+        host.querySelector("tbody td").textContent === "222.5";
+      checks.missingSlots = host.querySelectorAll("[data-trial-empty]").length === 5;
+      checks.weekFocus = document.activeElement === host.querySelector('[data-role="trial-week"]');
+      host.querySelector('[data-trial-mode="project"]').click();
+      choose("trial-project", JSON.stringify(["skilling", milk]));
+      checks.newestToOldest =
+        [...host.querySelectorAll("[data-trial-week]")].map((el) => el.dataset.trialWeek).join(",") === "10,9,8";
+      checks.timelineExactValues =
+        [...host.querySelectorAll("[data-trial-week] tbody tr:first-child td")]
+          .map((el) => el.textContent)
+          .join(",") === "123456789.125,222.5,111.25";
+      const timeline = host.querySelector("#mwi-trial-rail-timeline");
+      const beforeScroll = timeline.scrollLeft;
+      host.querySelector('[data-trial-scroll="timeline"][data-step="1"]').click();
+      checks.scrollTowardOlder = timeline.scrollWidth <= timeline.clientWidth || timeline.scrollLeft > beforeScroll;
+      checks.keyboardFocusableScroller = timeline.tabIndex === 0;
+      choose("trial-project", JSON.stringify(["combat", combats[0]]));
+      checks.projectSwitch =
+        host.querySelectorAll("[data-trial-week]").length === 1 && host.querySelectorAll("thead th").length === 4;
+      checks.switchResetsScroll = host.querySelector("#mwi-trial-rail-timeline").scrollLeft === 0;
+      const before = JSON.stringify(saved());
+      host.querySelector('[data-trial-mode="week"]').click();
+      checks.weekPreserved = host.querySelector('[data-role="trial-week"]').value === "9";
+      choose("trial-week", "10");
+      checks.viewReadOnly = JSON.stringify(saved()) === before;
+      checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
+      return { width: sidebarWidth, rootOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth), checks };
     }
     if (searchParams.has("trialHistoryAudit")) {
       // Only this isolated fixture origin is cleared, never the game's storage.
@@ -3269,177 +3322,6 @@
       window.__mwiTrialHistoryAuditReady = runTrialHistoryAudit().then((report) => {
         document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
         document.body.dataset.trialHistoryAuditReady = "true";
-        return report;
-      });
-    }
-
-    async function runTrialAnalyticsAudit() {
-      document.getElementById("close-exchange-modal").click();
-      const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
-      document.querySelector('[data-mwi-credit-tab="true"]').click();
-      panel.querySelector('[data-role="view-trials"]').click();
-      const empty = !panel.querySelector('[data-role="trial-analytics"]');
-      const make = (id, date, members, kind = "skilling") => {
-        const trialHrid = kind === "combat" ? "/guild_combat/badger" : "/guild_skilling/milking";
-        return {
-          schemaVersion: 2,
-          source: "manual",
-          recordId: id,
-          key: JSON.stringify(["manual", id]),
-          guildId: null,
-          guildName: "Analytics Fixture",
-          trialDate: date,
-          weekStartAt: null,
-          capturedAt: null,
-          kind,
-          trialHrid,
-          points: null,
-          party: { done: true, highestTier: null },
-          rows: members.map(([_name, value], index) => ({
-            memberKey: String(index),
-            characterId: null,
-            trialHrid,
-            ...(kind === "combat"
-              ? { damageDealt: value, healingDone: value / 2, premitigatedDamageTaken: value * 2 }
-              : { workDone: value })
-          })),
-          members: Object.fromEntries(members.map(([name], index) => [String(index), { name }]))
-        };
-      };
-      const records = [
-        make("analytics-1", "2026-08-28", [
-          ["Alpha", 10],
-          ["Beta", 20],
-          ["Zero", 0]
-        ]),
-        make("analytics-2", "2026-09-04", [
-          ["Alpha", 20],
-          ["Gamma", 30],
-          ["Zero", 0]
-        ]),
-        make("analytics-3", "2026-09-11", [
-          ["Alpha", 30],
-          ["Beta", 50],
-          ["Zero", 0]
-        ]),
-        make(
-          "analytics-combat",
-          "2026-09-11",
-          [
-            ["Alpha", 100],
-            ["Zero", 0]
-          ],
-          "combat"
-        )
-      ];
-      const input = panel.querySelector('[data-role="trial-import-file"]');
-      const files = new DataTransfer();
-      files.items.add(
-        new File([JSON.stringify({ schemaVersion: 2, records })], "analytics-fixture.json", {
-          type: "application/json"
-        })
-      );
-      input.files = files.files;
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFor(() => panel.querySelector('[data-role="trial-import-confirm"]'));
-      panel.querySelector('[data-role="trial-import-confirm"]').click();
-      const choose = (role, value) => {
-        const control = panel.querySelector(`[data-analysis="${role}"]`);
-        control.value = value;
-        control.dispatchEvent(new Event("change", { bubbles: true }));
-      };
-      choose("record", records[2].key);
-      const checks = {
-        emptyState: empty,
-        sixSections: panel.querySelectorAll("[data-analysis-section]").length === 6,
-        summary: panel.querySelector(".mwi-analysis-summary dd").textContent === "3",
-        multiWeekLine: Boolean(panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-line'))
-      };
-      choose("cohort", "shared");
-      const comparisonRows = panel.querySelectorAll('[data-analysis-section="comparison"] tbody tr');
-      checks.sharedCohort =
-        comparisonRows.length === 3 &&
-        [...comparisonRows].every((row) => row.children[1].textContent === "2") &&
-        comparisonRows[2].children[2].textContent === "30";
-      checks.coverageZero = Boolean(panel.querySelector('[data-analysis-section="coverage"] td .zero'));
-      checks.coverageAbsent = Boolean(panel.querySelector('[data-analysis-section="coverage"] td .absent'));
-      const query = panel.querySelector('[data-analysis="query"]');
-      query.value = "Alpha";
-      query.dispatchEvent(new Event("input", { bubbles: true }));
-      checks.search = panel.querySelectorAll(".mwi-analysis-ranking li").length === 1;
-      const composingInput = panel.querySelector('[data-analysis="query"]');
-      composingInput.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-      composingInput.value = "测试";
-      composingInput.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true, data: "测试" }));
-      checks.imePreserved =
-        composingInput.isConnected && panel.querySelector('[data-analysis="query"]') === composingInput;
-      composingInput.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "测试" }));
-      checks.imeApplied =
-        panel.querySelectorAll(".mwi-analysis-ranking li").length === 0 &&
-        panel.querySelector('[data-analysis="query"]').value === "测试";
-      const restoreQuery = panel.querySelector('[data-analysis="query"]');
-      restoreQuery.value = "Alpha";
-      restoreQuery.dispatchEvent(new Event("input", { bubbles: true }));
-      panel.querySelector(".mwi-analysis-ranking [data-analysis-member]").click();
-      checks.memberHistory = panel.querySelectorAll('[data-analysis-section="member"] tbody tr').length === 4;
-      const clear = panel.querySelector('[data-analysis="query"]');
-      clear.value = "";
-      clear.dispatchEvent(new Event("input", { bubbles: true }));
-      choose("record", records[0].key);
-      checks.singleWeekNoChart =
-        !panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-line') &&
-        !panel.querySelector('[data-analysis-section="comparison"] .mwi-analysis-compare-bars');
-      choose("project", "/guild_combat/badger");
-      choose("metric", "healingDone");
-      choose("y", "premitigatedDamageTaken");
-      const point = panel.querySelector(".mwi-analysis-dot");
-      point.focus();
-      checks.scatter = panel.querySelectorAll(".mwi-analysis-dot").length === 2;
-      checks.focusDetails = panel.querySelector("[data-analysis-detail]").textContent.includes("Alpha");
-      panel.querySelector('[data-analysis-jump="scatter"]').click();
-      checks.jumpVisible =
-        panel.querySelector("#mwi-analysis-scatter").getBoundingClientRect().top >=
-        panel.querySelector(".mwi-view-tabs-shell").getBoundingClientRect().bottom;
-      checks.healingMetric = panel.querySelector(".mwi-analysis-ranking strong").textContent === "50";
-      const sectionIds = ["overview", "ranking", "comparison", "member", "coverage", "scatter"];
-      for (const id of sectionIds) panel.querySelector(`[data-analysis-toggle="${id}"]`).click();
-      checks.independentCollapse = sectionIds.every(
-        (id) =>
-          panel.querySelector(`#mwi-analysis-body-${id}`).hidden &&
-          panel.querySelector(`[data-analysis-toggle="${id}"]`).getAttribute("aria-expanded") === "false"
-      );
-      choose("metric", "damageDealt");
-      checks.collapseSurvivesRefresh = sectionIds.every((id) => panel.querySelector(`#mwi-analysis-body-${id}`).hidden);
-      panel.querySelector('[data-analysis-jump="ranking"]').click();
-      checks.jumpExpands =
-        !panel.querySelector("#mwi-analysis-body-ranking").hidden &&
-        panel.querySelector("#mwi-analysis-body-member").hidden;
-      panel.querySelector(".mwi-analysis-ranking [data-analysis-member]").click();
-      checks.memberExpands = !panel.querySelector("#mwi-analysis-body-member").hidden;
-      const preferences = window.MwiGuildCreditStorage.createPluginStorage({
-        storage: localStorage,
-        location,
-        config: window.MwiGuildCreditConfig
-      });
-      checks.collapseSaved =
-        JSON.stringify(preferences.loadTrialAnalysisCollapsed()) ===
-        JSON.stringify(["overview", "comparison", "coverage", "scatter"]);
-      for (const id of sectionIds)
-        if (panel.querySelector(`#mwi-analysis-body-${id}`).hidden)
-          panel.querySelector(`[data-analysis-toggle="${id}"]`).click();
-      checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
-      const saved = Object.entries(localStorage)
-        .filter(([key]) => key.startsWith("mwi-guild-trial-history-v1:"))
-        .map(([, value]) => JSON.parse(value));
-      checks.readOnly =
-        saved.length === 4 && saved.find((record) => record.recordId === "analytics-3").rows[0].workDone === 30;
-      return { width: sidebarWidth, checks };
-    }
-    if (searchParams.has("trialAnalyticsAudit")) {
-      for (const key of Object.keys(localStorage))
-        if (key.startsWith("mwi-guild-trial-history-v1:")) localStorage.removeItem(key);
-      window.__mwiTrialAnalyticsAuditReady = runTrialAnalyticsAudit().then((report) => {
-        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
         return report;
       });
     }

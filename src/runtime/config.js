@@ -41,8 +41,6 @@
     FALLBACK_INSTALL_URL,
     PRICE_REFERENCE_STORAGE_KEY: "mwi-credit-price-reference",
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
-    TRIAL_ANALYTICS_UI_STORAGE_KEY: "mwi-trial-analytics-ui-v1",
-    TRIAL_ANALYTICS_SECTIONS: ["overview", "ranking", "comparison", "member", "coverage", "scatter"],
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",

@@ -4,6 +4,19 @@ const assert = require("node:assert/strict");
 const api = require("../src/trial-history.js");
 const now = Date.parse("2026-09-18T00:00:00Z");
 const week = "2026-09-14T00:00:00Z";
+test("原始明细保留官方省略零值与手动未知值的区别", () => {
+  for (const field of ["workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+    assert.equal(api.metricValue({ schemaVersion: 1 }, {}, field), 0);
+    assert.equal(api.metricValue({ schemaVersion: 2 }, {}, field), null);
+    for (const schemaVersion of [1, 2]) {
+      for (const value of [0, 123456789.125])
+        assert.equal(api.metricValue({ schemaVersion }, { [field]: value }, field), value);
+      for (const value of [null, -1, Infinity, NaN, "12"])
+        assert.equal(api.metricValue({ schemaVersion }, { [field]: value }, field), null);
+    }
+  }
+});
+
 function fixture() {
   return {
     context: {
@@ -393,4 +406,52 @@ test("已有游戏导出的零值省略字段仍可导入，保留原始结构",
   delete record.rows[0].workDone;
   assert.deepEqual(api.parseImport(importText([record], 1)), [record]);
   assert.throws(() => api.parseImport(importText([{ ...record, source: "manual" }])), /trialImportInvalidRecord/);
+});
+
+test("历史展示按周倒序归组，日期可补周，未知周置后且不改写记录", () => {
+  const base = manualFixture();
+  const records = [
+    { ...base, key: "unknown" },
+    { ...base, key: "week8", trialDate: "2026-09-03" },
+    { ...base, key: "week9", weekStartAt: Date.parse("2026-09-04") },
+    { ...base, key: "week9-midweek", weekStartAt: Date.parse("2026-09-07") }
+  ];
+  const before = JSON.stringify(records);
+  const weeks = api.historyWeeks(records);
+  assert.deepEqual(
+    weeks.map((w) => w.key),
+    ["9", "8", "unknown"]
+  );
+  assert.deepEqual(
+    weeks[0].records.map((r) => r.key),
+    ["week9", "week9-midweek"]
+  );
+  assert.equal(weeks[0].weekStartAt, Date.parse("2026-09-04"));
+  assert.equal(weeks[2].weekNumber, null);
+  assert.equal(JSON.stringify(records), before);
+  assert.deepEqual(api.historyWeeks([]), []);
+});
+
+test("项目展示按项目和类型分组，多公会及同周多记录不丢失、不合并数值", () => {
+  const base = manualFixture();
+  const records = [
+    { ...base, key: "combat", kind: "combat" },
+    { ...base, key: "a", guildName: "A" },
+    { ...base, key: "b", guildName: "B" },
+    { ...base, key: "other", trialHrid: "/guild_skilling/foraging" }
+  ];
+  const projects = api.historyProjects(records);
+  assert.equal(projects.length, 3);
+  assert.equal(projects.at(-1).kind, "combat");
+  const milk = projects.find((p) => p.key === api.historyProjectKey(base));
+  assert.deepEqual(
+    milk.records.map((r) => r.key),
+    ["a", "b"]
+  );
+  assert.equal(milk.records[0], records[1]);
+  assert.equal(
+    projects.reduce((sum, p) => sum + p.records.length, 0),
+    records.length
+  );
+  assert.deepEqual(api.historyProjects([]), []);
 });

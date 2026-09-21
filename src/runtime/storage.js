@@ -212,34 +212,6 @@
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
     }
 
-    function normalizeTrialAnalysisSections(value) {
-      return Array.isArray(value)
-        ? [...new Set(value.filter((id) => config.TRIAL_ANALYTICS_SECTIONS.includes(id)))]
-        : [];
-    }
-
-    function loadTrialAnalysisCollapsed() {
-      try {
-        return normalizeTrialAnalysisSections(
-          JSON.parse(storage.getItem(`${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`))
-        );
-      } catch (_) {
-        return [];
-      }
-    }
-
-    function saveTrialAnalysisCollapsed(value) {
-      try {
-        storage.setItem(
-          `${config.TRIAL_ANALYTICS_UI_STORAGE_KEY}:${guildBuildingPlannerStorageKey()}`,
-          JSON.stringify(normalizeTrialAnalysisSections(value))
-        );
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
     function loadTrialHistory() {
       const records = [];
       let failed = false;
@@ -706,8 +678,6 @@
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
-      loadTrialAnalysisCollapsed,
-      saveTrialAnalysisCollapsed,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,
