@@ -17,6 +17,32 @@ test("原始明细保留官方省略零值与手动未知值的区别", () => {
   }
 });
 
+test("生活明细按工作量降序展示，同值稳定且不改写原始记录", () => {
+  const rows = [
+    { characterId: 1, workDone: 0 },
+    { characterId: 2, workDone: 123.125 },
+    { characterId: 3, workDone: null },
+    { characterId: 4, workDone: 123.25 },
+    { characterId: 5, workDone: 123.125 },
+    { characterId: 6 }
+  ].map(Object.freeze);
+  Object.freeze(rows);
+  for (const schemaVersion of [1, 2]) {
+    const record = Object.freeze({ kind: "skilling", schemaVersion, rows });
+    const original = JSON.stringify(record);
+    assert.deepEqual(
+      api.displayRows(record).map((row) => row.characterId),
+      schemaVersion === 1 ? [4, 2, 5, 1, 6, 3] : [4, 2, 5, 1, 3, 6]
+    );
+    assert.equal(JSON.stringify(record), original);
+  }
+});
+
+test("战斗明细仍保留来源顺序", () => {
+  const rows = [{ damageDealt: 0 }, { damageDealt: 100 }];
+  assert.deepEqual(api.displayRows({ kind: "combat", rows }), rows);
+});
+
 function fixture() {
   return {
     context: {
@@ -619,4 +645,49 @@ test("项目展示按项目和类型分组，多公会及同周多记录不丢�
     records.length
   );
   assert.deepEqual(api.historyProjects([]), []);
+});
+
+test("历史项目按游戏技能顺序排列，缺失项目跳过，未知项目置于同类末尾", () => {
+  const names = [
+    "milking",
+    "foraging",
+    "woodcutting",
+    "cheesesmithing",
+    "crafting",
+    "tailoring",
+    "cooking",
+    "brewing",
+    "alchemy",
+    "enhancing"
+  ];
+  const make = (name) => ({ ...manualFixture(), trialHrid: `/guild_skilling/${name}` });
+  const records = [make("unknown"), ...names.toReversed().map(make), { ...make("milking"), key: "second" }];
+  const before = JSON.stringify(records);
+  assert.deepEqual(
+    api.historyProjects(records).map((p) => p.records[0].trialHrid.split("/").pop()),
+    [...names, "unknown"]
+  );
+  assert.equal(api.historyProjects(records)[0].records.length, 2);
+  assert.equal(JSON.stringify(records), before);
+  assert.deepEqual(
+    api.historyProjects([make("alchemy"), make("brewing"), make("milking")]).map((p) => p.records[0].trialHrid),
+    ["/guild_skilling/milking", "/guild_skilling/brewing", "/guild_skilling/alchemy"]
+  );
+});
+
+test("战斗项目使用游戏排序字段，当前定义优先，仍排在生活项目之后", () => {
+  const life = { ...manualFixture(), trialHrid: "/guild_skilling/enhancing" };
+  const a = { ...life, kind: "combat", trialHrid: "/guild_combat/a", trialDetail: { sortIndex: 5 } };
+  const b = { ...a, trialHrid: "/guild_combat/b", trialDetail: { sortIndex: 0 } };
+  const unknown = { ...a, trialHrid: "/guild_combat/unknown", trialDetail: null };
+  assert.deepEqual(
+    api.historyProjects([a, unknown, b, life]).map((p) => p.records[0]),
+    [life, b, a, unknown]
+  );
+  assert.deepEqual(
+    api
+      .historyProjects([a, b, life], { [a.trialHrid]: { sortIndex: 0 }, [b.trialHrid]: { sortIndex: 1 } })
+      .map((p) => p.records[0]),
+    [life, a, b]
+  );
 });

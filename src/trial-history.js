@@ -277,15 +277,30 @@
   }
 
   // Group records for display only: never combine member rows or discard duplicates.
-  function historyProjects(records) {
+  function historyProjects(records, details = {}) {
     const groups = new Map();
     for (const record of records) {
       const key = historyProjectKey(record);
       if (!groups.has(key)) groups.set(key, { key, kind: record.kind, records: [] });
       groups.get(key).records.push(record);
     }
+    const order = (group) => {
+      const record = group.records[0];
+      if (group.kind === "skilling") {
+        const skill = String(details[record.trialHrid]?.skillHrid || record.trialDetail?.skillHrid || record.trialHrid)
+          .split("/")
+          .pop();
+        const index = config.GUILD_TRIAL_SKILL_ORDER.indexOf(skill);
+        return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+      }
+      const index =
+        details[record.trialHrid]?.sortIndex ??
+        group.records.find((item) => Number.isFinite(item.trialDetail?.sortIndex))?.trialDetail.sortIndex;
+      return Number.isFinite(index) ? index : Number.MAX_SAFE_INTEGER;
+    };
     return [...groups.values()].sort(
-      (a, b) => Number(a.kind === "combat") - Number(b.kind === "combat") || a.key.localeCompare(b.key)
+      (a, b) =>
+        Number(a.kind === "combat") - Number(b.kind === "combat") || order(a) - order(b) || a.key.localeCompare(b.key)
     );
   }
 
@@ -394,6 +409,13 @@
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
   }
 
+  function displayRows(record) {
+    const rows = [...record.rows];
+    if (record.kind !== "skilling") return rows;
+    // Stable sorting preserves source order for ties; unknown values follow zero.
+    return rows.sort((a, b) => (metricValue(record, b, "workDone") ?? -1) - (metricValue(record, a, "workDone") ?? -1));
+  }
+
   function previewImport(incoming, existing) {
     const byKey = new Map(existing.map((record) => [record.key, normalizeSnapshot(record)]));
     return incoming.map(normalizeSnapshot).map((record) => {
@@ -420,6 +442,7 @@
     historyProjects,
     historyWeeks,
     metricValue,
+    displayRows,
     memberAbsent,
     memberLevel,
     withMemberLevels,

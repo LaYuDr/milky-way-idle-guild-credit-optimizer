@@ -3209,8 +3209,8 @@
         guildId: guild.id,
         guildTrialStatList: [
           ...skills.flatMap((trialHrid) => [
-            { trialHrid, characterId: 101, workDone: 123456789.125, additionalStatistic: 7 },
-            { trialHrid, characterId: 102, workDone: 0 }
+            { trialHrid, characterId: 102, workDone: 0 },
+            { trialHrid, characterId: 101, workDone: 123456789.125, additionalStatistic: 7 }
           ]),
           ...combats.flatMap((trialHrid) => [
             {
@@ -3245,12 +3245,24 @@
         emptyPreservesRecords: emptyResponseCount === 6,
         noAnalysisControls: !host.querySelector('[data-role="trial-analytics"], [data-analysis]'),
         fourSkilling: host.querySelectorAll('[data-trial-group="skilling"] .mwi-trial-column').length === 4,
+        weeklyGameOrder:
+          [...host.querySelectorAll('[data-trial-group="skilling"] [data-trial-project]')]
+            .map((el) => JSON.parse(el.dataset.trialProject)[1])
+            .join(",") === [skills[0], skills[1], skills[2], skills[3]].join(","),
         twoCombat: host.querySelectorAll('[data-trial-group="combat"] .mwi-trial-column').length === 2,
         sixMemberTables: host.querySelectorAll('[data-role="trial-stats-table"]').length === 6,
         allMemberRows: host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12,
         rawPrecisionPreserved:
           host.textContent.includes("123456789.125") &&
           saved().some((record) => record.rows.some((row) => row.additionalStatistic === 7)),
+        workDescending: [...host.querySelectorAll('[data-trial-group="skilling"] tbody')].every(
+          (body) =>
+            [...body.querySelectorAll('[data-trial-field="workDone"]')].map((cell) => cell.textContent).join(",") ===
+            "123456789.125,0"
+        ),
+        storedSourceOrder: saved()
+          .filter((record) => record.kind === "skilling")
+          .every((record) => record.rows.map((row) => row.characterId).join(",") === "102,101"),
         memberNamesEscaped: !host.querySelector("tbody b"),
         officialOmittedZero: [...host.querySelectorAll('[data-trial-group="combat"] tbody tr:last-child')].every(
           (row) => [...row.querySelectorAll('td:not([data-trial-field="level"])')].every((td) => td.textContent === "0")
@@ -3364,6 +3376,11 @@
       checks.scrollTowardOlder = timeline.scrollWidth <= timeline.clientWidth || timeline.scrollLeft > beforeScroll;
       checks.keyboardFocusableScroller = timeline.tabIndex === 0;
       choose("trial-project", JSON.stringify(["combat", combats[0]]));
+      checks.projectGameOrder =
+        [...host.querySelectorAll('[data-trial-choice="project"]')]
+          .slice(0, 4)
+          .map((el) => JSON.parse(el.value)[1])
+          .join(",") === skills.join(",");
       checks.directProjectChoices =
         host.querySelectorAll('[data-role="trial-project"] button').length === 6 && !host.querySelector("select");
       checks.projectSwitch =

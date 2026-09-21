@@ -43,6 +43,18 @@
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
+    GUILD_TRIAL_SKILL_ORDER: [
+      "milking",
+      "foraging",
+      "woodcutting",
+      "cheesesmithing",
+      "crafting",
+      "tailoring",
+      "cooking",
+      "brewing",
+      "alchemy",
+      "enhancing"
+    ],
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.20";
+window.MwiGuildCreditVersion = "1.2.21";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -728,6 +728,18 @@ window.MwiGuildCreditVersion = "1.2.20";
     UI_STATE_STORAGE_KEY: "mwi-guild-credit-ui-state-v1",
     GUILD_BUILDING_PLAN_STORAGE_PREFIX: "mwi-guild-building-planner-v1",
     GUILD_TRIAL_FIRST_START_AT: Date.parse("2026-07-10T00:00:00Z"),
+    GUILD_TRIAL_SKILL_ORDER: [
+      "milking",
+      "foraging",
+      "woodcutting",
+      "cheesesmithing",
+      "crafting",
+      "tailoring",
+      "cooking",
+      "brewing",
+      "alchemy",
+      "enhancing"
+    ],
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
@@ -1043,15 +1055,30 @@ window.MwiGuildCreditVersion = "1.2.20";
   }
 
   // Group records for display only: never combine member rows or discard duplicates.
-  function historyProjects(records) {
+  function historyProjects(records, details = {}) {
     const groups = new Map();
     for (const record of records) {
       const key = historyProjectKey(record);
       if (!groups.has(key)) groups.set(key, { key, kind: record.kind, records: [] });
       groups.get(key).records.push(record);
     }
+    const order = (group) => {
+      const record = group.records[0];
+      if (group.kind === "skilling") {
+        const skill = String(details[record.trialHrid]?.skillHrid || record.trialDetail?.skillHrid || record.trialHrid)
+          .split("/")
+          .pop();
+        const index = config.GUILD_TRIAL_SKILL_ORDER.indexOf(skill);
+        return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+      }
+      const index =
+        details[record.trialHrid]?.sortIndex ??
+        group.records.find((item) => Number.isFinite(item.trialDetail?.sortIndex))?.trialDetail.sortIndex;
+      return Number.isFinite(index) ? index : Number.MAX_SAFE_INTEGER;
+    };
     return [...groups.values()].sort(
-      (a, b) => Number(a.kind === "combat") - Number(b.kind === "combat") || a.key.localeCompare(b.key)
+      (a, b) =>
+        Number(a.kind === "combat") - Number(b.kind === "combat") || order(a) - order(b) || a.key.localeCompare(b.key)
     );
   }
 
@@ -1160,6 +1187,13 @@ window.MwiGuildCreditVersion = "1.2.20";
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
   }
 
+  function displayRows(record) {
+    const rows = [...record.rows];
+    if (record.kind !== "skilling") return rows;
+    // Stable sorting preserves source order for ties; unknown values follow zero.
+    return rows.sort((a, b) => (metricValue(record, b, "workDone") ?? -1) - (metricValue(record, a, "workDone") ?? -1));
+  }
+
   function previewImport(incoming, existing) {
     const byKey = new Map(existing.map((record) => [record.key, normalizeSnapshot(record)]));
     return incoming.map(normalizeSnapshot).map((record) => {
@@ -1186,6 +1220,7 @@ window.MwiGuildCreditVersion = "1.2.20";
     historyProjects,
     historyWeeks,
     metricValue,
+    displayRows,
     memberAbsent,
     memberLevel,
     withMemberLevels,
@@ -8257,51 +8292,51 @@ window.MwiGuildCreditVersion = "1.2.20";
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
 
-        #mwi-credit-optimizer .mwi-trial-import{margin:0 0 14px;padding:0 0 10px;border-bottom:1px solid var(--trial-line);min-width:0}
+        #mwi-credit-optimizer .mwi-trial-import{margin:0 0 8px;padding:0 0 6px;border-bottom:1px solid var(--trial-line);min-width:0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]:empty{display:none}
         #mwi-credit-optimizer .mwi-trial-import-preview h3{margin:12px 0 6px;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-import-list{list-style:none;padding:0;margin:8px 0;max-height:320px;overflow-y:auto;scrollbar-width:thin}
         #mwi-credit-optimizer .mwi-trial-import-list li{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 12px;padding:8px 0;border-bottom:1px solid var(--trial-line);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-import-list span{color:var(--trial-muted);font-size:12px;line-height:1.4}
-        #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{margin:6px 0;color:var(--trial-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-help,#mwi-credit-optimizer .mwi-trial-meta{margin:2px 0;color:var(--trial-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-notice{margin:6px 0;color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px 8px;margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
         #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.45}
+        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.35}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
-        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-member-absent{display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:help;line-height:1}
         #mwi-credit-optimizer .mwi-trial-member-absent:focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
-        #mwi-credit-optimizer .mwi-trial-raw{margin:10px 0;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-trial-raw{margin:6px 0;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:4px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
-        #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px 24px;margin:0 0 20px}
+        #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px 16px;margin:0 0 8px}
         #mwi-credit-optimizer .mwi-trial-choice-field{flex:1 1 360px;display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 2px 8px}
-        #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:34px;padding:6px 12px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
+        #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-project-icon{width:20px;height:20px;flex:0 0 20px}
         #mwi-credit-optimizer .mwi-trial-choices button:hover{background:var(--trial-surface);color:var(--trial-text)}
         #mwi-credit-optimizer .mwi-trial-choices button[aria-pressed="true"]{border-color:var(--trial-accent);background:#34514e;color:#d5f7ed}
-        #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--trial-field);border-radius:6px}
-        #mwi-credit-optimizer .mwi-trial-mode button{min-height:34px;background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:2px;background:var(--trial-field);border-radius:6px}
+        #mwi-credit-optimizer .mwi-trial-mode button{min-height:30px;background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-mode button[aria-pressed="true"]{background:#34514e;color:#d5f7ed}
-        #mwi-credit-optimizer .mwi-trial-group{min-width:0;margin:0 0 24px}
+        #mwi-credit-optimizer .mwi-trial-group{min-width:0;margin:0 0 16px}
         #mwi-credit-optimizer .mwi-trial-group-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
         #mwi-credit-optimizer .mwi-trial-group-header h3{margin:0;font-size:16px;font-weight:650}
         #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
         #mwi-credit-optimizer .mwi-trial-rail{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 0 12px}
-        #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:16px}
+        #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:12px}
         #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(240px,1fr))}
         #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,minmax(480px,1fr))}
         #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:320px;justify-content:start}
         #mwi-credit-optimizer .mwi-trial-timeline[data-kind="combat"]{grid-auto-columns:520px}
-        #mwi-credit-optimizer .mwi-trial-column{min-width:0;border-top:1px solid var(--trial-line);padding-top:12px}
-        #mwi-credit-optimizer .mwi-trial-column h4{margin:0 0 8px;font-size:14px;font-weight:650;color:var(--trial-accent);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-column{min-width:0;border-top:1px solid var(--trial-line);padding-top:6px}
+        #mwi-credit-optimizer .mwi-trial-column h4{margin:0 0 4px;font-size:14px;font-weight:650;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-record{min-width:0}
         #mwi-credit-optimizer .mwi-trial-record+.mwi-trial-record{border-top:1px solid var(--trial-line);margin-top:16px;padding-top:8px}
         #mwi-credit-optimizer .mwi-trial-record .mwi-trial-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -9770,11 +9805,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
           : ["level", "workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
-      // Keep source order and exact numeric values; this is a record viewer, not a ranking.
+      // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${trialHistoryApi
+          .displayRows(record)
+          .map(
+            (row) =>
+              `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+          )
+          .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
@@ -9826,7 +9867,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         [...host.querySelectorAll("[data-trial-raw][open]")].map((el) => el.dataset.trialRaw)
       );
       const weeks = trialHistoryApi.historyWeeks(records);
-      const projects = trialHistoryApi.historyProjects(records);
+      const details = getBridge()?.trialHistoryContext?.details || {};
+      const projects = trialHistoryApi.historyProjects(records, details);
       const week = weeks.find((entry) => entry.key === selectedWeek) || weeks[0];
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
@@ -9849,7 +9891,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           ["combat", 2]
         ]) {
           const columns = trialHistoryApi
-            .historyProjects(week.records.filter((record) => record.kind === kind))
+            .historyProjects(
+              week.records.filter((record) => record.kind === kind),
+              details
+            )
             .map((entry) =>
               renderColumn(trialName(entry.records[0]), entry.records, `data-trial-project="${escapeHtml(entry.key)}"`)
             );

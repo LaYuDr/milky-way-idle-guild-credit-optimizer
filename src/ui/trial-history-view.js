@@ -251,11 +251,17 @@
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
           : ["level", "workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
-      // Keep source order and exact numeric values; this is a record viewer, not a ranking.
+      // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${trialHistoryApi
+          .displayRows(record)
+          .map(
+            (row) =>
+              `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+          )
+          .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
@@ -307,7 +313,8 @@
         [...host.querySelectorAll("[data-trial-raw][open]")].map((el) => el.dataset.trialRaw)
       );
       const weeks = trialHistoryApi.historyWeeks(records);
-      const projects = trialHistoryApi.historyProjects(records);
+      const details = getBridge()?.trialHistoryContext?.details || {};
+      const projects = trialHistoryApi.historyProjects(records, details);
       const week = weeks.find((entry) => entry.key === selectedWeek) || weeks[0];
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
@@ -330,7 +337,10 @@
           ["combat", 2]
         ]) {
           const columns = trialHistoryApi
-            .historyProjects(week.records.filter((record) => record.kind === kind))
+            .historyProjects(
+              week.records.filter((record) => record.kind === kind),
+              details
+            )
             .map((entry) =>
               renderColumn(trialName(entry.records[0]), entry.records, `data-trial-project="${escapeHtml(entry.key)}"`)
             );

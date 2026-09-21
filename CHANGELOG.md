@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.21] - 2026-09-21
+
+### Changed
+
+- 优化历史试炼项目排序与成员明细展示，按游戏顺序排列项目并稳定排序生活项目。
+
 ## [1.2.20] - 2026-09-21
 
 ### Changed
