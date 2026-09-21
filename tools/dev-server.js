@@ -8,8 +8,8 @@ const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
 const port = Number(process.env.PORT || 4173);
 
-http
-  .createServer((request, response) => {
+function createDevServer() {
+  return http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const files = {
       "/milky-way-idle-guild-credit-optimizer.user.js": "milky-way-idle-guild-credit-optimizer.user.js",
@@ -44,7 +44,13 @@ http
       "Access-Control-Allow-Origin": "*"
     });
     response.end(fs.readFileSync(file));
-  })
-  .listen(port, "127.0.0.1", () => {
+  });
+}
+
+module.exports = { createDevServer };
+
+if (require.main === module) {
+  createDevServer().listen(port, "127.0.0.1", () => {
     console.log(`Tampermonkey loader URL: http://127.0.0.1:${port}/milky-way-idle-guild-credit-dev-loader.user.js`);
   });
+}

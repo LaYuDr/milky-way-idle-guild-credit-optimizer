@@ -3419,9 +3419,10 @@
         profileFrames[0].viewProfileData.characterName === members[101].name &&
         !nativeProfile.open &&
         host.querySelector("[data-trial-profile-content]").textContent.includes("1800");
-      const skillIcons = [...host.querySelectorAll(".mwi-trial-profile-facts .mwi-trial-profile-icon use")];
+      const skillIcons = [...host.querySelectorAll(".mwi-trial-skill-grid .mwi-trial-profile-icon use")];
       checks.profileNativeSkillIcons =
-        skillIcons.map((el) => el.getAttribute("href").split("#")[1]).join(",") === "milking,enhancing,magic" &&
+        skillIcons.map((el) => el.getAttribute("href").split("#")[1]).join(",") ===
+          "milking,foraging,woodcutting,cheesesmithing,crafting,tailoring,cooking,brewing,alchemy,enhancing,stamina,intelligence,attack,defense,melee,ranged,magic" &&
         skillIcons.every((el) => el.getAttribute("href").includes("skills_sprite"));
       const equipmentItems = [
         ...host.querySelectorAll(".mwi-trial-equipment-grid [data-equipment-slot]:not(.mwi-trial-equipment-empty)")
@@ -3449,7 +3450,33 @@
           el.getAttribute("title") && el.getAttribute("aria-label") === el.getAttribute("title") && el.tabIndex === 0
       );
       checks.profileSkillLevelsPreserved =
-        skillIcons.map((el) => el.closest("dt").nextElementSibling.textContent).join(",") === "143,138,98";
+        ["milking", "enhancing", "magic"]
+          .map((key) => host.querySelector(`[data-profile-skill="${key}"] .mwi-trial-equipment-level`).textContent)
+          .join(",") === "Lv.143,Lv.138,Lv.98";
+      const skillTiles = [...host.querySelectorAll("[data-profile-skill]")];
+      checks.profileMissingSkillsUnknown = skillTiles.filter((tile) => tile.textContent === "Lv.—").length === 14;
+      checks.profileSkillRows =
+        [1, 2, 3, 4].map((row) => skillTiles.filter((tile) => tile.style.gridRow === String(row)).length).join() ===
+        "5,5,4,3";
+      checks.profileSkillRowsRendered = [1, 2, 3, 4].every(
+        (row) =>
+          new Set(
+            skillTiles
+              .filter((tile) => tile.style.gridRow === String(row))
+              .map((tile) => Math.round(tile.getBoundingClientRect().top))
+          ).size === 1
+      );
+      const equipmentBounds = host.querySelector('[data-equipment-slot="back"]').getBoundingClientRect();
+      checks.profileSkillsSameSizeAsEquipment = skillTiles.every((tile) => {
+        const bounds = tile.getBoundingClientRect();
+        return (
+          Math.abs(bounds.width - equipmentBounds.width) < 1 && Math.abs(bounds.height - equipmentBounds.height) < 1
+        );
+      });
+      checks.profileSkillsAccessible = skillTiles.every(
+        (tile) => tile.getAttribute("title") === tile.getAttribute("aria-label") && tile.tabIndex === 0
+      );
+
       checks.profileIconsDecorative = [...host.querySelectorAll(".mwi-trial-profile-icon")].every(
         (el) => el.getAttribute("aria-hidden") === "true"
       );
@@ -3781,6 +3808,21 @@
         milkOverview().querySelector('[data-trial-aggregate="median"]').textContent === "61728394.56";
       checks.overviewBeforeTable =
         milkOverview().getBoundingClientRect().bottom <= displayTable().getBoundingClientRect().top;
+      const tableFitsContents = (table) =>
+        [...table.rows[0].cells].every((header, index) => {
+          const needed = Math.max(
+            ...[...table.rows].map((row) => {
+              const cell = row.cells[index];
+              const range = document.createRange();
+              range.selectNodeContents(cell);
+              const style = getComputedStyle(cell);
+              return (
+                range.getBoundingClientRect().width + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+              );
+            })
+          );
+          return header.getBoundingClientRect().width <= needed + 2;
+        });
       for (const view of ["week", "project", "player"]) {
         host.querySelector(`[data-trial-mode="${view}"]`).click();
         if (view === "player") choose("trial-player", JSON.stringify(["id", "101"]));
@@ -3795,6 +3837,7 @@
           if (mask === 15)
             checks[`displayAdaptiveWidth_${view}`] =
               columnWidth > nameOnlyWidth && current.scrollWidth <= current.parentElement.clientWidth + 1;
+          checks[`compactColumns_${view}_${mask}`] = tableFitsContents(current);
           const fields = [...current.querySelectorAll("thead [data-trial-sort]")].map((el) => el.dataset.trialSort);
           const expected = [
             "member",
@@ -3836,6 +3879,12 @@
             (summaryMask !== 0 || !record.querySelector('[data-role="trial-overview"]'));
         }
       }
+      const rawRecord = displayTable().closest("[data-trial-record]").querySelector(".mwi-trial-raw");
+      const rawColumn = rawRecord.closest(".mwi-trial-column");
+      const widthBeforeRaw = rawColumn.getBoundingClientRect().width;
+      rawRecord.open = true;
+      checks.rawDoesNotWidenColumns = Math.abs(rawColumn.getBoundingClientRect().width - widthBeforeRaw) < 1;
+      rawRecord.open = false;
       checks.displaySettingsRemainOpen = host.querySelector(".mwi-trial-display-settings").open;
       checks.displayNoProfileQueries = profileFrames.length === displayFrames;
       const savedDisplay = JSON.parse(

@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.27";
+window.MwiGuildCreditVersion = "1.2.28";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -8807,10 +8807,10 @@ window.MwiGuildCreditVersion = "1.2.27";
         #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
         #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
-        #mwi-credit-optimizer .mwi-trial-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.35}
+        #mwi-credit-optimizer .mwi-trial-table{width:max-content;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.35}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
-        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
-        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:nowrap;min-width:0}
         #mwi-credit-optimizer .mwi-trial-member-absent{display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:help;line-height:1}
         #mwi-credit-optimizer .mwi-trial-member-absent:focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
@@ -8858,12 +8858,13 @@ window.MwiGuildCreditVersion = "1.2.27";
         #mwi-credit-optimizer .mwi-trial-group-header h3{margin:0;font-size:16px;font-weight:650}
         #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
         #mwi-credit-optimizer .mwi-trial-rail{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 0 12px}
-        #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:12px}
-        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(var(--trial-week-width,240px),1fr))}
-        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,minmax(var(--trial-week-width,480px),1fr))}
-        #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:var(--trial-column-width,320px);justify-content:start}
-        #mwi-credit-optimizer .mwi-trial-timeline[data-kind="combat"]{grid-auto-columns:var(--trial-column-width,520px)}
-        #mwi-credit-optimizer .mwi-trial-column{min-width:0;border-top:1px solid var(--trial-line);padding-top:6px}
+        #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;justify-content:start;gap:8px}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,max-content)}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,max-content)}
+        #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:max-content;justify-content:start}
+        #mwi-credit-optimizer .mwi-trial-column{width:max-content;min-width:0;border-top:1px solid var(--trial-line);padding-top:6px}
+        /* Only member tables determine a project's width; wrap headings, summaries and raw records within it. */
+        #mwi-credit-optimizer .mwi-trial-column>h4,#mwi-credit-optimizer .mwi-trial-column .mwi-trial-meta,#mwi-credit-optimizer .mwi-trial-column .mwi-trial-overview,#mwi-credit-optimizer .mwi-trial-column .mwi-trial-raw{contain:inline-size}
         #mwi-credit-optimizer .mwi-trial-column h4{margin:0 0 4px;font-size:14px;font-weight:650;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-record{min-width:0}
         #mwi-credit-optimizer .mwi-trial-record+.mwi-trial-record{border-top:1px solid var(--trial-line);margin-top:16px;padding-top:8px}
@@ -8884,7 +8885,7 @@ window.MwiGuildCreditVersion = "1.2.27";
         #mwi-credit-optimizer .mwi-trial-profile-facts dt{display:flex;align-items:center;gap:6px;min-width:0;color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-facts dd{margin:0;max-width:20ch;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-icon{width:20px;height:20px;flex:0 0 20px}
-        #mwi-credit-optimizer .mwi-trial-equipment-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
+        #mwi-credit-optimizer .mwi-trial-skill-grid,#mwi-credit-optimizer .mwi-trial-equipment-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
         #mwi-credit-optimizer .mwi-trial-equipment-slot{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:1px solid #9da5df;border-radius:4px;background:#2c2c45;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-equipment-slot .mwi-trial-profile-icon{width:82%;height:82%}
         #mwi-credit-optimizer .mwi-trial-equipment-empty{align-items:start;border-style:dashed;background:transparent;color:var(--trial-muted);font-size:12px;text-align:center;padding:2px}
@@ -8895,7 +8896,7 @@ window.MwiGuildCreditVersion = "1.2.27";
         #mwi-credit-optimizer .mwi-trial-slot-label{padding:3px;font-size:12px;text-align:center}
         #mwi-credit-optimizer .mwi-trial-equipment-extra{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
         #mwi-credit-optimizer .mwi-trial-profile-abilities{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:12px}
-        #mwi-credit-optimizer .mwi-trial-ability-slot{border-color:transparent}
+        #mwi-credit-optimizer .mwi-trial-ability-slot,#mwi-credit-optimizer .mwi-trial-skill-slot{border-color:transparent}
         @container mwi-trials (max-width:760px){
           #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
           #mwi-credit-optimizer .mwi-trial-player-profile{padding:0 0 12px;border-right:0;border-bottom:1px solid var(--trial-line)}
@@ -10117,6 +10118,35 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   root.MwiGuildTrialPlayerView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
+  const SKILL_ROWS = [
+    ["milking", "foraging", "woodcutting", "cheesesmithing", "crafting"],
+    ["tailoring", "cooking", "brewing", "alchemy", "enhancing"],
+    ["stamina", "intelligence", "attack", "defense"],
+    ["melee", "ranged", "magic"]
+  ];
+  function skillLayout(skills) {
+    const slots = SKILL_ROWS.flatMap((keys, row) =>
+      keys.map((key, column) => ({
+        key,
+        row: row + 1,
+        column: column + 1,
+        skill: null
+      }))
+    );
+    let extra = 0;
+    for (const skill of skills) {
+      if (!skill?.skillHrid) continue;
+      const key = String(skill.skillHrid).split("/").pop();
+      if (key === "total_level") continue;
+      const slot = slots.find((slot) => slot.key === key && !slot.skill);
+      if (slot) slot.skill = skill;
+      else {
+        slots.push({ key, row: 5 + Math.floor(extra / 5), column: (extra % 5) + 1, skill });
+        extra += 1;
+      }
+    }
+    return slots;
+  }
   // Positions mirror the game's EquipmentLocationToSlotMap (rows 5–6 separate tools).
   const EQUIPMENT_SLOTS = [
     ["back", 1, 1],
@@ -10229,6 +10259,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         })
         .join("")}</div>`;
     }
+    function skillsMarkup(skills) {
+      if (!skills.some((skill) => suffix(skill.skillHrid) !== "total_level")) return "";
+      return `<h4>${e(t("trialProfileSkills"))}</h4><div class="mwi-trial-skill-grid" aria-label="${e(t("trialProfileSkills"))}">${skillLayout(
+        skills
+      )
+        .map(({ key, row, column, skill }) => {
+          const hrid = skill?.skillHrid || `/skills/${key}`;
+          const name = label(hrid);
+          const level = `Lv.${number(skill?.level)}`;
+          const description = `${name} ${level}`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+        })
+        .join("")}</div>`;
+    }
     function profileMarkup(state) {
       if (state.status !== "ready")
         return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
@@ -10246,11 +10290,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       ])
         if (profile[field] != null) html += metric(t(`trialProfile_${field}`), number(profile[field]));
       html += "</dl>";
-      if (skills.length)
-        html += `<h4>${e(t("trialProfileSkills"))}</h4><dl class="mwi-trial-profile-facts">${skills
-          .filter((skill) => suffix(skill.skillHrid) !== "total_level")
-          .map((skill) => metric(label(skill.skillHrid), number(skill.level), profileIcon("skill", skill.skillHrid)))
-          .join("")}</dl>`;
+      html += skillsMarkup(skills);
       html += equipmentMarkup(profile) + abilitiesMarkup(profile);
       for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
@@ -10295,7 +10335,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     return { render };
   }
-  return { createRenderer, equipmentLayout };
+  return { createRenderer, equipmentLayout, skillLayout };
 });
 
 
@@ -10751,13 +10791,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
-      const fields = visibleFields(kind);
-      const columnWidth =
-        kind === "combat"
-          ? 160 + fields.length * 90
-          : 160 + fields.reduce((width, field) => width + (field === "workMultiple" ? 136 : 80), 0);
-      const weekWidth = Math.max(180, columnWidth);
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}" style="--trial-column-width:${columnWidth}px;--trial-week-width:${weekWidth}px">${columns}</div></div></section>`;
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {

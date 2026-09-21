@@ -595,3 +595,13 @@ The player picker audit also covers case-insensitive name fragments, literal HTM
 text, no-match feedback, clearing, submit/Enter behavior, IME composition, input
 focus, keyboard navigation without queries, selection collapse, and a 60-player
 wrapping grid with the last member searchable. Search never merges identities.
+
+Compact trial tables use intrinsic content widths. The width audit compares each
+column with its widest header/cell content across all display-field combinations,
+and checks that expanding raw JSON does not widen the project column. Headings,
+summaries and metadata wrap within the width determined by member data.
+
+Profile skills use five-column tiles matching equipment dimensions. The profile
+audit checks native icon order, the 5/5/4/3 row grouping, accessible names, preserved
+levels and unknown placeholders, and measures equal skill/equipment tile sizes
+across the width matrix.

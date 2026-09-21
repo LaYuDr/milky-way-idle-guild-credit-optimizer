@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.28] - 2026-09-22
+
+### Changed
+
+- 优化玩家资料技能方格与试炼表格自适应布局，完善开发服务器测试接口和响应式审计。
+
 ## [1.2.27] - 2026-09-22
 
 ### Changed

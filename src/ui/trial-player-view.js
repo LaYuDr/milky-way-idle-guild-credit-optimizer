@@ -4,6 +4,35 @@
   root.MwiGuildTrialPlayerView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
+  const SKILL_ROWS = [
+    ["milking", "foraging", "woodcutting", "cheesesmithing", "crafting"],
+    ["tailoring", "cooking", "brewing", "alchemy", "enhancing"],
+    ["stamina", "intelligence", "attack", "defense"],
+    ["melee", "ranged", "magic"]
+  ];
+  function skillLayout(skills) {
+    const slots = SKILL_ROWS.flatMap((keys, row) =>
+      keys.map((key, column) => ({
+        key,
+        row: row + 1,
+        column: column + 1,
+        skill: null
+      }))
+    );
+    let extra = 0;
+    for (const skill of skills) {
+      if (!skill?.skillHrid) continue;
+      const key = String(skill.skillHrid).split("/").pop();
+      if (key === "total_level") continue;
+      const slot = slots.find((slot) => slot.key === key && !slot.skill);
+      if (slot) slot.skill = skill;
+      else {
+        slots.push({ key, row: 5 + Math.floor(extra / 5), column: (extra % 5) + 1, skill });
+        extra += 1;
+      }
+    }
+    return slots;
+  }
   // Positions mirror the game's EquipmentLocationToSlotMap (rows 5–6 separate tools).
   const EQUIPMENT_SLOTS = [
     ["back", 1, 1],
@@ -116,6 +145,20 @@
         })
         .join("")}</div>`;
     }
+    function skillsMarkup(skills) {
+      if (!skills.some((skill) => suffix(skill.skillHrid) !== "total_level")) return "";
+      return `<h4>${e(t("trialProfileSkills"))}</h4><div class="mwi-trial-skill-grid" aria-label="${e(t("trialProfileSkills"))}">${skillLayout(
+        skills
+      )
+        .map(({ key, row, column, skill }) => {
+          const hrid = skill?.skillHrid || `/skills/${key}`;
+          const name = label(hrid);
+          const level = `Lv.${number(skill?.level)}`;
+          const description = `${name} ${level}`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+        })
+        .join("")}</div>`;
+    }
     function profileMarkup(state) {
       if (state.status !== "ready")
         return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
@@ -133,11 +176,7 @@
       ])
         if (profile[field] != null) html += metric(t(`trialProfile_${field}`), number(profile[field]));
       html += "</dl>";
-      if (skills.length)
-        html += `<h4>${e(t("trialProfileSkills"))}</h4><dl class="mwi-trial-profile-facts">${skills
-          .filter((skill) => suffix(skill.skillHrid) !== "total_level")
-          .map((skill) => metric(label(skill.skillHrid), number(skill.level), profileIcon("skill", skill.skillHrid)))
-          .join("")}</dl>`;
+      html += skillsMarkup(skills);
       html += equipmentMarkup(profile) + abilitiesMarkup(profile);
       for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
@@ -182,5 +221,5 @@
     }
     return { render };
   }
-  return { createRenderer, equipmentLayout };
+  return { createRenderer, equipmentLayout, skillLayout };
 });

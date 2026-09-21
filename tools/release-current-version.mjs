@@ -37,6 +37,8 @@ const FIXED_RELEASE_PATHS = new Set([
   "releases/README.md",
   "releases/manifest.json",
   "tools/verify-repository.mjs",
+  "tools/check.mjs",
+  "tools/browser-audit.mjs",
   "发布当前版本.command",
   "dist/milky-way-idle-guild-credit-dev-loader.user.js",
   "dist/milky-way-idle-guild-credit-optimizer.user.js",
