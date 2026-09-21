@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.25";
+window.MwiGuildCreditVersion = "1.2.26";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -759,6 +759,7 @@ window.MwiGuildCreditVersion = "1.2.25";
     GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE: 2.5,
     RENDERED_MARKUP_PROPERTY: "__mwiGuildCreditRenderedMarkup",
     TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
+    TRIAL_DISPLAY_STORAGE_PREFIX: "mwi-guild-trial-display-v1",
     PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
     DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
     CREDIT_TYPES,
@@ -1232,11 +1233,35 @@ window.MwiGuildCreditVersion = "1.2.25";
   }
 
   const memberCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+  function summarizeMetric(record, field) {
+    const values = record.rows
+      .map((row) => (field === "level" ? memberLevel(record, row) : metricValue(record, row, field)))
+      .filter((value) => value !== null)
+      .sort((a, b) => a - b);
+    const count = values.length;
+    const sum = values.reduce((total, value) => total + value, 0);
+    const middle = Math.floor(count / 2);
+    return {
+      count,
+      missing: record.rows.length - count,
+      total: count && Number.isFinite(sum) ? sum : null,
+      average: count ? values.reduce((total, value) => total + value / count, 0) : null,
+      median: count ? (count % 2 ? values[middle] : values[middle - 1] / 2 + values[middle] / 2) : null
+    };
+  }
+
+  function metricShare(record, row, field, summary = summarizeMetric(record, field)) {
+    const value = metricValue(record, row, field);
+    return value !== null && summary.total > 0 ? (value / summary.total) * 100 : null;
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
       !sort ||
-      !["member", "level", "workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(sort.field)
+      !["member", "level", "workDone", "workShare", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(
+        sort.field
+      )
     )
       return result;
     const value = ({ record, row }) =>
@@ -1244,7 +1269,7 @@ window.MwiGuildCreditVersion = "1.2.25";
         ? memberIdentity(record, row).name || null
         : sort.field === "level"
           ? memberLevel(record, row)
-          : metricValue(record, row, sort.field);
+          : metricValue(record, row, sort.field === "workShare" ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),
@@ -1260,6 +1285,13 @@ window.MwiGuildCreditVersion = "1.2.25";
       record.rows.map((row) => ({ record, row })),
       sort
     ).map((entry) => entry.row);
+  }
+
+  function searchHistoryMembers(members, query) {
+    const needle = String(query || "")
+      .trim()
+      .toLocaleLowerCase();
+    return members.filter((member) => !needle || member.name.toLocaleLowerCase().includes(needle));
   }
 
   function previewImport(incoming, existing) {
@@ -1288,12 +1320,15 @@ window.MwiGuildCreditVersion = "1.2.25";
     historyProjects,
     historyWeeks,
     metricValue,
+    summarizeMetric,
+    metricShare,
     displayRows,
     sortEntries,
     memberAbsent,
     memberIdentity,
     memberHistory,
     historyMembers,
+    searchHistoryMembers,
     sameMember,
     memberLevel,
     withMemberLevels,
@@ -3364,13 +3399,36 @@ window.MwiGuildCreditVersion = "1.2.25";
       trialHistory: "历史试炼数据",
       trialGuide: "说明",
       trialDisplayNotice:
-        "目前仅提供数据收集与展示，暂不支持数据分析。如有分析需求，可导出数据交给 AI，并说明你希望了解的问题或呈现的效果。",
+        "目前提供数据收集、展示及基础汇总。如需进一步分析，可导出数据交给 AI，并说明你希望了解的问题或呈现的效果。",
       trialFeedbackNotice:
         "也欢迎加入 QQ 群 437320340，分享你与 AI 的分析对话或结果，帮助我了解大家的实际需求，为后续开发提供参考。感谢你的支持！",
+      trialDisplaySettings: "显示设置",
+      trialMemberColumns: "成员列表显示字段",
+      trialDisplaySettingsHint:
+        "工作量和占比用于生活试炼；占比按个人工作量 ÷ 项目已知总工作量计算，总量为 0 时显示 —。汇总不随列开关隐藏，最多保留两位小数。设置仅保存在本地。",
+      trialDisplaySaveFailed: "设置未能保存，当前页面已生效；重新打开页面后可能恢复默认。",
+      trialOverview: "项目总体概览",
+      trialKnownCoverage: "{field}：已知 {count}/{total} 人，汇总仅含已知值。",
+      trialPartialShare: "工作量不完整，占比仅相对于已知总工作量。",
+      trialField_workShare: "占总百分比",
+      trialAggregate_level_total: "总等级",
+      trialAggregate_level_average: "平均等级",
+      trialAggregate_level_median: "中位数等级",
+      trialAggregate_workDone_total: "总工作量",
+      trialAggregate_workDone_average: "平均工作量",
+      trialAggregate_workDone_median: "中位数工作量",
       trialDisplayMode: "历史数据展示方式",
       trialByWeek: "按周查看",
       trialByProject: "按项目查看",
       trialByPlayer: "按玩家查看",
+      trialPlayerFind: "选择玩家",
+      trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
+      trialPlayerSearchLabel: "搜索历史玩家",
+      trialPlayerSearchPlaceholder: "输入玩家名字，支持部分匹配",
+      trialPlayerSearchButton: "搜索",
+      trialPlayerSearchClear: "清空",
+      trialPlayerSearchCount: "显示 {count} / {total} 位玩家",
+      trialPlayerSearchEmpty: "未找到匹配的玩家，请修改关键词或清空搜索。",
       trialChoosePlayer: "玩家",
       trialSelectPlayerPrompt: "选择玩家查看参试历史",
       trialNoNamedPlayers: "暂无已记录姓名的玩家",
@@ -3438,6 +3496,30 @@ window.MwiGuildCreditVersion = "1.2.25";
       trialProfileCombatLevel: "战斗等级",
       trialProfileSkills: "技能等级",
       trialProfileEquipment: "装备",
+      trialSlot_back: "背部",
+      trialSlot_head: "头部",
+      trialSlot_trinket: "饰品",
+      trialSlot_neck: "项链",
+      trialSlot_main_hand: "主手",
+      trialSlot_body: "身体",
+      trialSlot_off_hand: "副手",
+      trialSlot_earrings: "耳环",
+      trialSlot_hands: "手部",
+      trialSlot_legs: "腿部",
+      trialSlot_pouch: "收纳袋",
+      trialSlot_ring: "戒指",
+      trialSlot_feet: "脚部",
+      trialSlot_charm: "护符",
+      trialSlot_milking_tool: "挤奶",
+      trialSlot_foraging_tool: "采摘",
+      trialSlot_woodcutting_tool: "伐木",
+      trialSlot_cheesesmithing_tool: "奶酪锻造",
+      trialSlot_crafting_tool: "制作",
+      trialSlot_tailoring_tool: "缝纫",
+      trialSlot_cooking_tool: "烹饪",
+      trialSlot_brewing_tool: "冲泡",
+      trialSlot_alchemy_tool: "炼金",
+      trialSlot_enhancing_tool: "强化",
       trialProfileAbilities: "技能配置",
       trialProfileHouse: "房屋",
       trialProfileRaw: "完整资料数据",
@@ -3928,13 +4010,36 @@ window.MwiGuildCreditVersion = "1.2.25";
       trialHistory: "Trial history",
       trialGuide: "Help",
       trialDisplayNotice:
-        "This feature currently collects and displays data; it does not provide analysis. For analysis, export your data and share it with an AI, explaining the questions you want answered or the results you would like to see.",
+        "This feature collects and displays data with basic summaries. For further analysis, export your data and share it with an AI, explaining the questions you want answered or the results you would like to see.",
       trialFeedbackNotice:
         "You are also welcome to join QQ group 437320340 and share your AI conversations or results. This helps me understand what you need and plan future development. Thank you for your support!",
+      trialDisplaySettings: "Display settings",
+      trialMemberColumns: "Member table columns",
+      trialDisplaySettingsHint:
+        "Work and share apply to skilling trials. Share = member work ÷ known trial total; zero totals show —. Summaries remain visible and use up to two decimals. Settings stay on this device.",
+      trialDisplaySaveFailed: "Settings apply to this page but could not be saved. Reopening may restore defaults.",
+      trialOverview: "Trial overview",
+      trialKnownCoverage: "{field}: known for {count}/{total} members; summary uses known values only.",
+      trialPartialShare: "Work data is incomplete; shares use the known total only.",
+      trialField_workShare: "Share of total",
+      trialAggregate_level_total: "Total level",
+      trialAggregate_level_average: "Average level",
+      trialAggregate_level_median: "Median level",
+      trialAggregate_workDone_total: "Total work",
+      trialAggregate_workDone_average: "Average work",
+      trialAggregate_workDone_median: "Median work",
       trialDisplayMode: "History display mode",
       trialByWeek: "By week",
       trialByProject: "By trial",
       trialByPlayer: "By player",
+      trialPlayerFind: "Choose a player",
+      trialPlayerSwitch: "Current player: {name} · Change player",
+      trialPlayerSearchLabel: "Search historical players",
+      trialPlayerSearchPlaceholder: "Enter all or part of a player name",
+      trialPlayerSearchButton: "Search",
+      trialPlayerSearchClear: "Clear",
+      trialPlayerSearchCount: "Showing {count} of {total} players",
+      trialPlayerSearchEmpty: "No matching players. Try another name or clear the search.",
       trialChoosePlayer: "Player",
       trialSelectPlayerPrompt: "Select a player to view trial history",
       trialNoNamedPlayers: "No recorded player names yet",
@@ -4009,6 +4114,30 @@ window.MwiGuildCreditVersion = "1.2.25";
       trialProfileCombatLevel: "Combat level",
       trialProfileSkills: "Skill levels",
       trialProfileEquipment: "Equipment",
+      trialSlot_back: "Back",
+      trialSlot_head: "Head",
+      trialSlot_trinket: "Trinket",
+      trialSlot_neck: "Neck",
+      trialSlot_main_hand: "Main hand",
+      trialSlot_body: "Body",
+      trialSlot_off_hand: "Off hand",
+      trialSlot_earrings: "Earrings",
+      trialSlot_hands: "Hands",
+      trialSlot_legs: "Legs",
+      trialSlot_pouch: "Pouch",
+      trialSlot_ring: "Ring",
+      trialSlot_feet: "Feet",
+      trialSlot_charm: "Charm",
+      trialSlot_milking_tool: "Milking",
+      trialSlot_foraging_tool: "Foraging",
+      trialSlot_woodcutting_tool: "Woodcutting",
+      trialSlot_cheesesmithing_tool: "Cheesesmithing",
+      trialSlot_crafting_tool: "Crafting",
+      trialSlot_tailoring_tool: "Tailoring",
+      trialSlot_cooking_tool: "Cooking",
+      trialSlot_brewing_tool: "Brewing",
+      trialSlot_alchemy_tool: "Alchemy",
+      trialSlot_enhancing_tool: "Enhancing",
       trialProfileAbilities: "Abilities",
       trialProfileHouse: "House",
       trialProfileRaw: "Full profile data",
@@ -5834,6 +5963,15 @@ window.MwiGuildCreditVersion = "1.2.25";
     };
   }
 
+  function normalizeTrialDisplay(value) {
+    return Object.fromEntries(
+      Object.entries({ level: true, workDone: true, workShare: false }).map(([key, fallback]) => [
+        key,
+        typeof value?.[key] === "boolean" ? value[key] : fallback
+      ])
+    );
+  }
+
   function createPluginStorage(options) {
     const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
@@ -5851,6 +5989,27 @@ window.MwiGuildCreditVersion = "1.2.25";
 
     function trialHistoryPrefix() {
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function trialDisplayKey() {
+      return `${config.TRIAL_DISPLAY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}`;
+    }
+
+    function loadTrialDisplay() {
+      try {
+        return normalizeTrialDisplay(JSON.parse(storage.getItem(trialDisplayKey())));
+      } catch (_) {
+        return normalizeTrialDisplay(null);
+      }
+    }
+
+    function saveTrialDisplay(value) {
+      try {
+        storage.setItem(trialDisplayKey(), JSON.stringify(normalizeTrialDisplay(value)));
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     function loadTrialHistory() {
@@ -6331,6 +6490,8 @@ window.MwiGuildCreditVersion = "1.2.25";
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
+      loadTrialDisplay,
+      saveTrialDisplay,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,
@@ -6349,6 +6510,7 @@ window.MwiGuildCreditVersion = "1.2.25";
   }
 
   return {
+    normalizeTrialDisplay,
     normalizePanelView,
     normalizePanelOrder,
     normalizeGuildPointHistory,
@@ -8630,10 +8792,36 @@ window.MwiGuildCreditVersion = "1.2.25";
         #mwi-credit-optimizer .mwi-trial-raw{margin:6px 0;min-width:0}
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:4px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
+        #mwi-credit-optimizer .mwi-trial-display-settings{margin:8px 0 12px;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-display-settings summary{cursor:pointer;width:fit-content;color:var(--trial-accent);padding:4px 0}
+        #mwi-credit-optimizer .mwi-trial-display-settings fieldset{margin:6px 0 0;padding:8px 10px;border:1px solid var(--trial-line);min-width:0}
+        #mwi-credit-optimizer .mwi-trial-display-settings p{margin:6px 0 0;line-height:1.5}
+        #mwi-credit-optimizer .mwi-trial-display-options{display:flex;flex-wrap:wrap;gap:6px 20px}
+        #mwi-credit-optimizer .mwi-trial-display-options label{display:flex;align-items:center;gap:6px;min-height:28px;cursor:pointer;color:var(--trial-text)}
+        #mwi-credit-optimizer .mwi-trial-display-options input{accent-color:var(--trial-accent);width:16px;height:16px;margin:0}
+        #mwi-credit-optimizer .mwi-trial-overview{margin:6px 0 8px;font-size:12px;line-height:1.4}
+        #mwi-credit-optimizer .mwi-trial-overview dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px;margin:0;padding:4px 0}
+        #mwi-credit-optimizer .mwi-trial-overview dt{color:var(--trial-muted);font-weight:normal;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-overview dd{margin:2px 0 0;font-size:13px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-overview p{margin:2px 0 4px;color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-display-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0 0 8px}
         #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-player-picker{margin:4px 0 12px}
+        #mwi-credit-optimizer .mwi-trial-player-picker>summary{padding:6px 0;cursor:pointer;font-size:14px;color:var(--trial-accent);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-player-search{margin-top:10px;text-align:left}
+        #mwi-credit-optimizer .mwi-trial-player-search label{display:block;margin-bottom:6px}
+        #mwi-credit-optimizer .mwi-trial-player-search-bar{display:flex;gap:6px;flex-wrap:wrap;max-width:640px}
+        #mwi-credit-optimizer .mwi-trial-player-search-bar input{flex:1 1 200px;min-width:0;width:100%;min-height:36px;padding:6px 10px;border:1px solid var(--trial-line);border-radius:4px;background:var(--trial-field);color:var(--trial-text);font-size:14px;caret-color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-player-search-bar input::placeholder{color:var(--trial-muted);opacity:1}
+        #mwi-credit-optimizer .mwi-trial-player-search-actions{display:flex;gap:6px;flex:0 0 auto}
+        #mwi-credit-optimizer .mwi-trial-player-search-bar button{min-height:36px;padding:6px 12px;flex:0 0 auto}
+        #mwi-credit-optimizer .mwi-trial-player-search-bar button[type="submit"]{background:#34514e;color:#d5f7ed}
+        #mwi-credit-optimizer .mwi-trial-search-count{margin:10px 0 6px;text-align:left}
+        #mwi-credit-optimizer .mwi-trial-player-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,100%),1fr));overflow:visible;gap:6px;padding:2px}
+        #mwi-credit-optimizer .mwi-trial-player-results button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-width:0;min-height:36px;text-align:left;white-space:normal;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-player-results small{font-size:11px;font-weight:normal}
         #mwi-credit-optimizer .mwi-trial-project-icon{width:20px;height:20px;flex:0 0 20px}
         #mwi-credit-optimizer .mwi-trial-choices button:hover{background:var(--trial-surface);color:var(--trial-text)}
         #mwi-credit-optimizer .mwi-trial-choices button[aria-pressed="true"]{border-color:var(--trial-accent);background:#34514e;color:#d5f7ed}
@@ -8646,10 +8834,10 @@ window.MwiGuildCreditVersion = "1.2.25";
         #mwi-credit-optimizer .mwi-trial-scroll-buttons{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
         #mwi-credit-optimizer .mwi-trial-rail{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 0 12px}
         #mwi-credit-optimizer .mwi-trial-columns{display:grid;align-items:start;gap:12px}
-        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(240px,1fr))}
-        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,minmax(480px,1fr))}
-        #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:320px;justify-content:start}
-        #mwi-credit-optimizer .mwi-trial-timeline[data-kind="combat"]{grid-auto-columns:520px}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="skilling"]{grid-template-columns:repeat(4,minmax(var(--trial-week-width,240px),1fr))}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="combat"]{grid-template-columns:repeat(2,minmax(var(--trial-week-width,480px),1fr))}
+        #mwi-credit-optimizer .mwi-trial-timeline{grid-auto-flow:column;grid-auto-columns:var(--trial-column-width,320px);justify-content:start}
+        #mwi-credit-optimizer .mwi-trial-timeline[data-kind="combat"]{grid-auto-columns:var(--trial-column-width,520px)}
         #mwi-credit-optimizer .mwi-trial-column{min-width:0;border-top:1px solid var(--trial-line);padding-top:6px}
         #mwi-credit-optimizer .mwi-trial-column h4{margin:0 0 4px;font-size:14px;font-weight:650;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-record{min-width:0}
@@ -8660,17 +8848,29 @@ window.MwiGuildCreditVersion = "1.2.25";
         #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-heading-link:hover{background:transparent;text-decoration:underline;text-underline-offset:3px}
         #mwi-credit-optimizer .mwi-trial-player-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px}
         #mwi-credit-optimizer .mwi-trial-player-toolbar h3{margin:0;overflow-wrap:anywhere;font-size:16px}
-        #mwi-credit-optimizer .mwi-trial-player-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
+        #mwi-credit-optimizer .mwi-trial-player-layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:20px;align-items:start}
         #mwi-credit-optimizer .mwi-trial-player-profile,#mwi-credit-optimizer .mwi-trial-player-history{min-width:0}
         #mwi-credit-optimizer .mwi-trial-player-profile{padding-right:16px;border-right:1px solid var(--trial-line)}
         #mwi-credit-optimizer .mwi-trial-player-profile header{display:flex;align-items:center;justify-content:space-between;gap:8px}
         #mwi-credit-optimizer .mwi-trial-player-profile h3{margin:0 0 6px;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-player-profile h4{margin:16px 0 4px;font-size:14px;color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
-        #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid var(--trial-line)}
-        #mwi-credit-optimizer .mwi-trial-profile-facts dt{color:var(--trial-muted);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-profile-facts dt{display:flex;align-items:center;gap:6px;min-width:0;color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-facts dd{margin:0;max-width:20ch;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-profile-items{margin:4px 0;padding-left:18px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-icon{width:20px;height:20px;flex:0 0 20px}
+        #mwi-credit-optimizer .mwi-trial-equipment-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
+        #mwi-credit-optimizer .mwi-trial-equipment-slot{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1;border:1px solid #9da5df;border-radius:4px;background:#2c2c45;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-equipment-slot .mwi-trial-profile-icon{width:82%;height:82%}
+        #mwi-credit-optimizer .mwi-trial-equipment-empty{align-items:start;border-style:dashed;background:transparent;color:var(--trial-muted);font-size:12px;text-align:center;padding:2px}
+        #mwi-credit-optimizer .mwi-trial-equipment-level{position:absolute;left:2px;top:0;font-size:14px;line-height:1.3;color:#eee;font-variant-numeric:tabular-nums;text-shadow:1px 1px 1px #000,-1px -1px 1px #000;pointer-events:none}
+        #mwi-credit-optimizer .mwi-trial-equipment-level[data-tier="blue"]{color:#87c8eb}
+        #mwi-credit-optimizer .mwi-trial-equipment-level[data-tier="purple"]{color:#cb91fa}
+        #mwi-credit-optimizer .mwi-trial-equipment-level[data-tier="gold"]{color:#ffac00}
+        #mwi-credit-optimizer .mwi-trial-slot-label{padding:3px;font-size:12px;text-align:center}
+        #mwi-credit-optimizer .mwi-trial-equipment-extra{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
+        #mwi-credit-optimizer .mwi-trial-profile-abilities{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:12px}
+        #mwi-credit-optimizer .mwi-trial-ability-slot{border-color:transparent}
         @container mwi-trials (max-width:760px){
           #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
           #mwi-credit-optimizer .mwi-trial-player-profile{padding:0 0 12px;border-right:0;border-bottom:1px solid var(--trial-line)}
@@ -9892,6 +10092,52 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   root.MwiGuildTrialPlayerView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
+  // Positions mirror the game's EquipmentLocationToSlotMap (rows 5–6 separate tools).
+  const EQUIPMENT_SLOTS = [
+    ["back", 1, 1],
+    ["head", 1, 2],
+    ["trinket", 1, 3],
+    ["neck", 1, 5],
+    ["main_hand", 2, 1],
+    ["body", 2, 2],
+    ["off_hand", 2, 3],
+    ["earrings", 2, 5],
+    ["hands", 3, 1],
+    ["legs", 3, 2],
+    ["pouch", 3, 3],
+    ["ring", 3, 5],
+    ["feet", 4, 2],
+    ["charm", 4, 5],
+    ["milking_tool", 7, 1],
+    ["foraging_tool", 7, 2],
+    ["woodcutting_tool", 7, 3],
+    ["cheesesmithing_tool", 7, 4],
+    ["crafting_tool", 7, 5],
+    ["tailoring_tool", 8, 1],
+    ["cooking_tool", 8, 2],
+    ["brewing_tool", 8, 3],
+    ["alchemy_tool", 8, 4],
+    ["enhancing_tool", 8, 5]
+  ];
+  function equipmentLayout(wearableItemMap, itemDetails = {}) {
+    const slots = EQUIPMENT_SLOTS.map(([key, row, column]) => ({ key, row, column, item: null }));
+    const extras = [];
+    for (const [key, item] of Object.entries(wearableItemMap || {})) {
+      if (!item?.itemHrid) continue;
+      const location =
+        item.itemLocationHrid ||
+        (key.startsWith("/item_locations/") ? key : null) ||
+        itemDetails[item.itemHrid]?.equipmentDetail?.type ||
+        key;
+      let slotKey = String(location).split("/").pop();
+      if (slotKey === "two_hand") slotKey = "main_hand";
+      const slot = slots.find((slot) => slot.key === slotKey);
+      if (slot && !slot.item) slot.item = item;
+      else extras.push(item);
+    }
+    return { slots, extras };
+  }
+
   function createRenderer({
     t,
     escapeHtml: e,
@@ -9899,6 +10145,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     trialName,
     weekLabel,
     projectIcon,
+    profileIcon,
     getBridge,
     resolveItemName,
     renderRecord,
@@ -9917,7 +10164,46 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const skill = t(`trialSkill_${key}`);
       return skill !== `trialSkill_${key}` ? skill : key;
     };
-    const metric = (name, value) => `<div><dt>${e(name)}</dt><dd>${e(value)}</dd></div>`;
+    const metric = (name, value, icon = "") => `<div><dt>${icon}<span>${e(name)}</span></dt><dd>${e(value)}</dd></div>`;
+    function equipmentTile(item, attributes = "") {
+      const name = resolveItemName(
+        item.itemHrid,
+        getBridge()?.itemDetails?.[item.itemHrid]?.name || suffix(item.itemHrid)
+      );
+      const level = item.enhancementLevel > 0 ? `+${item.enhancementLevel}` : "";
+      const description = `${name}${level ? ` ${level}` : ""}`;
+      const icon = profileIcon("item", item.itemHrid);
+      const tier = item.enhancementLevel >= 11 ? "gold" : item.enhancementLevel >= 8 ? "purple" : "blue";
+      return `<div class="mwi-trial-equipment-slot" ${attributes} tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${icon || `<span class="mwi-trial-slot-label">${e(name)}</span>`}${level ? `<span class="mwi-trial-equipment-level" data-tier="${tier}">${e(level)}</span>` : ""}</div>`;
+    }
+    function equipmentMarkup(profile) {
+      if (!profile.wearableItemMap) return "";
+      const { slots, extras } = equipmentLayout(profile.wearableItemMap, getBridge()?.itemDetails);
+      let html = `<h4>${e(t("trialProfileEquipment"))}</h4><div class="mwi-trial-equipment-grid">${slots
+        .map(({ key, row, column, item }) => {
+          const attributes = `data-equipment-slot="${key}" style="grid-row:${row};grid-column:${column}"`;
+          return item
+            ? equipmentTile(item, attributes)
+            : `<div class="mwi-trial-equipment-slot mwi-trial-equipment-empty" ${attributes}><span>${e(t(`trialSlot_${key}`))}</span></div>`;
+        })
+        .join("")}</div>`;
+      if (extras.length)
+        html += `<div class="mwi-trial-equipment-extra">${extras.map((item) => equipmentTile(item)).join("")}</div>`;
+      return html;
+    }
+    function abilitiesMarkup(profile) {
+      const abilities = entries(profile.equippedAbilities)
+        .filter((item) => item?.abilityHrid)
+        .sort((a, b) => (a.slotNumber ?? 0) - (b.slotNumber ?? 0));
+      if (!abilities.length) return "";
+      return `<div class="mwi-trial-profile-abilities" aria-label="${e(t("trialProfileAbilities"))}">${abilities
+        .map((item) => {
+          const name = label(item.abilityHrid),
+            level = `Lv.${number(item.level)}`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-ability-slot" tabindex="0" role="img" aria-label="${e(`${name} ${level}`)}" title="${e(`${name} ${level}`)}">${profileIcon("ability", item.abilityHrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+        })
+        .join("")}</div>`;
+    }
     function profileMarkup(state) {
       if (state.status !== "ready")
         return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
@@ -9938,15 +10224,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (skills.length)
         html += `<h4>${e(t("trialProfileSkills"))}</h4><dl class="mwi-trial-profile-facts">${skills
           .filter((skill) => suffix(skill.skillHrid) !== "total_level")
-          .map((skill) => metric(label(skill.skillHrid), number(skill.level)))
+          .map((skill) => metric(label(skill.skillHrid), number(skill.level), profileIcon("skill", skill.skillHrid)))
           .join("")}</dl>`;
-      const equipment = entries(profile.wearableItemMap).filter((item) => item?.itemHrid);
-      if (equipment.length)
-        html += `<h4>${e(t("trialProfileEquipment"))}</h4><ul class="mwi-trial-profile-items">${equipment.map((item) => `<li>${e(resolveItemName(item.itemHrid, getBridge()?.itemDetails?.[item.itemHrid]?.name || suffix(item.itemHrid)))}${item.enhancementLevel ? ` +${e(item.enhancementLevel)}` : ""}</li>`).join("")}</ul>`;
-      for (const [field, heading, hrid] of [
-        ["equippedAbilities", "trialProfileAbilities", "abilityHrid"],
-        ["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]
-      ]) {
+      html += equipmentMarkup(profile) + abilitiesMarkup(profile);
+      for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
         if (values.length)
           html += `<h4>${e(t(heading))}</h4><dl class="mwi-trial-profile-facts">${values.map((item) => metric(label(item[hrid]), number(item.level))).join("")}</dl>`;
@@ -9989,7 +10270,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     return { render };
   }
-  return { createRenderer };
+  return { createRenderer, equipmentLayout };
 });
 
 
@@ -10054,6 +10335,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let importBusy = false;
     let importRevision = 0;
     let guideOpen = false;
+    let displaySettingsOpen = false;
+    let displaySaveFailed = false;
+    let displaySettings = pluginStorage.loadTrialDisplay();
     const unsaved = new Map();
     const spriteBases = {};
     let spriteLoadPromise = null;
@@ -10066,19 +10350,42 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
+    let playerSearch = "";
+    let playerPickerOpen = true;
+    let playerSearchComposing = false;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
       const spec = projectIconSpec(record, detail);
-      if (!spec) return "";
-      let base = spriteBases[spec.sprite] || domApi.findSpriteBaseHref(document, spec.sprite);
-      if (base) spriteBases[spec.sprite] = base;
+      return spec ? gameIcon(spec.sprite, spec.symbol, "mwi-trial-project-icon") : "";
+    }
+
+    function profileIcon(kind, hrid) {
+      return gameIcon(
+        kind === "skill" ? "skills_sprite" : kind === "ability" ? "abilities_sprite" : "items_sprite",
+        String(hrid || "")
+          .split("/")
+          .pop(),
+        "mwi-trial-profile-icon"
+      );
+    }
+
+    function gameIcon(sprite, symbol, className) {
+      if (!/^[a-z0-9_]+$/.test(symbol || "")) return "";
+      let base = spriteBases[sprite] || domApi.findSpriteBaseHref(document, sprite);
+      if (base) spriteBases[sprite] = base;
       else if (!spriteLoadPromise && pageWindow.fetch && pageWindow.location?.origin) {
         spriteLoadPromise = pageWindow
           .fetch(new URL("/asset-manifest.json", pageWindow.location.origin).href, { cache: "force-cache" })
           .then((response) => (response.ok ? response.json() : null))
           .then((manifest) => {
-            for (const sprite of ["skills_sprite", "combat_monsters_sprite", "misc_sprite"]) {
+            for (const sprite of [
+              "skills_sprite",
+              "items_sprite",
+              "abilities_sprite",
+              "combat_monsters_sprite",
+              "misc_sprite"
+            ]) {
               const reference = domApi.spriteBaseFromAssetManifest(manifest, sprite);
               if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
@@ -10089,7 +10396,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           .catch(() => {});
       }
       return base
-        ? `<svg class="mwi-trial-project-icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${spec.symbol}`)}" width="100%" height="100%"></use></svg>`
+        ? `<svg class="${className}" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${symbol}`)}" width="100%" height="100%"></use></svg>`
         : "";
     }
     const trialName = (record) => {
@@ -10242,7 +10549,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     const tableSorts = new Map();
     function getSort(key, kind) {
-      return tableSorts.get(key) || (kind === "skilling" ? { field: "workDone", direction: "desc" } : null);
+      const fields = visibleFields(kind);
+      const saved = tableSorts.get(key);
+      if (saved && (saved.field === "member" || fields.includes(saved.field))) return saved;
+      if (kind === "combat") return null;
+      return {
+        field: fields.includes("workDone") ? "workDone" : fields.includes("workShare") ? "workShare" : "member",
+        direction: fields.some((field) => field === "workDone" || field === "workShare") ? "desc" : "asc"
+      };
     }
     function renderSortHeader(key, field, sort) {
       const label = t(field === "member" ? "trialMember" : `trialField_${field}`);
@@ -10259,6 +10573,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       trialName,
       weekLabel,
       projectIcon,
+      profileIcon,
       getBridge,
       resolveItemName,
       renderRecord,
@@ -10287,6 +10602,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function leavePlayer() {
       profileRevision += 1;
       selectedMember = null;
+      playerPickerOpen = true;
     }
 
     function renderMember(record, row) {
@@ -10334,22 +10650,64 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
     }
 
-    function renderRecord(record, showIdentity) {
-      const fields =
-        record.kind === "combat"
+    function visibleFields(kind) {
+      return (
+        kind === "combat"
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
-          : ["level", "workDone"];
+          : ["level", "workDone", "workShare"]
+      ).filter((field) => displaySettings[field] !== false);
+    }
+
+    function renderDisplaySettings() {
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+    }
+
+    function summaryNumber(value) {
+      return value === null || !Number.isFinite(value) ? "—" : String(Number(value.toFixed(2)));
+    }
+
+    function renderOverview(record, summaries) {
+      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${Object.entries(
+        summaries
+      )
+        .map(
+          ([field, stats]) =>
+            `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
+        )
+        .join(
+          ""
+        )}${displaySettings.workShare && record.kind === "skilling" && summaries.workDone.missing ? `<p>${escapeHtml(t("trialPartialShare"))}</p>` : ""}</div>`;
+    }
+
+    function renderRecord(record, showIdentity) {
+      const fields = visibleFields(record.kind);
+      const summaries = Object.fromEntries(
+        (record.kind === "combat" ? ["level"] : ["level", "workDone"]).map((field) => [
+          field,
+          trialHistoryApi.summarizeMetric(record, field)
+        ])
+      );
+      const cellValue = (row, field) => {
+        if (field === "workShare") {
+          const share = trialHistoryApi.metricShare(record, row, "workDone", summaries.workDone);
+          return share === null ? "—" : `${share.toFixed(2)}%`;
+        }
+        return number(
+          field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)
+        );
+      };
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       const sort = getSort(record.key, record.kind);
       // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        ${renderOverview(record, summaries)}
         <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
           .displayRows(record, sort)
           .map(
             (row) =>
-              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -10361,7 +10719,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+      const count = visibleFields(kind).length;
+      const columnWidth = kind === "combat" ? 160 + count * 90 : 160 + count * 80;
+      const weekWidth = Math.max(180, columnWidth);
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}" style="--trial-column-width:${columnWidth}px;--trial-week-width:${weekWidth}px">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {
@@ -10382,8 +10743,31 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
+    function renderPlayerResults(members, current) {
+      const results = trialHistoryApi.searchHistoryMembers(members, playerSearch);
+      const names = new Map();
+      for (const member of members) names.set(member.name, (names.get(member.name) || 0) + 1);
+      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(member.name)}</span>${names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
+    }
+
+    function renderPlayerPicker(members, current) {
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+    }
+
+    function filterPlayerResults(host) {
+      const input = host.querySelector("[data-trial-player-search]");
+      if (!input) return;
+      playerSearch = input.value;
+      const members = trialHistoryApi.historyMembers(records);
+      const current =
+        host.querySelector('[data-trial-choice="player"][aria-pressed="true"]')?.value ||
+        members.find((member) => selectedMember && trialHistoryApi.sameMember(member, selectedMember))?.key ||
+        "";
+      host.querySelector("#mwi-trial-player-results").innerHTML = renderPlayerResults(members, current);
+    }
+
     function revealChoice(button) {
-      if (!button) return;
+      if (!button || button.dataset.trialChoice === "player") return;
       const rail = button.parentElement;
       const bounds = rail.getBoundingClientRect();
       const item = button.getBoundingClientRect();
@@ -10395,6 +10779,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
+      const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
       displayedMembers = [];
       highlightedMember = null;
       hoveredMemberCell = null;
@@ -10415,7 +10801,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport();
+      let markup = renderImport() + renderDisplaySettings();
       markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
       if (mode === "player") {
         const members = trialHistoryApi.historyMembers(records);
@@ -10426,12 +10812,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup +=
-          renderChoices(
-            "player",
-            members.map((member) => ({ key: member.key, label: member.name })),
-            current
-          ) + "</div>";
+        markup += renderPlayerPicker(members, current) + "</div>";
         host.innerHTML =
           markup +
           (selectedMember
@@ -10450,6 +10831,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
         resetScroll = false;
         updateScrollButtons(host);
+        if (searchSelection) {
+          const input = host.querySelector("[data-trial-player-search]");
+          input?.focus({ preventScroll: true });
+          input?.setSelectionRange(...searchSelection);
+        }
         return;
       }
       if (!records.length) {
@@ -10554,14 +10940,44 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         "toggle",
         (event) => {
           if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
+          if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
+          if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
+            playerPickerOpen = event.target.open;
         },
         true
       );
       host.addEventListener("change", (event) => {
+        const field = event.target.dataset.trialDisplay;
+        if (["level", "workDone", "workShare"].includes(field)) {
+          displaySettings = { ...displaySettings, [field]: event.target.checked };
+          displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
+          displaySettingsOpen = true;
+          refresh(panel);
+          host.querySelector(`[data-trial-display="${field}"]`)?.focus({ preventScroll: true });
+          return;
+        }
         if (event.target.dataset.role === "trial-import-file") {
           void readImport(event.target.files?.[0], panel);
           return;
         }
+      });
+      host.addEventListener("compositionstart", (event) => {
+        if (event.target.matches("[data-trial-player-search]")) playerSearchComposing = true;
+      });
+      host.addEventListener("compositionend", (event) => {
+        if (event.target.matches("[data-trial-player-search]")) {
+          playerSearchComposing = false;
+          filterPlayerResults(host);
+        }
+      });
+      host.addEventListener("input", (event) => {
+        if (event.target.matches("[data-trial-player-search]") && !event.isComposing && !playerSearchComposing)
+          filterPlayerResults(host);
+      });
+      host.addEventListener("submit", (event) => {
+        if (!event.target.matches("[data-trial-player-search-form]")) return;
+        event.preventDefault();
+        if (!playerSearchComposing) filterPlayerResults(host);
       });
       host.addEventListener("keydown", (event) => {
         const button = event.target.closest("[data-trial-choice]");
@@ -10575,10 +10991,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             : event.key === "End"
               ? buttons.length - 1
               : Math.max(0, Math.min(buttons.length - 1, current + (event.key === "ArrowRight" ? 1 : -1)));
-        buttons[index].click();
+        if (button.dataset.trialChoice === "player") buttons[index].focus();
+        else buttons[index].click();
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-player-search-clear]")) {
+          const input = host.querySelector("[data-trial-player-search]");
+          input.value = "";
+          filterPlayerResults(host);
+          input.focus();
+          return;
+        }
         const sortButton = event.target.closest("[data-trial-sort]");
         if (sortButton) {
           const { trialSort: field, trialSortKey: key, trialSortNext: direction } = sortButton.dataset;
@@ -10602,6 +11026,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               name: profile.dataset.trialProfile
             };
           selectedMember = JSON.parse(profile.dataset.trialIdentity);
+          playerPickerOpen = false;
           resetScroll = true;
           mode = "player";
           readPlayerProfile(panel);
@@ -10655,7 +11080,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             const member = trialHistoryApi.historyMembers(records).find((entry) => entry.key === choice.value);
             if (!member) return;
             selectedMember = { id: member.id, name: member.name };
+            playerPickerOpen = false;
             readPlayerProfile(panel);
+            host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
+            return;
           } else {
             if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
             else selectedProject = choice.value;

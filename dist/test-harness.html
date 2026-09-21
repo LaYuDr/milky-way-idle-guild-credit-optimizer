@@ -319,6 +319,9 @@
         })
       );
     }
+    if (searchParams.has("trialHistoryAudit") && searchParams.get("resetState") === "1") {
+      localStorage.removeItem(`mwi-guild-trial-display-v1:mwi-guild-building-planner-v1:${location.hostname}:default`);
+    }
     // Feature audits explicitly opt in; normal startup keeps beta tabs off by default.
     if (
       searchParams.get("resetState") === "1" &&
@@ -3245,6 +3248,8 @@
       const existingSocket = { send: (frame) => profileFrames.push(JSON.parse(frame)) };
       const gameRoot = document.createElement("div");
       gameRoot.id = "root";
+      gameRoot.innerHTML =
+        '<svg hidden aria-hidden="true"><use href="/assets/skills_sprite.svg#milking"></use><use href="/assets/abilities_sprite.svg#ice_spear"></use><use href="/assets/items_sprite.svg#holy_brush"></use></svg>';
       let deferProfile = false;
       const profileReplies = [];
       const profileController = {
@@ -3266,9 +3271,31 @@
                 combatLevel: 97.25,
                 characterSkills: [
                   { skillHrid: "/skills/milking", level: 143 },
+                  { skillHrid: "/skills/enhancing", level: 138 },
+                  { skillHrid: "/skills/magic", level: 98 },
                   { skillHrid: "/skills/total_level", level: 1800 }
                 ],
-                wearableItemMap: { weapon: { itemHrid: "/items/milking_brush", enhancementLevel: 8 } }
+                wearableItemMap: {
+                  milkingTool: {
+                    itemHrid: "/items/holy_brush",
+                    itemLocationHrid: "/item_locations/milking_tool",
+                    enhancementLevel: 8
+                  },
+                  hands: {
+                    itemHrid: "/items/enchanted_gloves",
+                    itemLocationHrid: "/item_locations/hands",
+                    enhancementLevel: 5
+                  },
+                  back: {
+                    itemHrid: "/items/artificer_cape",
+                    itemLocationHrid: "/item_locations/back",
+                    enhancementLevel: 0
+                  }
+                },
+                equippedAbilities: [
+                  { abilityHrid: "/abilities/puncture", level: 40, slotNumber: 2 },
+                  { abilityHrid: "/abilities/ice_spear", level: 5, slotNumber: 1 }
+                ]
               },
               sharableGuildProfile: null
             });
@@ -3341,6 +3368,46 @@
       checks.playerChoicesUnique = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
       checks.playerControlsTwoRows = controlsStacked();
       checks.playerChoicesEscaped = !host.querySelector('[data-role="trial-player"] b');
+      const searchPlayerInput = () => host.querySelector("[data-trial-player-search]");
+      const searchPlayers = (value) => {
+        searchPlayerInput().value = value;
+        searchPlayerInput().dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const framesBeforeSearch = profileFrames.length;
+      searchPlayers("  aLPHa  ");
+      checks.playerSearchPartialCaseInsensitive =
+        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
+        host.querySelector('[data-trial-choice="player"]').textContent.includes("Alpha");
+      const stableSearchInput = searchPlayerInput();
+      stableSearchInput.focus();
+      searchPlayers("长名字");
+      checks.playerSearchKeepsInputFocus =
+        searchPlayerInput() === stableSearchInput && document.activeElement === stableSearchInput;
+      searchPlayers("不存在的名字");
+      checks.playerSearchEmptyState =
+        host.querySelectorAll('[data-trial-choice="player"]').length === 0 &&
+        Boolean(host.querySelector("#mwi-trial-player-results .mwi-trial-empty"));
+      searchPlayers("<b>");
+      checks.playerSearchEscapesMarkup =
+        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
+        !host.querySelector('[data-role="trial-player"] b');
+      host.querySelector("[data-trial-player-search-clear]").click();
+      checks.playerSearchClear =
+        searchPlayerInput().value === "" && host.querySelectorAll('[data-trial-choice="player"]').length === 2;
+      searchPlayerInput().dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+      searchPlayers("长名字");
+      checks.playerSearchDefersComposition = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
+      searchPlayerInput().dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      checks.playerSearchCompositionResult = host.querySelectorAll('[data-trial-choice="player"]').length === 1;
+      searchPlayerInput().value = "<b>";
+      const submit = new Event("submit", { bubbles: true, cancelable: true });
+      host.querySelector("[data-trial-player-search-form]").dispatchEvent(submit);
+      checks.playerSearchSubmit =
+        submit.defaultPrevented && host.querySelector('[data-trial-choice="player"]').textContent.includes("<b>");
+      checks.playerSearchDoesNotQueryOrSelect =
+        profileFrames.length === framesBeforeSearch && !host.querySelector("[data-trial-player-title]");
+      host.querySelector("[data-trial-player-search-clear]").click();
+
       host.querySelector('[data-trial-mode="project"]').click();
       checks.projectControlsTwoRows = controlsStacked();
       host.querySelector('[data-trial-mode="week"]').click();
@@ -3352,6 +3419,40 @@
         profileFrames[0].viewProfileData.characterName === members[101].name &&
         !nativeProfile.open &&
         host.querySelector("[data-trial-profile-content]").textContent.includes("1800");
+      const skillIcons = [...host.querySelectorAll(".mwi-trial-profile-facts .mwi-trial-profile-icon use")];
+      checks.profileNativeSkillIcons =
+        skillIcons.map((el) => el.getAttribute("href").split("#")[1]).join(",") === "milking,enhancing,magic" &&
+        skillIcons.every((el) => el.getAttribute("href").includes("skills_sprite"));
+      const equipmentItems = [
+        ...host.querySelectorAll(".mwi-trial-equipment-grid [data-equipment-slot]:not(.mwi-trial-equipment-empty)")
+      ];
+      checks.profileNativeEquipmentIcons =
+        equipmentItems.map((el) => el.querySelector("use")?.getAttribute("href").split("#")[1]).join(",") ===
+          "artificer_cape,enchanted_gloves,holy_brush" &&
+        equipmentItems.every((el) => el.querySelector("use").getAttribute("href").includes("items_sprite"));
+      checks.profileEnhancementPreserved =
+        host.querySelector('[data-equipment-slot="milking_tool"]').textContent.includes("+8") &&
+        host.querySelector('[data-equipment-slot="hands"]').textContent.includes("+5") &&
+        !host.querySelector('[data-equipment-slot="back"]').textContent.includes("+0");
+      checks.profileNativeSlots =
+        host.querySelectorAll("[data-equipment-slot]").length === 24 &&
+        host.querySelectorAll(".mwi-trial-equipment-empty").length === 21 &&
+        host.querySelector('[data-equipment-slot="milking_tool"]').style.gridRow === "7" &&
+        host.querySelector('[data-equipment-slot="neck"]').style.gridColumn === "5";
+      checks.profileAbilitySlots =
+        [...host.querySelectorAll(".mwi-trial-profile-abilities use")]
+          .map((el) => el.getAttribute("href").split("#")[1])
+          .join(",") === "ice_spear,puncture" &&
+        host.querySelector(".mwi-trial-profile-abilities").textContent.includes("Lv.40");
+      checks.profileEquipmentNamesAccessible = equipmentItems.every(
+        (el) =>
+          el.getAttribute("title") && el.getAttribute("aria-label") === el.getAttribute("title") && el.tabIndex === 0
+      );
+      checks.profileSkillLevelsPreserved =
+        skillIcons.map((el) => el.closest("dt").nextElementSibling.textContent).join(",") === "143,138,98";
+      checks.profileIconsDecorative = [...host.querySelectorAll(".mwi-trial-profile-icon")].every(
+        (el) => el.getAttribute("aria-hidden") === "true"
+      );
       checks.playerAllProjects = host.querySelectorAll("[data-trial-selected-member]").length === 6;
       checks.playerIncludesOtherNames = host
         .querySelector(".mwi-trial-player-history")
@@ -3643,11 +3744,18 @@
         host.querySelector('[data-trial-mode="player"]').getAttribute("aria-pressed") === "true";
       checks.playerChoiceActive =
         host.querySelector('[data-trial-choice="player"][aria-pressed="true"]').value === JSON.stringify(["id", "101"]);
+      checks.playerPickerCollapsesAfterSelection =
+        !host.querySelector(".mwi-trial-player-picker").open &&
+        document.activeElement === host.querySelector("[data-trial-player-title]");
+      host.querySelector(".mwi-trial-player-picker").open = true;
+      host.querySelector(".mwi-trial-player-picker").dispatchEvent(new Event("toggle"));
+      const framesBeforeKeyboard = profileFrames.length;
       host
         .querySelector('[data-trial-choice="player"][aria-pressed="true"]')
         .dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
       checks.playerKeyboardSelection =
-        document.activeElement === host.querySelector('[data-trial-choice="player"][aria-pressed="true"]');
+        document.activeElement === host.querySelector('[data-trial-choice="player"]') &&
+        profileFrames.length === framesBeforeKeyboard;
       choose("trial-player", JSON.stringify(["id", "102"]));
       checks.playerChoiceSwitchesHistory =
         host.querySelector("[data-trial-player-title]").textContent.includes(members[102].name) &&
@@ -3655,6 +3763,62 @@
       host.querySelector('[data-trial-mode="week"]').click();
       checks.playerModeReturnsToWeek =
         !host.querySelector("[data-trial-player-title]") && host.querySelectorAll("[data-trial-record]").length === 6;
+      const displayFrames = profileFrames.length;
+      const displayTable = () =>
+        host.querySelector('.mwi-trial-columns[data-kind="skilling"] [data-role="trial-stats-table"]');
+      const setDisplay = (field, checked) => {
+        const input = host.querySelector(`[data-trial-display="${field}"]`);
+        input.checked = checked;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const milkOverview = () =>
+        displayTable().closest("[data-trial-record]").querySelector('[data-trial-overview="workDone"]');
+      checks.workOverviewTotal =
+        milkOverview().querySelector('[data-trial-aggregate="total"]').textContent === "123456789.13";
+      checks.workOverviewAverage =
+        milkOverview().querySelector('[data-trial-aggregate="average"]').textContent === "61728394.56";
+      checks.workOverviewMedian =
+        milkOverview().querySelector('[data-trial-aggregate="median"]').textContent === "61728394.56";
+      checks.overviewBeforeTable =
+        milkOverview().getBoundingClientRect().bottom <= displayTable().getBoundingClientRect().top;
+      for (const view of ["week", "project", "player"]) {
+        host.querySelector(`[data-trial-mode="${view}"]`).click();
+        if (view === "player") choose("trial-player", JSON.stringify(["id", "101"]));
+        let nameOnlyWidth = 0;
+        for (let mask = 0; mask < 8; mask++) {
+          ["level", "workDone", "workShare"].forEach((field, bit) => setDisplay(field, Boolean(mask & (1 << bit))));
+          const current = displayTable();
+          const columnWidth = current.closest(".mwi-trial-column").getBoundingClientRect().width;
+          if (mask === 0) nameOnlyWidth = columnWidth;
+          if (mask === 7)
+            checks[`displayAdaptiveWidth_${view}`] =
+              columnWidth > nameOnlyWidth && current.scrollWidth <= current.parentElement.clientWidth + 1;
+          const fields = [...current.querySelectorAll("thead [data-trial-sort]")].map((el) => el.dataset.trialSort);
+          const expected = ["member", ...["level", "workDone", "workShare"].filter((field, bit) => mask & (1 << bit))];
+          checks[`displayColumns_${view}_${mask}`] =
+            fields.join() === expected.join() &&
+            current.querySelectorAll("tbody tr").length === 2 &&
+            panel.scrollWidth <= panel.clientWidth;
+          if (mask === 4) {
+            const shares = [...current.querySelectorAll('[data-trial-field="workShare"]')].map((el) => el.textContent);
+            checks[`displayShares_${view}`] = [...shares].sort().join() === "0.00%,100.00%";
+            current.querySelector('[data-trial-sort="workShare"]').click();
+            checks[`shareSort_${view}`] =
+              [...displayTable().querySelectorAll('[data-trial-field="workShare"]')]
+                .map((el) => el.textContent)
+                .join() === [...shares].reverse().join();
+          }
+        }
+      }
+      checks.displaySettingsRemainOpen = host.querySelector(".mwi-trial-display-settings").open;
+      checks.displayNoProfileQueries = profileFrames.length === displayFrames;
+      const savedDisplay = JSON.parse(
+        localStorage.getItem(`mwi-guild-trial-display-v1:mwi-guild-building-planner-v1:${location.hostname}:default`)
+      );
+      checks.displaySettingsPersist =
+        savedDisplay.level === true && savedDisplay.workDone === true && savedDisplay.workShare === true;
+      setDisplay("workShare", false);
+      host.querySelector('[data-trial-mode="week"]').click();
       checks.viewReadOnly = JSON.stringify(saved()) === before;
       // Longer official-stat fixtures verify full rows without nested vertical scrolling.
       const extraMembers = Object.fromEntries(
@@ -3692,6 +3856,22 @@
         host.querySelector('[data-trial-group="player-skilling"]').getBoundingClientRect().bottom <=
         host.querySelector('[data-trial-group="player-combat"]').getBoundingClientRect().top;
       checks.playerLongStillHighlighted = host.querySelectorAll("[data-trial-selected-member]").length === 8;
+      host.querySelector(".mwi-trial-player-picker").open = true;
+      host.querySelector(".mwi-trial-player-picker").dispatchEvent(new Event("toggle"));
+      const playerResults = host.querySelector('[data-role="trial-player"]');
+      const playerButtons = [...playerResults.querySelectorAll("button")];
+      checks.playerPickerFullGrid =
+        playerButtons.length === 60 &&
+        playerResults.scrollWidth <= playerResults.clientWidth + 1 &&
+        new Set(playerButtons.map((button) => Math.round(button.getBoundingClientRect().top))).size > 1;
+      searchPlayers("完整列表成员 58");
+      checks.playerSearchFindsLateMember =
+        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
+        host.querySelector('[data-trial-choice="player"]').textContent.includes("58");
+      host.querySelector("[data-trial-player-search-clear]").click();
+      host.querySelector(".mwi-trial-player-picker").open = false;
+      host.querySelector(".mwi-trial-player-picker").dispatchEvent(new Event("toggle"));
+
       checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
       const rootOverflow = Math.max(0, panel.scrollWidth - panel.clientWidth);
       if (!searchParams.has("keepLongHistory")) {

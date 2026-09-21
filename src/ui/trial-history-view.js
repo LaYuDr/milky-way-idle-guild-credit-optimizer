@@ -58,6 +58,9 @@
     let importBusy = false;
     let importRevision = 0;
     let guideOpen = false;
+    let displaySettingsOpen = false;
+    let displaySaveFailed = false;
+    let displaySettings = pluginStorage.loadTrialDisplay();
     const unsaved = new Map();
     const spriteBases = {};
     let spriteLoadPromise = null;
@@ -70,19 +73,42 @@
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
+    let playerSearch = "";
+    let playerPickerOpen = true;
+    let playerSearchComposing = false;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
       const spec = projectIconSpec(record, detail);
-      if (!spec) return "";
-      let base = spriteBases[spec.sprite] || domApi.findSpriteBaseHref(document, spec.sprite);
-      if (base) spriteBases[spec.sprite] = base;
+      return spec ? gameIcon(spec.sprite, spec.symbol, "mwi-trial-project-icon") : "";
+    }
+
+    function profileIcon(kind, hrid) {
+      return gameIcon(
+        kind === "skill" ? "skills_sprite" : kind === "ability" ? "abilities_sprite" : "items_sprite",
+        String(hrid || "")
+          .split("/")
+          .pop(),
+        "mwi-trial-profile-icon"
+      );
+    }
+
+    function gameIcon(sprite, symbol, className) {
+      if (!/^[a-z0-9_]+$/.test(symbol || "")) return "";
+      let base = spriteBases[sprite] || domApi.findSpriteBaseHref(document, sprite);
+      if (base) spriteBases[sprite] = base;
       else if (!spriteLoadPromise && pageWindow.fetch && pageWindow.location?.origin) {
         spriteLoadPromise = pageWindow
           .fetch(new URL("/asset-manifest.json", pageWindow.location.origin).href, { cache: "force-cache" })
           .then((response) => (response.ok ? response.json() : null))
           .then((manifest) => {
-            for (const sprite of ["skills_sprite", "combat_monsters_sprite", "misc_sprite"]) {
+            for (const sprite of [
+              "skills_sprite",
+              "items_sprite",
+              "abilities_sprite",
+              "combat_monsters_sprite",
+              "misc_sprite"
+            ]) {
               const reference = domApi.spriteBaseFromAssetManifest(manifest, sprite);
               if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
@@ -93,7 +119,7 @@
           .catch(() => {});
       }
       return base
-        ? `<svg class="mwi-trial-project-icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${spec.symbol}`)}" width="100%" height="100%"></use></svg>`
+        ? `<svg class="${className}" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${symbol}`)}" width="100%" height="100%"></use></svg>`
         : "";
     }
     const trialName = (record) => {
@@ -246,7 +272,14 @@
 
     const tableSorts = new Map();
     function getSort(key, kind) {
-      return tableSorts.get(key) || (kind === "skilling" ? { field: "workDone", direction: "desc" } : null);
+      const fields = visibleFields(kind);
+      const saved = tableSorts.get(key);
+      if (saved && (saved.field === "member" || fields.includes(saved.field))) return saved;
+      if (kind === "combat") return null;
+      return {
+        field: fields.includes("workDone") ? "workDone" : fields.includes("workShare") ? "workShare" : "member",
+        direction: fields.some((field) => field === "workDone" || field === "workShare") ? "desc" : "asc"
+      };
     }
     function renderSortHeader(key, field, sort) {
       const label = t(field === "member" ? "trialMember" : `trialField_${field}`);
@@ -263,6 +296,7 @@
       trialName,
       weekLabel,
       projectIcon,
+      profileIcon,
       getBridge,
       resolveItemName,
       renderRecord,
@@ -291,6 +325,7 @@
     function leavePlayer() {
       profileRevision += 1;
       selectedMember = null;
+      playerPickerOpen = true;
     }
 
     function renderMember(record, row) {
@@ -338,22 +373,64 @@
       }
     }
 
-    function renderRecord(record, showIdentity) {
-      const fields =
-        record.kind === "combat"
+    function visibleFields(kind) {
+      return (
+        kind === "combat"
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
-          : ["level", "workDone"];
+          : ["level", "workDone", "workShare"]
+      ).filter((field) => displaySettings[field] !== false);
+    }
+
+    function renderDisplaySettings() {
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+    }
+
+    function summaryNumber(value) {
+      return value === null || !Number.isFinite(value) ? "—" : String(Number(value.toFixed(2)));
+    }
+
+    function renderOverview(record, summaries) {
+      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${Object.entries(
+        summaries
+      )
+        .map(
+          ([field, stats]) =>
+            `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
+        )
+        .join(
+          ""
+        )}${displaySettings.workShare && record.kind === "skilling" && summaries.workDone.missing ? `<p>${escapeHtml(t("trialPartialShare"))}</p>` : ""}</div>`;
+    }
+
+    function renderRecord(record, showIdentity) {
+      const fields = visibleFields(record.kind);
+      const summaries = Object.fromEntries(
+        (record.kind === "combat" ? ["level"] : ["level", "workDone"]).map((field) => [
+          field,
+          trialHistoryApi.summarizeMetric(record, field)
+        ])
+      );
+      const cellValue = (row, field) => {
+        if (field === "workShare") {
+          const share = trialHistoryApi.metricShare(record, row, "workDone", summaries.workDone);
+          return share === null ? "—" : `${share.toFixed(2)}%`;
+        }
+        return number(
+          field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)
+        );
+      };
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       const sort = getSort(record.key, record.kind);
       // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        ${renderOverview(record, summaries)}
         <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
           .displayRows(record, sort)
           .map(
             (row) =>
-              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -365,7 +442,10 @@
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+      const count = visibleFields(kind).length;
+      const columnWidth = kind === "combat" ? 160 + count * 90 : 160 + count * 80;
+      const weekWidth = Math.max(180, columnWidth);
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}" style="--trial-column-width:${columnWidth}px;--trial-week-width:${weekWidth}px">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {
@@ -386,8 +466,31 @@
       return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
+    function renderPlayerResults(members, current) {
+      const results = trialHistoryApi.searchHistoryMembers(members, playerSearch);
+      const names = new Map();
+      for (const member of members) names.set(member.name, (names.get(member.name) || 0) + 1);
+      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(member.name)}</span>${names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
+    }
+
+    function renderPlayerPicker(members, current) {
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+    }
+
+    function filterPlayerResults(host) {
+      const input = host.querySelector("[data-trial-player-search]");
+      if (!input) return;
+      playerSearch = input.value;
+      const members = trialHistoryApi.historyMembers(records);
+      const current =
+        host.querySelector('[data-trial-choice="player"][aria-pressed="true"]')?.value ||
+        members.find((member) => selectedMember && trialHistoryApi.sameMember(member, selectedMember))?.key ||
+        "";
+      host.querySelector("#mwi-trial-player-results").innerHTML = renderPlayerResults(members, current);
+    }
+
     function revealChoice(button) {
-      if (!button) return;
+      if (!button || button.dataset.trialChoice === "player") return;
       const rail = button.parentElement;
       const bounds = rail.getBoundingClientRect();
       const item = button.getBoundingClientRect();
@@ -399,6 +502,8 @@
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
+      const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
       displayedMembers = [];
       highlightedMember = null;
       hoveredMemberCell = null;
@@ -419,7 +524,7 @@
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport();
+      let markup = renderImport() + renderDisplaySettings();
       markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
       if (mode === "player") {
         const members = trialHistoryApi.historyMembers(records);
@@ -430,12 +535,7 @@
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup +=
-          renderChoices(
-            "player",
-            members.map((member) => ({ key: member.key, label: member.name })),
-            current
-          ) + "</div>";
+        markup += renderPlayerPicker(members, current) + "</div>";
         host.innerHTML =
           markup +
           (selectedMember
@@ -454,6 +554,11 @@
         for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
         resetScroll = false;
         updateScrollButtons(host);
+        if (searchSelection) {
+          const input = host.querySelector("[data-trial-player-search]");
+          input?.focus({ preventScroll: true });
+          input?.setSelectionRange(...searchSelection);
+        }
         return;
       }
       if (!records.length) {
@@ -558,14 +663,44 @@
         "toggle",
         (event) => {
           if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
+          if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
+          if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
+            playerPickerOpen = event.target.open;
         },
         true
       );
       host.addEventListener("change", (event) => {
+        const field = event.target.dataset.trialDisplay;
+        if (["level", "workDone", "workShare"].includes(field)) {
+          displaySettings = { ...displaySettings, [field]: event.target.checked };
+          displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
+          displaySettingsOpen = true;
+          refresh(panel);
+          host.querySelector(`[data-trial-display="${field}"]`)?.focus({ preventScroll: true });
+          return;
+        }
         if (event.target.dataset.role === "trial-import-file") {
           void readImport(event.target.files?.[0], panel);
           return;
         }
+      });
+      host.addEventListener("compositionstart", (event) => {
+        if (event.target.matches("[data-trial-player-search]")) playerSearchComposing = true;
+      });
+      host.addEventListener("compositionend", (event) => {
+        if (event.target.matches("[data-trial-player-search]")) {
+          playerSearchComposing = false;
+          filterPlayerResults(host);
+        }
+      });
+      host.addEventListener("input", (event) => {
+        if (event.target.matches("[data-trial-player-search]") && !event.isComposing && !playerSearchComposing)
+          filterPlayerResults(host);
+      });
+      host.addEventListener("submit", (event) => {
+        if (!event.target.matches("[data-trial-player-search-form]")) return;
+        event.preventDefault();
+        if (!playerSearchComposing) filterPlayerResults(host);
       });
       host.addEventListener("keydown", (event) => {
         const button = event.target.closest("[data-trial-choice]");
@@ -579,10 +714,18 @@
             : event.key === "End"
               ? buttons.length - 1
               : Math.max(0, Math.min(buttons.length - 1, current + (event.key === "ArrowRight" ? 1 : -1)));
-        buttons[index].click();
+        if (button.dataset.trialChoice === "player") buttons[index].focus();
+        else buttons[index].click();
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-player-search-clear]")) {
+          const input = host.querySelector("[data-trial-player-search]");
+          input.value = "";
+          filterPlayerResults(host);
+          input.focus();
+          return;
+        }
         const sortButton = event.target.closest("[data-trial-sort]");
         if (sortButton) {
           const { trialSort: field, trialSortKey: key, trialSortNext: direction } = sortButton.dataset;
@@ -606,6 +749,7 @@
               name: profile.dataset.trialProfile
             };
           selectedMember = JSON.parse(profile.dataset.trialIdentity);
+          playerPickerOpen = false;
           resetScroll = true;
           mode = "player";
           readPlayerProfile(panel);
@@ -659,7 +803,10 @@
             const member = trialHistoryApi.historyMembers(records).find((entry) => entry.key === choice.value);
             if (!member) return;
             selectedMember = { id: member.id, name: member.name };
+            playerPickerOpen = false;
             readPlayerProfile(panel);
+            host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
+            return;
           } else {
             if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
             else selectedProject = choice.value;

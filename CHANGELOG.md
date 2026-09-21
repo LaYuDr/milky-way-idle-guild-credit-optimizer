@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.26] - 2026-09-21
+
+### Changed
+
+- 优化按玩家查看：增加可搜索玩家名单、切换入口与资料缓存，并完善窄屏布局和回归测试。
+
 ## [1.2.25] - 2026-09-21
 
 ### Changed

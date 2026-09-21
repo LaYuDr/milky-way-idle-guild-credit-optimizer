@@ -843,3 +843,72 @@ test("仅姓名的旧名记录仍可在玩家选项中找到", () => {
   assert.equal(choices.length, 2);
   assert.ok(choices.some((member) => member.id === null && member.name === "Old"));
 });
+
+test("项目汇总使用已知值，区分缺失与零，平均和中位数不改变记录", () => {
+  const record = {
+    schemaVersion: 2,
+    rows: [0, 10, null, 30].map((workDone, i) => ({ characterId: i + 1, workDone })),
+    memberLevels: { 1: 100, 2: 120 }
+  };
+  const original = JSON.stringify(record);
+  assert.deepEqual(api.summarizeMetric(record, "workDone"), {
+    count: 3,
+    missing: 1,
+    total: 40,
+    average: 40 / 3,
+    median: 10
+  });
+  assert.deepEqual(api.summarizeMetric(record, "level"), {
+    count: 2,
+    missing: 2,
+    total: 220,
+    average: 110,
+    median: 110
+  });
+  assert.equal(api.metricShare(record, record.rows[0], "workDone"), 0);
+  assert.equal(api.metricShare(record, record.rows[1], "workDone"), 25);
+  assert.equal(api.metricShare(record, record.rows[2], "workDone"), null);
+  assert.equal(JSON.stringify(record), original);
+  assert.deepEqual(
+    api.displayRows(record, { field: "workShare", direction: "desc" }).map((row) => row.characterId),
+    [4, 2, 1, 3]
+  );
+});
+
+test("空记录、全部未知、全零和溢出总数不会生成虚假的汇总或占比", () => {
+  for (const rows of [[], [{ workDone: null }], [{}]]) {
+    const record = { schemaVersion: 2, rows };
+    assert.deepEqual(api.summarizeMetric(record, "workDone"), {
+      count: 0,
+      missing: rows.length,
+      total: null,
+      average: null,
+      median: null
+    });
+  }
+  const record = { schemaVersion: 1, rows: [{}, { workDone: 0 }] };
+  assert.deepEqual(api.summarizeMetric(record, "workDone"), { count: 2, missing: 0, total: 0, average: 0, median: 0 });
+  assert.equal(api.metricShare(record, record.rows[0], "workDone"), null);
+  const huge = { schemaVersion: 2, rows: [{ workDone: Number.MAX_VALUE }, { workDone: Number.MAX_VALUE }] };
+  const summary = api.summarizeMetric(huge, "workDone");
+  assert.equal(summary.total, null);
+  assert.equal(summary.average, Number.MAX_VALUE);
+  assert.equal(summary.median, Number.MAX_VALUE);
+  assert.equal(api.metricShare(huge, huge.rows[0], "workDone"), null);
+});
+
+test("玩家搜索按姓名局部匹配，忽略大小写与首尾空白，不合并重名身份", () => {
+  const members = Object.freeze([
+    Object.freeze({ id: "1", name: "Alpha奶牛" }),
+    Object.freeze({ id: "2", name: "Alpha奶牛" }),
+    Object.freeze({ id: "3", name: "<b>原样</b>" })
+  ]);
+  for (const query of ["  ALPHA  ", "奶牛"])
+    assert.deepEqual(
+      api.searchHistoryMembers(members, query).map((member) => member.id),
+      ["1", "2"]
+    );
+  assert.deepEqual(api.searchHistoryMembers(members, "<b>"), [members[2]]);
+  assert.deepEqual(api.searchHistoryMembers(members, "[.*]"), []);
+  assert.deepEqual(api.searchHistoryMembers(members, "   "), members);
+});

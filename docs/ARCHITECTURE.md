@@ -81,3 +81,10 @@ releases/vMAJOR.MINOR/.
 - The bridge is tested with official-domain fake WebSockets.
 - Responsive and construction layouts use tools/test-harness.html.
 - Release tests protect the whitelist and immutable archive behavior.
+
+The embedded equipment panel follows the official frontend's `EquipmentLocationToSlotMap`:
+body slots in columns 1–3, jewelry in column 5, tools in rows 7–8, and abilities
+ordered by `slotNumber` underneath. `equipmentLayout` uses `itemLocationHrid`,
+then map keys or official equipment types; two-hand items occupy main hand.
+Unknown or duplicate slots remain visible in an extra grid. Icons reuse the
+page's native sprites or its asset manifest; no additional profile queries are made.

@@ -4,6 +4,52 @@
   root.MwiGuildTrialPlayerView = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
+  // Positions mirror the game's EquipmentLocationToSlotMap (rows 5–6 separate tools).
+  const EQUIPMENT_SLOTS = [
+    ["back", 1, 1],
+    ["head", 1, 2],
+    ["trinket", 1, 3],
+    ["neck", 1, 5],
+    ["main_hand", 2, 1],
+    ["body", 2, 2],
+    ["off_hand", 2, 3],
+    ["earrings", 2, 5],
+    ["hands", 3, 1],
+    ["legs", 3, 2],
+    ["pouch", 3, 3],
+    ["ring", 3, 5],
+    ["feet", 4, 2],
+    ["charm", 4, 5],
+    ["milking_tool", 7, 1],
+    ["foraging_tool", 7, 2],
+    ["woodcutting_tool", 7, 3],
+    ["cheesesmithing_tool", 7, 4],
+    ["crafting_tool", 7, 5],
+    ["tailoring_tool", 8, 1],
+    ["cooking_tool", 8, 2],
+    ["brewing_tool", 8, 3],
+    ["alchemy_tool", 8, 4],
+    ["enhancing_tool", 8, 5]
+  ];
+  function equipmentLayout(wearableItemMap, itemDetails = {}) {
+    const slots = EQUIPMENT_SLOTS.map(([key, row, column]) => ({ key, row, column, item: null }));
+    const extras = [];
+    for (const [key, item] of Object.entries(wearableItemMap || {})) {
+      if (!item?.itemHrid) continue;
+      const location =
+        item.itemLocationHrid ||
+        (key.startsWith("/item_locations/") ? key : null) ||
+        itemDetails[item.itemHrid]?.equipmentDetail?.type ||
+        key;
+      let slotKey = String(location).split("/").pop();
+      if (slotKey === "two_hand") slotKey = "main_hand";
+      const slot = slots.find((slot) => slot.key === slotKey);
+      if (slot && !slot.item) slot.item = item;
+      else extras.push(item);
+    }
+    return { slots, extras };
+  }
+
   function createRenderer({
     t,
     escapeHtml: e,
@@ -11,6 +57,7 @@
     trialName,
     weekLabel,
     projectIcon,
+    profileIcon,
     getBridge,
     resolveItemName,
     renderRecord,
@@ -29,7 +76,46 @@
       const skill = t(`trialSkill_${key}`);
       return skill !== `trialSkill_${key}` ? skill : key;
     };
-    const metric = (name, value) => `<div><dt>${e(name)}</dt><dd>${e(value)}</dd></div>`;
+    const metric = (name, value, icon = "") => `<div><dt>${icon}<span>${e(name)}</span></dt><dd>${e(value)}</dd></div>`;
+    function equipmentTile(item, attributes = "") {
+      const name = resolveItemName(
+        item.itemHrid,
+        getBridge()?.itemDetails?.[item.itemHrid]?.name || suffix(item.itemHrid)
+      );
+      const level = item.enhancementLevel > 0 ? `+${item.enhancementLevel}` : "";
+      const description = `${name}${level ? ` ${level}` : ""}`;
+      const icon = profileIcon("item", item.itemHrid);
+      const tier = item.enhancementLevel >= 11 ? "gold" : item.enhancementLevel >= 8 ? "purple" : "blue";
+      return `<div class="mwi-trial-equipment-slot" ${attributes} tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${icon || `<span class="mwi-trial-slot-label">${e(name)}</span>`}${level ? `<span class="mwi-trial-equipment-level" data-tier="${tier}">${e(level)}</span>` : ""}</div>`;
+    }
+    function equipmentMarkup(profile) {
+      if (!profile.wearableItemMap) return "";
+      const { slots, extras } = equipmentLayout(profile.wearableItemMap, getBridge()?.itemDetails);
+      let html = `<h4>${e(t("trialProfileEquipment"))}</h4><div class="mwi-trial-equipment-grid">${slots
+        .map(({ key, row, column, item }) => {
+          const attributes = `data-equipment-slot="${key}" style="grid-row:${row};grid-column:${column}"`;
+          return item
+            ? equipmentTile(item, attributes)
+            : `<div class="mwi-trial-equipment-slot mwi-trial-equipment-empty" ${attributes}><span>${e(t(`trialSlot_${key}`))}</span></div>`;
+        })
+        .join("")}</div>`;
+      if (extras.length)
+        html += `<div class="mwi-trial-equipment-extra">${extras.map((item) => equipmentTile(item)).join("")}</div>`;
+      return html;
+    }
+    function abilitiesMarkup(profile) {
+      const abilities = entries(profile.equippedAbilities)
+        .filter((item) => item?.abilityHrid)
+        .sort((a, b) => (a.slotNumber ?? 0) - (b.slotNumber ?? 0));
+      if (!abilities.length) return "";
+      return `<div class="mwi-trial-profile-abilities" aria-label="${e(t("trialProfileAbilities"))}">${abilities
+        .map((item) => {
+          const name = label(item.abilityHrid),
+            level = `Lv.${number(item.level)}`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-ability-slot" tabindex="0" role="img" aria-label="${e(`${name} ${level}`)}" title="${e(`${name} ${level}`)}">${profileIcon("ability", item.abilityHrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+        })
+        .join("")}</div>`;
+    }
     function profileMarkup(state) {
       if (state.status !== "ready")
         return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
@@ -50,15 +136,10 @@
       if (skills.length)
         html += `<h4>${e(t("trialProfileSkills"))}</h4><dl class="mwi-trial-profile-facts">${skills
           .filter((skill) => suffix(skill.skillHrid) !== "total_level")
-          .map((skill) => metric(label(skill.skillHrid), number(skill.level)))
+          .map((skill) => metric(label(skill.skillHrid), number(skill.level), profileIcon("skill", skill.skillHrid)))
           .join("")}</dl>`;
-      const equipment = entries(profile.wearableItemMap).filter((item) => item?.itemHrid);
-      if (equipment.length)
-        html += `<h4>${e(t("trialProfileEquipment"))}</h4><ul class="mwi-trial-profile-items">${equipment.map((item) => `<li>${e(resolveItemName(item.itemHrid, getBridge()?.itemDetails?.[item.itemHrid]?.name || suffix(item.itemHrid)))}${item.enhancementLevel ? ` +${e(item.enhancementLevel)}` : ""}</li>`).join("")}</ul>`;
-      for (const [field, heading, hrid] of [
-        ["equippedAbilities", "trialProfileAbilities", "abilityHrid"],
-        ["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]
-      ]) {
+      html += equipmentMarkup(profile) + abilitiesMarkup(profile);
+      for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
         if (values.length)
           html += `<h4>${e(t(heading))}</h4><dl class="mwi-trial-profile-facts">${values.map((item) => metric(label(item[hrid]), number(item.level))).join("")}</dl>`;
@@ -101,5 +182,5 @@
     }
     return { render };
   }
-  return { createRenderer };
+  return { createRenderer, equipmentLayout };
 });

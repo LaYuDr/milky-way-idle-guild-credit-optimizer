@@ -454,11 +454,35 @@
   }
 
   const memberCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+  function summarizeMetric(record, field) {
+    const values = record.rows
+      .map((row) => (field === "level" ? memberLevel(record, row) : metricValue(record, row, field)))
+      .filter((value) => value !== null)
+      .sort((a, b) => a - b);
+    const count = values.length;
+    const sum = values.reduce((total, value) => total + value, 0);
+    const middle = Math.floor(count / 2);
+    return {
+      count,
+      missing: record.rows.length - count,
+      total: count && Number.isFinite(sum) ? sum : null,
+      average: count ? values.reduce((total, value) => total + value / count, 0) : null,
+      median: count ? (count % 2 ? values[middle] : values[middle - 1] / 2 + values[middle] / 2) : null
+    };
+  }
+
+  function metricShare(record, row, field, summary = summarizeMetric(record, field)) {
+    const value = metricValue(record, row, field);
+    return value !== null && summary.total > 0 ? (value / summary.total) * 100 : null;
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
       !sort ||
-      !["member", "level", "workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(sort.field)
+      !["member", "level", "workDone", "workShare", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(
+        sort.field
+      )
     )
       return result;
     const value = ({ record, row }) =>
@@ -466,7 +490,7 @@
         ? memberIdentity(record, row).name || null
         : sort.field === "level"
           ? memberLevel(record, row)
-          : metricValue(record, row, sort.field);
+          : metricValue(record, row, sort.field === "workShare" ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),
@@ -482,6 +506,13 @@
       record.rows.map((row) => ({ record, row })),
       sort
     ).map((entry) => entry.row);
+  }
+
+  function searchHistoryMembers(members, query) {
+    const needle = String(query || "")
+      .trim()
+      .toLocaleLowerCase();
+    return members.filter((member) => !needle || member.name.toLocaleLowerCase().includes(needle));
   }
 
   function previewImport(incoming, existing) {
@@ -510,12 +541,15 @@
     historyProjects,
     historyWeeks,
     metricValue,
+    summarizeMetric,
+    metricShare,
     displayRows,
     sortEntries,
     memberAbsent,
     memberIdentity,
     memberHistory,
     historyMembers,
+    searchHistoryMembers,
     sameMember,
     memberLevel,
     withMemberLevels,

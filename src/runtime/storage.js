@@ -193,6 +193,15 @@
     };
   }
 
+  function normalizeTrialDisplay(value) {
+    return Object.fromEntries(
+      Object.entries({ level: true, workDone: true, workShare: false }).map(([key, fallback]) => [
+        key,
+        typeof value?.[key] === "boolean" ? value[key] : fallback
+      ])
+    );
+  }
+
   function createPluginStorage(options) {
     const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
@@ -210,6 +219,27 @@
 
     function trialHistoryPrefix() {
       return `${config.TRIAL_HISTORY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function trialDisplayKey() {
+      return `${config.TRIAL_DISPLAY_STORAGE_PREFIX}:${guildBuildingPlannerStorageKey()}`;
+    }
+
+    function loadTrialDisplay() {
+      try {
+        return normalizeTrialDisplay(JSON.parse(storage.getItem(trialDisplayKey())));
+      } catch (_) {
+        return normalizeTrialDisplay(null);
+      }
+    }
+
+    function saveTrialDisplay(value) {
+      try {
+        storage.setItem(trialDisplayKey(), JSON.stringify(normalizeTrialDisplay(value)));
+        return true;
+      } catch (_) {
+        return false;
+      }
     }
 
     function loadTrialHistory() {
@@ -690,6 +720,8 @@
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
+      loadTrialDisplay,
+      saveTrialDisplay,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,
@@ -708,6 +740,7 @@
   }
 
   return {
+    normalizeTrialDisplay,
     normalizePanelView,
     normalizePanelOrder,
     normalizeGuildPointHistory,

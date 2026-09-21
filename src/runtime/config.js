@@ -74,6 +74,7 @@
     GUILD_TOKEN_BUDGET_SNAP_THRESHOLD_PERCENTAGE: 2.5,
     RENDERED_MARKUP_PROPERTY: "__mwiGuildCreditRenderedMarkup",
     TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
+    TRIAL_DISPLAY_STORAGE_PREFIX: "mwi-guild-trial-display-v1",
     PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
     DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
     CREDIT_TYPES,

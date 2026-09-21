@@ -471,7 +471,7 @@ exact values, duplicate and empty responses, escaped member names, missing
 project slots, week switching, project switching, newest-to-oldest columns,
 scroll buttons, focus, unchanged stored records and contained horizontal scrolling.
 The audit also checks embedded player profiles without a native dialog, all
-complete member tables for projects attended by the selected player, life/combat rails, newest-to-oldest horizontal columns, persistent player highlight, profile-cache reuse, explicit refresh,
+native skill/equipment sprite references with unchanged levels and enhancement values, complete member tables for projects attended by the selected player, life/combat rails, newest-to-oldest horizontal columns, persistent player highlight, profile-cache reuse, explicit refresh,
 unavailable lookup, out-of-order replies, return navigation, and the bidirectional
 week/project heading links. The local fixture models the native profile state
 update; real-game compatibility still needs verification after installation.
@@ -580,3 +580,18 @@ The trial-history fixture checks a single row of three view modes with choices b
 project, and player history views: ascending/descending toggles, independent table
 state, unknown levels last, retained keyboard focus, cross-week highlighting,
 complete rows, and no extra profile requests or stored-record changes.
+
+### Trial display settings and summaries
+
+The trial history audit exercises all eight combinations of level, work and share
+columns in week, project and player views, including percentage sorting, adaptive
+column widths, full row retention, local preference persistence and no extra
+profile requests. Overviews remain above the member table and use known values
+only; unit tests cover missing values, explicit zero, odd/even medians, empty
+records, zero denominators and overflowing totals. Display preferences use their
+own per-region/character key and are not part of trial exports.
+
+The player picker audit also covers case-insensitive name fragments, literal HTML
+text, no-match feedback, clearing, submit/Enter behavior, IME composition, input
+focus, keyboard navigation without queries, selection collapse, and a 60-player
+wrapping grid with the last member searchable. Search never merges identities.
