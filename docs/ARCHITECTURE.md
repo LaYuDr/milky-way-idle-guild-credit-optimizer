@@ -33,6 +33,29 @@ The public game_data/marketplace.json snapshot is an estimate source, not
 proof of full order-book depth. Guild exchange rules and character state must
 come from data already present in the game page.
 
+## Trial player history and embedded profiles
+
+`src/trial-history.js` selects a player's rows without changing stored records;
+`src/ui/trial-player-view.js` renders the embedded profile and weekly participation.
+`src/ui/trial-history-view.js` owns player/week/project navigation and restores the
+original list's selection and horizontal position on return. A view revision
+rejects late callbacks after another player or page has been selected.
+
+`src/runtime/profile-reader.js` is loaded before the bridge. A name click (or an
+explicit profile refresh) calls the native `handleViewProfile` once. While that
+request is pending, a temporary `setState` wrapper consumes only matching
+`sharableProfile` updates and routes the payload into the embedded view. Ordinary
+state changes, functional updates and other players' profiles pass through.
+The wrapper is removed when requests finish, after a bounded 60-second grace
+period, or on disposal; a 15-second timeout reports failure without retrying.
+This depends on the game's current profile handler using an object state update.
+The protocol has no request ID, so simultaneous native and plugin queries for the
+same name cannot be distinguished. No socket is created or replaced for lookup.
+
+Profiles are cached in memory only (up to 50 names). A known character-ID mismatch
+is not shown. Historical names/levels and imported/exported records are unchanged;
+current profile fields are displayed separately from historical trial levels.
+
 ## Build and artifact flow
 
 tools/build.js concatenates an explicit SOURCE_FILES list in dependency order.

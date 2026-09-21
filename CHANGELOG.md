@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.24] - 2026-09-21
+
+### Changed
+
+- 新增历史试炼玩家内嵌资料视图，支持跨周项目与周次跳转，并复用原生资料查询与缓存。
+
 ## [1.2.23] - 2026-09-21
 
 ### Changed

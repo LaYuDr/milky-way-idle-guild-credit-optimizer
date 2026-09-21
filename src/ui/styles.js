@@ -659,6 +659,10 @@
         #mwi-credit-optimizer .mwi-trial-import-preview{padding:2px 12px 10px;margin-top:10px;border-radius:6px;background:var(--trial-surface)}
         #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-sort{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;min-height:24px;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-sort:hover{background:transparent;color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-sort svg{flex:0 0 12px}
+        #mwi-credit-optimizer .mwi-trial-table th:is([aria-sort="ascending"],[aria-sort="descending"]){color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
         #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link{min-height:0;max-width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
@@ -713,6 +717,27 @@
         #mwi-credit-optimizer .mwi-trial-record+.mwi-trial-record{border-top:1px solid var(--trial-line);margin-top:16px;padding-top:8px}
         #mwi-credit-optimizer .mwi-trial-record .mwi-trial-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-empty{margin:0;padding:12px 0;min-height:120px;max-width:32ch;color:var(--trial-muted);font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-heading-link{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0;border:0;background:transparent;color:var(--trial-accent);font:inherit;text-align:inherit;white-space:normal}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-heading-link:hover{background:transparent;text-decoration:underline;text-underline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-player-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px}
+        #mwi-credit-optimizer .mwi-trial-player-toolbar h3{margin:0;overflow-wrap:anywhere;font-size:16px}
+        #mwi-credit-optimizer .mwi-trial-player-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
+        #mwi-credit-optimizer .mwi-trial-player-profile,#mwi-credit-optimizer .mwi-trial-player-history{min-width:0}
+        #mwi-credit-optimizer .mwi-trial-player-profile{padding-right:16px;border-right:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-player-profile header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+        #mwi-credit-optimizer .mwi-trial-player-profile h3,#mwi-credit-optimizer .mwi-trial-player-week h3{margin:0 0 6px;font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-player-profile h4{margin:16px 0 4px;font-size:14px;color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
+        #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-profile-facts dt{color:var(--trial-muted);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-facts dd{margin:0;max-width:20ch;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-items{margin:4px 0;padding-left:18px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-player-week{margin:0 0 20px}
+        #mwi-credit-optimizer .mwi-trial-player-week .mwi-trial-table caption{padding:3px 0}
+        @container mwi-trials (max-width:760px){
+          #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
+          #mwi-credit-optimizer .mwi-trial-player-profile{padding:0 0 12px;border-right:0;border-bottom:1px solid var(--trial-line)}
+        }
         @container mwi-trials (max-width:460px){
           #mwi-credit-optimizer .mwi-trial-import-list{max-height:280px}
           #mwi-credit-optimizer .mwi-trial-import-list li{grid-template-columns:minmax(0,1fr)}

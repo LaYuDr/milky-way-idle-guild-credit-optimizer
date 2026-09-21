@@ -707,3 +707,87 @@ test("战斗项目使用游戏排序字段，当前定义优先，仍排在生�
     [life, a, b]
   );
 });
+
+test("玩家历史跨周筛选全部项目，保留零值与来源且不修改原记录", () => {
+  const { context, message } = fixture();
+  const [base] = api.completedSnapshots(context, message, now);
+  const records = [
+    base,
+    {
+      ...base,
+      key: "combat",
+      kind: "combat",
+      trialHrid: "beast",
+      rows: [
+        { characterId: 1, damageDealt: 12.125 },
+        { characterId: 2, damageDealt: 999 }
+      ]
+    },
+    { ...base, key: "old", weekStartAt: base.weekStartAt - 7 * 86400000, members: { 1: { name: "Old Name" } } },
+    { ...base, key: "manual", rows: [{ memberKey: "a", workDone: null }], members: { a: { name: "Member" } } },
+    { ...base, key: "other", rows: [{ characterId: 2, workDone: 999 }], members: { 2: { name: "Member" } } }
+  ];
+  const original = JSON.stringify(records);
+  const weeks = api.memberHistory(records, { id: "1", name: "Member" });
+  assert.equal(weeks.length, 2);
+  assert.equal(weeks[0].records.length, 3);
+  assert.equal(weeks[1].records.length, 1);
+  assert.ok(weeks.flatMap((week) => week.records).every((record) => record.rows.length === 1));
+  assert.equal(weeks[0].records.find((record) => record.key === "combat").rows[0].damageDealt, 12.125);
+  assert.equal(JSON.stringify(records), original);
+});
+
+test("所有数值列支持稳定升降序，零和小数参与排序，未知始终末尾", () => {
+  for (const field of ["level", "workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+    const rows = [0, 10, null, 2.5, 10, undefined].map((value, i) => Object.freeze({ characterId: i, [field]: value }));
+    const record = Object.freeze({
+      schemaVersion: 2,
+      rows: Object.freeze(rows),
+      memberLevels: { 0: 0, 1: 10, 2: null, 3: 2.5, 4: 10 }
+    });
+    const before = JSON.stringify(record);
+    assert.deepEqual(
+      api.displayRows(record, { field, direction: "asc" }).map((row) => row.characterId),
+      [0, 3, 1, 4, 2, 5]
+    );
+    assert.deepEqual(
+      api.displayRows(record, { field, direction: "desc" }).map((row) => row.characterId),
+      [1, 4, 3, 0, 2, 5]
+    );
+    assert.equal(JSON.stringify(record), before);
+  }
+});
+
+test("成员按原始姓名自然排序，缺名末尾，等名稳定且不更改记录", () => {
+  const record = {
+    rows: [{ characterId: 1 }, { characterId: 2 }, { characterId: 3 }, { characterId: 4 }],
+    members: { 1: { name: "Player10" }, 2: { name: "Player2" }, 4: { name: "Player2" } }
+  };
+  assert.deepEqual(
+    api.displayRows(record, { field: "member", direction: "asc" }).map((row) => row.characterId),
+    [2, 4, 1, 3]
+  );
+  assert.deepEqual(
+    api.displayRows(record, { field: "member", direction: "desc" }).map((row) => row.characterId),
+    [1, 2, 4, 3]
+  );
+});
+
+test("玩家跨项目排序使用各记录的等级和零值语义", () => {
+  const entries = [
+    { record: { schemaVersion: 2 }, row: { characterId: 1 } },
+    { record: { schemaVersion: 1, memberLevels: { 1: 100 } }, row: { characterId: 1 } },
+    { record: { schemaVersion: 2, memberLevels: { 1: 200 } }, row: { characterId: 1, workDone: 2.5 } }
+  ];
+  assert.deepEqual(api.sortEntries(entries, { field: "workDone", direction: "asc" }), [
+    entries[1],
+    entries[2],
+    entries[0]
+  ]);
+  assert.deepEqual(api.sortEntries(entries, { field: "level", direction: "desc" }), [
+    entries[2],
+    entries[1],
+    entries[0]
+  ]);
+  assert.deepEqual(api.sortEntries(entries, null), entries);
+});

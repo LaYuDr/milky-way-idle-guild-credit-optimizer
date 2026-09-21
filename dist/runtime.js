@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.23";
+window.MwiGuildCreditVersion = "1.2.24";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -904,6 +904,17 @@ window.MwiGuildCreditVersion = "1.2.23";
     return Boolean(a.name && a.name === b.name);
   }
 
+  function memberHistory(records, identity) {
+    return historyWeeks(
+      records
+        .map((record) => ({
+          ...record,
+          rows: record.rows.filter((row) => sameMember(identity, memberIdentity(record, row)))
+        }))
+        .filter((record) => record.rows.length)
+    );
+  }
+
   function memberAbsent(record, row, context = {}) {
     if (!context.guild || !context.roster) return false;
     const sameGuild =
@@ -1200,11 +1211,35 @@ window.MwiGuildCreditVersion = "1.2.23";
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
   }
 
-  function displayRows(record) {
-    const rows = [...record.rows];
-    if (record.kind !== "skilling") return rows;
-    // Stable sorting preserves source order for ties; unknown values follow zero.
-    return rows.sort((a, b) => (metricValue(record, b, "workDone") ?? -1) - (metricValue(record, a, "workDone") ?? -1));
+  const memberCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+  function sortEntries(entries, sort) {
+    const result = [...entries];
+    if (
+      !sort ||
+      !["member", "level", "workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(sort.field)
+    )
+      return result;
+    const value = ({ record, row }) =>
+      sort.field === "member"
+        ? memberIdentity(record, row).name || null
+        : sort.field === "level"
+          ? memberLevel(record, row)
+          : metricValue(record, row, sort.field);
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return result.sort((a, b) => {
+      const left = value(a),
+        right = value(b);
+      // Unknown values stay last in either direction; equal values retain source order.
+      if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
+      return direction * (sort.field === "member" ? memberCollator.compare(left, right) : left - right);
+    });
+  }
+
+  function displayRows(record, sort = record.kind === "skilling" ? { field: "workDone", direction: "desc" } : null) {
+    return sortEntries(
+      record.rows.map((row) => ({ record, row })),
+      sort
+    ).map((entry) => entry.row);
   }
 
   function previewImport(incoming, existing) {
@@ -1234,8 +1269,10 @@ window.MwiGuildCreditVersion = "1.2.23";
     historyWeeks,
     metricValue,
     displayRows,
+    sortEntries,
     memberAbsent,
     memberIdentity,
+    memberHistory,
     sameMember,
     memberLevel,
     withMemberLevels,
@@ -1249,6 +1286,157 @@ window.MwiGuildCreditVersion = "1.2.23";
     weekNumber,
     MAX_IMPORT_BYTES
   };
+});
+
+
+// SOURCE: src/runtime/profile-reader.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildProfileReader = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  const keyFor = (name) => (typeof name === "string" ? name.trim().toLowerCase() : "");
+  function profileIdentity(profile) {
+    const character = profile?.sharableCharacter || {};
+    const skills = Object.values(profile?.characterSkills || {});
+    const id =
+      character.id ??
+      character.characterId ??
+      profile?.characterId ??
+      skills.find((skill) => skill?.characterId != null)?.characterId;
+    return {
+      id: id == null ? null : String(id),
+      name: character.name || profile?.characterName || profile?.name || ""
+    };
+  }
+
+  function createReader({ getController, setTimeout, clearTimeout }) {
+    const cache = new Map();
+    const hooks = new Map();
+    const notify = (entry, result) => {
+      for (const listener of entry.listeners) {
+        try {
+          listener(result);
+        } catch (_) {
+          /* Optional UI must not interrupt the game. */
+        }
+      }
+    };
+    function restore(controller, hook) {
+      if (hook.pending.size) return;
+      if (controller.setState === hook.intercept) {
+        if (hook.own) controller.setState = hook.original;
+        else delete controller.setState;
+      }
+      hooks.delete(controller);
+    }
+    function remember(profile) {
+      const key = keyFor(profileIdentity(profile).name);
+      if (!key) return;
+      cache.delete(key);
+      cache.set(key, profile);
+      if (cache.size > 50) cache.delete(cache.keys().next().value);
+    }
+    function hookController(controller) {
+      if (hooks.has(controller)) return hooks.get(controller);
+      const hook = { pending: new Map(), original: controller.setState, own: Object.hasOwn(controller, "setState") };
+      hook.intercept = function (update, callback) {
+        // The official profile_shared handler supplies this object. All unrelated
+        // and functional state updates pass through unchanged.
+        const profile = update && typeof update === "object" ? update.sharableProfile : null;
+        const key = keyFor(profileIdentity(profile).name);
+        const entry = profile && hook.pending.get(key);
+        if (!entry) return hook.original.apply(this, arguments);
+        hook.pending.delete(key);
+        clearTimeout(entry.timeout);
+        clearTimeout(entry.cleanup);
+        remember(profile);
+        const rest = { ...update };
+        delete rest.sharableProfile;
+        delete rest.sharableGuildProfile;
+        restore(controller, hook);
+        if (Object.keys(rest).length) hook.original.call(this, rest, callback);
+        else if (typeof callback === "function") callback.call(this);
+        notify(entry, { status: "ready", profile });
+      };
+      controller.setState = hook.intercept;
+      if (controller.setState !== hook.intercept) return null;
+      hooks.set(controller, hook);
+      return hook;
+    }
+    function request(name, listener, force = false) {
+      const characterName = typeof name === "string" ? name.trim() : "";
+      if (
+        !characterName ||
+        characterName.length > 64 ||
+        /[\u0000-\u001f\u007f]/.test(characterName) ||
+        typeof listener !== "function"
+      )
+        return false;
+      const key = keyFor(characterName);
+      try {
+        const controller = getController();
+        const pending = hooks.get(controller)?.pending.get(key);
+        if (pending && !(force && pending.timedOut)) {
+          pending.listeners.add(listener);
+          if (pending.timedOut) listener({ status: "timeout" });
+          return true;
+        }
+        if (!force) {
+          const current = controller?.state?.sharableProfile;
+          if (!cache.has(key) && keyFor(profileIdentity(current).name) === key) remember(current);
+          if (cache.has(key)) {
+            listener({ status: "ready", profile: cache.get(key) });
+            return true;
+          }
+        }
+        if (!controller || typeof controller.setState !== "function") return false;
+        const hook = hookController(controller);
+        if (!hook) return false;
+        const previous = hook.pending.get(key);
+        if (previous) {
+          clearTimeout(previous.timeout);
+          clearTimeout(previous.cleanup);
+        }
+        const entry = { listeners: new Set([listener]) };
+        hook.pending.set(key, entry);
+        entry.timeout = setTimeout(() => {
+          entry.timedOut = true;
+          notify(entry, { status: "timeout" });
+        }, 15000);
+        // A late response from our request must not flash a native modal. Keep a
+        // bounded grace period, then restore the controller even if no reply arrives.
+        entry.cleanup = setTimeout(() => {
+          clearTimeout(entry.timeout);
+          hook.pending.delete(key);
+          restore(controller, hook);
+        }, 60000);
+        try {
+          controller.handleViewProfile(characterName);
+        } catch (_) {
+          entry.timedOut = true;
+          notify(entry, { status: "unavailable" });
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    function dispose() {
+      for (const [controller, hook] of hooks) {
+        for (const entry of hook.pending.values()) {
+          clearTimeout(entry.timeout);
+          clearTimeout(entry.cleanup);
+        }
+        hook.pending.clear();
+        restore(controller, hook);
+      }
+      cache.clear();
+    }
+    return { request, dispose };
+  }
+  return { createReader, profileIdentity };
 });
 
 
@@ -1439,21 +1627,14 @@ window.MwiGuildCreditVersion = "1.2.23";
     }
   };
 
-  // Explicit name clicks only. The native handler sends one view_profile frame
-  // through the game's existing connection; its response opens the native modal.
-  bridge.requestProfile = function (name) {
-    const characterName = typeof name === "string" ? name.trim() : "";
-    if (!characterName || characterName.length > 64 || /[\u0000-\u001f\u007f]/.test(characterName)) return false;
-    try {
-      const controller = findGameController("handleViewProfile");
-      if (!controller) return false;
-      controller.handleViewProfile(characterName);
-      return true;
-    } catch (_) {
-      // Never retry: the handler may have sent the request before throwing.
-      return false;
-    }
-  };
+  const profileReaderApi = window.MwiGuildProfileReader || page.MwiGuildProfileReader;
+  const profileReader = profileReaderApi?.createReader({
+    getController: () => findGameController("handleViewProfile"),
+    setTimeout: (...args) => window.setTimeout(...args),
+    clearTimeout: (timer) => window.clearTimeout(timer)
+  });
+  bridge.requestProfile = (name, listener, force = false) => profileReader?.request(name, listener, force) === true;
+  bridge.disposeProfileReader = () => profileReader?.dispose();
 
   function levelRecordKey(record, fallbackKey) {
     if (record && typeof record === "object") {
@@ -3219,10 +3400,41 @@ window.MwiGuildCreditVersion = "1.2.23";
       trialStatsTable: "成员试炼统计",
       trialMember: "成员",
       trialNameUnavailable: "名称未读取",
+      trialPlayerBack: "返回历史列表",
+      trialPlayerHistory: "参试历史",
+      trialPlayerProfile: "个人资料",
+      trialProfileRefresh: "刷新资料",
+      trialProfileLoading: "正在读取资料…",
+      trialProfileTimeout: "资料查询超时，可点击刷新资料重试。",
+      trialProfileMismatch: "返回的资料与历史角色 ID 不一致，未展示。",
+      trialPlayerEmpty: "暂无该玩家的参试记录。",
+      trialProfileGuild: "公会",
+      trialProfileTotalLevel: "总等级",
+      trialProfileCombatLevel: "战斗等级",
+      trialProfileSkills: "技能等级",
+      trialProfileEquipment: "装备",
+      trialProfileAbilities: "技能配置",
+      trialProfileHouse: "房屋",
+      trialProfileRaw: "完整资料数据",
+      trialProfile_totalTaskPoints: "任务点数",
+      trialProfile_labyrinthPoints: "迷宫点数",
+      trialProfile_labyrinthHighestFloor: "迷宫最高层",
+      trialProfile_collectionPoints: "收集点数",
+      trialProfile_bestiaryPoints: "图鉴点数",
+      trialProfile_famePoints: "声望点数",
+      trialSkill_stamina: "耐力",
+      trialSkill_intelligence: "智力",
+      trialSkill_attack: "攻击",
+      trialSkill_melee: "近战",
+      trialSkill_defense: "防御",
+      trialSkill_ranged: "远程",
+      trialSkill_magic: "魔法",
       trialMemberAbsent: "已不在公会",
-      trialOpenProfile: "查看 {name} 的资料",
+      trialOpenProfile: "查看 {name} 的参试历史",
       trialProfileUnavailable: "暂时无法打开玩家资料，请确认游戏已连接并刷新页面后重试。",
       trialRaw: "原始记录",
+      trialSortAscending: "按{field}升序排列",
+      trialSortDescending: "按{field}降序排列",
       trialField_level: "等级",
       trialField_workDone: "工作量",
       trialField_damageDealt: "造成伤害",
@@ -3755,11 +3967,42 @@ window.MwiGuildCreditVersion = "1.2.23";
       trialStatsTable: "Member trial statistics",
       trialMember: "Member",
       trialNameUnavailable: "Name unavailable",
+      trialPlayerBack: "Back to history",
+      trialPlayerHistory: "Trial history",
+      trialPlayerProfile: "Player profile",
+      trialProfileRefresh: "Refresh profile",
+      trialProfileLoading: "Loading profile…",
+      trialProfileTimeout: "Profile request timed out. Use Refresh profile to try again.",
+      trialProfileMismatch: "The returned character ID does not match this historical player.",
+      trialPlayerEmpty: "No trial records for this player.",
+      trialProfileGuild: "Guild",
+      trialProfileTotalLevel: "Total level",
+      trialProfileCombatLevel: "Combat level",
+      trialProfileSkills: "Skill levels",
+      trialProfileEquipment: "Equipment",
+      trialProfileAbilities: "Abilities",
+      trialProfileHouse: "House",
+      trialProfileRaw: "Full profile data",
+      trialProfile_totalTaskPoints: "Task points",
+      trialProfile_labyrinthPoints: "Labyrinth points",
+      trialProfile_labyrinthHighestFloor: "Highest labyrinth floor",
+      trialProfile_collectionPoints: "Collection points",
+      trialProfile_bestiaryPoints: "Bestiary points",
+      trialProfile_famePoints: "Fame points",
+      trialSkill_stamina: "Stamina",
+      trialSkill_intelligence: "Intelligence",
+      trialSkill_attack: "Attack",
+      trialSkill_melee: "Melee",
+      trialSkill_defense: "Defense",
+      trialSkill_ranged: "Ranged",
+      trialSkill_magic: "Magic",
       trialMemberAbsent: "No longer in the guild",
-      trialOpenProfile: "View {name}'s profile",
+      trialOpenProfile: "View {name}'s trial history",
       trialProfileUnavailable:
         "Cannot open the player profile. Check the game connection and refresh the page before trying again.",
       trialRaw: "Raw record",
+      trialSortAscending: "Sort {field} ascending",
+      trialSortDescending: "Sort {field} descending",
       trialField_level: "Level",
       trialField_workDone: "Work done",
       trialField_damageDealt: "Damage dealt",
@@ -8326,6 +8569,10 @@ window.MwiGuildCreditVersion = "1.2.23";
         #mwi-credit-optimizer .mwi-trial-import-preview{padding:2px 12px 10px;margin-top:10px;border-radius:6px;background:var(--trial-surface)}
         #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-sort{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;min-height:24px;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-sort:hover{background:transparent;color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-sort svg{flex:0 0 12px}
+        #mwi-credit-optimizer .mwi-trial-table th:is([aria-sort="ascending"],[aria-sort="descending"]){color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
         #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link{min-height:0;max-width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
@@ -8380,6 +8627,27 @@ window.MwiGuildCreditVersion = "1.2.23";
         #mwi-credit-optimizer .mwi-trial-record+.mwi-trial-record{border-top:1px solid var(--trial-line);margin-top:16px;padding-top:8px}
         #mwi-credit-optimizer .mwi-trial-record .mwi-trial-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-empty{margin:0;padding:12px 0;min-height:120px;max-width:32ch;color:var(--trial-muted);font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-heading-link{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0;border:0;background:transparent;color:var(--trial-accent);font:inherit;text-align:inherit;white-space:normal}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-heading-link:hover{background:transparent;text-decoration:underline;text-underline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-player-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 12px}
+        #mwi-credit-optimizer .mwi-trial-player-toolbar h3{margin:0;overflow-wrap:anywhere;font-size:16px}
+        #mwi-credit-optimizer .mwi-trial-player-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
+        #mwi-credit-optimizer .mwi-trial-player-profile,#mwi-credit-optimizer .mwi-trial-player-history{min-width:0}
+        #mwi-credit-optimizer .mwi-trial-player-profile{padding-right:16px;border-right:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-player-profile header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+        #mwi-credit-optimizer .mwi-trial-player-profile h3,#mwi-credit-optimizer .mwi-trial-player-week h3{margin:0 0 6px;font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-player-profile h4{margin:16px 0 4px;font-size:14px;color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
+        #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-profile-facts dt{color:var(--trial-muted);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-facts dd{margin:0;max-width:20ch;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-items{margin:4px 0;padding-left:18px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-player-week{margin:0 0 20px}
+        #mwi-credit-optimizer .mwi-trial-player-week .mwi-trial-table caption{padding:3px 0}
+        @container mwi-trials (max-width:760px){
+          #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
+          #mwi-credit-optimizer .mwi-trial-player-profile{padding:0 0 12px;border-right:0;border-bottom:1px solid var(--trial-line)}
+        }
         @container mwi-trials (max-width:460px){
           #mwi-credit-optimizer .mwi-trial-import-list{max-height:280px}
           #mwi-credit-optimizer .mwi-trial-import-list li{grid-template-columns:minmax(0,1fr)}
@@ -9590,6 +9858,119 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 });
 
 
+// SOURCE: src/ui/trial-player-view.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialPlayerView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  function createRenderer({
+    t,
+    escapeHtml: e,
+    trialHistoryApi: api,
+    trialName,
+    weekLabel,
+    projectIcon,
+    getBridge,
+    resolveItemName,
+    getSort,
+    renderSortHeader
+  }) {
+    const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
+    const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
+    const suffix = (value) =>
+      String(value || "")
+        .split("/")
+        .pop();
+    const label = (hrid) => {
+      const key = suffix(hrid);
+      const translated = t(`trialName_${key}`);
+      if (translated !== `trialName_${key}`) return translated;
+      const skill = t(`trialSkill_${key}`);
+      return skill !== `trialSkill_${key}` ? skill : key;
+    };
+    const metric = (name, value) => `<div><dt>${e(name)}</dt><dd>${e(value)}</dd></div>`;
+    function profileMarkup(state) {
+      if (state.status !== "ready")
+        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
+      const profile = state.profile;
+      const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
+      const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
+      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileGuild"), profile.guildName || "—")}${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}`;
+      for (const field of [
+        "totalTaskPoints",
+        "labyrinthPoints",
+        "labyrinthHighestFloor",
+        "collectionPoints",
+        "bestiaryPoints",
+        "famePoints"
+      ])
+        if (profile[field] != null) html += metric(t(`trialProfile_${field}`), number(profile[field]));
+      html += "</dl>";
+      if (skills.length)
+        html += `<h4>${e(t("trialProfileSkills"))}</h4><dl class="mwi-trial-profile-facts">${skills
+          .filter((skill) => suffix(skill.skillHrid) !== "total_level")
+          .map((skill) => metric(label(skill.skillHrid), number(skill.level)))
+          .join("")}</dl>`;
+      const equipment = entries(profile.wearableItemMap).filter((item) => item?.itemHrid);
+      if (equipment.length)
+        html += `<h4>${e(t("trialProfileEquipment"))}</h4><ul class="mwi-trial-profile-items">${equipment.map((item) => `<li>${e(resolveItemName(item.itemHrid, getBridge()?.itemDetails?.[item.itemHrid]?.name || suffix(item.itemHrid)))}${item.enhancementLevel ? ` +${e(item.enhancementLevel)}` : ""}</li>`).join("")}</ul>`;
+      for (const [field, heading, hrid] of [
+        ["equippedAbilities", "trialProfileAbilities", "abilityHrid"],
+        ["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]
+      ]) {
+        const values = entries(profile[field]).filter((item) => item?.[hrid]);
+        if (values.length)
+          html += `<h4>${e(t(heading))}</h4><dl class="mwi-trial-profile-facts">${values.map((item) => metric(label(item[hrid]), number(item.level))).join("")}</dl>`;
+      }
+      html += `<details class="mwi-trial-raw"><summary>${e(t("trialProfileRaw"))}</summary><pre>${e(JSON.stringify(profile, null, 2))}</pre></details>`;
+      return html;
+    }
+    function historyMarkup(weeks) {
+      if (!weeks.length) return `<p class="mwi-trial-meta">${e(t("trialPlayerEmpty"))}</p>`;
+      return weeks
+        .map(
+          (week) =>
+            `<section class="mwi-trial-player-week"><h3><button type="button" class="mwi-trial-heading-link" data-trial-jump-week="${e(week.key)}">${e(weekLabel(week))}</button></h3>${[
+              "skilling",
+              "combat"
+            ]
+              .map((kind) => {
+                const records = week.records.filter((record) => record.kind === kind);
+                if (!records.length) return "";
+                const fields =
+                  kind === "skilling"
+                    ? ["level", "workDone"]
+                    : ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"];
+                const key = JSON.stringify(["player", week.key, kind]);
+                const sort = getSort(key);
+                const rows = api
+                  .historyProjects(records)
+                  .flatMap((project) =>
+                    project.records.flatMap((record) => record.rows.map((row) => ({ project, record, row })))
+                  );
+                return `<div class="mwi-trial-table-scroll" data-trial-scroll-id="${e(key)}" role="region" tabindex="0" aria-label="${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}"><table class="mwi-trial-table"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><thead><tr><th scope="col">${e(t("trialChooseProject"))}</th>${fields.map((field) => renderSortHeader(key, field, sort)).join("")}</tr></thead><tbody>${api
+                  .sortEntries(rows, sort)
+                  .map(
+                    ({ project, record, row }) =>
+                      `<tr data-trial-player-row><th scope="row"><button type="button" class="mwi-trial-heading-link" data-trial-jump-project="${e(project.key)}">${projectIcon(record)}${e(trialName(record))}</button><small>${e(record.guildName || t("trialUnknownGuild"))} · ${e(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</small></th>${fields.map((field) => `<td data-trial-field="${field}">${e(number(field === "level" ? api.memberLevel(record, row) : api.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+                  )
+                  .join("")}</tbody></table></div>`;
+              })
+              .join("")}</section>`
+        )
+        .join("");
+    }
+    function render({ member, weeks, profileState }) {
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+    }
+    return { render };
+  }
+  return { createRenderer };
+});
+
+
 // SOURCE: src/ui/trial-history-view.js
 (function (root, factory) {
   const api = factory();
@@ -9632,6 +10013,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    playerViewApi,
+    profileReaderApi,
+    resolveItemName,
     getBridge,
     getPanel
   }) {
@@ -9656,6 +10040,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let highlightedMember = null;
     let hoveredMemberCell = null;
     let focusedMemberCell = null;
+    let selectedMember = null;
+    let profileState = { status: "loading" };
+    let profileRevision = 0;
+    let playerReturn = null;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
@@ -9673,7 +10061,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
             const panel = getPanel();
-            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode === "project")
+            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode !== "week")
               refresh(panel);
           })
           .catch(() => {});
@@ -9830,6 +10218,55 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
     }
 
+    const tableSorts = new Map();
+    function getSort(key, kind) {
+      return tableSorts.get(key) || (kind === "skilling" ? { field: "workDone", direction: "desc" } : null);
+    }
+    function renderSortHeader(key, field, sort) {
+      const label = t(field === "member" ? "trialMember" : `trialField_${field}`);
+      const active = sort?.field === field;
+      const next = active ? (sort.direction === "asc" ? "desc" : "asc") : field === "member" ? "asc" : "desc";
+      const action = t(next === "asc" ? "trialSortAscending" : "trialSortDescending", { field: label });
+      return `<th scope="col" aria-sort="${active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}"><button type="button" class="mwi-trial-sort" data-trial-sort="${field}" data-trial-sort-key="${escapeHtml(key)}" data-trial-sort-next="${next}" aria-label="${escapeHtml(action)}" title="${escapeHtml(action)}"><span>${escapeHtml(label)}</span><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${!active || sort.direction === "asc" ? '<path d="m3 5 3-3 3 3"/>' : ""}${!active || sort.direction === "desc" ? '<path d="m3 9 3 3 3-3"/>' : ""}</svg></button></th>`;
+    }
+
+    const playerRenderer = playerViewApi.createRenderer({
+      t,
+      escapeHtml,
+      trialHistoryApi,
+      trialName,
+      weekLabel,
+      projectIcon,
+      getBridge,
+      resolveItemName,
+      getSort,
+      renderSortHeader
+    });
+
+    function readPlayerProfile(panel, force = false) {
+      const revision = ++profileRevision;
+      const member = selectedMember;
+      profileState = { status: "loading" };
+      refresh(panel);
+      const receive = (result) => {
+        if (disposed || revision !== profileRevision || mode !== "player" || selectedMember !== member) return;
+        if (result.status === "ready") {
+          const identity = profileReaderApi.profileIdentity(result.profile);
+          if (member.id !== null && identity.id !== null && member.id !== identity.id) result = { status: "mismatch" };
+        }
+        profileState = result;
+        refresh(panel);
+      };
+      const name =
+        member.id != null ? getBridge()?.trialHistoryContext?.members?.[member.id]?.name || member.name : member.name;
+      if (getBridge()?.requestProfile?.(name, receive, force) !== true) receive({ status: "unavailable" });
+    }
+
+    function leavePlayer() {
+      profileRevision += 1;
+      selectedMember = null;
+    }
+
     function renderMember(record, row) {
       const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
       const name = rawName || t("trialNameUnavailable");
@@ -9837,7 +10274,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
         (rawName
-          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
+          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
           : escapeHtml(name)) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
@@ -9881,12 +10318,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
           : ["level", "workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
+      const sort = getSort(record.key, record.kind);
       // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${trialHistoryApi
-          .displayRows(record)
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
+          .displayRows(record, sort)
           .map(
             (row) =>
               `<tr><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
@@ -9895,9 +10333,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
-    function renderColumn(title, items, attributes = "") {
+    function renderColumn(title, items, attributes = "", jump = "") {
       const showIdentity = items.length > 1 || multipleGuilds;
-      return `<article class="mwi-trial-column" ${attributes}><h4>${escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
     function renderRail(id, title, columns, kind, timeline = false) {
@@ -9953,8 +10391,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup =
-        renderImport() + '<p class="mwi-trial-notice" data-role="trial-profile-status" role="status" hidden></p>';
+      let markup = renderImport();
+      if (mode === "player" && selectedMember) {
+        host.innerHTML =
+          markup +
+          playerRenderer.render({
+            member: selectedMember,
+            weeks: trialHistoryApi.memberHistory(records, selectedMember),
+            profileState
+          });
+        for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
+          const position = scroll.get(el.dataset.trialScrollId);
+          if (position) [el.scrollLeft, el.scrollTop] = position;
+        }
+        return;
+      }
       if (!records.length) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
@@ -9977,7 +10428,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               details
             )
             .map((entry) =>
-              renderColumn(trialName(entry.records[0]), entry.records, `data-trial-project="${escapeHtml(entry.key)}"`)
+              renderColumn(
+                trialName(entry.records[0]),
+                entry.records,
+                `data-trial-project="${escapeHtml(entry.key)}"`,
+                `data-trial-jump-project="${escapeHtml(entry.key)}"`
+              )
             );
           while (columns.length < size)
             columns.push(renderColumn(t("trialUnrecordedProject"), [], 'data-trial-empty="true"'));
@@ -9999,7 +10455,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           "timeline",
           trialName(project.records[0]),
           timeline
-            .map((entry) => renderColumn(weekLabel(entry), entry.records, `data-trial-week="${entry.key}"`))
+            .map((entry) =>
+              renderColumn(
+                weekLabel(entry),
+                entry.records,
+                `data-trial-week="${entry.key}"`,
+                `data-trial-jump-week="${entry.key}"`
+              )
+            )
             .join(""),
           project.kind,
           true
@@ -10071,12 +10534,69 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const sortButton = event.target.closest("[data-trial-sort]");
+        if (sortButton) {
+          const { trialSort: field, trialSortKey: key, trialSortNext: direction } = sortButton.dataset;
+          tableSorts.set(key, { field, direction });
+          refresh(panel);
+          [...host.querySelectorAll("[data-trial-sort]")]
+            .find((button) => button.dataset.trialSortKey === key && button.dataset.trialSort === field)
+            ?.focus({ preventScroll: true });
+          return;
+        }
         const profile = event.target.closest("[data-trial-profile]");
         if (profile) {
-          const accepted = getBridge()?.requestProfile?.(profile.dataset.trialProfile) === true;
-          const status = host.querySelector('[data-role="trial-profile-status"]');
-          status.textContent = accepted ? "" : t("trialProfileUnavailable");
-          status.hidden = accepted;
+          playerReturn = {
+            mode,
+            scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+              el.dataset.trialScrollId,
+              el.scrollLeft,
+              el.scrollTop
+            ]),
+            name: profile.dataset.trialProfile
+          };
+          selectedMember = JSON.parse(profile.dataset.trialIdentity);
+          mode = "player";
+          readPlayerProfile(panel);
+          host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
+          return;
+        }
+        if (event.target.closest("[data-trial-profile-refresh]")) {
+          readPlayerProfile(panel, true);
+          return;
+        }
+        if (event.target.closest("[data-trial-player-back]")) {
+          leavePlayer();
+          mode = playerReturn?.mode || "week";
+          refresh(panel);
+          for (const [key, left, top] of playerReturn?.scroll || []) {
+            const element = [...host.querySelectorAll("[data-trial-scroll-id]")].find(
+              (el) => el.dataset.trialScrollId === key
+            );
+            if (element) {
+              element.scrollLeft = left;
+              element.scrollTop = top;
+            }
+          }
+          [...host.querySelectorAll("[data-trial-profile]")]
+            .find((el) => el.dataset.trialProfile === playerReturn?.name)
+            ?.focus({ preventScroll: true });
+          updateScrollButtons(host);
+          return;
+        }
+        const jump = event.target.closest("[data-trial-jump-week], [data-trial-jump-project]");
+        if (jump) {
+          leavePlayer();
+          if (jump.dataset.trialJumpWeek !== undefined) {
+            mode = "week";
+            selectedWeek = jump.dataset.trialJumpWeek;
+          } else {
+            mode = "project";
+            selectedProject = jump.dataset.trialJumpProject;
+          }
+          resetScroll = true;
+          refresh(panel);
+          host.querySelector('[data-trial-choice][aria-pressed="true"]')?.focus({ preventScroll: true });
           return;
         }
         const choice = event.target.closest("[data-trial-choice]");
@@ -10129,6 +10649,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     function dispose() {
       disposed = true;
+      profileRevision += 1;
+      getBridge()?.disposeProfileReader?.();
       importRevision += 1;
       resizeObserver?.disconnect();
       const bridge = getBridge();
@@ -14167,6 +14689,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    playerViewApi: window.MwiGuildTrialPlayerView,
+    profileReaderApi: window.MwiGuildProfileReader,
+    resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });

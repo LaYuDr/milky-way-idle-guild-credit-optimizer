@@ -126,6 +126,17 @@
     return Boolean(a.name && a.name === b.name);
   }
 
+  function memberHistory(records, identity) {
+    return historyWeeks(
+      records
+        .map((record) => ({
+          ...record,
+          rows: record.rows.filter((row) => sameMember(identity, memberIdentity(record, row)))
+        }))
+        .filter((record) => record.rows.length)
+    );
+  }
+
   function memberAbsent(record, row, context = {}) {
     if (!context.guild || !context.roster) return false;
     const sameGuild =
@@ -422,11 +433,35 @@
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
   }
 
-  function displayRows(record) {
-    const rows = [...record.rows];
-    if (record.kind !== "skilling") return rows;
-    // Stable sorting preserves source order for ties; unknown values follow zero.
-    return rows.sort((a, b) => (metricValue(record, b, "workDone") ?? -1) - (metricValue(record, a, "workDone") ?? -1));
+  const memberCollator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
+  function sortEntries(entries, sort) {
+    const result = [...entries];
+    if (
+      !sort ||
+      !["member", "level", "workDone", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(sort.field)
+    )
+      return result;
+    const value = ({ record, row }) =>
+      sort.field === "member"
+        ? memberIdentity(record, row).name || null
+        : sort.field === "level"
+          ? memberLevel(record, row)
+          : metricValue(record, row, sort.field);
+    const direction = sort.direction === "asc" ? 1 : -1;
+    return result.sort((a, b) => {
+      const left = value(a),
+        right = value(b);
+      // Unknown values stay last in either direction; equal values retain source order.
+      if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
+      return direction * (sort.field === "member" ? memberCollator.compare(left, right) : left - right);
+    });
+  }
+
+  function displayRows(record, sort = record.kind === "skilling" ? { field: "workDone", direction: "desc" } : null) {
+    return sortEntries(
+      record.rows.map((row) => ({ record, row })),
+      sort
+    ).map((entry) => entry.row);
   }
 
   function previewImport(incoming, existing) {
@@ -456,8 +491,10 @@
     historyWeeks,
     metricValue,
     displayRows,
+    sortEntries,
     memberAbsent,
     memberIdentity,
+    memberHistory,
     sameMember,
     memberLevel,
     withMemberLevels,

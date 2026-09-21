@@ -3245,11 +3245,35 @@
       const existingSocket = { send: (frame) => profileFrames.push(JSON.parse(frame)) };
       const gameRoot = document.createElement("div");
       gameRoot.id = "root";
+      let deferProfile = false;
+      const profileReplies = [];
       const profileController = {
+        state: {},
+        setState(update) {
+          Object.assign(this.state, update);
+          if (update.sharableProfile) {
+            nativeProfile.textContent = update.sharableProfile.sharableCharacter.name;
+            nativeProfile.showModal();
+          }
+        },
         handleViewProfile(characterName) {
           existingSocket.send(JSON.stringify({ type: "view_profile", viewProfileData: { characterName } }));
-          nativeProfile.textContent = characterName;
-          nativeProfile.showModal();
+          const reply = () =>
+            this.setState({
+              sharableProfile: {
+                sharableCharacter: { name: characterName, id: characterName === members[101].name ? 101 : 102 },
+                guildName: "Profile Guild",
+                combatLevel: 97.25,
+                characterSkills: [
+                  { skillHrid: "/skills/milking", level: 143 },
+                  { skillHrid: "/skills/total_level", level: 1800 }
+                ],
+                wearableItemMap: { weapon: { itemHrid: "/items/milking_brush", enhancementLevel: 8 } }
+              },
+              sharableGuildProfile: null
+            });
+          if (deferProfile) profileReplies.push(reply);
+          else reply();
         }
       };
       gameRoot.__reactContainer$trialAudit = { current: { child: { stateNode: profileController } } };
@@ -3307,9 +3331,18 @@
         profileFrames.length === 1 &&
         profileFrames[0].type === "view_profile" &&
         profileFrames[0].viewProfileData.characterName === members[101].name &&
-        nativeProfile.open &&
-        nativeProfile.textContent === members[101].name;
-      nativeProfile.close();
+        !nativeProfile.open &&
+        host.querySelector("[data-trial-profile-content]").textContent.includes("1800");
+      checks.playerAllProjects = host.querySelectorAll("[data-trial-player-row]").length === 6;
+      checks.playerNoOtherNames = !host
+        .querySelector(".mwi-trial-player-history")
+        .textContent.includes(members[102].name);
+      checks.playerPanelContained = panel.scrollWidth <= panel.clientWidth;
+      const profileBounds = host.querySelector(".mwi-trial-player-profile").getBoundingClientRect();
+      const historyBounds = host.querySelector(".mwi-trial-player-history").getBoundingClientRect();
+      checks.playerResponsiveLayout =
+        host.clientWidth > 760 ? profileBounds.right <= historyBounds.left : profileBounds.bottom <= historyBounds.top;
+      host.querySelector("[data-trial-player-back]").click();
       checks.unknownLevels = [...host.querySelectorAll('[data-trial-field="level"]')].every(
         (cell) => cell.textContent === "—"
       );
@@ -3416,20 +3449,26 @@
       checks.memberBlurClears = highlighted().length === 0;
       checks.highlightDoesNotQuery = profileFrames.length === 1;
       nameCells[0].querySelector("button").click();
-      checks.projectProfileSingleQuery = profileFrames.length === 2 && nativeProfile.open;
-      nativeProfile.close();
+      checks.projectProfileCache = profileFrames.length === 1 && !nativeProfile.open;
+      checks.playerEveryWeek =
+        host.querySelectorAll(".mwi-trial-player-week").length === 3 &&
+        host.querySelectorAll("[data-trial-player-row]").length === 8;
+      const playerWeeks = [...host.querySelectorAll("[data-trial-jump-week]")].map((el) => el.dataset.trialJumpWeek);
+      checks.playerWeeksNewestFirst = playerWeeks.join(",") === "10,9,8";
       delete gameRoot.__reactContainer$trialAudit;
-      nameCells[0].querySelector("button").click();
-      const profileStatus = host.querySelector('[data-role="trial-profile-status"]');
+      host.querySelector("[data-trial-profile-refresh]").click();
       checks.profileUnavailableFeedback =
-        profileFrames.length === 2 && !profileStatus.hidden && Boolean(profileStatus.textContent);
+        profileFrames.length === 1 && Boolean(host.querySelector('[data-trial-profile-content] [role="status"]'));
       gameRoot.__reactContainer$trialAudit = { current: { child: { stateNode: profileController } } };
+      host.querySelector("[data-trial-profile-refresh]").click();
+      checks.profileRefreshOneQuery = profileFrames.length === 2 && !nativeProfile.open;
+      host.querySelector("[data-trial-player-back]").click();
       const timeline = host.querySelector("#mwi-trial-rail-timeline");
       const beforeScroll = timeline.scrollLeft;
       host.querySelector('[data-trial-scroll="timeline"][data-step="1"]').click();
       checks.scrollTowardOlder = timeline.scrollWidth <= timeline.clientWidth || timeline.scrollLeft > beforeScroll;
       checks.keyboardFocusableScroller = timeline.tabIndex === 0;
-      nameCells[0].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      host.querySelector("[data-trial-member]").dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       choose("trial-project", JSON.stringify(["combat", combats[0]]));
       checks.memberHighlightClearsOnProjectSwitch = highlighted().length === 0;
       checks.projectGameOrder =
@@ -3446,6 +3485,105 @@
       host.querySelector('[data-trial-mode="week"]').click();
       checks.weekPreserved = host.querySelector('[data-role="trial-week"] [aria-pressed="true"]').value === "9";
       choose("trial-week", "10");
+      host.querySelector("[data-trial-jump-project]").click();
+      checks.weekTitleToProject =
+        host.querySelector('[data-role="trial-project"] [aria-pressed="true"]').value ===
+        JSON.stringify(["skilling", milk]);
+      host.querySelector('[data-trial-jump-week="9"]').click();
+      checks.projectTitleToWeek = host.querySelector('[data-role="trial-week"] [aria-pressed="true"]').value === "9";
+      host.querySelector("[data-trial-profile]").click();
+      host.querySelector('[data-trial-jump-week="10"]').click();
+      checks.playerWeekJumpAllProjects = host.querySelectorAll("[data-trial-record]").length === 6;
+      host.querySelector("[data-trial-profile]").click();
+      host.querySelector("[data-trial-jump-project]").click();
+      checks.playerProjectJumpAllWeeks = host.querySelectorAll("[data-trial-week]").length === 3;
+      deferProfile = true;
+      host.querySelector("[data-trial-profile]").click();
+      host.querySelector("[data-trial-profile-refresh]").click();
+      host.querySelector("[data-trial-player-back]").click();
+      host.querySelectorAll("[data-trial-profile]")[1].click();
+      checks.playerLoadingKeepsHistory =
+        host.querySelectorAll("[data-trial-player-row]").length === 6 && !nativeProfile.open;
+      profileReplies[0]();
+      checks.lateProfileDoesNotReplacePlayer =
+        host.querySelector("[data-trial-player-title]").textContent.includes(members[102].name) &&
+        !host.querySelector("[data-trial-profile-content]").textContent.includes("1800") &&
+        !nativeProfile.open;
+      profileReplies[1]();
+      checks.secondProfileInline =
+        host.querySelector("[data-trial-profile-content]").textContent.includes("1800") && !nativeProfile.open;
+      deferProfile = false;
+      host.querySelector("[data-trial-player-back]").click();
+      host.querySelector('[data-trial-mode="week"]').click();
+      choose("trial-week", "10");
+      const framesBeforeSort = profileFrames.length;
+      const table = (kind, index = 0) => host.querySelectorAll(`[data-trial-group="${kind}"] table`)[index];
+      const values = (kind, field, index = 0) =>
+        [...table(kind, index).querySelectorAll(`[data-trial-field="${field}"]`)]
+          .map((cell) => cell.textContent)
+          .join(",");
+      const clickSort = (kind, field, index = 0) =>
+        table(kind, index).querySelector(`[data-trial-sort="${field}"]`).click();
+      checks.allSortHeaders = [...host.querySelectorAll('[data-role="trial-stats-table"]')].every(
+        (table) =>
+          table.querySelectorAll("thead button[data-trial-sort]").length === table.querySelectorAll("thead th").length
+      );
+      clickSort("skilling", "workDone");
+      checks.workAscending = values("skilling", "workDone") === "0,123456789.125";
+      checks.independentTableSort = values("skilling", "workDone", 1) === "123456789.125,0";
+      checks.sortFocusRetained =
+        document.activeElement === table("skilling").querySelector('[data-trial-sort="workDone"]');
+      checks.sortDirectionAccessible =
+        table("skilling").querySelector('[data-trial-sort="workDone"]').closest("th").getAttribute("aria-sort") ===
+        "ascending";
+      clickSort("skilling", "workDone");
+      checks.workDescendingToggle = values("skilling", "workDone") === "123456789.125,0";
+      for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+        clickSort("combat", field);
+        const descending = [...table("combat").querySelectorAll(`[data-trial-field="${field}"]`)].map((cell) =>
+          Number(cell.textContent)
+        );
+        clickSort("combat", field);
+        const ascending = [...table("combat").querySelectorAll(`[data-trial-field="${field}"]`)].map((cell) =>
+          Number(cell.textContent)
+        );
+        checks[`sort_${field}`] =
+          descending[0] > descending[1] && ascending.join(",") === [...descending].reverse().join(",");
+      }
+      clickSort("combat", "level", 1);
+      checks.levelUnknownLastDescending = values("combat", "level", 1) === "97.25,—";
+      clickSort("combat", "level", 1);
+      checks.levelUnknownLastAscending = values("combat", "level", 1) === "97.25,—";
+      clickSort("skilling", "member");
+      const ascendingNames = [...table("skilling").querySelectorAll("[data-trial-profile]")].map(
+        (el) => el.textContent
+      );
+      clickSort("skilling", "member");
+      checks.memberSortToggle =
+        [...table("skilling").querySelectorAll("[data-trial-profile]")].map((el) => el.textContent).join(",") ===
+        ascendingNames.reverse().join(",");
+      checks.sortNoProfileQueries = profileFrames.length === framesBeforeSort;
+      host.querySelector('[data-trial-mode="project"]').click();
+      const sortedName = host.querySelector("[data-trial-member] [data-trial-profile]");
+      sortedName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.sortedMemberStillHighlights = host.querySelectorAll(".mwi-trial-member-highlight").length === 3;
+      sortedName.click();
+      const playerSort = () => host.querySelector('[data-trial-sort="workDone"]');
+      playerSort().click();
+      const playerValues = () =>
+        [...playerSort().closest("table").querySelectorAll('[data-trial-field="workDone"]')].map((cell) =>
+          Number(cell.textContent)
+        );
+      const playerDescending = playerValues();
+      playerSort().click();
+      checks.playerSortToggle =
+        playerValues().every((v, i, all) => i === 0 || v >= all[i - 1]) &&
+        playerDescending.every((v, i, all) => i === 0 || v <= all[i - 1]);
+      checks.sortedPlayerKeepsAllWeeks = host.querySelectorAll(".mwi-trial-player-week").length === 3;
+      host.querySelector("[data-trial-player-back]").click();
+      host.querySelector('[data-trial-mode="week"]').click();
+      choose("trial-week", "10");
+      checks.sortKeepsAllRows = host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12;
       checks.viewReadOnly = JSON.stringify(saved()) === before;
       checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
       return { width: sidebarWidth, rootOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth), checks };

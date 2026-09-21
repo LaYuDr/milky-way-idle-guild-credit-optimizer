@@ -184,21 +184,14 @@
     }
   };
 
-  // Explicit name clicks only. The native handler sends one view_profile frame
-  // through the game's existing connection; its response opens the native modal.
-  bridge.requestProfile = function (name) {
-    const characterName = typeof name === "string" ? name.trim() : "";
-    if (!characterName || characterName.length > 64 || /[\u0000-\u001f\u007f]/.test(characterName)) return false;
-    try {
-      const controller = findGameController("handleViewProfile");
-      if (!controller) return false;
-      controller.handleViewProfile(characterName);
-      return true;
-    } catch (_) {
-      // Never retry: the handler may have sent the request before throwing.
-      return false;
-    }
-  };
+  const profileReaderApi = window.MwiGuildProfileReader || page.MwiGuildProfileReader;
+  const profileReader = profileReaderApi?.createReader({
+    getController: () => findGameController("handleViewProfile"),
+    setTimeout: (...args) => window.setTimeout(...args),
+    clearTimeout: (timer) => window.clearTimeout(timer)
+  });
+  bridge.requestProfile = (name, listener, force = false) => profileReader?.request(name, listener, force) === true;
+  bridge.disposeProfileReader = () => profileReader?.dispose();
 
   function levelRecordKey(record, fallbackKey) {
     if (record && typeof record === "object") {

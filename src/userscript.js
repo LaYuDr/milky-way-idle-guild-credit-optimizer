@@ -679,6 +679,9 @@
     escapeHtml,
     pluginStorage,
     trialHistoryApi,
+    playerViewApi: window.MwiGuildTrialPlayerView,
+    profileReaderApi: window.MwiGuildProfileReader,
+    resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel
   });
