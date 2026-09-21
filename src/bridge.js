@@ -148,7 +148,7 @@
     return roots;
   }
 
-  function findMarketplaceController() {
+  function findGameController(methodName) {
     const pending = reactFiberRoots();
     const visited = new Set();
     let inspected = 0;
@@ -158,7 +158,7 @@
       visited.add(fiber);
       inspected += 1;
       const stateNode = fiber.stateNode;
-      if (stateNode && typeof stateNode.handleGoToMarketplace === "function") return stateNode;
+      if (stateNode && typeof stateNode[methodName] === "function") return stateNode;
       if (fiber.current) pending.push(fiber.current);
       if (fiber.child) pending.push(fiber.child);
       if (fiber.sibling) pending.push(fiber.sibling);
@@ -169,7 +169,7 @@
 
   bridge.goToMarketplace = function (itemHrid, enhancementLevel) {
     if (typeof itemHrid !== "string" || !itemHrid.startsWith("/items/")) return false;
-    const controller = findMarketplaceController();
+    const controller = findGameController("handleGoToMarketplace");
     if (!controller) return false;
     // The native item UI always supplies a numeric level (0 for ordinary
     // materials). An undefined level builds an invalid market order-book key
@@ -180,6 +180,22 @@
       controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
       return true;
     } catch (_) {
+      return false;
+    }
+  };
+
+  // Explicit name clicks only. The native handler sends one view_profile frame
+  // through the game's existing connection; its response opens the native modal.
+  bridge.requestProfile = function (name) {
+    const characterName = typeof name === "string" ? name.trim() : "";
+    if (!characterName || characterName.length > 64 || /[\u0000-\u001f\u007f]/.test(characterName)) return false;
+    try {
+      const controller = findGameController("handleViewProfile");
+      if (!controller) return false;
+      controller.handleViewProfile(characterName);
+      return true;
+    } catch (_) {
+      // Never retry: the handler may have sent the request before throwing.
       return false;
     }
   };

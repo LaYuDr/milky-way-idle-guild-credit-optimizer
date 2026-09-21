@@ -61,6 +61,8 @@
     let disposed = false;
     let displayedMembers = [];
     let highlightedMember = null;
+    let hoveredMemberCell = null;
+    let focusedMemberCell = null;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
@@ -236,11 +238,14 @@
     }
 
     function renderMember(record, row) {
-      const name = record.members?.[row.memberKey ?? row.characterId]?.name || t("trialNameUnavailable");
+      const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
+      const name = rawName || t("trialNameUnavailable");
       const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
-        escapeHtml(name) +
+        (rawName
+          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
+          : escapeHtml(name)) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
           : "")
@@ -250,7 +255,15 @@
     function memberAttributes(record, row) {
       if (mode !== "project") return "";
       const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
-      return ` data-trial-member="${index}" tabindex="0"`;
+      return ` data-trial-member="${index}"`;
+    }
+
+    function updateMemberInteraction(host, target, keyboard) {
+      const candidate = target?.closest?.("[data-trial-member]");
+      const cell = candidate && host.contains(candidate) ? candidate : null;
+      if (keyboard) focusedMemberCell = cell;
+      else hoveredMemberCell = cell;
+      highlightMember(host, hoveredMemberCell || focusedMemberCell);
     }
 
     function highlightMember(host, target) {
@@ -329,6 +342,8 @@
       if (!host) return;
       displayedMembers = [];
       highlightedMember = null;
+      hoveredMemberCell = null;
+      focusedMemberCell = null;
       const scroll = new Map(
         [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
           el.dataset.trialScrollId,
@@ -345,7 +360,8 @@
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport();
+      let markup =
+        renderImport() + '<p class="mwi-trial-notice" data-role="trial-profile-status" role="status" hidden></p>';
       if (!records.length) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
@@ -430,9 +446,9 @@
         resizeObserver.observe(host);
       }
       for (const type of ["mouseover", "focusin"])
-        host.addEventListener(type, (event) => highlightMember(host, event.target));
+        host.addEventListener(type, (event) => updateMemberInteraction(host, event.target, type === "focusin"));
       for (const type of ["mouseout", "focusout"])
-        host.addEventListener(type, (event) => highlightMember(host, event.relatedTarget));
+        host.addEventListener(type, (event) => updateMemberInteraction(host, event.relatedTarget, type === "focusout"));
       host.addEventListener(
         "toggle",
         (event) => {
@@ -462,6 +478,14 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const profile = event.target.closest("[data-trial-profile]");
+        if (profile) {
+          const accepted = getBridge()?.requestProfile?.(profile.dataset.trialProfile) === true;
+          const status = host.querySelector('[data-role="trial-profile-status"]');
+          status.textContent = accepted ? "" : t("trialProfileUnavailable");
+          status.hidden = accepted;
+          return;
+        }
         const choice = event.target.closest("[data-trial-choice]");
         if (choice) {
           if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;

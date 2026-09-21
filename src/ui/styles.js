@@ -661,7 +661,8 @@
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
         #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
-        #mwi-credit-optimizer .mwi-trial-table [data-trial-member]:focus-visible{outline-offset:-2px}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link{min-height:0;max-width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link:hover{background:transparent;color:var(--trial-accent);text-decoration:underline;text-underline-offset:3px}
 
         #mwi-credit-optimizer .mwi-trial-import{margin:0 0 8px;padding:0 0 6px;border-bottom:1px solid var(--trial-line);min-width:0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}

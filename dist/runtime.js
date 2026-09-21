@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.22";
+window.MwiGuildCreditVersion = "1.2.23";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1403,7 +1403,7 @@ window.MwiGuildCreditVersion = "1.2.22";
     return roots;
   }
 
-  function findMarketplaceController() {
+  function findGameController(methodName) {
     const pending = reactFiberRoots();
     const visited = new Set();
     let inspected = 0;
@@ -1413,7 +1413,7 @@ window.MwiGuildCreditVersion = "1.2.22";
       visited.add(fiber);
       inspected += 1;
       const stateNode = fiber.stateNode;
-      if (stateNode && typeof stateNode.handleGoToMarketplace === "function") return stateNode;
+      if (stateNode && typeof stateNode[methodName] === "function") return stateNode;
       if (fiber.current) pending.push(fiber.current);
       if (fiber.child) pending.push(fiber.child);
       if (fiber.sibling) pending.push(fiber.sibling);
@@ -1424,7 +1424,7 @@ window.MwiGuildCreditVersion = "1.2.22";
 
   bridge.goToMarketplace = function (itemHrid, enhancementLevel) {
     if (typeof itemHrid !== "string" || !itemHrid.startsWith("/items/")) return false;
-    const controller = findMarketplaceController();
+    const controller = findGameController("handleGoToMarketplace");
     if (!controller) return false;
     // The native item UI always supplies a numeric level (0 for ordinary
     // materials). An undefined level builds an invalid market order-book key
@@ -1435,6 +1435,22 @@ window.MwiGuildCreditVersion = "1.2.22";
       controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
       return true;
     } catch (_) {
+      return false;
+    }
+  };
+
+  // Explicit name clicks only. The native handler sends one view_profile frame
+  // through the game's existing connection; its response opens the native modal.
+  bridge.requestProfile = function (name) {
+    const characterName = typeof name === "string" ? name.trim() : "";
+    if (!characterName || characterName.length > 64 || /[\u0000-\u001f\u007f]/.test(characterName)) return false;
+    try {
+      const controller = findGameController("handleViewProfile");
+      if (!controller) return false;
+      controller.handleViewProfile(characterName);
+      return true;
+    } catch (_) {
+      // Never retry: the handler may have sent the request before throwing.
       return false;
     }
   };
@@ -3204,6 +3220,8 @@ window.MwiGuildCreditVersion = "1.2.22";
       trialMember: "成员",
       trialNameUnavailable: "名称未读取",
       trialMemberAbsent: "已不在公会",
+      trialOpenProfile: "查看 {name} 的资料",
+      trialProfileUnavailable: "暂时无法打开玩家资料，请确认游戏已连接并刷新页面后重试。",
       trialRaw: "原始记录",
       trialField_level: "等级",
       trialField_workDone: "工作量",
@@ -3738,6 +3756,9 @@ window.MwiGuildCreditVersion = "1.2.22";
       trialMember: "Member",
       trialNameUnavailable: "Name unavailable",
       trialMemberAbsent: "No longer in the guild",
+      trialOpenProfile: "View {name}'s profile",
+      trialProfileUnavailable:
+        "Cannot open the player profile. Check the game connection and refresh the page before trying again.",
       trialRaw: "Raw record",
       trialField_level: "Level",
       trialField_workDone: "Work done",
@@ -8307,7 +8328,8 @@ window.MwiGuildCreditVersion = "1.2.22";
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
         #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
-        #mwi-credit-optimizer .mwi-trial-table [data-trial-member]:focus-visible{outline-offset:-2px}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link{min-height:0;max-width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link:hover{background:transparent;color:var(--trial-accent);text-decoration:underline;text-underline-offset:3px}
 
         #mwi-credit-optimizer .mwi-trial-import{margin:0 0 8px;padding:0 0 6px;border-bottom:1px solid var(--trial-line);min-width:0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}
@@ -9632,6 +9654,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let disposed = false;
     let displayedMembers = [];
     let highlightedMember = null;
+    let hoveredMemberCell = null;
+    let focusedMemberCell = null;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
@@ -9807,11 +9831,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderMember(record, row) {
-      const name = record.members?.[row.memberKey ?? row.characterId]?.name || t("trialNameUnavailable");
+      const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
+      const name = rawName || t("trialNameUnavailable");
       const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
-        escapeHtml(name) +
+        (rawName
+          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
+          : escapeHtml(name)) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
           : "")
@@ -9821,7 +9848,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function memberAttributes(record, row) {
       if (mode !== "project") return "";
       const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
-      return ` data-trial-member="${index}" tabindex="0"`;
+      return ` data-trial-member="${index}"`;
+    }
+
+    function updateMemberInteraction(host, target, keyboard) {
+      const candidate = target?.closest?.("[data-trial-member]");
+      const cell = candidate && host.contains(candidate) ? candidate : null;
+      if (keyboard) focusedMemberCell = cell;
+      else hoveredMemberCell = cell;
+      highlightMember(host, hoveredMemberCell || focusedMemberCell);
     }
 
     function highlightMember(host, target) {
@@ -9900,6 +9935,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (!host) return;
       displayedMembers = [];
       highlightedMember = null;
+      hoveredMemberCell = null;
+      focusedMemberCell = null;
       const scroll = new Map(
         [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
           el.dataset.trialScrollId,
@@ -9916,7 +9953,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport();
+      let markup =
+        renderImport() + '<p class="mwi-trial-notice" data-role="trial-profile-status" role="status" hidden></p>';
       if (!records.length) {
         host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
@@ -10001,9 +10039,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         resizeObserver.observe(host);
       }
       for (const type of ["mouseover", "focusin"])
-        host.addEventListener(type, (event) => highlightMember(host, event.target));
+        host.addEventListener(type, (event) => updateMemberInteraction(host, event.target, type === "focusin"));
       for (const type of ["mouseout", "focusout"])
-        host.addEventListener(type, (event) => highlightMember(host, event.relatedTarget));
+        host.addEventListener(type, (event) => updateMemberInteraction(host, event.relatedTarget, type === "focusout"));
       host.addEventListener(
         "toggle",
         (event) => {
@@ -10033,6 +10071,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const profile = event.target.closest("[data-trial-profile]");
+        if (profile) {
+          const accepted = getBridge()?.requestProfile?.(profile.dataset.trialProfile) === true;
+          const status = host.querySelector('[data-role="trial-profile-status"]');
+          status.textContent = accepted ? "" : t("trialProfileUnavailable");
+          status.hidden = accepted;
+          return;
+        }
         const choice = event.target.closest("[data-trial-choice]");
         if (choice) {
           if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;

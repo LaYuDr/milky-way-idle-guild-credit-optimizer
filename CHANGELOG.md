@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.23] - 2026-09-21
+
+### Changed
+
+- 增强历史试炼成员交互：点击玩家姓名调用游戏原生资料入口，并补充不可用提示与回归测试。
+
 ## [1.2.22] - 2026-09-21
 
 ### Changed

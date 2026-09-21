@@ -486,6 +486,8 @@
       trialMember: "成员",
       trialNameUnavailable: "名称未读取",
       trialMemberAbsent: "已不在公会",
+      trialOpenProfile: "查看 {name} 的资料",
+      trialProfileUnavailable: "暂时无法打开玩家资料，请确认游戏已连接并刷新页面后重试。",
       trialRaw: "原始记录",
       trialField_level: "等级",
       trialField_workDone: "工作量",
@@ -1020,6 +1022,9 @@
       trialMember: "Member",
       trialNameUnavailable: "Name unavailable",
       trialMemberAbsent: "No longer in the guild",
+      trialOpenProfile: "View {name}'s profile",
+      trialProfileUnavailable:
+        "Cannot open the player profile. Check the game connection and refresh the page before trying again.",
       trialRaw: "Raw record",
       trialField_level: "Level",
       trialField_workDone: "Work done",

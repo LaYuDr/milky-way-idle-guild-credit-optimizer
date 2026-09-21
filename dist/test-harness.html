@@ -3237,6 +3237,23 @@
       const repeatCount = saved().length;
       send({ ...message, guildTrialStatList: [] });
       const emptyResponseCount = saved().length;
+      // Model the existing native controller and its already-established socket.
+      const profileFrames = [];
+      const nativeProfile = document.createElement("dialog");
+      nativeProfile.dataset.testProfile = "true";
+      document.body.append(nativeProfile);
+      const existingSocket = { send: (frame) => profileFrames.push(JSON.parse(frame)) };
+      const gameRoot = document.createElement("div");
+      gameRoot.id = "root";
+      const profileController = {
+        handleViewProfile(characterName) {
+          existingSocket.send(JSON.stringify({ type: "view_profile", viewProfileData: { characterName } }));
+          nativeProfile.textContent = characterName;
+          nativeProfile.showModal();
+        }
+      };
+      gameRoot.__reactContainer$trialAudit = { current: { child: { stateNode: profileController } } };
+      document.body.append(gameRoot);
       const checks = {
         fourthTab: panel.querySelectorAll(".mwi-view-tab").length === 4,
         emptyState: empty,
@@ -3284,6 +3301,15 @@
             )
           ).size === 1
       };
+      checks.profileNoAutomaticQuery = profileFrames.length === 0;
+      host.querySelector("[data-trial-profile]").click();
+      checks.weekProfileSingleQuery =
+        profileFrames.length === 1 &&
+        profileFrames[0].type === "view_profile" &&
+        profileFrames[0].viewProfileData.characterName === members[101].name &&
+        nativeProfile.open &&
+        nativeProfile.textContent === members[101].name;
+      nativeProfile.close();
       checks.unknownLevels = [...host.querySelectorAll('[data-trial-field="level"]')].every(
         (cell) => cell.textContent === "—"
       );
@@ -3382,10 +3408,22 @@
         highlighted().length === 1 && highlighted()[0].querySelector("th").textContent === members[102].name;
       nameCells[1].dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: host }));
       checks.memberHoverClears = highlighted().length === 0;
-      nameCells[0].focus();
+      nameCells[0].querySelector("button").focus();
       checks.memberFocusAcrossWeeks = highlighted().length === 3;
-      nameCells[0].blur();
+      host.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.memberFocusSurvivesPointerAway = highlighted().length === 3;
+      nameCells[0].querySelector("button").blur();
       checks.memberBlurClears = highlighted().length === 0;
+      checks.highlightDoesNotQuery = profileFrames.length === 1;
+      nameCells[0].querySelector("button").click();
+      checks.projectProfileSingleQuery = profileFrames.length === 2 && nativeProfile.open;
+      nativeProfile.close();
+      delete gameRoot.__reactContainer$trialAudit;
+      nameCells[0].querySelector("button").click();
+      const profileStatus = host.querySelector('[data-role="trial-profile-status"]');
+      checks.profileUnavailableFeedback =
+        profileFrames.length === 2 && !profileStatus.hidden && Boolean(profileStatus.textContent);
+      gameRoot.__reactContainer$trialAudit = { current: { child: { stateNode: profileController } } };
       const timeline = host.querySelector("#mwi-trial-rail-timeline");
       const beforeScroll = timeline.scrollLeft;
       host.querySelector('[data-trial-scroll="timeline"][data-step="1"]').click();
