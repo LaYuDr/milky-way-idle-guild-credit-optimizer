@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.30] - 2026-09-22
+
+### Changed
+
+- 完善检查工作流、浏览器矩阵审计和发布门禁文档。
+
 ## [1.2.29] - 2026-09-22
 
 ### Changed

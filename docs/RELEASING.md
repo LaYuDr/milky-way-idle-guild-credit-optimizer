@@ -37,6 +37,13 @@ changelog, runs the full check, creates the one new immutable archive, stages
 only allowlisted paths, commits, pushes main, verifies the remote commit, and
 waits for Greasy Fork synchronization.
 
+The built-in full check uses compact stage summaries and retains complete
+logs under `.workbench/check-*`. Do not manually run each constituent check
+again after it succeeds. The release gate still runs after version/changelog
+updates and inherits `MWI_ARCHIVE_RELEASE=1`; quick checks and previous local
+passes never bypass it. Browser/game verification remains a separate requirement
+when the change affects those boundaries.
+
 Never use git add . in this repository.
 
 ## Rollback

@@ -54,8 +54,21 @@ git diff --check
 npm run release:dry-run
 ```
 
+Prefer `npm run check:handoff` to run the same three commands' checks once,
+with compact output and full logs under `.workbench/`. `npm run check` still
+runs all five stages; never treat `check:quick` as a full gate.
+
+During implementation, use `npm run check:quick -- test/<affected>.test.js`
+with an explicit list of affected tests. When impact is unclear, run the full
+suite. After a successful gate, do not repeat its individual stages unless
+files changed, a check failed, or new evidence warrants another run.
+
 For layout changes, also run the documented width-matrix audit in
-docs/DEVELOPMENT.md.
+docs/DEVELOPMENT.md. Use `npm run test:browser -- --suite <affected-suite>`
+to batch the existing contracts; shared styles or panel-shell changes require
+all affected suites. Width/locale overrides are smoke checks, not full matrices.
+Read compact summaries first and inspect full logs/reports on failure. Browser
+fixtures do not replace real-game verification of bridge or integration changes.
 
 Do not commit, push, publish, delete user data, or broaden automation behavior
 without explicit authorization. Always stage an explicit file list; never run

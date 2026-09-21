@@ -27,6 +27,42 @@ npm run check verifies formatting and lint rules, runs the Node tests, rebuilds
 current artifacts, and verifies the repository layout. It does not create a
 historical release archive.
 
+### Compact and scoped verification
+
+All checks retain their original coverage. `npm run check` now prints stage
+status, duration and Node test totals. Full stdout/stderr and `summary.json`
+are saved in a unique `.workbench/check-*` directory. A failed command returns
+a nonzero exit code, prints the last 6 KB of its log and stops subsequent stages.
+Read the full log for earlier errors; a truncated console excerpt is not the
+complete diagnostic. Successful logs are also retained.
+
+```bash
+# Development iteration: explicit affected tests, plus full formatting and lint.
+npm run check:quick -- test/trial-history.test.js test/runtime-storage.test.js
+
+# Handoff: full check, git diff --check and release:dry-run, each once.
+npm run check:handoff
+
+# CI: full check and git diff --exit-code, as before.
+npm run check:ci
+```
+
+Quick mode requires at least one existing `test/*.test.js` file; it does not
+infer dependencies, build artifacts or run repository verification. Use all
+tests when impact is uncertain. It never substitutes for the final full gate.
+Do not run `check`, `check:handoff` and `check:ci` consecutively on unchanged
+files: they share the same five-stage gate. CI's clean-diff check is for a
+committed checkout, not a mixed working tree. Individual npm commands remain
+available for detailed diagnostics.
+
+For small documentation changes, inspect the diff and formatting during
+iteration. For business rules, storage or protocol changes, choose affected
+Node tests and add browser/game verification at the affected boundary. For
+layout changes, run the affected feature's full browser matrix. For shared
+styles, localization or shell changes, expand to every affected feature.
+Once the required checks pass, repeat them only after relevant changes,
+failures or newly discovered risks.
+
 Run `npm run format` after intentional source edits. Generated artifacts,
 historical releases, local references, and workbench files are excluded from
 Prettier so immutable or third-party content is never mechanically rewritten.
@@ -42,6 +78,54 @@ Prettier so immutable or third-party content is never mechanically rewritten.
   src/userscript.js, then extend the module-order test.
 
 ## Local browser testing
+
+### Automated matrix runner
+
+The existing harness contracts can run in one command without reading every
+successful page's DOM or taking a screenshot at every width:
+
+```bash
+# One-time browser setup after npm ci (or use an installed Chrome below).
+npx playwright install chromium
+
+# Full trial-history matrix: eleven Chinese widths and three English widths.
+npm run test:browser -- --suite trials
+
+# Use installed Chrome; no browser download is needed.
+npm run test:browser -- --suite trials --channel chrome
+
+# Multiple affected features; each uses its documented width/language matrix.
+npm run test:browser -- --suite layout,credit,construction,settings
+
+# Explicit smoke subset while iterating; NOT full matrix acceptance.
+npm run test:browser -- --suite trials --widths 320,900 --locales zh,en
+```
+
+Suites: `layout`, `credit`, `construction`, `settings`, `trials`,
+`upgrade-empty`, `market-filter`, `locale-race`, `sidebar-resize`,
+`sidebar-startup`, `construction-snapshot`, `token-guide`. `--suite all` runs
+all supported suites; it is not the default for a small feature change.
+
+The runner rebuilds current artifacts without archival, starts a loopback
+server on a free port, and opens a fresh browser context for each case. It
+blocks external requests and never connects to an existing game session.
+Reload-based fixtures retain their own session state within that case.
+It waits for the harness JSON report, rejects missing/empty checks, reports
+page errors and timeouts as failures, and exits nonzero if any case fails.
+Layout and construction reports additionally enforce their documented geometry
+and readability fields; they do not use the same report shape as other suites.
+
+Each case has one console status line. Full JSON reports and failure-only PNGs
+are kept under `.workbench/browser-*`, with `matrix.json` recording the exact
+planned and completed cases. Custom widths/locales are labelled as a subset;
+they must not be reported as a complete documented matrix. Browser installation
+or startup failure is a failed run, never a skipped pass. No automatic retries
+hide intermittent failures. The runner is separate from the Node-only CI gate.
+
+Pointer/keyboard checks without a machine-readable harness report (such as
+the native sidebar-tab manual audit below), visual quality review, export/reload
+follow-ups and installed-game compatibility still need their documented checks.
+The matrix runner does not claim to cover them.
 
 Start the development server:
 
