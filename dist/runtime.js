@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.26";
+window.MwiGuildCreditVersion = "1.2.27";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1255,13 +1255,27 @@ window.MwiGuildCreditVersion = "1.2.26";
     return value !== null && summary.total > 0 ? (value / summary.total) * 100 : null;
   }
 
+  function metricAverageMultiple(record, row, field, summary = summarizeMetric(record, field)) {
+    const value = metricValue(record, row, field);
+    if (value === null || !(summary.average > 0) || !Number.isFinite(summary.average)) return null;
+    const multiple = value / summary.average;
+    return Number.isFinite(multiple) ? multiple : null;
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
       !sort ||
-      !["member", "level", "workDone", "workShare", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(
-        sort.field
-      )
+      ![
+        "member",
+        "level",
+        "workDone",
+        "workShare",
+        "workMultiple",
+        "damageDealt",
+        "healingDone",
+        "premitigatedDamageTaken"
+      ].includes(sort.field)
     )
       return result;
     const value = ({ record, row }) =>
@@ -1269,7 +1283,7 @@ window.MwiGuildCreditVersion = "1.2.26";
         ? memberIdentity(record, row).name || null
         : sort.field === "level"
           ? memberLevel(record, row)
-          : metricValue(record, row, sort.field === "workShare" ? "workDone" : sort.field);
+          : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),
@@ -1322,6 +1336,7 @@ window.MwiGuildCreditVersion = "1.2.26";
     metricValue,
     summarizeMetric,
     metricShare,
+    metricAverageMultiple,
     displayRows,
     sortEntries,
     memberAbsent,
@@ -3405,12 +3420,15 @@ window.MwiGuildCreditVersion = "1.2.26";
       trialDisplaySettings: "显示设置",
       trialMemberColumns: "成员列表显示字段",
       trialDisplaySettingsHint:
-        "工作量和占比用于生活试炼；占比按个人工作量 ÷ 项目已知总工作量计算，总量为 0 时显示 —。汇总不随列开关隐藏，最多保留两位小数。设置仅保存在本地。",
+        "生活试炼的人均倍数 = 个人工作量 ÷ 已知平均工作量（1× 为人均）；占比 = 个人工作量 ÷ 已知总工作量，分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
       trialDisplaySaveFailed: "设置未能保存，当前页面已生效；重新打开页面后可能恢复默认。",
       trialOverview: "项目总体概览",
       trialKnownCoverage: "{field}：已知 {count}/{total} 人，汇总仅含已知值。",
-      trialPartialShare: "工作量不完整，占比仅相对于已知总工作量。",
+      trialPartialShare: "工作量不完整，占比和人均倍数仅按已知工作量计算。",
       trialField_workShare: "占总百分比",
+      trialField_workMultiple: "人均倍数",
+      trialField_levelSummary: "等级汇总",
+      trialField_workSummary: "工作量汇总",
       trialAggregate_level_total: "总等级",
       trialAggregate_level_average: "平均等级",
       trialAggregate_level_median: "中位数等级",
@@ -4016,12 +4034,15 @@ window.MwiGuildCreditVersion = "1.2.26";
       trialDisplaySettings: "Display settings",
       trialMemberColumns: "Member table columns",
       trialDisplaySettingsHint:
-        "Work and share apply to skilling trials. Share = member work ÷ known trial total; zero totals show —. Summaries remain visible and use up to two decimals. Settings stay on this device.",
+        "For skilling trials, average multiple = work ÷ known average (1× is average); share = work ÷ known total. Zero denominators show —. Each summary toggle controls its total, average and median. Settings stay on this device.",
       trialDisplaySaveFailed: "Settings apply to this page but could not be saved. Reopening may restore defaults.",
       trialOverview: "Trial overview",
       trialKnownCoverage: "{field}: known for {count}/{total} members; summary uses known values only.",
-      trialPartialShare: "Work data is incomplete; shares use the known total only.",
+      trialPartialShare: "Work data is incomplete; shares and average multiples use known work only.",
       trialField_workShare: "Share of total",
+      trialField_workMultiple: "Average multiple",
+      trialField_levelSummary: "Level summary",
+      trialField_workSummary: "Work summary",
       trialAggregate_level_total: "Total level",
       trialAggregate_level_average: "Average level",
       trialAggregate_level_median: "Median level",
@@ -5965,10 +5986,14 @@ window.MwiGuildCreditVersion = "1.2.26";
 
   function normalizeTrialDisplay(value) {
     return Object.fromEntries(
-      Object.entries({ level: true, workDone: true, workShare: false }).map(([key, fallback]) => [
-        key,
-        typeof value?.[key] === "boolean" ? value[key] : fallback
-      ])
+      Object.entries({
+        level: true,
+        workDone: true,
+        workShare: false,
+        workMultiple: false,
+        levelSummary: true,
+        workSummary: true
+      }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])
     );
   }
 
@@ -10553,10 +10578,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const saved = tableSorts.get(key);
       if (saved && (saved.field === "member" || fields.includes(saved.field))) return saved;
       if (kind === "combat") return null;
-      return {
-        field: fields.includes("workDone") ? "workDone" : fields.includes("workShare") ? "workShare" : "member",
-        direction: fields.some((field) => field === "workDone" || field === "workShare") ? "desc" : "asc"
-      };
+      const field = ["workDone", "workShare", "workMultiple"].find((value) => fields.includes(value)) || "member";
+      return { field, direction: field === "member" ? "asc" : "desc" };
     }
     function renderSortHeader(key, field, sort) {
       const label = t(field === "member" ? "trialMember" : `trialField_${field}`);
@@ -10654,12 +10677,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return (
         kind === "combat"
           ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
-          : ["level", "workDone", "workShare"]
+          : ["level", "workDone", "workShare", "workMultiple"]
       ).filter((field) => displaySettings[field] !== false);
     }
 
     function renderDisplaySettings() {
-      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
     }
 
     function summaryNumber(value) {
@@ -10667,16 +10690,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderOverview(record, summaries) {
-      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${Object.entries(
-        summaries
-      )
+      const items = Object.entries(summaries)
+        .filter(([field]) => displaySettings[field === "level" ? "levelSummary" : "workSummary"])
         .map(
           ([field, stats]) =>
             `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
         )
-        .join(
-          ""
-        )}${displaySettings.workShare && record.kind === "skilling" && summaries.workDone.missing ? `<p>${escapeHtml(t("trialPartialShare"))}</p>` : ""}</div>`;
+        .join("");
+      const partial =
+        (displaySettings.workShare || displaySettings.workMultiple) &&
+        record.kind === "skilling" &&
+        summaries.workDone.missing
+          ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
+          : "";
+      if (!items && !partial) return "";
+      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${items}${partial}</div>`;
     }
 
     function renderRecord(record, showIdentity) {
@@ -10688,6 +10716,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         ])
       );
       const cellValue = (row, field) => {
+        if (field === "workMultiple") {
+          const multiple = trialHistoryApi.metricAverageMultiple(record, row, "workDone", summaries.workDone);
+          return multiple === null ? "—" : `${multiple.toFixed(2)}×`;
+        }
         if (field === "workShare") {
           const share = trialHistoryApi.metricShare(record, row, "workDone", summaries.workDone);
           return share === null ? "—" : `${share.toFixed(2)}%`;
@@ -10719,8 +10751,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
-      const count = visibleFields(kind).length;
-      const columnWidth = kind === "combat" ? 160 + count * 90 : 160 + count * 80;
+      const fields = visibleFields(kind);
+      const columnWidth =
+        kind === "combat"
+          ? 160 + fields.length * 90
+          : 160 + fields.reduce((width, field) => width + (field === "workMultiple" ? 136 : 80), 0);
       const weekWidth = Math.max(180, columnWidth);
       return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}" style="--trial-column-width:${columnWidth}px;--trial-week-width:${weekWidth}px">${columns}</div></div></section>`;
     }
@@ -10948,7 +10983,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
       host.addEventListener("change", (event) => {
         const field = event.target.dataset.trialDisplay;
-        if (["level", "workDone", "workShare"].includes(field)) {
+        if (["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].includes(field)) {
           displaySettings = { ...displaySettings, [field]: event.target.checked };
           displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
           displaySettingsOpen = true;

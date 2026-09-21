@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.27] - 2026-09-22
+
+### Changed
+
+- 修正玩家历史资料与试炼数据缓存、展示和状态同步，并补充回归测试。
+
 ## [1.2.26] - 2026-09-21
 
 ### Changed

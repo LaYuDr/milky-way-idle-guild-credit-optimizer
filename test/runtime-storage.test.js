@@ -500,15 +500,35 @@ test("403 退避状态只保留已配置快照源和合法时间", () => {
 });
 
 test("试炼显示设置校验布尔值，独立持久化并在存储故障时回退", () => {
-  const defaults = { level: true, workDone: true, workShare: false };
+  const defaults = {
+    level: true,
+    workDone: true,
+    workShare: false,
+    workMultiple: false,
+    levelSummary: true,
+    workSummary: true
+  };
   assert.deepEqual(storageApi.normalizeTrialDisplay({ level: "false", workDone: null, workShare: true, extra: true }), {
     ...defaults,
+    workShare: true
+  });
+  assert.deepEqual(storageApi.normalizeTrialDisplay({ level: false, workDone: true, workShare: true }), {
+    ...defaults,
+    level: false,
     workShare: true
   });
   const storage = memoryStorage();
   const plugin = createStorage(storage);
   assert.deepEqual(plugin.loadTrialDisplay(), defaults);
-  const hidden = { level: false, workDone: false, workShare: true };
+  const hidden = {
+    ...defaults,
+    level: false,
+    workDone: false,
+    workShare: true,
+    workMultiple: true,
+    levelSummary: false,
+    workSummary: false
+  };
   assert.equal(plugin.saveTrialDisplay(hidden), true);
   assert.deepEqual(createStorage(storage).loadTrialDisplay(), hidden);
   const key = `${config.TRIAL_DISPLAY_STORAGE_PREFIX}:${plugin.guildBuildingPlannerStorageKey()}`;

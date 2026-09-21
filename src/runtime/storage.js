@@ -195,10 +195,14 @@
 
   function normalizeTrialDisplay(value) {
     return Object.fromEntries(
-      Object.entries({ level: true, workDone: true, workShare: false }).map(([key, fallback]) => [
-        key,
-        typeof value?.[key] === "boolean" ? value[key] : fallback
-      ])
+      Object.entries({
+        level: true,
+        workDone: true,
+        workShare: false,
+        workMultiple: false,
+        levelSummary: true,
+        workSummary: true
+      }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])
     );
   }
 

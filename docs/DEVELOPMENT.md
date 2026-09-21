@@ -583,11 +583,11 @@ complete rows, and no extra profile requests or stored-record changes.
 
 ### Trial display settings and summaries
 
-The trial history audit exercises all eight combinations of level, work and share
+The trial history audit exercises all sixteen combinations of level, work, share and average-multiple
 columns in week, project and player views, including percentage sorting, adaptive
 column widths, full row retention, local preference persistence and no extra
-profile requests. Overviews remain above the member table and use known values
-only; unit tests cover missing values, explicit zero, odd/even medians, empty
+profile requests. Four summary-toggle combinations are checked in all three views. Overviews
+remain above the member table and use known values only; unit tests cover missing values, explicit zero, odd/even medians, empty
 records, zero denominators and overflowing totals. Display preferences use their
 own per-region/character key and are not part of trial exports.
 

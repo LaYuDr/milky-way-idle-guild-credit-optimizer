@@ -740,6 +740,12 @@
       "path": "releases/v1.2/银河奶牛公会信用点性价比-v1.2.26.user.js",
       "sizeBytes": 789820,
       "sha256": "4380d8211057735b061a77d4fda206053ce72babbacc89ce99c5d2d2a9be9464"
+    },
+    {
+      "version": "1.2.27",
+      "path": "releases/v1.2/银河奶牛公会信用点性价比-v1.2.27.user.js",
+      "sizeBytes": 791428,
+      "sha256": "a025827b27dae474be416c15aff8bd1274a82634a123254e29d537bbc7415f55"
     }
   ]
 }

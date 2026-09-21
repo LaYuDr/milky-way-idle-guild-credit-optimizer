@@ -476,13 +476,27 @@
     return value !== null && summary.total > 0 ? (value / summary.total) * 100 : null;
   }
 
+  function metricAverageMultiple(record, row, field, summary = summarizeMetric(record, field)) {
+    const value = metricValue(record, row, field);
+    if (value === null || !(summary.average > 0) || !Number.isFinite(summary.average)) return null;
+    const multiple = value / summary.average;
+    return Number.isFinite(multiple) ? multiple : null;
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
       !sort ||
-      !["member", "level", "workDone", "workShare", "damageDealt", "healingDone", "premitigatedDamageTaken"].includes(
-        sort.field
-      )
+      ![
+        "member",
+        "level",
+        "workDone",
+        "workShare",
+        "workMultiple",
+        "damageDealt",
+        "healingDone",
+        "premitigatedDamageTaken"
+      ].includes(sort.field)
     )
       return result;
     const value = ({ record, row }) =>
@@ -490,7 +504,7 @@
         ? memberIdentity(record, row).name || null
         : sort.field === "level"
           ? memberLevel(record, row)
-          : metricValue(record, row, sort.field === "workShare" ? "workDone" : sort.field);
+          : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),
@@ -543,6 +557,7 @@
     metricValue,
     summarizeMetric,
     metricShare,
+    metricAverageMultiple,
     displayRows,
     sortEntries,
     memberAbsent,

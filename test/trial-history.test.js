@@ -912,3 +912,28 @@ test("玩家搜索按姓名局部匹配，忽略大小写与首尾空白，不�
   assert.deepEqual(api.searchHistoryMembers(members, "[.*]"), []);
   assert.deepEqual(api.searchHistoryMembers(members, "   "), members);
 });
+
+test("工作量人均倍数以已知成员平均值为基准，零值参与平均且缺失保持未知", () => {
+  const record = { schemaVersion: 2, rows: [0, 30, 60, null].map((workDone, i) => ({ characterId: i + 1, workDone })) };
+  const before = JSON.stringify(record);
+  assert.deepEqual(
+    record.rows.map((row) => api.metricAverageMultiple(record, row, "workDone")),
+    [0, 1, 2, null]
+  );
+  assert.deepEqual(
+    api.displayRows(record, { field: "workMultiple", direction: "desc" }).map((row) => row.characterId),
+    [3, 2, 1, 4]
+  );
+  assert.deepEqual(
+    api.displayRows(record, { field: "workMultiple", direction: "asc" }).map((row) => row.characterId),
+    [1, 2, 3, 4]
+  );
+  assert.equal(JSON.stringify(record), before);
+  for (const rows of [[{ workDone: 0 }], [{ workDone: null }], []]) {
+    assert.equal(api.metricAverageMultiple({ schemaVersion: 2, rows }, rows[0] || {}, "workDone"), null);
+  }
+  const official = { schemaVersion: 1, rows: [{}, { workDone: 10 }] };
+  assert.equal(api.metricAverageMultiple(official, official.rows[1], "workDone"), 2);
+  const huge = { schemaVersion: 2, rows: [{ workDone: Number.MAX_VALUE }, { workDone: Number.MAX_VALUE }] };
+  assert.equal(api.metricAverageMultiple(huge, huge.rows[0], "workDone"), 1);
+});

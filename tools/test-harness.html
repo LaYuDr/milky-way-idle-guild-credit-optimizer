@@ -3785,20 +3785,36 @@
         host.querySelector(`[data-trial-mode="${view}"]`).click();
         if (view === "player") choose("trial-player", JSON.stringify(["id", "101"]));
         let nameOnlyWidth = 0;
-        for (let mask = 0; mask < 8; mask++) {
-          ["level", "workDone", "workShare"].forEach((field, bit) => setDisplay(field, Boolean(mask & (1 << bit))));
+        for (let mask = 0; mask < 16; mask++) {
+          ["level", "workDone", "workShare", "workMultiple"].forEach((field, bit) =>
+            setDisplay(field, Boolean(mask & (1 << bit)))
+          );
           const current = displayTable();
           const columnWidth = current.closest(".mwi-trial-column").getBoundingClientRect().width;
           if (mask === 0) nameOnlyWidth = columnWidth;
-          if (mask === 7)
+          if (mask === 15)
             checks[`displayAdaptiveWidth_${view}`] =
               columnWidth > nameOnlyWidth && current.scrollWidth <= current.parentElement.clientWidth + 1;
           const fields = [...current.querySelectorAll("thead [data-trial-sort]")].map((el) => el.dataset.trialSort);
-          const expected = ["member", ...["level", "workDone", "workShare"].filter((field, bit) => mask & (1 << bit))];
+          const expected = [
+            "member",
+            ...["level", "workDone", "workShare", "workMultiple"].filter((field, bit) => mask & (1 << bit))
+          ];
           checks[`displayColumns_${view}_${mask}`] =
             fields.join() === expected.join() &&
             current.querySelectorAll("tbody tr").length === 2 &&
             panel.scrollWidth <= panel.clientWidth;
+          if (mask === 8) {
+            const multiples = [...current.querySelectorAll('[data-trial-field="workMultiple"]')].map(
+              (el) => el.textContent
+            );
+            checks[`displayMultiples_${view}`] = [...multiples].sort().join() === "0.00×,2.00×";
+            current.querySelector('[data-trial-sort="workMultiple"]').click();
+            checks[`multipleSort_${view}`] =
+              [...displayTable().querySelectorAll('[data-trial-field="workMultiple"]')]
+                .map((el) => el.textContent)
+                .join() === [...multiples].reverse().join();
+          }
           if (mask === 4) {
             const shares = [...current.querySelectorAll('[data-trial-field="workShare"]')].map((el) => el.textContent);
             checks[`displayShares_${view}`] = [...shares].sort().join() === "0.00%,100.00%";
@@ -3809,6 +3825,16 @@
                 .join() === [...shares].reverse().join();
           }
         }
+        for (let summaryMask = 0; summaryMask < 4; summaryMask++) {
+          setDisplay("levelSummary", Boolean(summaryMask & 1));
+          setDisplay("workSummary", Boolean(summaryMask & 2));
+          const record = displayTable().closest("[data-trial-record]");
+          checks[`summaryToggle_${view}_${summaryMask}`] =
+            Boolean(record.querySelector('[data-trial-overview="level"]')) === Boolean(summaryMask & 1) &&
+            Boolean(record.querySelector('[data-trial-overview="workDone"]')) === Boolean(summaryMask & 2) &&
+            displayTable().querySelectorAll("tbody tr").length === 2 &&
+            (summaryMask !== 0 || !record.querySelector('[data-role="trial-overview"]'));
+        }
       }
       checks.displaySettingsRemainOpen = host.querySelector(".mwi-trial-display-settings").open;
       checks.displayNoProfileQueries = profileFrames.length === displayFrames;
@@ -3816,8 +3842,14 @@
         localStorage.getItem(`mwi-guild-trial-display-v1:mwi-guild-building-planner-v1:${location.hostname}:default`)
       );
       checks.displaySettingsPersist =
-        savedDisplay.level === true && savedDisplay.workDone === true && savedDisplay.workShare === true;
+        savedDisplay.level === true &&
+        savedDisplay.workDone === true &&
+        savedDisplay.workShare === true &&
+        savedDisplay.workMultiple === true &&
+        savedDisplay.levelSummary === true &&
+        savedDisplay.workSummary === true;
       setDisplay("workShare", false);
+      setDisplay("workMultiple", false);
       host.querySelector('[data-trial-mode="week"]').click();
       checks.viewReadOnly = JSON.stringify(saved()) === before;
       // Longer official-stat fixtures verify full rows without nested vertical scrolling.
