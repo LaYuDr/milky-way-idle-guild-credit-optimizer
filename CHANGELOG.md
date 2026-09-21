@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.25] - 2026-09-21
+
+### Changed
+
+- 新增按玩家查看模式，支持选择玩家、查看生活与战斗历史横向记录，并保留完整成员数据。
+
 ## [1.2.24] - 2026-09-21
 
 ### Changed

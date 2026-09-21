@@ -3325,6 +3325,25 @@
             )
           ).size === 1
       };
+      const controlsStacked = () => {
+        const modes = [...host.querySelectorAll("[data-trial-mode]")];
+        const choice = host.querySelector(".mwi-trial-choice-field");
+        return (
+          modes.length === 3 &&
+          new Set(modes.map((el) => Math.round(el.getBoundingClientRect().top))).size === 1 &&
+          choice.getBoundingClientRect().top >= host.querySelector(".mwi-trial-mode").getBoundingClientRect().bottom
+        );
+      };
+      checks.weekControlsTwoRows = controlsStacked();
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.playerModeNoQueryUntilSelected =
+        profileFrames.length === 0 && !host.querySelector("[data-trial-player-title]");
+      checks.playerChoicesUnique = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
+      checks.playerControlsTwoRows = controlsStacked();
+      checks.playerChoicesEscaped = !host.querySelector('[data-role="trial-player"] b');
+      host.querySelector('[data-trial-mode="project"]').click();
+      checks.projectControlsTwoRows = controlsStacked();
+      host.querySelector('[data-trial-mode="week"]').click();
       checks.profileNoAutomaticQuery = profileFrames.length === 0;
       host.querySelector("[data-trial-profile]").click();
       checks.weekProfileSingleQuery =
@@ -3333,10 +3352,24 @@
         profileFrames[0].viewProfileData.characterName === members[101].name &&
         !nativeProfile.open &&
         host.querySelector("[data-trial-profile-content]").textContent.includes("1800");
-      checks.playerAllProjects = host.querySelectorAll("[data-trial-player-row]").length === 6;
-      checks.playerNoOtherNames = !host
+      checks.playerAllProjects = host.querySelectorAll("[data-trial-selected-member]").length === 6;
+      checks.playerIncludesOtherNames = host
         .querySelector(".mwi-trial-player-history")
         .textContent.includes(members[102].name);
+      checks.playerCompleteMemberTables =
+        host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12;
+      checks.playerGroupsVertical =
+        host.querySelector('[data-trial-group="player-skilling"]').getBoundingClientRect().bottom <=
+        host.querySelector('[data-trial-group="player-combat"]').getBoundingClientRect().top;
+      checks.playerColumnsHorizontal =
+        new Set(
+          [...host.querySelectorAll('[data-trial-group="player-skilling"] [data-trial-player-column]')].map((el) =>
+            Math.round(el.getBoundingClientRect().top)
+          )
+        ).size === 1;
+      checks.playerTablesNoVerticalLimit = [...host.querySelectorAll(".mwi-trial-table-scroll")].every(
+        (el) => el.scrollHeight <= el.clientHeight + 1
+      );
       checks.playerPanelContained = panel.scrollWidth <= panel.clientWidth;
       const profileBounds = host.querySelector(".mwi-trial-player-profile").getBoundingClientRect();
       const historyBounds = host.querySelector(".mwi-trial-player-history").getBoundingClientRect();
@@ -3451,10 +3484,21 @@
       nameCells[0].querySelector("button").click();
       checks.projectProfileCache = profileFrames.length === 1 && !nativeProfile.open;
       checks.playerEveryWeek =
-        host.querySelectorAll(".mwi-trial-player-week").length === 3 &&
-        host.querySelectorAll("[data-trial-player-row]").length === 8;
-      const playerWeeks = [...host.querySelectorAll("[data-trial-jump-week]")].map((el) => el.dataset.trialJumpWeek);
-      checks.playerWeeksNewestFirst = playerWeeks.join(",") === "10,9,8";
+        new Set([...host.querySelectorAll("[data-trial-player-column]")].map((el) => el.dataset.trialWeek)).size ===
+          3 && host.querySelectorAll("[data-trial-selected-member]").length === 8;
+      const playerWeeks = [...host.querySelectorAll('[data-trial-group="player-skilling"] [data-trial-jump-week]')].map(
+        (el) => el.dataset.trialJumpWeek
+      );
+      checks.playerWeeksNewestFirst = playerWeeks.join(",") === "10,10,10,10,9,8";
+      const playerRail = host.querySelector("#mwi-trial-rail-player-skilling");
+      host.querySelector('[data-trial-scroll="player-skilling"][data-step="1"]').click();
+      checks.playerScrollsOlder = playerRail.scrollLeft > 0;
+      const savedPlayerLeft = playerRail.scrollLeft;
+      host.querySelector('[data-trial-sort="member"]').click();
+      checks.playerSortPreservesScroll =
+        host.querySelector("#mwi-trial-rail-player-skilling").scrollLeft === savedPlayerLeft;
+      checks.playerSelectionSurvivesSort = host.querySelectorAll("[data-trial-selected-member]").length === 8;
+      host.querySelector('[data-trial-sort="workDone"]').click();
       delete gameRoot.__reactContainer$trialAudit;
       host.querySelector("[data-trial-profile-refresh]").click();
       checks.profileUnavailableFeedback =
@@ -3503,7 +3547,7 @@
       host.querySelector("[data-trial-player-back]").click();
       host.querySelectorAll("[data-trial-profile]")[1].click();
       checks.playerLoadingKeepsHistory =
-        host.querySelectorAll("[data-trial-player-row]").length === 6 && !nativeProfile.open;
+        host.querySelectorAll("[data-trial-selected-member]").length === 6 && !nativeProfile.open;
       profileReplies[0]();
       checks.lateProfileDoesNotReplacePlayer =
         host.querySelector("[data-trial-player-title]").textContent.includes(members[102].name) &&
@@ -3574,19 +3618,88 @@
         [...playerSort().closest("table").querySelectorAll('[data-trial-field="workDone"]')].map((cell) =>
           Number(cell.textContent)
         );
-      const playerDescending = playerValues();
+      const firstPlayerOrder = playerValues();
       playerSort().click();
       checks.playerSortToggle =
-        playerValues().every((v, i, all) => i === 0 || v >= all[i - 1]) &&
-        playerDescending.every((v, i, all) => i === 0 || v <= all[i - 1]);
-      checks.sortedPlayerKeepsAllWeeks = host.querySelectorAll(".mwi-trial-player-week").length === 3;
+        playerValues().join(",") === [...firstPlayerOrder].reverse().join(",") &&
+        firstPlayerOrder[0] !== firstPlayerOrder[1];
+      checks.sortedPlayerKeepsAllWeeks =
+        new Set([...host.querySelectorAll("[data-trial-player-column]")].map((el) => el.dataset.trialWeek)).size === 3;
+      host.querySelector("[data-trial-profile]").closest("table").querySelectorAll("[data-trial-profile]")[1].click();
+      checks.playerSwitchKeepsReturnRoute = Boolean(host.querySelector("[data-trial-player-back]"));
       host.querySelector("[data-trial-player-back]").click();
+      checks.playerSwitchReturnsToList = Boolean(
+        host.querySelector('[data-trial-mode="project"][aria-pressed="true"]')
+      );
       host.querySelector('[data-trial-mode="week"]').click();
       choose("trial-week", "10");
       checks.sortKeepsAllRows = host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12;
+      const requestsBeforePlayerMode = profileFrames.length;
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.playerModeNoBackgroundQuery = profileFrames.length === requestsBeforePlayerMode;
+      choose("trial-player", JSON.stringify(["id", "101"]));
+      checks.playerChoiceOpensHistory =
+        host.querySelectorAll("[data-trial-selected-member]").length === 8 &&
+        host.querySelector('[data-trial-mode="player"]').getAttribute("aria-pressed") === "true";
+      checks.playerChoiceActive =
+        host.querySelector('[data-trial-choice="player"][aria-pressed="true"]').value === JSON.stringify(["id", "101"]);
+      host
+        .querySelector('[data-trial-choice="player"][aria-pressed="true"]')
+        .dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      checks.playerKeyboardSelection =
+        document.activeElement === host.querySelector('[data-trial-choice="player"][aria-pressed="true"]');
+      choose("trial-player", JSON.stringify(["id", "102"]));
+      checks.playerChoiceSwitchesHistory =
+        host.querySelector("[data-trial-player-title]").textContent.includes(members[102].name) &&
+        host.querySelectorAll("[data-trial-selected-member]").length === 6;
+      host.querySelector('[data-trial-mode="week"]').click();
+      checks.playerModeReturnsToWeek =
+        !host.querySelector("[data-trial-player-title]") && host.querySelectorAll("[data-trial-record]").length === 6;
       checks.viewReadOnly = JSON.stringify(saved()) === before;
+      // Longer official-stat fixtures verify full rows without nested vertical scrolling.
+      const extraMembers = Object.fromEntries(
+        Array.from({ length: 58 }, (_, index) => [200 + index, { name: `完整列表成员 ${index + 1}` }])
+      );
+      send({ type: "guild_updated", guild });
+      send({ type: "guild_characters_updated", guildSharableCharacterMap: { ...members, ...extraMembers } });
+      send({
+        ...message,
+        guildTrialStatList: [
+          ...message.guildTrialStatList,
+          ...Object.keys(extraMembers).flatMap((id) => [
+            { trialHrid: milk, characterId: Number(id), workDone: Number(id) },
+            {
+              trialHrid: combats[0],
+              characterId: Number(id),
+              damageDealt: Number(id),
+              healingDone: 0,
+              premitigatedDamageTaken: 1
+            }
+          ])
+        ]
+      });
+      [...host.querySelectorAll("[data-trial-profile]")]
+        .find((button) => JSON.parse(button.dataset.trialIdentity).id === "101")
+        .click();
+      const longTables = [...host.querySelectorAll('[data-role="trial-stats-table"]')].filter(
+        (table) => table.querySelectorAll("tbody tr").length === 60
+      );
+      checks.playerLongFullLists = longTables.length === 2;
+      checks.playerLongNoInnerVerticalScroll = longTables.every(
+        (table) => table.parentElement.scrollHeight <= table.parentElement.clientHeight + 1
+      );
+      checks.playerLongCombatBelowLife =
+        host.querySelector('[data-trial-group="player-skilling"]').getBoundingClientRect().bottom <=
+        host.querySelector('[data-trial-group="player-combat"]').getBoundingClientRect().top;
+      checks.playerLongStillHighlighted = host.querySelectorAll("[data-trial-selected-member]").length === 8;
       checks.zeroPanelOverflow = panel.scrollWidth <= panel.clientWidth;
-      return { width: sidebarWidth, rootOverflow: Math.max(0, panel.scrollWidth - panel.clientWidth), checks };
+      const rootOverflow = Math.max(0, panel.scrollWidth - panel.clientWidth);
+      if (!searchParams.has("keepLongHistory")) {
+        host.querySelector("[data-trial-player-back]").click();
+        send({ type: "guild_characters_updated", guildSharableCharacterMap: members });
+        send(message);
+      }
+      return { width: sidebarWidth, rootOverflow, checks };
     }
     if (searchParams.has("trialHistoryAudit")) {
       // Only this isolated fixture origin is cleared, never the game's storage.

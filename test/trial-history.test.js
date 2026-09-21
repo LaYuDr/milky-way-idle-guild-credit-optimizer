@@ -708,7 +708,7 @@ test("战斗项目使用游戏排序字段，当前定义优先，仍排在生�
   );
 });
 
-test("玩家历史跨周筛选全部项目，保留零值与来源且不修改原记录", () => {
+test("玩家历史只选参加过的项目，保留全体成员及完整来源且不修改原记录", () => {
   const { context, message } = fixture();
   const [base] = api.completedSnapshots(context, message, now);
   const records = [
@@ -732,7 +732,15 @@ test("玩家历史跨周筛选全部项目，保留零值与来源且不修改�
   assert.equal(weeks.length, 2);
   assert.equal(weeks[0].records.length, 3);
   assert.equal(weeks[1].records.length, 1);
-  assert.ok(weeks.flatMap((week) => week.records).every((record) => record.rows.length === 1));
+  assert.ok(
+    weeks
+      .flatMap((week) => week.records)
+      .every((record) => record === records.find((source) => source.key === record.key))
+  );
+  assert.equal(weeks[0].records.find((record) => record.key === "combat").rows.length, 2);
+  assert.equal(weeks[0].records.find((record) => record.key === "combat").rows[1].damageDealt, 999);
+  assert.ok(!weeks.flatMap((week) => week.records).some((record) => record.key === "other"));
+  assert.deepEqual(api.memberHistory(records, { id: "missing", name: "Unknown" }), []);
   assert.equal(weeks[0].records.find((record) => record.key === "combat").rows[0].damageDealt, 12.125);
   assert.equal(JSON.stringify(records), original);
 });
@@ -790,4 +798,48 @@ test("玩家跨项目排序使用各记录的等级和零值语义", () => {
     entries[0]
   ]);
   assert.deepEqual(api.sortEntries(entries, null), entries);
+});
+
+test("玩家选项按 ID 去重并优先最新姓名，手动唯一同名合并，异 ID 同名不合并", () => {
+  const record = (weekNumber, rows, members) => ({ weekNumber, weekStartAt: weekNumber * 604800000, rows, members });
+  const records = [
+    record(8, [{ characterId: 1 }, { memberKey: "m" }], { 1: { name: "Old" }, m: { name: "Solo" } }),
+    record(
+      9,
+      [
+        { characterId: 1 },
+        { characterId: 2 },
+        { characterId: 3 },
+        { characterId: 4 },
+        { memberKey: "manual" },
+        { characterId: 5 }
+      ],
+      { 1: { name: "New" }, 2: { name: "Solo" }, 3: { name: "Twin" }, 4: { name: "Twin" }, manual: { name: "Manual" } }
+    )
+  ];
+  const before = JSON.stringify(records);
+  const choices = api.historyMembers(records);
+  assert.equal(choices.length, 5);
+  assert.equal(choices.find((item) => item.id === "1").name, "New");
+  assert.equal(choices.filter((item) => item.name === "Solo").length, 1);
+  assert.equal(choices.filter((item) => item.name === "Twin").length, 2);
+  assert.equal(choices.find((item) => item.name === "Manual").id, null);
+  assert.equal(JSON.stringify(records), before);
+  assert.deepEqual(api.historyMembers([]), []);
+});
+
+test("仅姓名的旧名记录仍可在玩家选项中找到", () => {
+  const old = {
+    weekStartAt: Date.parse("2026-09-07T00:00:00Z"),
+    rows: [{ characterId: 1 }, { memberKey: "manual" }],
+    members: { 1: { name: "Old" }, manual: { name: "Old" } }
+  };
+  const latest = {
+    weekStartAt: Date.parse("2026-09-14T00:00:00Z"),
+    rows: [{ characterId: 1 }],
+    members: { 1: { name: "New" } }
+  };
+  const choices = api.historyMembers([old, latest]);
+  assert.equal(choices.length, 2);
+  assert.ok(choices.some((member) => member.id === null && member.name === "Old"));
 });

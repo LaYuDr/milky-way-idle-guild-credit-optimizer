@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.24";
+window.MwiGuildCreditVersion = "1.2.25";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -904,14 +904,34 @@ window.MwiGuildCreditVersion = "1.2.24";
     return Boolean(a.name && a.name === b.name);
   }
 
+  function historyMembers(records) {
+    const members = new Map();
+    const idsByName = new Map();
+    for (const week of historyWeeks(records))
+      for (const record of week.records)
+        for (const row of record.rows) {
+          const identity = memberIdentity(record, row);
+          if (!identity.name) continue;
+          const key = JSON.stringify([identity.id === null ? "name" : "id", identity.id ?? identity.name]);
+          if (!members.has(key)) members.set(key, { key, ...identity });
+          if (identity.id !== null) {
+            if (!idsByName.has(identity.name)) idsByName.set(identity.name, new Set());
+            idsByName.get(identity.name).add(identity.id);
+          }
+        }
+    // Keep distinct IDs even when names coincide; collapse a manual alias only when unambiguous.
+    return [...members.values()]
+      .filter((member) => {
+        if (member.id !== null || idsByName.get(member.name)?.size !== 1) return true;
+        const [id] = idsByName.get(member.name);
+        return members.get(JSON.stringify(["id", id]))?.name !== member.name;
+      })
+      .sort((a, b) => memberCollator.compare(a.name, b.name));
+  }
+
   function memberHistory(records, identity) {
     return historyWeeks(
-      records
-        .map((record) => ({
-          ...record,
-          rows: record.rows.filter((row) => sameMember(identity, memberIdentity(record, row)))
-        }))
-        .filter((record) => record.rows.length)
+      records.filter((record) => record.rows.some((row) => sameMember(identity, memberIdentity(record, row))))
     );
   }
 
@@ -1273,6 +1293,7 @@ window.MwiGuildCreditVersion = "1.2.24";
     memberAbsent,
     memberIdentity,
     memberHistory,
+    historyMembers,
     sameMember,
     memberLevel,
     withMemberLevels,
@@ -3349,6 +3370,10 @@ window.MwiGuildCreditVersion = "1.2.24";
       trialDisplayMode: "历史数据展示方式",
       trialByWeek: "按周查看",
       trialByProject: "按项目查看",
+      trialByPlayer: "按玩家查看",
+      trialChoosePlayer: "玩家",
+      trialSelectPlayerPrompt: "选择玩家查看参试历史",
+      trialNoNamedPlayers: "暂无已记录姓名的玩家",
       trialChooseWeek: "周次",
       trialChooseProject: "项目",
       trialUnknownWeek: "周次不明",
@@ -3909,6 +3934,10 @@ window.MwiGuildCreditVersion = "1.2.24";
       trialDisplayMode: "History display mode",
       trialByWeek: "By week",
       trialByProject: "By trial",
+      trialByPlayer: "By player",
+      trialChoosePlayer: "Player",
+      trialSelectPlayerPrompt: "Select a player to view trial history",
+      trialNoNamedPlayers: "No recorded player names yet",
       trialChooseWeek: "Week",
       trialChooseProject: "Trial",
       trialUnknownWeek: "Unknown week",
@@ -8574,7 +8603,7 @@ window.MwiGuildCreditVersion = "1.2.24";
         #mwi-credit-optimizer .mwi-trial-sort svg{flex:0 0 12px}
         #mwi-credit-optimizer .mwi-trial-table th:is([aria-sort="ascending"],[aria-sort="descending"]){color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
-        #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
+        #mwi-credit-optimizer .mwi-trial-table tbody tr:is(.mwi-trial-member-highlight,.mwi-trial-player-selected){background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link{min-height:0;max-width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:inherit;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
         #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-profile-link:hover{background:transparent;color:var(--trial-accent);text-decoration:underline;text-underline-offset:3px}
 
@@ -8601,15 +8630,15 @@ window.MwiGuildCreditVersion = "1.2.24";
         #mwi-credit-optimizer .mwi-trial-raw{margin:6px 0;min-width:0}
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:4px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
-        #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:8px 16px;margin:0 0 8px}
-        #mwi-credit-optimizer .mwi-trial-choice-field{flex:1 1 360px;display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-display-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0 0 8px}
+        #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-project-icon{width:20px;height:20px;flex:0 0 20px}
         #mwi-credit-optimizer .mwi-trial-choices button:hover{background:var(--trial-surface);color:var(--trial-text)}
         #mwi-credit-optimizer .mwi-trial-choices button[aria-pressed="true"]{border-color:var(--trial-accent);background:#34514e;color:#d5f7ed}
-        #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:2px;background:var(--trial-field);border-radius:6px}
-        #mwi-credit-optimizer .mwi-trial-mode button{min-height:30px;background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:nowrap;gap:4px;padding:2px;max-width:100%;width:fit-content;overflow-x:auto;scrollbar-width:thin;background:var(--trial-field);border-radius:6px}
+        #mwi-credit-optimizer .mwi-trial-mode button{flex:0 0 auto;white-space:nowrap;min-height:30px;background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-mode button[aria-pressed="true"]{background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer .mwi-trial-group{min-width:0;margin:0 0 16px}
         #mwi-credit-optimizer .mwi-trial-group-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
@@ -8635,15 +8664,13 @@ window.MwiGuildCreditVersion = "1.2.24";
         #mwi-credit-optimizer .mwi-trial-player-profile,#mwi-credit-optimizer .mwi-trial-player-history{min-width:0}
         #mwi-credit-optimizer .mwi-trial-player-profile{padding-right:16px;border-right:1px solid var(--trial-line)}
         #mwi-credit-optimizer .mwi-trial-player-profile header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-        #mwi-credit-optimizer .mwi-trial-player-profile h3,#mwi-credit-optimizer .mwi-trial-player-week h3{margin:0 0 6px;font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-player-profile h3{margin:0 0 6px;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-player-profile h4{margin:16px 0 4px;font-size:14px;color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:3px 0;border-bottom:1px solid var(--trial-line)}
         #mwi-credit-optimizer .mwi-trial-profile-facts dt{color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-facts dd{margin:0;max-width:20ch;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-items{margin:4px 0;padding-left:18px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-trial-player-week{margin:0 0 20px}
-        #mwi-credit-optimizer .mwi-trial-player-week .mwi-trial-table caption{padding:3px 0}
         @container mwi-trials (max-width:760px){
           #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
           #mwi-credit-optimizer .mwi-trial-player-profile{padding:0 0 12px;border-right:0;border-bottom:1px solid var(--trial-line)}
@@ -9874,8 +9901,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     projectIcon,
     getBridge,
     resolveItemName,
-    getSort,
-    renderSortHeader
+    renderRecord,
+    renderRail
   }) {
     const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
     const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
@@ -9929,39 +9956,34 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     function historyMarkup(weeks) {
       if (!weeks.length) return `<p class="mwi-trial-meta">${e(t("trialPlayerEmpty"))}</p>`;
-      return weeks
-        .map(
-          (week) =>
-            `<section class="mwi-trial-player-week"><h3><button type="button" class="mwi-trial-heading-link" data-trial-jump-week="${e(week.key)}">${e(weekLabel(week))}</button></h3>${[
-              "skilling",
-              "combat"
-            ]
-              .map((kind) => {
-                const records = week.records.filter((record) => record.kind === kind);
-                if (!records.length) return "";
-                const fields =
-                  kind === "skilling"
-                    ? ["level", "workDone"]
-                    : ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"];
-                const key = JSON.stringify(["player", week.key, kind]);
-                const sort = getSort(key);
-                const rows = api
-                  .historyProjects(records)
-                  .flatMap((project) =>
-                    project.records.flatMap((record) => record.rows.map((row) => ({ project, record, row })))
-                  );
-                return `<div class="mwi-trial-table-scroll" data-trial-scroll-id="${e(key)}" role="region" tabindex="0" aria-label="${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}"><table class="mwi-trial-table"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><thead><tr><th scope="col">${e(t("trialChooseProject"))}</th>${fields.map((field) => renderSortHeader(key, field, sort)).join("")}</tr></thead><tbody>${api
-                  .sortEntries(rows, sort)
-                  .map(
-                    ({ project, record, row }) =>
-                      `<tr data-trial-player-row><th scope="row"><button type="button" class="mwi-trial-heading-link" data-trial-jump-project="${e(project.key)}">${projectIcon(record)}${e(trialName(record))}</button><small>${e(record.guildName || t("trialUnknownGuild"))} · ${e(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</small></th>${fields.map((field) => `<td data-trial-field="${field}">${e(number(field === "level" ? api.memberLevel(record, row) : api.metricValue(record, row, field)))}</td>`).join("")}</tr>`
-                  )
-                  .join("")}</tbody></table></div>`;
-              })
-              .join("")}</section>`
-        )
+      return ["skilling", "combat"]
+        .map((kind) => {
+          const columns = weeks.flatMap((week) =>
+            api
+              .historyProjects(
+                week.records.filter((record) => record.kind === kind),
+                getBridge()?.trialHistoryContext?.details || {}
+              )
+              .flatMap((project) =>
+                project.records.map(
+                  (record) =>
+                    `<article class="mwi-trial-column" data-trial-player-column data-trial-week="${e(week.key)}"><h4><button type="button" class="mwi-trial-heading-link" data-trial-jump-week="${e(week.key)}">${e(weekLabel(week))}</button></h4><h4><button type="button" class="mwi-trial-heading-link" data-trial-jump-project="${e(project.key)}">${projectIcon(record)}${e(trialName(record))}</button></h4>${renderRecord(record, true)}</article>`
+                )
+              )
+          );
+          if (!columns.length) return "";
+          return renderRail(
+            `player-${kind}`,
+            t(kind === "skilling" ? "trialSkilling" : "trialCombat"),
+            columns.join(""),
+            kind,
+            true,
+            true
+          );
+        })
         .join("");
     }
+
     function render({ member, weeks, profileState }) {
       return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
@@ -10239,8 +10261,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       projectIcon,
       getBridge,
       resolveItemName,
-      getSort,
-      renderSortHeader
+      renderRecord,
+      renderRail
     });
 
     function readPlayerProfile(panel, force = false) {
@@ -10283,7 +10305,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function memberAttributes(record, row) {
-      if (mode !== "project") return "";
+      if (mode !== "project" && mode !== "player") return "";
       const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
       return ` data-trial-member="${index}"`;
     }
@@ -10327,7 +10349,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           .displayRows(record, sort)
           .map(
             (row) =>
-              `<tr><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -10338,8 +10360,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
-    function renderRail(id, title, columns, kind, timeline = false) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${timeline ? " hidden" : ""}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+    function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {
@@ -10354,7 +10376,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderChoices(kind, entries, current) {
-      const label = t(kind === "week" ? "trialChooseWeek" : "trialChooseProject");
+      const label = t(
+        kind === "week" ? "trialChooseWeek" : kind === "player" ? "trialChoosePlayer" : "trialChooseProject"
+      );
       return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
@@ -10392,25 +10416,46 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
       let markup = renderImport();
-      if (mode === "player" && selectedMember) {
+      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
+      if (mode === "player") {
+        const members = trialHistoryApi.historyMembers(records);
+        const selectedKey = selectedMember
+          ? JSON.stringify([selectedMember.id === null ? "name" : "id", selectedMember.id ?? selectedMember.name])
+          : "";
+        const current =
+          members.find((member) => member.key === selectedKey)?.key ||
+          (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
+          "";
+        markup +=
+          renderChoices(
+            "player",
+            members.map((member) => ({ key: member.key, label: member.name })),
+            current
+          ) + "</div>";
         host.innerHTML =
           markup +
-          playerRenderer.render({
-            member: selectedMember,
-            weeks: trialHistoryApi.memberHistory(records, selectedMember),
-            profileState
-          });
+          (selectedMember
+            ? playerRenderer.render({
+                member: selectedMember,
+                weeks: trialHistoryApi.memberHistory(records, selectedMember),
+                profileState
+              })
+            : `<p class="mwi-status">${escapeHtml(t(members.length ? "trialSelectPlayerPrompt" : "trialNoNamedPlayers"))}</p>`);
         for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
           const position = scroll.get(el.dataset.trialScrollId);
-          if (position) [el.scrollLeft, el.scrollTop] = position;
+          if (position && (!resetScroll || el.dataset.trialScrollId === "choice-player"))
+            [el.scrollLeft, el.scrollTop] = position;
         }
+        if (resetScroll) revealChoice(host.querySelector('[data-trial-choice="player"][aria-pressed="true"]'));
+        for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
+        resetScroll = false;
+        updateScrollButtons(host);
         return;
       }
       if (!records.length) {
-        host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
+        host.innerHTML = markup + `</div><p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
-      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : "trialByProject"))}</button>`).join("")}</div>`;
       if (mode === "week") {
         markup +=
           renderChoices(
@@ -10546,16 +10591,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
         const profile = event.target.closest("[data-trial-profile]");
         if (profile) {
-          playerReturn = {
-            mode,
-            scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
-              el.dataset.trialScrollId,
-              el.scrollLeft,
-              el.scrollTop
-            ]),
-            name: profile.dataset.trialProfile
-          };
+          if (mode !== "player")
+            playerReturn = {
+              mode,
+              scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+                el.dataset.trialScrollId,
+                el.scrollLeft,
+                el.scrollTop
+              ]),
+              name: profile.dataset.trialProfile
+            };
           selectedMember = JSON.parse(profile.dataset.trialIdentity);
+          resetScroll = true;
           mode = "player";
           readPlayerProfile(panel);
           host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
@@ -10578,9 +10625,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               element.scrollTop = top;
             }
           }
-          [...host.querySelectorAll("[data-trial-profile]")]
-            .find((el) => el.dataset.trialProfile === playerReturn?.name)
-            ?.focus({ preventScroll: true });
+          const returnTarget =
+            [...host.querySelectorAll("[data-trial-profile]")].find(
+              (el) => el.dataset.trialProfile === playerReturn?.name
+            ) || host.querySelector(`[data-trial-mode="${mode}"]`);
+          returnTarget?.focus({ preventScroll: true });
           updateScrollButtons(host);
           return;
         }
@@ -10601,17 +10650,37 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
         const choice = event.target.closest("[data-trial-choice]");
         if (choice) {
-          if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
-          else selectedProject = choice.value;
           resetScroll = true;
-          refresh(panel);
+          if (choice.dataset.trialChoice === "player") {
+            const member = trialHistoryApi.historyMembers(records).find((entry) => entry.key === choice.value);
+            if (!member) return;
+            selectedMember = { id: member.id, name: member.name };
+            readPlayerProfile(panel);
+          } else {
+            if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
+            else selectedProject = choice.value;
+            refresh(panel);
+          }
           const active = host.querySelector('[data-trial-choice][aria-pressed="true"]');
           active?.focus({ preventScroll: true });
           revealChoice(active);
         }
         const modeButton = event.target.closest("[data-trial-mode]");
         if (modeButton) {
-          mode = modeButton.dataset.trialMode;
+          const nextMode = modeButton.dataset.trialMode;
+          if (nextMode !== mode) {
+            if (nextMode === "player")
+              playerReturn = {
+                mode,
+                scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+                  el.dataset.trialScrollId,
+                  el.scrollLeft,
+                  el.scrollTop
+                ])
+              };
+            if (mode === "player") leavePlayer();
+            mode = nextMode;
+          }
           resetScroll = true;
           refresh(panel);
           host.querySelector(`[data-trial-mode="${mode}"]`)?.focus();

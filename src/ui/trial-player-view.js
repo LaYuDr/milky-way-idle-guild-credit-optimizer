@@ -13,8 +13,8 @@
     projectIcon,
     getBridge,
     resolveItemName,
-    getSort,
-    renderSortHeader
+    renderRecord,
+    renderRail
   }) {
     const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
     const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
@@ -68,39 +68,34 @@
     }
     function historyMarkup(weeks) {
       if (!weeks.length) return `<p class="mwi-trial-meta">${e(t("trialPlayerEmpty"))}</p>`;
-      return weeks
-        .map(
-          (week) =>
-            `<section class="mwi-trial-player-week"><h3><button type="button" class="mwi-trial-heading-link" data-trial-jump-week="${e(week.key)}">${e(weekLabel(week))}</button></h3>${[
-              "skilling",
-              "combat"
-            ]
-              .map((kind) => {
-                const records = week.records.filter((record) => record.kind === kind);
-                if (!records.length) return "";
-                const fields =
-                  kind === "skilling"
-                    ? ["level", "workDone"]
-                    : ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"];
-                const key = JSON.stringify(["player", week.key, kind]);
-                const sort = getSort(key);
-                const rows = api
-                  .historyProjects(records)
-                  .flatMap((project) =>
-                    project.records.flatMap((record) => record.rows.map((row) => ({ project, record, row })))
-                  );
-                return `<div class="mwi-trial-table-scroll" data-trial-scroll-id="${e(key)}" role="region" tabindex="0" aria-label="${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}"><table class="mwi-trial-table"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><thead><tr><th scope="col">${e(t("trialChooseProject"))}</th>${fields.map((field) => renderSortHeader(key, field, sort)).join("")}</tr></thead><tbody>${api
-                  .sortEntries(rows, sort)
-                  .map(
-                    ({ project, record, row }) =>
-                      `<tr data-trial-player-row><th scope="row"><button type="button" class="mwi-trial-heading-link" data-trial-jump-project="${e(project.key)}">${projectIcon(record)}${e(trialName(record))}</button><small>${e(record.guildName || t("trialUnknownGuild"))} · ${e(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</small></th>${fields.map((field) => `<td data-trial-field="${field}">${e(number(field === "level" ? api.memberLevel(record, row) : api.metricValue(record, row, field)))}</td>`).join("")}</tr>`
-                  )
-                  .join("")}</tbody></table></div>`;
-              })
-              .join("")}</section>`
-        )
+      return ["skilling", "combat"]
+        .map((kind) => {
+          const columns = weeks.flatMap((week) =>
+            api
+              .historyProjects(
+                week.records.filter((record) => record.kind === kind),
+                getBridge()?.trialHistoryContext?.details || {}
+              )
+              .flatMap((project) =>
+                project.records.map(
+                  (record) =>
+                    `<article class="mwi-trial-column" data-trial-player-column data-trial-week="${e(week.key)}"><h4><button type="button" class="mwi-trial-heading-link" data-trial-jump-week="${e(week.key)}">${e(weekLabel(week))}</button></h4><h4><button type="button" class="mwi-trial-heading-link" data-trial-jump-project="${e(project.key)}">${projectIcon(record)}${e(trialName(record))}</button></h4>${renderRecord(record, true)}</article>`
+                )
+              )
+          );
+          if (!columns.length) return "";
+          return renderRail(
+            `player-${kind}`,
+            t(kind === "skilling" ? "trialSkilling" : "trialCombat"),
+            columns.join(""),
+            kind,
+            true,
+            true
+          );
+        })
         .join("");
     }
+
     function render({ member, weeks, profileState }) {
       return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }

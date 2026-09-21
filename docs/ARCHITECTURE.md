@@ -35,8 +35,8 @@ come from data already present in the game page.
 
 ## Trial player history and embedded profiles
 
-`src/trial-history.js` selects a player's rows without changing stored records;
-`src/ui/trial-player-view.js` renders the embedded profile and weekly participation.
+`src/trial-history.js` selects complete trial records containing a player, retaining all member rows;
+`src/ui/trial-player-view.js` renders the embedded profile and two horizontal history rails (skilling above combat). Each column is one complete week/project record, newest first, using the shared sortable record renderer and a persistent selected-player highlight.
 `src/ui/trial-history-view.js` owns player/week/project navigation and restores the
 original list's selection and horizontal position on return. A view revision
 rejects late callbacks after another player or page has been selected.

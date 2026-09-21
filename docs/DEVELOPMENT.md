@@ -471,7 +471,7 @@ exact values, duplicate and empty responses, escaped member names, missing
 project slots, week switching, project switching, newest-to-oldest columns,
 scroll buttons, focus, unchanged stored records and contained horizontal scrolling.
 The audit also checks embedded player profiles without a native dialog, all
-weekly projects for the selected player, profile-cache reuse, explicit refresh,
+complete member tables for projects attended by the selected player, life/combat rails, newest-to-oldest horizontal columns, persistent player highlight, profile-cache reuse, explicit refresh,
 unavailable lookup, out-of-order replies, return navigation, and the bidirectional
 week/project heading links. The local fixture models the native profile state
 update; real-game compatibility still needs verification after installation.
@@ -576,7 +576,7 @@ Both schema versions remain compatible; exports include `memberLevels` when
 available. The trial-history harness checks delayed capture, column order,
 missing levels, and preservation after refresh/recapture.
 
-The trial-history fixture also checks sortable member and numeric headers in weekly,
+The trial-history fixture checks a single row of three view modes with choices below, deduplicated player options, explicit player selection and keyboard switching without background queries. It also checks sortable member and numeric headers in weekly,
 project, and player history views: ascending/descending toggles, independent table
 state, unknown levels last, retained keyboard focus, cross-week highlighting,
 complete rows, and no extra profile requests or stored-record changes.

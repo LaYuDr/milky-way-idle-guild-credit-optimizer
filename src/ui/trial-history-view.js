@@ -265,8 +265,8 @@
       projectIcon,
       getBridge,
       resolveItemName,
-      getSort,
-      renderSortHeader
+      renderRecord,
+      renderRail
     });
 
     function readPlayerProfile(panel, force = false) {
@@ -309,7 +309,7 @@
     }
 
     function memberAttributes(record, row) {
-      if (mode !== "project") return "";
+      if (mode !== "project" && mode !== "player") return "";
       const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
       return ` data-trial-member="${index}"`;
     }
@@ -353,7 +353,7 @@
           .displayRows(record, sort)
           .map(
             (row) =>
-              `<tr><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -364,8 +364,8 @@
       return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
-    function renderRail(id, title, columns, kind, timeline = false) {
-      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${timeline ? " hidden" : ""}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
+    function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
+      return `<section class="mwi-trial-group" data-trial-group="${id}" aria-labelledby="mwi-trial-heading-${id}"><header class="mwi-trial-group-header"><h3 id="mwi-trial-heading-${id}"${showTitle ? "" : " hidden"}>${escapeHtml(title)}</h3><div class="mwi-trial-scroll-buttons"><button type="button" data-trial-scroll="${id}" data-step="-1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialNewer" : "trialScrollLeft"))}</button><button type="button" data-trial-scroll="${id}" data-step="1" aria-controls="mwi-trial-rail-${id}">${escapeHtml(t(timeline ? "trialOlder" : "trialScrollRight"))}</button></div></header><div class="mwi-trial-rail" id="mwi-trial-rail-${id}" data-trial-scroll-id="${id}" role="region" tabindex="0" aria-label="${escapeHtml(title)}"><div class="mwi-trial-columns ${timeline ? "mwi-trial-timeline" : "mwi-trial-week-grid"}" data-kind="${kind}">${columns}</div></div></section>`;
     }
 
     function updateScrollButtons(host) {
@@ -380,7 +380,9 @@
     }
 
     function renderChoices(kind, entries, current) {
-      const label = t(kind === "week" ? "trialChooseWeek" : "trialChooseProject");
+      const label = t(
+        kind === "week" ? "trialChooseWeek" : kind === "player" ? "trialChoosePlayer" : "trialChooseProject"
+      );
       return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
@@ -418,25 +420,46 @@
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
       let markup = renderImport();
-      if (mode === "player" && selectedMember) {
+      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
+      if (mode === "player") {
+        const members = trialHistoryApi.historyMembers(records);
+        const selectedKey = selectedMember
+          ? JSON.stringify([selectedMember.id === null ? "name" : "id", selectedMember.id ?? selectedMember.name])
+          : "";
+        const current =
+          members.find((member) => member.key === selectedKey)?.key ||
+          (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
+          "";
+        markup +=
+          renderChoices(
+            "player",
+            members.map((member) => ({ key: member.key, label: member.name })),
+            current
+          ) + "</div>";
         host.innerHTML =
           markup +
-          playerRenderer.render({
-            member: selectedMember,
-            weeks: trialHistoryApi.memberHistory(records, selectedMember),
-            profileState
-          });
+          (selectedMember
+            ? playerRenderer.render({
+                member: selectedMember,
+                weeks: trialHistoryApi.memberHistory(records, selectedMember),
+                profileState
+              })
+            : `<p class="mwi-status">${escapeHtml(t(members.length ? "trialSelectPlayerPrompt" : "trialNoNamedPlayers"))}</p>`);
         for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
           const position = scroll.get(el.dataset.trialScrollId);
-          if (position) [el.scrollLeft, el.scrollTop] = position;
+          if (position && (!resetScroll || el.dataset.trialScrollId === "choice-player"))
+            [el.scrollLeft, el.scrollTop] = position;
         }
+        if (resetScroll) revealChoice(host.querySelector('[data-trial-choice="player"][aria-pressed="true"]'));
+        for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
+        resetScroll = false;
+        updateScrollButtons(host);
         return;
       }
       if (!records.length) {
-        host.innerHTML = markup + `<p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
+        host.innerHTML = markup + `</div><p class="mwi-status">${escapeHtml(t("trialHistoryEmpty"))}</p>`;
         return;
       }
-      markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : "trialByProject"))}</button>`).join("")}</div>`;
       if (mode === "week") {
         markup +=
           renderChoices(
@@ -572,16 +595,18 @@
         }
         const profile = event.target.closest("[data-trial-profile]");
         if (profile) {
-          playerReturn = {
-            mode,
-            scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
-              el.dataset.trialScrollId,
-              el.scrollLeft,
-              el.scrollTop
-            ]),
-            name: profile.dataset.trialProfile
-          };
+          if (mode !== "player")
+            playerReturn = {
+              mode,
+              scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+                el.dataset.trialScrollId,
+                el.scrollLeft,
+                el.scrollTop
+              ]),
+              name: profile.dataset.trialProfile
+            };
           selectedMember = JSON.parse(profile.dataset.trialIdentity);
+          resetScroll = true;
           mode = "player";
           readPlayerProfile(panel);
           host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
@@ -604,9 +629,11 @@
               element.scrollTop = top;
             }
           }
-          [...host.querySelectorAll("[data-trial-profile]")]
-            .find((el) => el.dataset.trialProfile === playerReturn?.name)
-            ?.focus({ preventScroll: true });
+          const returnTarget =
+            [...host.querySelectorAll("[data-trial-profile]")].find(
+              (el) => el.dataset.trialProfile === playerReturn?.name
+            ) || host.querySelector(`[data-trial-mode="${mode}"]`);
+          returnTarget?.focus({ preventScroll: true });
           updateScrollButtons(host);
           return;
         }
@@ -627,17 +654,37 @@
         }
         const choice = event.target.closest("[data-trial-choice]");
         if (choice) {
-          if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
-          else selectedProject = choice.value;
           resetScroll = true;
-          refresh(panel);
+          if (choice.dataset.trialChoice === "player") {
+            const member = trialHistoryApi.historyMembers(records).find((entry) => entry.key === choice.value);
+            if (!member) return;
+            selectedMember = { id: member.id, name: member.name };
+            readPlayerProfile(panel);
+          } else {
+            if (choice.dataset.trialChoice === "week") selectedWeek = choice.value;
+            else selectedProject = choice.value;
+            refresh(panel);
+          }
           const active = host.querySelector('[data-trial-choice][aria-pressed="true"]');
           active?.focus({ preventScroll: true });
           revealChoice(active);
         }
         const modeButton = event.target.closest("[data-trial-mode]");
         if (modeButton) {
-          mode = modeButton.dataset.trialMode;
+          const nextMode = modeButton.dataset.trialMode;
+          if (nextMode !== mode) {
+            if (nextMode === "player")
+              playerReturn = {
+                mode,
+                scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+                  el.dataset.trialScrollId,
+                  el.scrollLeft,
+                  el.scrollTop
+                ])
+              };
+            if (mode === "player") leavePlayer();
+            mode = nextMode;
+          }
           resetScroll = true;
           refresh(panel);
           host.querySelector(`[data-trial-mode="${mode}"]`)?.focus();

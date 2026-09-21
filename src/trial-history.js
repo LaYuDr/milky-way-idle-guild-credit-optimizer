@@ -126,14 +126,34 @@
     return Boolean(a.name && a.name === b.name);
   }
 
+  function historyMembers(records) {
+    const members = new Map();
+    const idsByName = new Map();
+    for (const week of historyWeeks(records))
+      for (const record of week.records)
+        for (const row of record.rows) {
+          const identity = memberIdentity(record, row);
+          if (!identity.name) continue;
+          const key = JSON.stringify([identity.id === null ? "name" : "id", identity.id ?? identity.name]);
+          if (!members.has(key)) members.set(key, { key, ...identity });
+          if (identity.id !== null) {
+            if (!idsByName.has(identity.name)) idsByName.set(identity.name, new Set());
+            idsByName.get(identity.name).add(identity.id);
+          }
+        }
+    // Keep distinct IDs even when names coincide; collapse a manual alias only when unambiguous.
+    return [...members.values()]
+      .filter((member) => {
+        if (member.id !== null || idsByName.get(member.name)?.size !== 1) return true;
+        const [id] = idsByName.get(member.name);
+        return members.get(JSON.stringify(["id", id]))?.name !== member.name;
+      })
+      .sort((a, b) => memberCollator.compare(a.name, b.name));
+  }
+
   function memberHistory(records, identity) {
     return historyWeeks(
-      records
-        .map((record) => ({
-          ...record,
-          rows: record.rows.filter((row) => sameMember(identity, memberIdentity(record, row)))
-        }))
-        .filter((record) => record.rows.length)
+      records.filter((record) => record.rows.some((row) => sameMember(identity, memberIdentity(record, row))))
     );
   }
 
@@ -495,6 +515,7 @@
     memberAbsent,
     memberIdentity,
     memberHistory,
+    historyMembers,
     sameMember,
     memberLevel,
     withMemberLevels,
