@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.28";
+window.MwiGuildCreditVersion = "1.2.29";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {

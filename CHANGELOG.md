@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.29] - 2026-09-22
+
+### Changed
+
+- 补充发布检查工作流与浏览器审计参数的回归测试。
+
 ## [1.2.28] - 2026-09-22
 
 ### Changed
