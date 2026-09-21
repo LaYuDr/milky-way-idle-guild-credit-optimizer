@@ -54,15 +54,15 @@ const version = process.env.MWI_VERSION || require(path.join(root, "package.json
 const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
 if (!versionMatch) throw new Error(`Invalid package version: ${version}`);
 const header = `// ==UserScript==
-// @name         银河奶牛公会信用点性价比
+// @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
 // @version      ${version}
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
-// @description  公会信用点兑换与神龛升级的只读计算辅助；不会自动交易、兑换或升级，也不会上传账号数据。
-// @description:en Read-only guild planning helper for credit exchanges, shrine upgrades, and construction; does not automate buying, selling, exchanging, or upgrading, and does not upload account data.
+// @description  银河奶牛公会助手：比较信用点兑换成本、规划神龛升级与公会建设、保存历史试炼统计；不会自动交易、兑换或升级，不会上传账号数据。
+// @description:en Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history; does not automate buying, selling, exchanging, or upgrading, and does not upload account data.
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
 // @grant        GM_addElement
@@ -124,11 +124,11 @@ if (process.env.MWI_ARCHIVE_RELEASE === "1") {
 }
 
 const loader = `// ==UserScript==
-// @name         银河奶牛公会信用点性价比 开发加载器
+// @name         公会助手 开发加载器
 // @namespace    https://www.milkywayidle.com/
 // @version      ${version}
 // @author       柆雨
-// @description  从本机开发服务加载银河奶牛信用点插件；仅用于开发和自动测试。
+// @description  从本机开发服务加载公会助手；仅用于开发和自动测试。
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
 // @grant        GM_xmlhttpRequest

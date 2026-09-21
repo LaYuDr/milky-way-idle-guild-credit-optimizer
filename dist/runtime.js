@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.21";
+window.MwiGuildCreditVersion = "1.2.22";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -891,6 +891,19 @@ window.MwiGuildCreditVersion = "1.2.21";
     );
   }
 
+  function memberIdentity(record, row) {
+    return {
+      id: row.characterId == null ? null : String(row.characterId),
+      name: record.members?.[row.memberKey ?? row.characterId]?.name || ""
+    };
+  }
+
+  function sameMember(a, b) {
+    if (a.id !== null && b.id !== null) return a.id === b.id;
+    // Manual imports have no character ID; only an exact, known name can match.
+    return Boolean(a.name && a.name === b.name);
+  }
+
   function memberAbsent(record, row, context = {}) {
     if (!context.guild || !context.roster) return false;
     const sameGuild =
@@ -1222,6 +1235,8 @@ window.MwiGuildCreditVersion = "1.2.21";
     metricValue,
     displayRows,
     memberAbsent,
+    memberIdentity,
+    sameMember,
     memberLevel,
     withMemberLevels,
     updateContext,
@@ -8291,6 +8306,8 @@ window.MwiGuildCreditVersion = "1.2.21";
         #mwi-credit-optimizer .mwi-trial-import-list strong{grid-column:1/-1;font-weight:500;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-table thead th{background:#30364b;color:#cbd4e9;font-size:12px;font-weight:500;position:sticky;top:0;z-index:1}
         #mwi-credit-optimizer .mwi-trial-table tbody tr:hover{background:#2d3349}
+        #mwi-credit-optimizer .mwi-trial-table tbody tr.mwi-trial-member-highlight{background:#34514e;color:#d5f7ed}
+        #mwi-credit-optimizer .mwi-trial-table [data-trial-member]:focus-visible{outline-offset:-2px}
 
         #mwi-credit-optimizer .mwi-trial-import{margin:0 0 8px;padding:0 0 6px;border-bottom:1px solid var(--trial-line);min-width:0}
         #mwi-credit-optimizer .mwi-trial-import [data-role="trial-import-status"]{color:var(--trial-warning);font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 0}
@@ -9613,6 +9630,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     const spriteBases = {};
     let spriteLoadPromise = null;
     let disposed = false;
+    let displayedMembers = [];
+    let highlightedMember = null;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
@@ -9799,6 +9818,28 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
     }
 
+    function memberAttributes(record, row) {
+      if (mode !== "project") return "";
+      const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
+      return ` data-trial-member="${index}" tabindex="0"`;
+    }
+
+    function highlightMember(host, target) {
+      const cell = target?.closest?.("[data-trial-member]");
+      const index = cell && host.contains(cell) ? cell.dataset.trialMember : null;
+      if (index === highlightedMember) return;
+      highlightedMember = index;
+      const member = index === null ? null : displayedMembers[Number(index)];
+      for (const name of host.querySelectorAll("[data-trial-member]")) {
+        name
+          .closest("tr")
+          .classList.toggle(
+            "mwi-trial-member-highlight",
+            Boolean(member && trialHistoryApi.sameMember(member, displayedMembers[Number(name.dataset.trialMember)]))
+          );
+      }
+    }
+
     function renderRecord(record, showIdentity) {
       const fields =
         record.kind === "combat"
@@ -9813,7 +9854,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           .displayRows(record)
           .map(
             (row) =>
-              `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -9857,6 +9898,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      displayedMembers = [];
+      highlightedMember = null;
       const scroll = new Map(
         [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
           el.dataset.trialScrollId,
@@ -9957,6 +10000,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
         resizeObserver.observe(host);
       }
+      for (const type of ["mouseover", "focusin"])
+        host.addEventListener(type, (event) => highlightMember(host, event.target));
+      for (const type of ["mouseout", "focusout"])
+        host.addEventListener(type, (event) => highlightMember(host, event.relatedTarget));
       host.addEventListener(
         "toggle",
         (event) => {

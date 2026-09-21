@@ -59,6 +59,8 @@
     const spriteBases = {};
     let spriteLoadPromise = null;
     let disposed = false;
+    let displayedMembers = [];
+    let highlightedMember = null;
 
     function projectIcon(record) {
       const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
@@ -245,6 +247,28 @@
       );
     }
 
+    function memberAttributes(record, row) {
+      if (mode !== "project") return "";
+      const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
+      return ` data-trial-member="${index}" tabindex="0"`;
+    }
+
+    function highlightMember(host, target) {
+      const cell = target?.closest?.("[data-trial-member]");
+      const index = cell && host.contains(cell) ? cell.dataset.trialMember : null;
+      if (index === highlightedMember) return;
+      highlightedMember = index;
+      const member = index === null ? null : displayedMembers[Number(index)];
+      for (const name of host.querySelectorAll("[data-trial-member]")) {
+        name
+          .closest("tr")
+          .classList.toggle(
+            "mwi-trial-member-highlight",
+            Boolean(member && trialHistoryApi.sameMember(member, displayedMembers[Number(name.dataset.trialMember)]))
+          );
+      }
+    }
+
     function renderRecord(record, showIdentity) {
       const fields =
         record.kind === "combat"
@@ -259,7 +283,7 @@
           .displayRows(record)
           .map(
             (row) =>
-              `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
+              `<tr><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
@@ -303,6 +327,8 @@
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      displayedMembers = [];
+      highlightedMember = null;
       const scroll = new Map(
         [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
           el.dataset.trialScrollId,
@@ -403,6 +429,10 @@
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
         resizeObserver.observe(host);
       }
+      for (const type of ["mouseover", "focusin"])
+        host.addEventListener(type, (event) => highlightMember(host, event.target));
+      for (const type of ["mouseout", "focusout"])
+        host.addEventListener(type, (event) => highlightMember(host, event.relatedTarget));
       host.addEventListener(
         "toggle",
         (event) => {

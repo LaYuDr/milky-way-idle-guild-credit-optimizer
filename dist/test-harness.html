@@ -3370,12 +3370,30 @@
         [...host.querySelectorAll('[data-trial-week] tbody tr:first-child [data-trial-field="workDone"]')]
           .map((el) => el.textContent)
           .join(",") === "123456789.125,222.5,111.25";
+      const nameCells = [...host.querySelectorAll("[data-trial-member]")];
+      const highlighted = () => [...host.querySelectorAll(".mwi-trial-member-highlight")];
+      checks.noMemberIdTooltip = !host.querySelector('tbody th[title^="ID "]');
+      nameCells[0].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.memberHoverAcrossWeeks =
+        highlighted().length === 3 &&
+        highlighted().every((row) => row.querySelector("th").textContent === members[101].name);
+      nameCells[0].dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: nameCells[1] }));
+      checks.memberHoverSwitch =
+        highlighted().length === 1 && highlighted()[0].querySelector("th").textContent === members[102].name;
+      nameCells[1].dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: host }));
+      checks.memberHoverClears = highlighted().length === 0;
+      nameCells[0].focus();
+      checks.memberFocusAcrossWeeks = highlighted().length === 3;
+      nameCells[0].blur();
+      checks.memberBlurClears = highlighted().length === 0;
       const timeline = host.querySelector("#mwi-trial-rail-timeline");
       const beforeScroll = timeline.scrollLeft;
       host.querySelector('[data-trial-scroll="timeline"][data-step="1"]').click();
       checks.scrollTowardOlder = timeline.scrollWidth <= timeline.clientWidth || timeline.scrollLeft > beforeScroll;
       checks.keyboardFocusableScroller = timeline.tabIndex === 0;
+      nameCells[0].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       choose("trial-project", JSON.stringify(["combat", combats[0]]));
+      checks.memberHighlightClearsOnProjectSwitch = highlighted().length === 0;
       checks.projectGameOrder =
         [...host.querySelectorAll('[data-trial-choice="project"]')]
           .slice(0, 4)

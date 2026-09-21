@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.22] - 2026-09-21
+
+### Changed
+
+- 整理公会助手说明与元信息，增强历史试炼跨周成员高亮和身份匹配。
+
 ## [1.2.21] - 2026-09-21
 
 ### Changed

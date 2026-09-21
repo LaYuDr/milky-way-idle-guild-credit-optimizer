@@ -113,6 +113,19 @@
     );
   }
 
+  function memberIdentity(record, row) {
+    return {
+      id: row.characterId == null ? null : String(row.characterId),
+      name: record.members?.[row.memberKey ?? row.characterId]?.name || ""
+    };
+  }
+
+  function sameMember(a, b) {
+    if (a.id !== null && b.id !== null) return a.id === b.id;
+    // Manual imports have no character ID; only an exact, known name can match.
+    return Boolean(a.name && a.name === b.name);
+  }
+
   function memberAbsent(record, row, context = {}) {
     if (!context.guild || !context.roster) return false;
     const sameGuild =
@@ -444,6 +457,8 @@
     metricValue,
     displayRows,
     memberAbsent,
+    memberIdentity,
+    sameMember,
     memberLevel,
     withMemberLevels,
     updateContext,

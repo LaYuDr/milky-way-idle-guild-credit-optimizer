@@ -43,6 +43,22 @@ test("战斗明细仍保留来源顺序", () => {
   assert.deepEqual(api.displayRows({ kind: "combat", rows }), rows);
 });
 
+test("跨周成员匹配优先角色 ID，无 ID 时按完整姓名且不匹配未知姓名", () => {
+  const identity = (id, name) =>
+    api.memberIdentity(
+      { members: { [id ?? "manual"]: { name } } },
+      id == null ? { memberKey: "manual" } : { characterId: id }
+    );
+  assert.equal(api.sameMember(identity(1, "Before"), identity("1", "After")), true);
+  assert.equal(api.sameMember(identity(1, "Alpha"), identity(2, "Alpha")), false);
+  assert.equal(api.sameMember(identity(1, "Alpha"), identity(null, "Alpha")), true);
+  assert.equal(api.sameMember(identity(null, "Alpha"), identity(1, "Alpha")), true);
+  assert.equal(api.sameMember(identity(null, "Alpha"), identity(null, "Alpha")), true);
+  assert.equal(api.sameMember(identity(null, "Alpha"), identity(null, "Al")), false);
+  assert.equal(api.sameMember(identity(null, ""), identity(null, "")), false);
+  assert.equal(api.sameMember(identity(null, "名称未读取"), identity(null, "")), false);
+});
+
 function fixture() {
   return {
     context: {

@@ -42,7 +42,7 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   assert.match(currentBundle, /^\/\/ @name:en\s+Milky Way Idle Guild Assistant$/m);
   assert.match(
     currentBundle,
-    /^\/\/ @description:en\s+Read-only guild planning helper for credit exchanges, shrine upgrades, and construction;/m
+    /^\/\/ @description:en\s+Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history;/m
   );
 
   const firstReleaseBuild = runBuild(root, true);

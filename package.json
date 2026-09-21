@@ -1,8 +1,8 @@
 {
   "name": "milky-way-idle-guild-credit-optimizer",
-  "version": "1.2.21",
+  "version": "1.2.22",
   "private": true,
-  "description": "Read-only guild credit and shrine planning helper for Milky Way Idle",
+  "description": "Read-only guild assistant for Milky Way Idle: credit exchanges, shrine upgrades, construction planning, and trial history",
   "scripts": {
     "build": "node tools/build.js",
     "format": "prettier --write .",
