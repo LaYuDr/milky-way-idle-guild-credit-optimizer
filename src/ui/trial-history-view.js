@@ -5,8 +5,35 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function projectIconSpec(record, detail = record.trialDetail) {
+    const project = String(record.trialHrid || "")
+      .split("/")
+      .pop();
+    let sprite, symbol;
+    if (record.kind === "skilling") {
+      sprite = "skills_sprite";
+      symbol = String(detail?.skillHrid || project)
+        .split("/")
+        .pop();
+    } else if (record.kind === "combat") {
+      const monsters = [...new Set(Array.isArray(detail?.monsterHrids) ? detail.monsterHrids : [])];
+      if (monsters.length === 1) {
+        sprite = "combat_monsters_sprite";
+        symbol = String(monsters[0]).split("/").pop();
+      } else if (monsters.length > 1 || project === "swarm") {
+        sprite = "misc_sprite";
+        symbol = "trial_swarm";
+      } else if (["badger", "chameleon", "hedgehog", "jellyfish"].includes(project)) {
+        sprite = "combat_monsters_sprite";
+        symbol = `trial_${project}`;
+      }
+    }
+    return sprite && /^[a-z0-9_]+$/.test(symbol || "") ? { sprite, symbol } : null;
+  }
+
   function createTrialHistoryView({
     document,
+    domApi,
     pageWindow,
     t,
     escapeHtml,
@@ -29,6 +56,35 @@
     let importRevision = 0;
     let guideOpen = false;
     const unsaved = new Map();
+    const spriteBases = {};
+    let spriteLoadPromise = null;
+    let disposed = false;
+
+    function projectIcon(record) {
+      const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
+      const spec = projectIconSpec(record, detail);
+      if (!spec) return "";
+      let base = spriteBases[spec.sprite] || domApi.findSpriteBaseHref(document, spec.sprite);
+      if (base) spriteBases[spec.sprite] = base;
+      else if (!spriteLoadPromise && pageWindow.fetch && pageWindow.location?.origin) {
+        spriteLoadPromise = pageWindow
+          .fetch(new URL("/asset-manifest.json", pageWindow.location.origin).href, { cache: "force-cache" })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((manifest) => {
+            for (const sprite of ["skills_sprite", "combat_monsters_sprite", "misc_sprite"]) {
+              const reference = domApi.spriteBaseFromAssetManifest(manifest, sprite);
+              if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
+            }
+            const panel = getPanel();
+            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode === "project")
+              refresh(panel);
+          })
+          .catch(() => {});
+      }
+      return base
+        ? `<svg class="mwi-trial-project-icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${spec.symbol}`)}" width="100%" height="100%"></use></svg>`
+        : "";
+    }
     const trialName = (record) => {
       const key = String(record.trialDetail?.skillHrid || record.trialHrid)
         .split("/")
@@ -53,6 +109,11 @@
     function capture() {
       const bridge = getBridge();
       for (const record of bridge?.pendingTrialSnapshots?.splice(0) || []) unsaved.set(record.key, record);
+      reload();
+      for (const record of records) {
+        const enriched = trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext);
+        if (enriched !== record) unsaved.set(record.key, enriched);
+      }
       for (const [key, record] of unsaved) {
         if (pluginStorage.saveTrialSnapshot(record)) unsaved.delete(key);
       }
@@ -172,15 +233,29 @@
       });
     }
 
+    function renderMember(record, row) {
+      const name = record.members?.[row.memberKey ?? row.characterId]?.name || t("trialNameUnavailable");
+      const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
+      const label = escapeHtml(t("trialMemberAbsent"));
+      return (
+        escapeHtml(name) +
+        (absent
+          ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
+          : "")
+      );
+    }
+
     function renderRecord(record, showIdentity) {
       const fields =
-        record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+        record.kind === "combat"
+          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          : ["level", "workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       // Keep source order and exact numeric values; this is a record viewer, not a ranking.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
@@ -206,7 +281,7 @@
 
     function renderChoices(kind, entries, current) {
       const label = t(kind === "week" ? "trialChooseWeek" : "trialChooseProject");
-      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${escapeHtml(name)}</button>`).join("")}</div></div>`;
+      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
     function revealChoice(button) {
@@ -267,7 +342,11 @@
         markup +=
           renderChoices(
             "project",
-            projects.map((entry) => ({ key: entry.key, label: trialName(entry.records[0]) })),
+            projects.map((entry) => ({
+              key: entry.key,
+              label: trialName(entry.records[0]),
+              icon: projectIcon(entry.records[0])
+            })),
             selectedProject
           ) + "</div>";
         const timeline = trialHistoryApi.historyWeeks(project.records);
@@ -386,11 +465,13 @@
       if (panel && panel.dataset.activeView === "trials") refresh(panel);
     };
     function start() {
+      disposed = false;
       const bridge = getBridge();
       if (bridge) bridge.onTrialStatsUpdated = onStats;
       capture();
     }
     function dispose() {
+      disposed = true;
       importRevision += 1;
       resizeObserver?.disconnect();
       const bridge = getBridge();
@@ -398,5 +479,5 @@
     }
     return { start, dispose, bind, refresh };
   }
-  return { createTrialHistoryView };
+  return { createTrialHistoryView, projectIconSpec };
 });

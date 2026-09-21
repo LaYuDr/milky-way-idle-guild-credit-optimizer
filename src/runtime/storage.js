@@ -298,7 +298,19 @@
         const previous = JSON.parse(storage.getItem(key) || "null");
         const members = { ...(previous?.members || {}), ...record.members };
         // One key per trial: a quota error cannot destroy any older records.
-        storage.setItem(key, JSON.stringify({ ...record, members }));
+        const levels =
+          previous?.memberLevels || record.memberLevels
+            ? {
+                memberLevels: Object.fromEntries(
+                  record.rows.flatMap((row) => {
+                    const level =
+                      trialHistoryApi.memberLevel(previous || {}, row) ?? trialHistoryApi.memberLevel(record, row);
+                    return level === null ? [] : [[row.memberKey ?? row.characterId, level]];
+                  })
+                )
+              }
+            : {};
+        storage.setItem(key, JSON.stringify({ ...record, members, ...levels }));
         return true;
       } catch (_) {
         return false;

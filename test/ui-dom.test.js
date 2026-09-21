@@ -53,3 +53,54 @@ test("精灵图路径可从页面引用和带哈希的官方资源清单解析",
   );
   assert.equal(domApi.spriteBaseFromAssetManifest({ files: {} }, "misc_sprite"), "");
 });
+
+test("历史项目选择复用游戏技能、试炼怪物和虫群图标", () => {
+  const { projectIconSpec } = require("../src/ui/trial-history-view.js");
+  for (const name of [
+    "milking",
+    "foraging",
+    "brewing",
+    "enhancing",
+    "alchemy",
+    "cheesesmithing",
+    "crafting",
+    "tailoring"
+  ]) {
+    assert.deepEqual(projectIconSpec({ kind: "skilling", trialHrid: `/guild_skilling/${name}` }), {
+      sprite: "skills_sprite",
+      symbol: name
+    });
+  }
+  for (const name of ["hedgehog", "badger", "chameleon", "jellyfish"]) {
+    assert.deepEqual(projectIconSpec({ kind: "combat", trialHrid: `/guild_combat/${name}` }), {
+      sprite: "combat_monsters_sprite",
+      symbol: `trial_${name}`
+    });
+  }
+  assert.deepEqual(projectIconSpec({ kind: "combat", trialHrid: "/guild_combat/swarm" }), {
+    sprite: "misc_sprite",
+    symbol: "trial_swarm"
+  });
+  assert.deepEqual(
+    projectIconSpec({
+      kind: "combat",
+      trialHrid: "future",
+      trialDetail: { monsterHrids: ["/monsters/new_boss", "/monsters/new_boss"] }
+    }),
+    { sprite: "combat_monsters_sprite", symbol: "new_boss" }
+  );
+  assert.deepEqual(
+    projectIconSpec({
+      kind: "combat",
+      trialHrid: "future",
+      trialDetail: { monsterHrids: ["/monsters/one", "/monsters/two"] }
+    }),
+    { sprite: "misc_sprite", symbol: "trial_swarm" }
+  );
+  assert.equal(projectIconSpec({ kind: "combat", trialHrid: "unknown" }), null);
+  assert.equal(
+    projectIconSpec({ kind: "combat", trialHrid: "unknown", trialDetail: { monsterHrids: { broken: true } } }),
+    null
+  );
+  assert.equal(projectIconSpec({ kind: "skilling", trialHrid: '<bad"' }), null);
+});

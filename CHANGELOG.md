@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.20] - 2026-09-21
+
+### Changed
+
+- 增强历史试炼成员状态与报名等级记录，补充原生图标展示、名单同步及回归测试。
+
 ## [1.2.19] - 2026-09-21
 
 ### Changed

@@ -550,3 +550,23 @@ fields remain unknown. The history audit also checks that analysis controls are 
 
 Removed feature details and source recovery steps are preserved in
 [Trial analytics restore guide](TRIAL_ANALYTICS_RESTORE.md).
+
+### Historical trial member levels
+
+The native signup modal reads `guildTrialSignupLevelMap[characterId]` from
+`guild_characters_updated` / initial character data: `skillingTrialLevel` for
+skilling and `combatLevel` for combat. `guild_trial_signup_updated` carries
+`trialSignupLevels` for one member. Source verified against the official
+`main.bdda2571.chunk.js` on 2026-09-21; use passive bridge messages only.
+
+Keep the signup map separate from names and match `guildId`, `currentWeekStartAt`,
+`signupWeekStartAt`, character ID and the signed-up project before capturing a
+level. Reset signup context on guild/week changes. Store optional
+`memberLevels` on each record, keyed by character ID (automatic records) or
+`memberKey` (manual imports). Values are finite non-negative numbers or `null`;
+missing/null displays as an em dash. Preserve combat decimals and raw stat rows.
+Late roster messages may fill missing levels in matching automatic records;
+never replace a known stored level or backfill other weeks or manual records.
+Both schema versions remain compatible; exports include `memberLevels` when
+available. The trial-history harness checks delayed capture, column order,
+missing levels, and preservation after refresh/recapture.

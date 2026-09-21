@@ -673,6 +673,7 @@
 
   const trialHistoryView = trialHistoryViewApi.createTrialHistoryView({
     document,
+    domApi,
     pageWindow,
     t,
     escapeHtml,

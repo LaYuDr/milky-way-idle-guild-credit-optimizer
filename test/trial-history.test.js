@@ -79,6 +79,72 @@ test("重复打开标识稳定，跨周、公会不同；退出公会清空成�
   assert.deepEqual(api.updateContext(context, { guild: { id: 8 } }).members, {});
 });
 
+test("离会提示只使用同公会已读取的名单，按 ID 匹配且不改历史名字", () => {
+  const { context, message } = fixture();
+  const [record] = api.completedSnapshots(context, message, now);
+  const row = record.rows[0];
+  const original = JSON.stringify(record);
+  assert.equal(api.memberAbsent(record, row, context), false);
+  const present = api.updateContext(context, {
+    type: "guild_characters_updated",
+    guildId: 7,
+    guildCharacterMap: { 1: {} },
+    guildSharableCharacterMap: { 1: { name: "Renamed" } }
+  });
+  assert.equal(api.memberAbsent(record, row, present), false);
+  const absent = api.updateContext(present, {
+    type: "guild_characters_updated",
+    guildId: 7,
+    guildCharacterMap: {},
+    guildSharableCharacterMap: {}
+  });
+  assert.equal(api.memberAbsent(record, row, absent), true);
+  assert.equal(JSON.stringify(record), original);
+  assert.equal(api.memberAbsent(record, row, api.updateContext(absent, { guild: { id: 8 } })), false);
+  assert.equal(api.memberAbsent(record, row, api.updateContext(absent, { guild: null })), false);
+  assert.equal(api.memberAbsent({ ...record, guildId: "8" }, row, absent), false);
+  const otherGuild = api.updateContext(present, {
+    type: "guild_characters_updated",
+    guildId: 8,
+    guildSharableCharacterMap: {}
+  });
+  assert.equal(api.memberAbsent(record, row, otherGuild), false);
+  assert.equal(otherGuild.roster, present.roster);
+  const statsNames = api.updateContext(absent, { ...message, guildSharableCharacterMap: context.members });
+  assert.equal(api.memberAbsent(record, row, statsNames), true);
+  assert.equal(
+    api.memberAbsent(record, row, api.updateContext(context, { ...message, guildSharableCharacterMap: {} })),
+    false
+  );
+  assert.equal(
+    api.memberAbsent(
+      record,
+      row,
+      api.updateContext(context, { type: "guild_characters_updated", guildSharableCharacterMap: [] })
+    ),
+    false
+  );
+});
+
+test("手动记录只在公会已知且当前姓名完整时匹配原始姓名", () => {
+  const record = { ...manualFixture(), guildName: "Guild" };
+  const row = record.rows[0];
+  const context = api.updateContext(
+    { guild: { id: 7, name: "Guild" } },
+    {
+      type: "guild_characters_updated",
+      guildSharableCharacterMap: { 1: { name: "5321" } }
+    }
+  );
+  assert.equal(api.memberAbsent(record, row, context), false);
+  assert.equal(api.memberAbsent({ ...record, members: { "entry-1": { name: "Absent" } } }, row, context), true);
+  assert.equal(api.memberAbsent({ ...record, guildName: null }, row, context), false);
+  assert.equal(api.memberAbsent({ ...record, guildName: "Other Guild" }, row, context), false);
+  assert.equal(api.memberAbsent({ ...record, members: {} }, row, context), false);
+  const incomplete = api.updateContext(context, { type: "guild_characters_updated", guildCharacterMap: { 2: {} } });
+  assert.equal(api.memberAbsent(record, row, incomplete), false);
+});
+
 const storageApi = require("../src/runtime/storage.js");
 const config = require("../src/runtime/config.js");
 function storageFixture(values = new Map(), character = "1", hostname = "www.milkywayidle.com") {
@@ -120,6 +186,95 @@ test("归档刷新恢复、重复更新、跨角色和服务器隔离，保留�
     ["construction", "credit", "upgrade", "trials"]
   );
 });
+function levelFixture() {
+  const { context, message } = fixture();
+  context.guild.currentTrialsData = JSON.stringify({
+    skilling: { parties: { milk: { done: true } } },
+    combat: { parties: { beast: { done: true } } }
+  });
+  return {
+    message,
+    context: api.updateContext(context, {
+      type: "guild_characters_updated",
+      guildCharacterMap: {
+        1: { signupWeekStartAt: week, signedUpSkillingTrialHrid: "milk", signedUpCombatTrialHrid: "beast" }
+      },
+      guildTrialSignupLevelMap: { 1: { skillingTrialLevel: 143, combatLevel: 97.25 } }
+    })
+  };
+}
+test("项目等级按成员、周和项目归档，生活和战斗分别保存完整数值", () => {
+  const { context, message } = levelFixture();
+  const records = api.completedSnapshots(context, message, now);
+  assert.equal(api.memberLevel(records[0], records[0].rows[0]), 143);
+  assert.equal(api.memberLevel(records[1], records[1].rows[0]), 97.25);
+  context.signupLevels[1].skillingTrialLevel = 200;
+  assert.equal(api.memberLevel(records[0], records[0].rows[0]), 143);
+  assert.deepEqual(records[0].rows, [message.guildTrialStatList[0]]);
+  assert.deepEqual(api.parseImport(importText(records)), records);
+  const { plugin, values } = storageFixture();
+  for (const record of records) assert.equal(plugin.saveTrialSnapshot(record), true);
+  plugin.saveTrialSnapshot({ ...records[0], memberLevels: { 1: 200 } });
+  plugin.saveTrialSnapshot({ ...records[0], memberLevels: undefined });
+  const loaded = storageFixture(values).plugin.loadTrialHistory().records;
+  assert.equal(
+    api.memberLevel(
+      loaded.find((r) => r.kind === "skilling"),
+      records[0].rows[0]
+    ),
+    143
+  );
+});
+test("等级迟到可补齐，但不使用其他周、公会、项目或手动记录的当前等级", () => {
+  const { context, message } = levelFixture();
+  const [record] = api.completedSnapshots({ ...context, signupLevels: {} }, message, now);
+  assert.equal(api.memberLevel(record, record.rows[0]), null);
+  assert.equal(api.memberLevel(api.withMemberLevels(record, context), record.rows[0]), 143);
+  for (const wrong of [
+    { ...context, guild: { ...context.guild, id: 8 } },
+    { ...context, guild: { ...context.guild, currentWeekStartAt: "2026-09-07T00:00:00Z" } },
+    { ...context, signups: { 1: { ...context.signups[1], signedUpSkillingTrialHrid: "other" } } },
+    { ...context, signups: { 1: { ...context.signups[1], signupWeekStartAt: "2026-09-07T00:00:00Z" } } },
+    { ...context, signupLevels: {} }
+  ])
+    assert.equal(api.withMemberLevels(record, wrong), record);
+  assert.equal(api.withMemberLevels(manualFixture(), context).memberLevels, undefined);
+  const switched = api.updateContext(context, {
+    guild: { ...context.guild, currentWeekStartAt: "2026-09-07T00:00:00Z" }
+  });
+  assert.deepEqual(switched.signupLevels, {});
+  assert.deepEqual(switched.signups, {});
+  assert.deepEqual(api.updateContext(context, { guild: null }).signupLevels, {});
+  assert.deepEqual(
+    api.updateContext(context, { type: "guild_characters_updated", guildCharacterMap: context.signups }).signupLevels,
+    {}
+  );
+  const signup = api.updateContext(context, {
+    type: "guild_trial_signup_updated",
+    characterId: 1,
+    ...context.signups[1],
+    trialSignupLevels: { skillingTrialLevel: 155 }
+  });
+  assert.equal(api.memberLevel(api.withMemberLevels(record, signup), record.rows[0]), 155);
+});
+test("等级缺失保持未知，旧文件兼容，导入拒绝非法等级和无法对应的成员", () => {
+  const manual = manualFixture();
+  assert.equal(api.memberLevel(manual, manual.rows[0]), null);
+  for (const level of [0, 1, 160, 99.125, null]) {
+    const record = { ...manual, memberLevels: { "entry-1": level } };
+    assert.deepEqual(api.parseImport(importText([record])), [record]);
+  }
+  for (const memberLevels of [[], "160", { "entry-1": -1 }, { "entry-1": "160" }, { unknown: 100 }]) {
+    assert.throws(() => api.parseImport(importText([{ ...manual, memberLevels }])), /trialImportInvalidRecord/);
+  }
+  const { context, message } = levelFixture();
+  for (const level of [null, -1, Infinity, NaN, "160"]) {
+    context.signupLevels[1].skillingTrialLevel = level;
+    const [record] = api.completedSnapshots(context, message, now);
+    assert.equal(api.memberLevel(record, record.rows[0]), null);
+  }
+});
+
 test("存储失败不覆盖旧记录，损坏条目隔离并明确报告", () => {
   const { context, message } = fixture();
   const [record] = api.completedSnapshots(context, message, now);
@@ -160,7 +315,17 @@ test("正式消息桥接被动接收统计，并在界面尚未启动时保留�
   const bridge = window.__mwiGuildCreditBridge;
   assert.equal(bridge.pendingTrialSnapshots.length, 1);
   assert.equal(bridge.pendingTrialSnapshots[0].members[1].name, "Member");
+  let refreshes = 0;
+  bridge.onTrialStatsUpdated = () => refreshes++;
+  socket.receive({ type: "guild_characters_updated", guildSharableCharacterMap: {} });
+  assert.equal(refreshes, 1);
+  assert.equal(bridge.pendingTrialSnapshots.length, 1);
+  assert.equal(
+    api.memberAbsent(bridge.pendingTrialSnapshots[0], message.guildTrialStatList[0], bridge.trialHistoryContext),
+    true
+  );
   socket.receive({ type: "guild_updated", guild: null });
+  assert.equal(refreshes, 2);
   socket.receive(message);
   assert.equal(bridge.pendingTrialSnapshots.length, 1);
 });

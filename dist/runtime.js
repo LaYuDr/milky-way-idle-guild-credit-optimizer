@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.19";
+window.MwiGuildCreditVersion = "1.2.20";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -789,10 +789,108 @@ window.MwiGuildCreditVersion = "1.2.19";
     if (Object.hasOwn(message, "guild")) {
       const guild = message.guild;
       const changed = String(guild?.id || "") !== String(previous.guild?.id || "");
-      next = { ...next, guild, members: changed ? {} : previous.members };
+      const weekChanged = timestamp(guild?.currentWeekStartAt) !== timestamp(previous.guild?.currentWeekStartAt);
+      next = {
+        ...next,
+        guild,
+        members: changed ? {} : previous.members,
+        roster: changed ? null : previous.roster,
+        signups: changed || weekChanged ? {} : previous.signups,
+        signupLevels: changed || weekChanged ? {} : previous.signupLevels
+      };
     }
+    if (message.guildId != null && String(message.guildId) !== String(next.guild?.id)) return next;
     if (message.guildSharableCharacterMap) next = { ...next, members: message.guildSharableCharacterMap };
+    // Stats can include names for historical participants. Only a current roster
+    // response can establish membership; keep it separate from captured names.
+    const roster =
+      message.guildCharacterMap ??
+      (message.type === "guild_characters_updated" ? message.guildSharableCharacterMap : null);
+    if (next.guild?.id != null && roster && typeof roster === "object" && !Array.isArray(roster)) {
+      next = {
+        ...next,
+        roster: Object.fromEntries(
+          Object.entries(roster).map(([id, member]) => [
+            id,
+            { name: message.guildSharableCharacterMap?.[id]?.name || member?.name || null }
+          ])
+        )
+      };
+    }
+    if (isObject(message.guildCharacterMap)) next = { ...next, signups: message.guildCharacterMap };
+    if (isObject(message.guildTrialSignupLevelMap)) next = { ...next, signupLevels: message.guildTrialSignupLevelMap };
+    else if (message.type === "guild_characters_updated") next = { ...next, signupLevels: {} };
+    if (message.type === "guild_trial_signup_updated" && next.signups?.[message.characterId]) {
+      next = {
+        ...next,
+        signups: {
+          ...next.signups,
+          [message.characterId]: {
+            ...next.signups[message.characterId],
+            signedUpSkillingTrialHrid: message.signedUpSkillingTrialHrid,
+            signedUpCombatTrialHrid: message.signedUpCombatTrialHrid,
+            signupWeekStartAt: message.signupWeekStartAt
+          }
+        },
+        signupLevels: { ...next.signupLevels, [message.characterId]: message.trialSignupLevels || {} }
+      };
+    }
     return next;
+  }
+
+  function timestamp(value) {
+    return typeof value === "number" ? value : Date.parse(value);
+  }
+
+  function memberLevel(record, row) {
+    const level = record.memberLevels?.[row.memberKey ?? row.characterId];
+    return isMetric(level) ? level : null;
+  }
+
+  function withMemberLevels(record, context = {}) {
+    if (
+      record.schemaVersion !== 1 ||
+      String(context.guild?.id) !== record.guildId ||
+      timestamp(context.guild?.currentWeekStartAt) !== record.weekStartAt
+    )
+      return record;
+    const memberLevels = { ...record.memberLevels };
+    let changed = false;
+    for (const row of record.rows) {
+      if (memberLevel(record, row) !== null) continue;
+      const signup = context.signups?.[row.characterId];
+      const project = record.kind === "combat" ? signup?.signedUpCombatTrialHrid : signup?.signedUpSkillingTrialHrid;
+      if (project !== record.trialHrid || timestamp(signup?.signupWeekStartAt) !== record.weekStartAt) continue;
+      const levels = context.signupLevels?.[row.characterId];
+      const level = record.kind === "combat" ? levels?.combatLevel : levels?.skillingTrialLevel;
+      if (!isMetric(level)) continue;
+      memberLevels[row.characterId] = level;
+      changed = true;
+    }
+    return changed ? { ...record, memberLevels } : record;
+  }
+
+  function validMemberLevels(record) {
+    if (record.memberLevels === undefined) return true;
+    if (!isObject(record.memberLevels) || !Array.isArray(record.rows)) return false;
+    const ids = new Set(record.rows.map((row) => String(row?.memberKey ?? row?.characterId)));
+    return Object.entries(record.memberLevels).every(
+      ([id, level]) => ids.has(id) && (level === null || isMetric(level))
+    );
+  }
+
+  function memberAbsent(record, row, context = {}) {
+    if (!context.guild || !context.roster) return false;
+    const sameGuild =
+      record.guildId != null
+        ? String(record.guildId) === String(context.guild.id)
+        : Boolean(record.guildName && record.guildName === context.guild.name);
+    if (!sameGuild) return false;
+    if (row.characterId != null) return !Object.hasOwn(context.roster, String(row.characterId));
+    const name = record.members?.[row.memberKey]?.name;
+    const members = Object.values(context.roster);
+    // ID-less imports can only be checked by name when every roster name is known.
+    return Boolean(name && members.every((member) => member.name) && !members.some((member) => member.name === name));
   }
 
   // The official stats response contains every trial. Only completed parties
@@ -820,21 +918,26 @@ window.MwiGuildCreditVersion = "1.2.19";
         }
         snapshots.push(
           JSON.parse(
-            JSON.stringify({
-              schemaVersion: 1,
-              key: JSON.stringify([String(guild.id), weekStartAt, trialHrid]),
-              guildId: String(guild.id),
-              guildName: String(guild.name || guild.id),
-              weekStartAt,
-              trialHrid,
-              kind,
-              capturedAt,
-              points: trials.points?.[trialHrid] ?? null,
-              party,
-              rows,
-              members,
-              trialDetail: context.details?.[trialHrid] || null
-            })
+            JSON.stringify(
+              withMemberLevels(
+                {
+                  schemaVersion: 1,
+                  key: JSON.stringify([String(guild.id), weekStartAt, trialHrid]),
+                  guildId: String(guild.id),
+                  guildName: String(guild.name || guild.id),
+                  weekStartAt,
+                  trialHrid,
+                  kind,
+                  capturedAt,
+                  points: trials.points?.[trialHrid] ?? null,
+                  party,
+                  rows,
+                  members,
+                  trialDetail: context.details?.[trialHrid] || null
+                },
+                context
+              )
+            )
           )
         );
       }
@@ -843,6 +946,7 @@ window.MwiGuildCreditVersion = "1.2.19";
   }
 
   function validSnapshot(value) {
+    if (!validMemberLevels(value || {})) return false;
     if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
@@ -1082,6 +1186,9 @@ window.MwiGuildCreditVersion = "1.2.19";
     historyProjects,
     historyWeeks,
     metricValue,
+    memberAbsent,
+    memberLevel,
+    withMemberLevels,
     updateContext,
     completedSnapshots,
     validSnapshot,
@@ -1582,12 +1689,17 @@ window.MwiGuildCreditVersion = "1.2.19";
       keepGuildData(message);
       const trialApi = window.MwiGuildTrialHistory;
       if (trialApi) {
+        const previousContext = bridge.trialHistoryContext;
         bridge.trialHistoryContext = trialApi.updateContext(bridge.trialHistoryContext, message);
         const snapshots = trialApi.completedSnapshots(bridge.trialHistoryContext, message);
-        if (snapshots.length) {
-          bridge.pendingTrialSnapshots.push(...snapshots);
-          if (typeof bridge.onTrialStatsUpdated === "function") bridge.onTrialStatsUpdated();
-        }
+        if (snapshots.length) bridge.pendingTrialSnapshots.push(...snapshots);
+        const membershipChanged =
+          previousContext.guild !== bridge.trialHistoryContext.guild ||
+          previousContext.roster !== bridge.trialHistoryContext.roster ||
+          previousContext.signups !== bridge.trialHistoryContext.signups ||
+          previousContext.signupLevels !== bridge.trialHistoryContext.signupLevels;
+        if ((snapshots.length || membershipChanged) && typeof bridge.onTrialStatsUpdated === "function")
+          bridge.onTrialStatsUpdated();
       }
     } catch (_) {
       diagnostics.lastMessageType = "non_json";
@@ -3040,8 +3152,10 @@ window.MwiGuildCreditVersion = "1.2.19";
       trialSummary: "{count} 人 · {points} 点 · {tier} 层",
       trialStatsTable: "成员试炼统计",
       trialMember: "成员",
-      trialFormerMember: "名称未读取",
+      trialNameUnavailable: "名称未读取",
+      trialMemberAbsent: "已不在公会",
       trialRaw: "原始记录",
+      trialField_level: "等级",
       trialField_workDone: "工作量",
       trialField_damageDealt: "造成伤害",
       trialField_healingDone: "治疗量",
@@ -3572,8 +3686,10 @@ window.MwiGuildCreditVersion = "1.2.19";
       trialSummary: "{count} members · {points} points · Tier {tier}",
       trialStatsTable: "Member trial statistics",
       trialMember: "Member",
-      trialFormerMember: "Name unavailable",
+      trialNameUnavailable: "Name unavailable",
+      trialMemberAbsent: "No longer in the guild",
       trialRaw: "Raw record",
+      trialField_level: "Level",
       trialField_workDone: "Work done",
       trialField_damageDealt: "Damage dealt",
       trialField_healingDone: "Healing done",
@@ -5480,7 +5596,19 @@ window.MwiGuildCreditVersion = "1.2.19";
         const previous = JSON.parse(storage.getItem(key) || "null");
         const members = { ...(previous?.members || {}), ...record.members };
         // One key per trial: a quota error cannot destroy any older records.
-        storage.setItem(key, JSON.stringify({ ...record, members }));
+        const levels =
+          previous?.memberLevels || record.memberLevels
+            ? {
+                memberLevels: Object.fromEntries(
+                  record.rows.flatMap((row) => {
+                    const level =
+                      trialHistoryApi.memberLevel(previous || {}, row) ?? trialHistoryApi.memberLevel(record, row);
+                    return level === null ? [] : [[row.memberKey ?? row.characterId, level]];
+                  })
+                )
+              }
+            : {};
+        storage.setItem(key, JSON.stringify({ ...record, members, ...levels }));
         return true;
       } catch (_) {
         return false;
@@ -8146,6 +8274,8 @@ window.MwiGuildCreditVersion = "1.2.19";
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-member-absent{display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:help;line-height:1}
+        #mwi-credit-optimizer .mwi-trial-member-absent:focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
         #mwi-credit-optimizer .mwi-trial-raw{margin:10px 0;min-width:0}
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:8px 0;color:var(--trial-muted);font-size:12px}
@@ -8153,7 +8283,8 @@ window.MwiGuildCreditVersion = "1.2.19";
         #mwi-credit-optimizer .mwi-trial-display-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px 24px;margin:0 0 20px}
         #mwi-credit-optimizer .mwi-trial-choice-field{flex:1 1 360px;display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:4px 2px 8px}
-        #mwi-credit-optimizer .mwi-trial-choices button{flex:0 0 auto;white-space:nowrap;min-height:34px;padding:6px 12px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:34px;padding:6px 12px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-project-icon{width:20px;height:20px;flex:0 0 20px}
         #mwi-credit-optimizer .mwi-trial-choices button:hover{background:var(--trial-surface);color:var(--trial-text)}
         #mwi-credit-optimizer .mwi-trial-choices button[aria-pressed="true"]{border-color:var(--trial-accent);background:#34514e;color:#d5f7ed}
         #mwi-credit-optimizer .mwi-trial-mode{display:flex;flex-wrap:wrap;gap:4px;padding:4px;background:var(--trial-field);border-radius:6px}
@@ -9393,8 +9524,35 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function projectIconSpec(record, detail = record.trialDetail) {
+    const project = String(record.trialHrid || "")
+      .split("/")
+      .pop();
+    let sprite, symbol;
+    if (record.kind === "skilling") {
+      sprite = "skills_sprite";
+      symbol = String(detail?.skillHrid || project)
+        .split("/")
+        .pop();
+    } else if (record.kind === "combat") {
+      const monsters = [...new Set(Array.isArray(detail?.monsterHrids) ? detail.monsterHrids : [])];
+      if (monsters.length === 1) {
+        sprite = "combat_monsters_sprite";
+        symbol = String(monsters[0]).split("/").pop();
+      } else if (monsters.length > 1 || project === "swarm") {
+        sprite = "misc_sprite";
+        symbol = "trial_swarm";
+      } else if (["badger", "chameleon", "hedgehog", "jellyfish"].includes(project)) {
+        sprite = "combat_monsters_sprite";
+        symbol = `trial_${project}`;
+      }
+    }
+    return sprite && /^[a-z0-9_]+$/.test(symbol || "") ? { sprite, symbol } : null;
+  }
+
   function createTrialHistoryView({
     document,
+    domApi,
     pageWindow,
     t,
     escapeHtml,
@@ -9417,6 +9575,35 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let importRevision = 0;
     let guideOpen = false;
     const unsaved = new Map();
+    const spriteBases = {};
+    let spriteLoadPromise = null;
+    let disposed = false;
+
+    function projectIcon(record) {
+      const detail = getBridge()?.trialHistoryContext?.details?.[record.trialHrid] || record.trialDetail;
+      const spec = projectIconSpec(record, detail);
+      if (!spec) return "";
+      let base = spriteBases[spec.sprite] || domApi.findSpriteBaseHref(document, spec.sprite);
+      if (base) spriteBases[spec.sprite] = base;
+      else if (!spriteLoadPromise && pageWindow.fetch && pageWindow.location?.origin) {
+        spriteLoadPromise = pageWindow
+          .fetch(new URL("/asset-manifest.json", pageWindow.location.origin).href, { cache: "force-cache" })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((manifest) => {
+            for (const sprite of ["skills_sprite", "combat_monsters_sprite", "misc_sprite"]) {
+              const reference = domApi.spriteBaseFromAssetManifest(manifest, sprite);
+              if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
+            }
+            const panel = getPanel();
+            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode === "project")
+              refresh(panel);
+          })
+          .catch(() => {});
+      }
+      return base
+        ? `<svg class="mwi-trial-project-icon" width="20" height="20" aria-hidden="true" focusable="false"><use href="${escapeHtml(`${base}#${spec.symbol}`)}" width="100%" height="100%"></use></svg>`
+        : "";
+    }
     const trialName = (record) => {
       const key = String(record.trialDetail?.skillHrid || record.trialHrid)
         .split("/")
@@ -9441,6 +9628,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function capture() {
       const bridge = getBridge();
       for (const record of bridge?.pendingTrialSnapshots?.splice(0) || []) unsaved.set(record.key, record);
+      reload();
+      for (const record of records) {
+        const enriched = trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext);
+        if (enriched !== record) unsaved.set(record.key, enriched);
+      }
       for (const [key, record] of unsaved) {
         if (pluginStorage.saveTrialSnapshot(record)) unsaved.delete(key);
       }
@@ -9560,15 +9752,29 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
     }
 
+    function renderMember(record, row) {
+      const name = record.members?.[row.memberKey ?? row.characterId]?.name || t("trialNameUnavailable");
+      const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
+      const label = escapeHtml(t("trialMemberAbsent"));
+      return (
+        escapeHtml(name) +
+        (absent
+          ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
+          : "")
+      );
+    }
+
     function renderRecord(record, showIdentity) {
       const fields =
-        record.kind === "combat" ? ["damageDealt", "healingDone", "premitigatedDamageTaken"] : ["workDone"];
+        record.kind === "combat"
+          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          : ["level", "workDone"];
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       // Keep source order and exact numeric values; this is a record viewer, not a ranking.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${escapeHtml(record.members?.[row.memberKey ?? row.characterId]?.name || t("trialFormerMember"))}</th>${fields.map((field) => `<td>${escapeHtml(number(trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr><th scope="col">${escapeHtml(t("trialMember"))}</th>${fields.map((field) => `<th scope="col">${escapeHtml(t(`trialField_${field}`))}</th>`).join("")}</tr></thead><tbody>${record.rows.map((row) => `<tr><th scope="row"${row.characterId == null ? "" : ` title="ID ${escapeHtml(row.characterId)}"`}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(number(field === "level" ? trialHistoryApi.memberLevel(record, row) : trialHistoryApi.metricValue(record, row, field)))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
@@ -9594,7 +9800,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function renderChoices(kind, entries, current) {
       const label = t(kind === "week" ? "trialChooseWeek" : "trialChooseProject");
-      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${escapeHtml(name)}</button>`).join("")}</div></div>`;
+      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
     }
 
     function revealChoice(button) {
@@ -9655,7 +9861,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         markup +=
           renderChoices(
             "project",
-            projects.map((entry) => ({ key: entry.key, label: trialName(entry.records[0]) })),
+            projects.map((entry) => ({
+              key: entry.key,
+              label: trialName(entry.records[0]),
+              icon: projectIcon(entry.records[0])
+            })),
             selectedProject
           ) + "</div>";
         const timeline = trialHistoryApi.historyWeeks(project.records);
@@ -9774,11 +9984,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (panel && panel.dataset.activeView === "trials") refresh(panel);
     };
     function start() {
+      disposed = false;
       const bridge = getBridge();
       if (bridge) bridge.onTrialStatsUpdated = onStats;
       capture();
     }
     function dispose() {
+      disposed = true;
       importRevision += 1;
       resizeObserver?.disconnect();
       const bridge = getBridge();
@@ -9786,7 +9998,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     return { start, dispose, bind, refresh };
   }
-  return { createTrialHistoryView };
+  return { createTrialHistoryView, projectIconSpec };
 });
 
 
@@ -13811,6 +14023,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   const trialHistoryView = trialHistoryViewApi.createTrialHistoryView({
     document,
+    domApi,
     pageWindow,
     t,
     escapeHtml,

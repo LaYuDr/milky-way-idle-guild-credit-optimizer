@@ -3253,7 +3253,7 @@
           saved().some((record) => record.rows.some((row) => row.additionalStatistic === 7)),
         memberNamesEscaped: !host.querySelector("tbody b"),
         officialOmittedZero: [...host.querySelectorAll('[data-trial-group="combat"] tbody tr:last-child')].every(
-          (row) => [...row.querySelectorAll("td")].every((td) => td.textContent === "0")
+          (row) => [...row.querySelectorAll('td:not([data-trial-field="level"])')].every((td) => td.textContent === "0")
         ),
         fullRawRecords: host.querySelectorAll(".mwi-trial-raw pre").length === 6,
         lifeAboveCombat:
@@ -3272,6 +3272,64 @@
             )
           ).size === 1
       };
+      checks.unknownLevels = [...host.querySelectorAll('[data-trial-field="level"]')].every(
+        (cell) => cell.textContent === "—"
+      );
+      const signups = Object.fromEntries(
+        [101, 102].map((id) => [
+          id,
+          {
+            signupWeekStartAt: guild.currentWeekStartAt,
+            signedUpSkillingTrialHrid: milk,
+            signedUpCombatTrialHrid: combats[0]
+          }
+        ])
+      );
+      send({
+        type: "guild_characters_updated",
+        guildSharableCharacterMap: members,
+        guildCharacterMap: signups,
+        guildTrialSignupLevelMap: { 101: { skillingTrialLevel: 143, combatLevel: 97.25 } }
+      });
+      const levelFor = (hrid) =>
+        host.querySelector(
+          `[data-trial-record='${JSON.stringify([guild.id, Date.parse(guild.currentWeekStartAt), hrid])}'] [data-trial-field="level"]`
+        )?.textContent;
+      checks.lateLevelsCaptured =
+        levelFor(milk) === "143" &&
+        levelFor(combats[0]) === "97.25" &&
+        saved().filter((record) => record.memberLevels?.[101] != null).length === 2;
+      checks.levelBeforeWork = [...host.querySelectorAll('[data-trial-group="skilling"] tbody tr')].every(
+        (row) => row.querySelector('[data-trial-field="level"]').nextElementSibling?.dataset.trialField === "workDone"
+      );
+      send({
+        type: "guild_trial_signup_updated",
+        characterId: 101,
+        ...signups[101],
+        trialSignupLevels: { skillingTrialLevel: 180, combatLevel: 110 }
+      });
+      send(message);
+      checks.savedLevelNotReplaced = levelFor(milk) === "143" && levelFor(combats[0]) === "97.25";
+      const originalRecords = JSON.stringify(saved());
+      send({ type: "guild_characters_updated", guildSharableCharacterMap: { 101: { name: "Renamed" } } });
+      checks.absentMemberIcons = host.querySelectorAll(".mwi-trial-member-absent").length === 6;
+      checks.originalMemberNames = [...host.querySelectorAll("tbody th")].every(
+        (cell) => cell.textContent.trim() === members[101].name || cell.textContent.trim() === members[102].name
+      );
+      checks.absentMemberLabel = [...host.querySelectorAll(".mwi-trial-member-absent")].every(
+        (icon) =>
+          icon.title ===
+            (new URLSearchParams(location.search).get("locale") === "en" ? "No longer in the guild" : "已不在公会") &&
+          icon.getAttribute("aria-label") === icon.title &&
+          icon.tabIndex === 0
+      );
+      checks.membershipDoesNotAlterRecords = JSON.stringify(saved()) === originalRecords;
+      send({ type: "guild_updated", guild: { id: "other-guild" } });
+      checks.otherGuildNotCompared = !host.querySelector(".mwi-trial-member-absent");
+      send({ type: "guild_updated", guild });
+      checks.unloadedRosterNotCompared = !host.querySelector(".mwi-trial-member-absent");
+      send({ type: "guild_characters_updated", guildSharableCharacterMap: members });
+      checks.returningMemberClearsIcon = !host.querySelector(".mwi-trial-member-absent");
       for (const [week, value] of [
         ["2026-09-07T00:00:00Z", 222.5],
         ["2026-08-31T00:00:00Z", 111.25]
@@ -3286,7 +3344,7 @@
       choose("trial-week", "9");
       checks.weekSelection =
         host.querySelectorAll("[data-trial-record]").length === 1 &&
-        host.querySelector("tbody td").textContent === "222.5";
+        host.querySelector('tbody [data-trial-field="workDone"]').textContent === "222.5";
       checks.missingSlots = host.querySelectorAll("[data-trial-empty]").length === 5;
       checks.directWeekChoices =
         host.querySelectorAll('[data-role="trial-week"] button').length === 3 && !host.querySelector("select");
@@ -3297,7 +3355,7 @@
       checks.newestToOldest =
         [...host.querySelectorAll("[data-trial-week]")].map((el) => el.dataset.trialWeek).join(",") === "10,9,8";
       checks.timelineExactValues =
-        [...host.querySelectorAll("[data-trial-week] tbody tr:first-child td")]
+        [...host.querySelectorAll('[data-trial-week] tbody tr:first-child [data-trial-field="workDone"]')]
           .map((el) => el.textContent)
           .join(",") === "123456789.125,222.5,111.25";
       const timeline = host.querySelector("#mwi-trial-rail-timeline");
@@ -3309,7 +3367,7 @@
       checks.directProjectChoices =
         host.querySelectorAll('[data-role="trial-project"] button').length === 6 && !host.querySelector("select");
       checks.projectSwitch =
-        host.querySelectorAll("[data-trial-week]").length === 1 && host.querySelectorAll("thead th").length === 4;
+        host.querySelectorAll("[data-trial-week]").length === 1 && host.querySelectorAll("thead th").length === 5;
       checks.switchResetsScroll = host.querySelector("#mwi-trial-rail-timeline").scrollLeft === 0;
       const before = JSON.stringify(saved());
       host.querySelector('[data-trial-mode="week"]').click();

@@ -484,12 +484,17 @@
       keepGuildData(message);
       const trialApi = window.MwiGuildTrialHistory;
       if (trialApi) {
+        const previousContext = bridge.trialHistoryContext;
         bridge.trialHistoryContext = trialApi.updateContext(bridge.trialHistoryContext, message);
         const snapshots = trialApi.completedSnapshots(bridge.trialHistoryContext, message);
-        if (snapshots.length) {
-          bridge.pendingTrialSnapshots.push(...snapshots);
-          if (typeof bridge.onTrialStatsUpdated === "function") bridge.onTrialStatsUpdated();
-        }
+        if (snapshots.length) bridge.pendingTrialSnapshots.push(...snapshots);
+        const membershipChanged =
+          previousContext.guild !== bridge.trialHistoryContext.guild ||
+          previousContext.roster !== bridge.trialHistoryContext.roster ||
+          previousContext.signups !== bridge.trialHistoryContext.signups ||
+          previousContext.signupLevels !== bridge.trialHistoryContext.signupLevels;
+        if ((snapshots.length || membershipChanged) && typeof bridge.onTrialStatsUpdated === "function")
+          bridge.onTrialStatsUpdated();
       }
     } catch (_) {
       diagnostics.lastMessageType = "non_json";

@@ -23,10 +23,108 @@
     if (Object.hasOwn(message, "guild")) {
       const guild = message.guild;
       const changed = String(guild?.id || "") !== String(previous.guild?.id || "");
-      next = { ...next, guild, members: changed ? {} : previous.members };
+      const weekChanged = timestamp(guild?.currentWeekStartAt) !== timestamp(previous.guild?.currentWeekStartAt);
+      next = {
+        ...next,
+        guild,
+        members: changed ? {} : previous.members,
+        roster: changed ? null : previous.roster,
+        signups: changed || weekChanged ? {} : previous.signups,
+        signupLevels: changed || weekChanged ? {} : previous.signupLevels
+      };
     }
+    if (message.guildId != null && String(message.guildId) !== String(next.guild?.id)) return next;
     if (message.guildSharableCharacterMap) next = { ...next, members: message.guildSharableCharacterMap };
+    // Stats can include names for historical participants. Only a current roster
+    // response can establish membership; keep it separate from captured names.
+    const roster =
+      message.guildCharacterMap ??
+      (message.type === "guild_characters_updated" ? message.guildSharableCharacterMap : null);
+    if (next.guild?.id != null && roster && typeof roster === "object" && !Array.isArray(roster)) {
+      next = {
+        ...next,
+        roster: Object.fromEntries(
+          Object.entries(roster).map(([id, member]) => [
+            id,
+            { name: message.guildSharableCharacterMap?.[id]?.name || member?.name || null }
+          ])
+        )
+      };
+    }
+    if (isObject(message.guildCharacterMap)) next = { ...next, signups: message.guildCharacterMap };
+    if (isObject(message.guildTrialSignupLevelMap)) next = { ...next, signupLevels: message.guildTrialSignupLevelMap };
+    else if (message.type === "guild_characters_updated") next = { ...next, signupLevels: {} };
+    if (message.type === "guild_trial_signup_updated" && next.signups?.[message.characterId]) {
+      next = {
+        ...next,
+        signups: {
+          ...next.signups,
+          [message.characterId]: {
+            ...next.signups[message.characterId],
+            signedUpSkillingTrialHrid: message.signedUpSkillingTrialHrid,
+            signedUpCombatTrialHrid: message.signedUpCombatTrialHrid,
+            signupWeekStartAt: message.signupWeekStartAt
+          }
+        },
+        signupLevels: { ...next.signupLevels, [message.characterId]: message.trialSignupLevels || {} }
+      };
+    }
     return next;
+  }
+
+  function timestamp(value) {
+    return typeof value === "number" ? value : Date.parse(value);
+  }
+
+  function memberLevel(record, row) {
+    const level = record.memberLevels?.[row.memberKey ?? row.characterId];
+    return isMetric(level) ? level : null;
+  }
+
+  function withMemberLevels(record, context = {}) {
+    if (
+      record.schemaVersion !== 1 ||
+      String(context.guild?.id) !== record.guildId ||
+      timestamp(context.guild?.currentWeekStartAt) !== record.weekStartAt
+    )
+      return record;
+    const memberLevels = { ...record.memberLevels };
+    let changed = false;
+    for (const row of record.rows) {
+      if (memberLevel(record, row) !== null) continue;
+      const signup = context.signups?.[row.characterId];
+      const project = record.kind === "combat" ? signup?.signedUpCombatTrialHrid : signup?.signedUpSkillingTrialHrid;
+      if (project !== record.trialHrid || timestamp(signup?.signupWeekStartAt) !== record.weekStartAt) continue;
+      const levels = context.signupLevels?.[row.characterId];
+      const level = record.kind === "combat" ? levels?.combatLevel : levels?.skillingTrialLevel;
+      if (!isMetric(level)) continue;
+      memberLevels[row.characterId] = level;
+      changed = true;
+    }
+    return changed ? { ...record, memberLevels } : record;
+  }
+
+  function validMemberLevels(record) {
+    if (record.memberLevels === undefined) return true;
+    if (!isObject(record.memberLevels) || !Array.isArray(record.rows)) return false;
+    const ids = new Set(record.rows.map((row) => String(row?.memberKey ?? row?.characterId)));
+    return Object.entries(record.memberLevels).every(
+      ([id, level]) => ids.has(id) && (level === null || isMetric(level))
+    );
+  }
+
+  function memberAbsent(record, row, context = {}) {
+    if (!context.guild || !context.roster) return false;
+    const sameGuild =
+      record.guildId != null
+        ? String(record.guildId) === String(context.guild.id)
+        : Boolean(record.guildName && record.guildName === context.guild.name);
+    if (!sameGuild) return false;
+    if (row.characterId != null) return !Object.hasOwn(context.roster, String(row.characterId));
+    const name = record.members?.[row.memberKey]?.name;
+    const members = Object.values(context.roster);
+    // ID-less imports can only be checked by name when every roster name is known.
+    return Boolean(name && members.every((member) => member.name) && !members.some((member) => member.name === name));
   }
 
   // The official stats response contains every trial. Only completed parties
@@ -54,21 +152,26 @@
         }
         snapshots.push(
           JSON.parse(
-            JSON.stringify({
-              schemaVersion: 1,
-              key: JSON.stringify([String(guild.id), weekStartAt, trialHrid]),
-              guildId: String(guild.id),
-              guildName: String(guild.name || guild.id),
-              weekStartAt,
-              trialHrid,
-              kind,
-              capturedAt,
-              points: trials.points?.[trialHrid] ?? null,
-              party,
-              rows,
-              members,
-              trialDetail: context.details?.[trialHrid] || null
-            })
+            JSON.stringify(
+              withMemberLevels(
+                {
+                  schemaVersion: 1,
+                  key: JSON.stringify([String(guild.id), weekStartAt, trialHrid]),
+                  guildId: String(guild.id),
+                  guildName: String(guild.name || guild.id),
+                  weekStartAt,
+                  trialHrid,
+                  kind,
+                  capturedAt,
+                  points: trials.points?.[trialHrid] ?? null,
+                  party,
+                  rows,
+                  members,
+                  trialDetail: context.details?.[trialHrid] || null
+                },
+                context
+              )
+            )
           )
         );
       }
@@ -77,6 +180,7 @@
   }
 
   function validSnapshot(value) {
+    if (!validMemberLevels(value || {})) return false;
     if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
@@ -316,6 +420,9 @@
     historyProjects,
     historyWeeks,
     metricValue,
+    memberAbsent,
+    memberLevel,
+    withMemberLevels,
     updateContext,
     completedSnapshots,
     validSnapshot,
