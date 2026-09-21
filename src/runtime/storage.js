@@ -28,6 +28,10 @@
     return panelViews.includes(view) ? view : "credit";
   }
 
+  function normalizeSidebarDisplayName(value) {
+    return typeof value === "string" ? Array.from(value.trim().replace(/\s+/g, " ")).slice(0, 24).join("") : "";
+  }
+
   function normalizePanelOrder(order, panelViews, defaultOrder = panelViews) {
     const allowed = new Set(panelViews);
     const normalized = [];
@@ -362,6 +366,7 @@
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: false,
         showTrialHistoryView: false,
+        sidebarDisplayName: "",
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -423,6 +428,7 @@
           ),
           showConstructionView: stored.showConstructionView === true,
           showTrialHistoryView: stored.showTrialHistoryView === true,
+          sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -571,6 +577,7 @@
             ),
             showConstructionView: state.showConstructionView === true,
             showTrialHistoryView: state.showTrialHistoryView === true,
+            sidebarDisplayName: normalizeSidebarDisplayName(state.sidebarDisplayName),
             activeView: state.activeView,
             panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
             useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
@@ -744,6 +751,7 @@
   }
 
   return {
+    normalizeSidebarDisplayName,
     normalizeTrialDisplay,
     normalizePanelView,
     normalizePanelOrder,

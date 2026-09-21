@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.30";
+window.MwiGuildCreditVersion = "1.2.31";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3090,6 +3090,10 @@ window.MwiGuildCreditVersion = "1.2.30";
       settingsShrinesLoading: "正在读取可配置的公会神龛…",
       settingsShrinesEmpty: "已读取游戏数据，但没有可配置的公会神龛。",
       interfaceVisibility: "界面",
+      sidebarDisplayName: "侧栏显示名称",
+      sidebarDisplayNameHint: "最多 24 个字符；留空恢复默认名称。保存后立即生效。",
+      sidebarNameSave: "保存名称",
+      sidebarNameReset: "恢复默认",
       showConstructionView: "显示公会建设页签（测试版功能，效果不佳）",
       showTrialHistoryView: "显示历史试炼数据页签（测试版功能，效果不佳）",
       showTrialHistoryViewHint: "默认关闭。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
@@ -3418,15 +3422,15 @@ window.MwiGuildCreditVersion = "1.2.30";
       trialFeedbackNotice:
         "也欢迎加入 QQ 群 437320340，分享你与 AI 的分析对话或结果，帮助我了解大家的实际需求，为后续开发提供参考。感谢你的支持！",
       trialDisplaySettings: "显示设置",
-      trialMemberColumns: "成员列表显示字段",
+      trialMemberColumns: "成员列表显示项",
       trialDisplaySettingsHint:
-        "生活试炼的人均倍数 = 个人工作量 ÷ 已知平均工作量（1× 为人均）；占比 = 个人工作量 ÷ 已知总工作量，分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
+        "生活试炼中，相对人均 = 个人工作量 ÷ 人均工作量（1× 表示达到平均水平）；总量占比 = 个人工作量 ÷ 总工作量，以百分比显示。两项均按该次项目记录中工作量已知的成员计算，包含零值；个人工作量缺失或分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
       trialDisplaySaveFailed: "设置未能保存，当前页面已生效；重新打开页面后可能恢复默认。",
       trialOverview: "项目总体概览",
       trialKnownCoverage: "{field}：已知 {count}/{total} 人，汇总仅含已知值。",
-      trialPartialShare: "工作量不完整，占比和人均倍数仅按已知工作量计算。",
-      trialField_workShare: "占总百分比",
-      trialField_workMultiple: "人均倍数",
+      trialPartialShare: "工作量不完整，总量占比和相对人均仅按该次项目记录中工作量已知的成员计算。",
+      trialField_workShare: "总量占比",
+      trialField_workMultiple: "相对人均",
       trialField_levelSummary: "等级汇总",
       trialField_workSummary: "工作量汇总",
       trialAggregate_level_total: "总等级",
@@ -3685,6 +3689,10 @@ window.MwiGuildCreditVersion = "1.2.30";
       settingsShrinesLoading: "Reading configurable guild shrines…",
       settingsShrinesEmpty: "Game data is available, but there are no configurable guild shrines.",
       interfaceVisibility: "Interface",
+      sidebarDisplayName: "Sidebar tab name",
+      sidebarDisplayNameHint: "Up to 24 characters. Leave blank to use the default name. Applies when saved.",
+      sidebarNameSave: "Save name",
+      sidebarNameReset: "Reset name",
       showConstructionView: "Show Guild construction (Beta feature; results may be unsatisfactory)",
       showTrialHistoryView: "Show Trial history (Beta feature; results may be unsatisfactory)",
       showTrialHistoryViewHint:
@@ -5819,6 +5827,10 @@ window.MwiGuildCreditVersion = "1.2.30";
     return panelViews.includes(view) ? view : "credit";
   }
 
+  function normalizeSidebarDisplayName(value) {
+    return typeof value === "string" ? Array.from(value.trim().replace(/\s+/g, " ")).slice(0, 24).join("") : "";
+  }
+
   function normalizePanelOrder(order, panelViews, defaultOrder = panelViews) {
     const allowed = new Set(panelViews);
     const normalized = [];
@@ -6153,6 +6165,7 @@ window.MwiGuildCreditVersion = "1.2.30";
         guildShrineAutofillExcludedBuffHrids: [],
         showConstructionView: false,
         showTrialHistoryView: false,
+        sidebarDisplayName: "",
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: 1,
@@ -6214,6 +6227,7 @@ window.MwiGuildCreditVersion = "1.2.30";
           ),
           showConstructionView: stored.showConstructionView === true,
           showTrialHistoryView: stored.showTrialHistoryView === true,
+          sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
@@ -6362,6 +6376,7 @@ window.MwiGuildCreditVersion = "1.2.30";
             ),
             showConstructionView: state.showConstructionView === true,
             showTrialHistoryView: state.showTrialHistoryView === true,
+            sidebarDisplayName: normalizeSidebarDisplayName(state.sidebarDisplayName),
             activeView: state.activeView,
             panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
             useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
@@ -6535,6 +6550,7 @@ window.MwiGuildCreditVersion = "1.2.30";
   }
 
   return {
+    normalizeSidebarDisplayName,
     normalizeTrialDisplay,
     normalizePanelView,
     normalizePanelOrder,
@@ -8140,6 +8156,7 @@ window.MwiGuildCreditVersion = "1.2.30";
         #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;gap:2px;background:transparent}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:28px;min-width:28px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
         #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
         #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-switch+.mwi-settings-switch{margin-top:6px}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-settings-name{margin:0 0 8px;min-width:0}#mwi-credit-optimizer .mwi-settings-name>label{display:block;margin-bottom:5px;font-size:11px;font-weight:700}#mwi-credit-optimizer .mwi-settings-name-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}#mwi-credit-optimizer .mwi-settings-name-controls input{flex:1 1 160px;width:100%;min-width:0;max-width:100%;box-sizing:border-box}#mwi-credit-optimizer .mwi-settings-name-controls button{flex:0 0 auto}#mwi-credit-optimizer .mwi-settings-name p{margin:5px 0 0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-number-field{display:grid;gap:4px;min-width:0}#mwi-credit-optimizer .mwi-number-field>label{display:block}#mwi-credit-optimizer .mwi-price-reference{display:flex;flex:0 0 auto;align-items:center;gap:0;height:40px;min-height:40px;border:1px solid #5b5d7b;border-radius:6px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{height:38px;min-height:38px;border-radius:0;background:#353653;color:#c9cbeb;padding:0 9px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}#mwi-credit-optimizer .mwi-controls>[data-role="refresh"]{min-height:40px}
@@ -10524,8 +10541,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
-        <div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div>
-        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
+        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
@@ -10870,7 +10886,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport() + renderDisplaySettings();
+      let markup = renderImport();
       markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
       if (mode === "player") {
         const members = trialHistoryApi.historyMembers(records);
@@ -10881,7 +10897,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup += renderPlayerPicker(members, current) + "</div>";
+        markup += renderPlayerPicker(members, current) + "</div>" + renderDisplaySettings();
         host.innerHTML =
           markup +
           (selectedMember
@@ -10917,7 +10933,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             "week",
             weeks.map((entry) => ({ key: entry.key, label: weekLabel(entry) })),
             selectedWeek
-          ) + "</div>";
+          ) +
+          "</div>" +
+          renderDisplaySettings();
         for (const [kind, size] of [
           ["skilling", 4],
           ["combat", 2]
@@ -10949,7 +10967,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               icon: projectIcon(entry.records[0])
             })),
             selectedProject
-          ) + "</div>";
+          ) +
+          "</div>" +
+          renderDisplaySettings();
         const timeline = trialHistoryApi.historyWeeks(project.records);
         markup += renderRail(
           "timeline",
@@ -12138,7 +12158,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         snapshot
       )}</section><section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(
         t("interfaceVisibility")
-      )}</h4></div><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
+      )}</h4></div><form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" aria-describedby="mwi-settings-sidebar-name-hint" autocomplete="off"><button type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button type="button" data-role="settings-sidebar-name-reset">${escapeHtml(t("sidebarNameReset"))}</button></div><p id="mwi-settings-sidebar-name-hint">${escapeHtml(t("sidebarDisplayNameHint"))}</p></form><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
         t("showConstructionView")
       )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
         t("showConstructionViewHint")
@@ -12170,7 +12190,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       settingsPanel.hidden = state.settingsOpen !== true;
       const content = settingsPanel.querySelector('[data-role="settings-content"]');
       const snapshot = guildBuffSettingsSnapshot();
+      const nameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+      const draftName = nameInput?.value;
       updateRenderedMarkup(content, renderSettingsContent(snapshot));
+      const updatedNameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+      if (updatedNameInput && draftName !== undefined) updatedNameInput.value = draftName;
       const excludedHrids = currentExcludedGuildBuffHrids();
       for (const input of settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'))
         input.checked = !excludedHrids.has(input.dataset.guildBuffHrid);
@@ -13346,6 +13370,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       priceReference,
       normalizePanelView,
       persistPluginUiState,
+      normalizeSidebarDisplayName,
       checkPluginUpdate,
       refreshPanel,
       refreshGuildUpgrade,
@@ -13886,6 +13911,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         event.preventDefault();
         event.stopPropagation();
         setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      function saveSidebarName(reset = false) {
+        const input = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+        state.sidebarDisplayName = normalizeSidebarDisplayName(reset ? "" : input.value);
+        if (state.creditTab) state.creditTab.textContent = state.sidebarDisplayName || t("sidebarCredit");
+        const persisted = persistPluginUiState();
+        input.value = state.sidebarDisplayName;
+        setSettingsStatus(panel, persisted === false ? "settingsSaveFailed" : "settingsSaved");
+      }
+      settingsPanel.addEventListener("submit", (event) => {
+        if (!event.target.matches('[data-role="settings-sidebar-name-form"]')) return;
+        event.preventDefault();
+        saveSidebarName();
+      });
+      settingsPanel.addEventListener("click", (event) => {
+        if (event.target.closest('[data-role="settings-sidebar-name-reset"]')) saveSidebarName(true);
       });
       settingsPanel.addEventListener("change", (event) => {
         if (event.target.matches('[data-role="settings-shrine-autofill"]')) {
@@ -14700,6 +14741,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     showTrialHistoryView: savedUiState.showTrialHistoryView,
+    sidebarDisplayName: savedUiState.sidebarDisplayName,
     settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,
@@ -15277,6 +15319,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     priceReference,
     normalizePanelView,
     persistPluginUiState,
+    normalizeSidebarDisplayName: storageApi.normalizeSidebarDisplayName,
     checkPluginUpdate,
     refreshPanel: (...args) => refreshPanel(...args),
     refreshGuildUpgrade,
@@ -15501,7 +15544,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     creditTab.setAttribute("aria-selected", "false");
     creditTab.setAttribute("role", "tab");
     if ("disabled" in creditTab) creditTab.disabled = false;
-    creditTab.replaceChildren(document.createTextNode(t("sidebarCredit")));
+    creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
     const activateCreditTab = (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();

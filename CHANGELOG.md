@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.31] - 2026-09-22
+
+### Changed
+
+- 完善成员列表字段设置与侧栏名称自定义，修正设置持久化并同步界面测试。
+
 ## [1.2.30] - 2026-09-22
 
 ### Changed

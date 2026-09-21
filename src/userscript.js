@@ -124,6 +124,7 @@
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
     showConstructionView: savedUiState.showConstructionView,
     showTrialHistoryView: savedUiState.showTrialHistoryView,
+    sidebarDisplayName: savedUiState.sidebarDisplayName,
     settingsOpen: false,
     shrineGuideContext: null,
     shrineGuideModel: null,
@@ -701,6 +702,7 @@
     priceReference,
     normalizePanelView,
     persistPluginUiState,
+    normalizeSidebarDisplayName: storageApi.normalizeSidebarDisplayName,
     checkPluginUpdate,
     refreshPanel: (...args) => refreshPanel(...args),
     refreshGuildUpgrade,
@@ -925,7 +927,7 @@
     creditTab.setAttribute("aria-selected", "false");
     creditTab.setAttribute("role", "tab");
     if ("disabled" in creditTab) creditTab.disabled = false;
-    creditTab.replaceChildren(document.createTextNode(t("sidebarCredit")));
+    creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
     const activateCreditTab = (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();

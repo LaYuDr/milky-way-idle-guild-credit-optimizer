@@ -23,6 +23,7 @@
       priceReference,
       normalizePanelView,
       persistPluginUiState,
+      normalizeSidebarDisplayName,
       checkPluginUpdate,
       refreshPanel,
       refreshGuildUpgrade,
@@ -563,6 +564,22 @@
         event.preventDefault();
         event.stopPropagation();
         setSettingsOpen(panel, false, { restoreFocus: true });
+      });
+      function saveSidebarName(reset = false) {
+        const input = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+        state.sidebarDisplayName = normalizeSidebarDisplayName(reset ? "" : input.value);
+        if (state.creditTab) state.creditTab.textContent = state.sidebarDisplayName || t("sidebarCredit");
+        const persisted = persistPluginUiState();
+        input.value = state.sidebarDisplayName;
+        setSettingsStatus(panel, persisted === false ? "settingsSaveFailed" : "settingsSaved");
+      }
+      settingsPanel.addEventListener("submit", (event) => {
+        if (!event.target.matches('[data-role="settings-sidebar-name-form"]')) return;
+        event.preventDefault();
+        saveSidebarName();
+      });
+      settingsPanel.addEventListener("click", (event) => {
+        if (event.target.closest('[data-role="settings-sidebar-name-reset"]')) saveSidebarName(true);
       });
       settingsPanel.addEventListener("change", (event) => {
         if (event.target.matches('[data-role="settings-shrine-autofill"]')) {

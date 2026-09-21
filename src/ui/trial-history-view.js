@@ -182,8 +182,7 @@
         <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
-        <div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div>
-        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
+        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
@@ -528,7 +527,7 @@
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
-      let markup = renderImport() + renderDisplaySettings();
+      let markup = renderImport();
       markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
       if (mode === "player") {
         const members = trialHistoryApi.historyMembers(records);
@@ -539,7 +538,7 @@
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup += renderPlayerPicker(members, current) + "</div>";
+        markup += renderPlayerPicker(members, current) + "</div>" + renderDisplaySettings();
         host.innerHTML =
           markup +
           (selectedMember
@@ -575,7 +574,9 @@
             "week",
             weeks.map((entry) => ({ key: entry.key, label: weekLabel(entry) })),
             selectedWeek
-          ) + "</div>";
+          ) +
+          "</div>" +
+          renderDisplaySettings();
         for (const [kind, size] of [
           ["skilling", 4],
           ["combat", 2]
@@ -607,7 +608,9 @@
               icon: projectIcon(entry.records[0])
             })),
             selectedProject
-          ) + "</div>";
+          ) +
+          "</div>" +
+          renderDisplaySettings();
         const timeline = trialHistoryApi.historyWeeks(project.records);
         markup += renderRail(
           "timeline",

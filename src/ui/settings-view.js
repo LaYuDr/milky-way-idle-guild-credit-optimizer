@@ -66,7 +66,7 @@
         snapshot
       )}</section><section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(
         t("interfaceVisibility")
-      )}</h4></div><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
+      )}</h4></div><form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" aria-describedby="mwi-settings-sidebar-name-hint" autocomplete="off"><button type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button type="button" data-role="settings-sidebar-name-reset">${escapeHtml(t("sidebarNameReset"))}</button></div><p id="mwi-settings-sidebar-name-hint">${escapeHtml(t("sidebarDisplayNameHint"))}</p></form><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
         t("showConstructionView")
       )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
         t("showConstructionViewHint")
@@ -98,7 +98,11 @@
       settingsPanel.hidden = state.settingsOpen !== true;
       const content = settingsPanel.querySelector('[data-role="settings-content"]');
       const snapshot = guildBuffSettingsSnapshot();
+      const nameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+      const draftName = nameInput?.value;
       updateRenderedMarkup(content, renderSettingsContent(snapshot));
+      const updatedNameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
+      if (updatedNameInput && draftName !== undefined) updatedNameInput.value = draftName;
       const excludedHrids = currentExcludedGuildBuffHrids();
       for (const input of settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'))
         input.checked = !excludedHrids.has(input.dataset.guildBuffHrid);

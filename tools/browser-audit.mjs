@@ -171,6 +171,7 @@ async function main() {
   const server = createDevServer();
   let browser;
   const results = [];
+  let runError = null;
   try {
     await new Promise((resolve, reject) => {
       server.once("error", reject);
@@ -193,10 +194,26 @@ async function main() {
     const failed = results.filter((result) => result.failures.length).length;
     console.log(`浏览器审计：${results.length - failed}/${results.length} 通过；报告／失败截图：${directory}`);
     return failed ? 1 : 0;
+  } catch (error) {
+    runError = error.stack || error.message;
+    throw error;
   } finally {
     fs.writeFileSync(
       path.join(directory, "matrix.json"),
-      JSON.stringify({ plan, completed: results.length, results }, null, 2) + "\n"
+      JSON.stringify(
+        {
+          status:
+            !runError && results.length === plan.cases.length && results.every((result) => !result.failures.length)
+              ? "passed"
+              : "failed",
+          error: runError,
+          plan,
+          completed: results.length,
+          results
+        },
+        null,
+        2
+      ) + "\n"
     );
     try {
       await browser?.close();

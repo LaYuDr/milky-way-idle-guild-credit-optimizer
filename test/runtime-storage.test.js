@@ -47,6 +47,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildShrineAutofillExcludedBuffHrids: [],
     showConstructionView: false,
     showTrialHistoryView: false,
+    sidebarDisplayName: "",
     activeView: "credit",
     panelOrder: ["upgrade", "credit", "construction", "trials"],
     targetCredit: 1,
@@ -545,4 +546,22 @@ test("试炼显示设置校验布尔值，独立持久化并在存储故障时�
   });
   assert.deepEqual(broken.loadTrialDisplay(), defaults);
   assert.equal(broken.saveTrialDisplay(hidden), false);
+});
+
+test("侧栏名称按文本保存，空白与无效值恢复默认，长度按完整字符限制", () => {
+  assert.equal(storageApi.normalizeSidebarDisplayName(null), "");
+  assert.equal(storageApi.normalizeSidebarDisplayName(" \n "), "");
+  assert.equal(storageApi.normalizeSidebarDisplayName(" 我的  公会 "), "我的 公会");
+  assert.equal(storageApi.normalizeSidebarDisplayName("牛".repeat(30)), "牛".repeat(24));
+  assert.equal(storageApi.normalizeSidebarDisplayName("🐄".repeat(25)), "🐄".repeat(24));
+  const local = memoryStorage();
+  const store = createStorage(local);
+  const state = store.loadSavedPluginUiState();
+  state.guildTokenCreditHrids = new Set(state.guildTokenCreditHrids);
+  state.sidebarDisplayName = "<b>牛奶</b>";
+  assert.equal(store.persistPluginUiState(state), true);
+  assert.equal(createStorage(local).loadSavedPluginUiState().sidebarDisplayName, "<b>牛奶</b>");
+  state.sidebarDisplayName = "  ";
+  store.persistPluginUiState(state);
+  assert.equal(createStorage(local).loadSavedPluginUiState().sidebarDisplayName, "");
 });
