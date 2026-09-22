@@ -765,14 +765,15 @@
         #mwi-credit-optimizer .mwi-trial-profile-section{margin-top:12px}
         #mwi-credit-optimizer .mwi-trial-profile-section>summary{padding:6px 0;min-height:32px;font-size:14px;font-weight:650;color:var(--trial-accent);cursor:pointer;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-section>summary:hover{text-decoration:underline;text-underline-offset:3px}
-        #mwi-credit-optimizer .mwi-trial-player-overview{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-trial-player-overview{width:100%;table-layout:auto;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
         #mwi-credit-optimizer .mwi-trial-player-overview caption{caption-side:top;text-align:left;padding:10px 0 4px;color:var(--trial-accent);font-weight:650}
         #mwi-credit-optimizer .mwi-trial-player-overview th,#mwi-credit-optimizer .mwi-trial-player-overview td{padding:5px 3px;border-bottom:1px solid var(--trial-line);text-align:right;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-player-overview th:first-child{text-align:left}
         #mwi-credit-optimizer .mwi-trial-overview-name{width:34%}
-        #mwi-credit-optimizer .mwi-trial-overview-count{width:16%}
+        #mwi-credit-optimizer .mwi-trial-overview-count{width:10%}
         #mwi-credit-optimizer .mwi-trial-player-overview tfoot th,#mwi-credit-optimizer .mwi-trial-player-overview tfoot td{border-top:2px solid var(--trial-line);font-weight:650;color:var(--trial-accent)}
         #mwi-credit-optimizer .mwi-trial-player-overview thead th{white-space:normal;color:var(--trial-muted);font-weight:500}
+        #mwi-credit-optimizer .mwi-trial-player-overview thead th:nth-child(2),#mwi-credit-optimizer .mwi-trial-player-overview thead th:nth-child(3){white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-player-overview tbody th{font-weight:400}
         #mwi-credit-optimizer .mwi-trial-player-overview tbody th>span{display:flex;align-items:center;gap:5px}
         #mwi-credit-optimizer .mwi-trial-player-overview .mwi-trial-overview-project-name{min-width:0;white-space:normal;overflow-wrap:anywhere}

@@ -3739,6 +3739,15 @@
           table.tHead.rows[0].cells.length === 4 &&
           table.tFoot.getBoundingClientRect().top >= table.tBodies[0].getBoundingClientRect().bottom - 1
       );
+      checks.playerOverviewAverageHeadingSingleLine = [...host.querySelectorAll(".mwi-trial-player-overview")].every(
+        (table) => {
+          const heading = table.tHead.rows[0].cells[2];
+          const range = document.createRange();
+          range.selectNodeContents(heading);
+          const lines = [...range.getClientRects()];
+          return lines.length === 1 && heading.scrollWidth <= heading.clientWidth + 1;
+        }
+      );
       checks.playerOverviewBeforeSkills = Boolean(
         host
           .querySelector('[data-trial-profile-section="overview"]')
