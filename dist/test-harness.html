@@ -510,6 +510,7 @@
       guildBuffDetails: {
         "/guild_buffs/tempo_life": {
           guildBuffHrid: "/guild_buffs/tempo_life",
+          buffs: [{ typeHrid: "/buff_types/action_speed", flatBoost: 0.005, flatBoostLevelBonus: 0.005 }],
           shrineHrid: "/guild_shrines/tempo",
           isCombat: false,
           levelCosts: surplusPlan
@@ -532,6 +533,10 @@
         },
         "/guild_buffs/tempo_combat": {
           guildBuffHrid: "/guild_buffs/tempo_combat",
+          buffs: [
+            { typeHrid: "/buff_types/attack_speed", ratioBoost: 0.004, ratioBoostLevelBonus: 0.004 },
+            { typeHrid: "/buff_types/cast_speed", flatBoost: 0.004, flatBoostLevelBonus: 0.004 }
+          ],
           shrineHrid: "/guild_shrines/tempo",
           isCombat: true,
           levelCosts: [
@@ -542,6 +547,7 @@
         },
         "/guild_buffs/spirit_life": {
           guildBuffHrid: "/guild_buffs/spirit_life",
+          buffs: [{ typeHrid: "/buff_types/essence_find", flatBoost: 0.03, flatBoostLevelBonus: 0.03 }],
           shrineHrid: "/guild_shrines/spirit",
           isCombat: false,
           levelCosts: [
@@ -552,6 +558,10 @@
         },
         "/guild_buffs/spirit_combat": {
           guildBuffHrid: "/guild_buffs/spirit_combat",
+          buffs: [
+            { typeHrid: "/buff_types/max_hitpoints", ratioBoost: 0.01, ratioBoostLevelBonus: 0.01 },
+            { typeHrid: "/buff_types/max_manapoints", ratioBoost: 0.01, ratioBoostLevelBonus: 0.01 }
+          ],
           shrineHrid: "/guild_shrines/spirit",
           isCombat: true,
           levelCosts: [
@@ -2390,6 +2400,15 @@
           closeLabel: closeButton?.getAttribute("aria-label") || "",
           statusLive: settingsPanel.querySelector('[data-role="settings-status"]')?.getAttribute("aria-live") || "",
           shrineInputCount: shrineInputs.length,
+          shrineGameIconCount: settingsPanel.querySelectorAll('.mwi-settings-shrine-icon [data-icon-source="game"] use')
+            .length,
+          shrineEffects: Array.from(
+            settingsPanel.querySelectorAll(".mwi-settings-shrine-effects"),
+            (element) => element.textContent
+          ),
+          shrineEffectsDescribed: shrineInputs.every((input) =>
+            Boolean(document.getElementById(input.getAttribute("aria-describedby")))
+          ),
           allShrineInputsLabelled: shrineInputs.every((input) =>
             Boolean(input.id && settingsPanel.querySelector(`label[for="${CSS.escape(input.id)}"]`))
           ),
@@ -2422,6 +2441,9 @@
         return candidate && elementIsVisible(candidate) ? candidate : null;
       });
       await waitFor(() => settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]').length === 4);
+      await waitFor(
+        () => settingsPanel.querySelectorAll('.mwi-settings-shrine-icon [data-icon-source="game"] use').length === 4
+      );
       const opened = settingsGeometrySnapshot(panel);
 
       const spiritLifeHrid = "/guild_buffs/spirit_life";
@@ -2654,6 +2676,14 @@
         }
       };
       report.checks = {
+        shrineIconsAndEffectsVisible:
+          opened.settings.shrineGameIconCount === 4 &&
+          opened.settings.shrineEffectsDescribed &&
+          opened.settings.shrineEffects.every((text) =>
+            text.includes(document.documentElement.lang.startsWith("zh") ? "每级" : "Per level")
+          ) &&
+          opened.settings.shrineEffects.some((text) => text.includes("+0.4%")) &&
+          opened.settings.shrineEffects.some((text) => text.includes("+3%")),
         trialSwitchAccessible:
           trialSwitch.getAttribute("role") === "switch" &&
           Boolean(document.getElementById(trialSwitch.getAttribute("aria-describedby"))),
@@ -3339,6 +3369,10 @@
     };
 
     async function runTrialHistoryAudit() {
+      // The game places captions below tables; the overview must explicitly override it.
+      const gameCaptionStyle = document.createElement("style");
+      gameCaptionStyle.textContent = "caption { caption-side: bottom; }";
+      document.head.append(gameCaptionStyle);
       document.getElementById("close-exchange-modal").click();
       const panel = await waitFor(() => document.getElementById("mwi-credit-optimizer"));
       document.querySelector('#test-tabs [data-mwi-credit-tab="true"]').click();
@@ -3683,6 +3717,28 @@
         overviewValues().filter((value) => value === "2.00×").length === 6 &&
         overviewCounts().filter((value) => value === "0").length === 9 &&
         overviewValues().filter((value) => value === "—").length === 9;
+      checks.playerOverviewTotals = overviewRows().every(
+        (row) =>
+          row.querySelector("[data-trial-overview-total]").textContent ===
+          row.querySelector("[data-trial-overview-average]").textContent
+      );
+      checks.playerOverviewCategorySummaries = ["skilling", "combat"].every((kind) => {
+        const row = host.querySelector(`[data-trial-overview-summary="${kind}"]`);
+        return (
+          row &&
+          row.parentElement.tagName === "TFOOT" &&
+          row.querySelector("[data-trial-overview-count]").textContent === (kind === "skilling" ? "4" : "2") &&
+          row.querySelector("[data-trial-overview-average]").textContent === "2.00×" &&
+          row.querySelector("[data-trial-overview-total]").textContent === (kind === "skilling" ? "8.00×" : "4.00×")
+        );
+      });
+      checks.playerOverviewTitlesAboveHeaders = [...host.querySelectorAll(".mwi-trial-player-overview")].every(
+        (table) =>
+          getComputedStyle(table.caption).captionSide === "top" &&
+          table.caption.getBoundingClientRect().bottom <= table.tHead.getBoundingClientRect().top + 1 &&
+          table.tHead.rows[0].cells.length === 4 &&
+          table.tFoot.getBoundingClientRect().top >= table.tBodies[0].getBoundingClientRect().bottom - 1
+      );
       checks.playerOverviewBeforeSkills = Boolean(
         host
           .querySelector('[data-trial-profile-section="overview"]')
@@ -3692,7 +3748,8 @@
       checks.playerOverviewContained = [...host.querySelectorAll(".mwi-trial-player-overview")].every(
         (table) =>
           table.scrollWidth <= table.clientWidth &&
-          table.getBoundingClientRect().right <= host.getBoundingClientRect().right + 1
+          table.getBoundingClientRect().right <= host.getBoundingClientRect().right + 1 &&
+          [...table.querySelectorAll("th, td")].every((cell) => cell.scrollWidth <= cell.clientWidth + 1)
       );
       const skillIcons = [...host.querySelectorAll(".mwi-trial-skill-grid .mwi-trial-profile-icon use")];
       checks.profileNativeSkillIcons =

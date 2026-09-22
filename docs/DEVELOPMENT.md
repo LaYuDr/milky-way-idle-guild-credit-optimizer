@@ -749,6 +749,14 @@ The pure weekly-ranking tests cover the 1.5/2.2/0.8 and absent/2.2/0.8 examples,
 join boundaries, never-participating members, partial captures, cross-guild and
 rejoin gaps, manual exclusion, evidence validation and recapture preservation.
 
+The trial overview places each category caption above its table even when the game
+styles captions at the bottom. Rows show participation count, average multiple and
+total multiple. Each category has an All trials footer: counts and valid multiples
+are summed, and the average divides that total by valid samples (not by project
+count). Missing multiples are excluded, valid zero remains zero, and no valid
+samples show an em dash. The trials matrix checks captions, footers, totals and
+contained four-column tables in both locales.
+
 Player profiles include a default-open, independently collapsible trial overview before
 skills and equipment. All ten skilling and five combat projects remain visible,
 including projects without captured participations (0 / em dash). Statistics reuse

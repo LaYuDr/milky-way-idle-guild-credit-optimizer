@@ -77,6 +77,7 @@
     TRIAL_HISTORY_STORAGE_PREFIX: "mwi-guild-trial-history-v1",
     TRIAL_DISPLAY_STORAGE_PREFIX: "mwi-guild-trial-display-v1",
     PANEL_VIEWS: ["credit", "upgrade", "construction", "trials"],
+    DEFAULT_TARGET_CREDIT: 100,
     DEFAULT_PANEL_ORDER: ["upgrade", "credit", "construction", "trials"],
     CREDIT_TYPES,
     GUILD_TOKEN_CREDIT_CONVERSIONS,

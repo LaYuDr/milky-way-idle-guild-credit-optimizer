@@ -441,6 +441,7 @@
           state.panel.dataset.activeView === "construction"
         )
           refreshGuildConstruction(state.panel);
+        if (state.panel?.isConnected && state.settingsOpen) refreshSettings(state.panel);
         return guildBuildingSpriteHref;
       })
       .catch(() => "");
@@ -594,6 +595,9 @@
   } = upgradeView;
 
   const settingsView = settingsViewApi.createSettingsView({
+    core,
+    guildBuildingSpriteBaseHref,
+    guildBuildingIconMarkup,
     state,
     t,
     ui,

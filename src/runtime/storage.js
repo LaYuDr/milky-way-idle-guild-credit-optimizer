@@ -387,7 +387,7 @@
         sidebarDisplayName: "",
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
-        targetCredit: 1,
+        targetCredit: config.DEFAULT_TARGET_CREDIT,
         upgradePlans: []
       };
       try {
@@ -449,7 +449,7 @@
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
-          targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : 1,
+          targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : fallback.targetCredit,
           upgradePlans
         };
       } catch (_) {

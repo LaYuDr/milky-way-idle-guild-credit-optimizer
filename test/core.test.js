@@ -2538,3 +2538,25 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(buildSource, /@match        https:\/\/www\.milkywayidle\.com\/\*/);
   assert.match(buildSource, /@match        https:\/\/www\.milkywayidlecn\.com\/\*/);
 });
+
+test("神龛效果区分首级与每级增量，拒绝缺失或非法值", () => {
+  assert.deepEqual(core.guildBuffLevelEffects(null), []);
+  assert.deepEqual(core.guildBuffLevelEffects({ buffs: [null, {}, { typeHrid: "x", flatBoost: null }] }), []);
+  assert.deepEqual(
+    core.guildBuffLevelEffects({
+      buffs: [
+        { typeHrid: "/buff_types/damage", ratioBoost: 0.003, ratioBoostLevelBonus: 0.003, flatBoost: 0 },
+        { typeHrid: "/buff_types/action_level", flatBoost: 2, flatBoostLevelBonus: 1 },
+        { typeHrid: "zero", flatBoost: 0, flatBoostLevelBonus: 1 },
+        { typeHrid: "constant", flatBoost: 3 },
+        { typeHrid: "invalid", flatBoost: Infinity, ratioBoost: "0.2" }
+      ]
+    }),
+    [
+      { typeHrid: "/buff_types/damage", kind: "ratio", first: 0.003, increment: 0.003 },
+      { typeHrid: "/buff_types/action_level", kind: "flat", first: 2, increment: 1 },
+      { typeHrid: "zero", kind: "flat", first: 0, increment: 1 },
+      { typeHrid: "constant", kind: "flat", first: 3, increment: 0 }
+    ]
+  );
+});

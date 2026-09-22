@@ -1253,6 +1253,21 @@
     );
   }
 
+  // Official buffs use the base value at level 1, then a separate bonus per level.
+  function guildBuffLevelEffects(detail) {
+    if (!Array.isArray(detail?.buffs)) return [];
+    const finite = (value) => typeof value === "number" && Number.isFinite(value);
+    return detail.buffs.flatMap((buff) => {
+      if (!buff || typeof buff.typeHrid !== "string") return [];
+      return ["ratio", "flat"].flatMap((kind) => {
+        const first = buff[`${kind}Boost`];
+        const increment = buff[`${kind}BoostLevelBonus`] ?? 0;
+        if (!finite(first) || !finite(increment) || (first === 0 && increment === 0)) return [];
+        return [{ typeHrid: buff.typeHrid, kind, first, increment }];
+      });
+    });
+  }
+
   function isUnitPriceWithinLimit(unitPrice, maxUnitPrice) {
     const limit = Number(maxUnitPrice);
     if (!Number.isSafeInteger(limit) || limit <= 0) return true;
@@ -1261,6 +1276,7 @@
   }
 
   return {
+    guildBuffLevelEffects,
     normalizeAsks,
     quoteAsks,
     evaluateConversion,

@@ -86,7 +86,17 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
     { hrid: "/guild_buffs/life", detail: { isCombat: false, label: "Life Shrine" } },
     { hrid: "/guild_buffs/combat", detail: { isCombat: true, label: "Combat Shrine" } }
   ];
-  const content = {};
+  const focused = { id: "mwi-settings-show-trials", isConnected: true };
+  let restoredFocus = false;
+  const replacement = {
+    focus: () => {
+      restoredFocus = true;
+    }
+  };
+  const content = {
+    ownerDocument: { activeElement: focused, getElementById: (id) => (id === focused.id ? replacement : null) },
+    contains: (element) => element === focused || element === replacement
+  };
   const shrineInputs = entries.map((entry) => ({ dataset: { guildBuffHrid: entry.hrid }, checked: null }));
   const constructionInput = { checked: null };
   const trialsInput = { checked: null };
@@ -103,6 +113,9 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
     }
   };
   const api = settingsViewApi.createSettingsView({
+    core: require("../src/core.js"),
+    guildBuildingSpriteBaseHref: () => "/misc_sprite.svg",
+    guildBuildingIconMarkup: () => '<svg aria-hidden="true"></svg>',
     state,
     t: (key) => key,
     ui: () => ({ locale: "en" }),
@@ -111,6 +124,7 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
     guildBuffLabel: (detail) => detail.label,
     updateRenderedMarkup(element, markup) {
       element.innerHTML = markup;
+      focused.isConnected = false;
     }
   });
 
@@ -127,6 +141,8 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
   assert.equal(shrineInputs[1].checked, false);
   assert.equal(constructionInput.checked, false);
   assert.equal(trialsInput.checked, false);
+  assert.equal(restoredFocus, true, "图片加载重绘后恢复显示开关的焦点");
+  assert.match(markup, /id="mwi-settings-show-trials"[^>]*data-role="settings-show-trials"/);
   assert.match(content.innerHTML, /data-domain="life"/);
   assert.match(content.innerHTML, /data-domain="combat"/);
 });
@@ -134,6 +150,9 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
 test("设置视图区分神龛规则读取中与已读取空结果", () => {
   const state = { settingsOpen: true, guildBuffDetails: null };
   const api = settingsViewApi.createSettingsView({
+    core: require("../src/core.js"),
+    guildBuildingSpriteBaseHref: () => "/misc_sprite.svg",
+    guildBuildingIconMarkup: () => '<svg aria-hidden="true"></svg>',
     state,
     t: (key) => key,
     ui: () => ({ locale: "en" }),
@@ -146,4 +165,56 @@ test("设置视图区分神龛规则读取中与已读取空结果", () => {
   assert.match(api.renderSettingsMarkup(), /data-role="settings-shrines-loading"[^>]*role="status"/);
   state.guildBuffDetails = {};
   assert.match(api.renderSettingsMarkup(), /data-role="settings-shrines-empty"[^>]*role="status"/);
+});
+
+test("神龛设置显示游戏图标、独立每级效果与中英文说明", () => {
+  const localization = require("../src/localization.js");
+  for (const locale of ["zh-CN", "en"]) {
+    const localizer = localization.createLocalizer(locale);
+    const entries = [
+      {
+        hrid: "/guild_buffs/tempo_combat",
+        detail: {
+          shrineHrid: "/guild_shrines/tempo",
+          isCombat: true,
+          buffs: [
+            { typeHrid: "/buff_types/attack_speed", ratioBoost: 0.004, ratioBoostLevelBonus: 0.004 },
+            { typeHrid: "/buff_types/cast_speed", flatBoost: 0.004, flatBoostLevelBonus: 0.004 },
+            { typeHrid: "/buff_types/max_hitpoints", ratioBoost: 0.02, ratioBoostLevelBonus: 0.01 }
+          ]
+        }
+      }
+    ];
+    const api = settingsViewApi.createSettingsView({
+      core: require("../src/core.js"),
+      state: { settingsOpen: true },
+      t: localizer.t,
+      ui: () => ({ locale }),
+      escapeHtml: String,
+      guildBuffEntries: () => entries,
+      guildBuffLabel: () => "Tempo",
+      guildBuildingSpriteBaseHref: () => "/misc_sprite.svg",
+      guildBuildingIconMarkup: (definition, sprite) => {
+        assert.equal(definition.hrid, "/guild_shrines/tempo");
+        assert.equal(sprite, "/misc_sprite.svg");
+        return '<svg aria-hidden="true"><use href="/misc_sprite.svg#guild_shrine_tempo"></use></svg>';
+      },
+      updateRenderedMarkup: () => false
+    });
+    const markup = api.renderSettingsMarkup();
+    assert.match(markup, /#guild_shrine_tempo/);
+    assert.match(markup, /aria-describedby="mwi-settings-autofill--guild_buffs-tempo_combat-effects"/);
+    assert.match(
+      markup,
+      locale === "zh-CN"
+        ? /每级：攻击速度 \+0.4%<br>每级：施法速度 \+0.4%/
+        : /Per level: Attack speed \+0.4%<br>Per level: Cast speed \+0.4%/
+    );
+    assert.match(markup, locale === "zh-CN" ? /首级 \+2%；后续每级 \+1%/ : /level 1 \+2%; each later level \+1%/);
+    entries[0].detail.buffs = undefined;
+    assert.match(
+      api.renderSettingsMarkup(),
+      locale === "zh-CN" ? /每级效果暂未读取/ : /Per-level effects not yet available/
+    );
+  }
 });

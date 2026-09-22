@@ -50,7 +50,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     sidebarDisplayName: "",
     activeView: "credit",
     panelOrder: ["upgrade", "credit", "construction", "trials"],
-    targetCredit: 1,
+    targetCredit: 100,
     upgradePlans: []
   });
 
@@ -567,4 +567,16 @@ test("侧栏名称按文本保存，空白与无效值恢复默认，长度按�
   state.sidebarDisplayName = "  ";
   store.persistPluginUiState(state);
   assert.equal(createStorage(local).loadSavedPluginUiState().sidebarDisplayName, "");
+});
+
+test("目标信用点默认 100，非法保存值回退，合法手动值保留", () => {
+  assert.equal(createStorage(memoryStorage()).loadSavedPluginUiState().targetCredit, 100);
+  for (const targetCredit of [undefined, null, 0, -1, 1.5, "invalid"]) {
+    const saved = memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ targetCredit }) });
+    assert.equal(createStorage(saved).loadSavedPluginUiState().targetCredit, 100);
+  }
+  for (const targetCredit of [1, 100, 501, 2000]) {
+    const saved = memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ targetCredit }) });
+    assert.equal(createStorage(saved).loadSavedPluginUiState().targetCredit, targetCredit);
+  }
 });

@@ -188,16 +188,20 @@
       return `<details class="mwi-trial-profile-section" data-trial-profile-section="${key}" ${sectionOpen[key] !== false ? "open" : ""}><summary>${e(t(title))}</summary>${content}</details>`;
     }
     function overviewMarkup(projects, sectionOpen) {
+      const multiple = (value) => (value === null ? "—" : `${value.toFixed(2)}×`);
+      const cells = (values) =>
+        `<td data-trial-overview-count>${values.participations}</td><td data-trial-overview-average>${multiple(values.average)}</td><td data-trial-overview-total>${multiple(values.total)}</td>`;
       const tables = ["skilling", "combat"]
         .map((kind) => {
-          const rows = projects
-            .filter((project) => project.kind === kind)
+          const categoryProjects = projects.filter((project) => project.kind === kind);
+          const rows = categoryProjects
             .map(
               (project) =>
-                `<tr data-trial-overview-project="${e(project.trialHrid)}"><th scope="row"><span>${projectIcon(project)}${e(trialName(project))}</span></th><td data-trial-overview-count>${project.participations}</td><td data-trial-overview-average>${project.average === null ? "—" : `${project.average.toFixed(2)}×`}</td></tr>`
+                `<tr data-trial-overview-project="${e(project.trialHrid)}"><th scope="row"><span>${projectIcon(project)}<span class="mwi-trial-overview-project-name">${e(trialName(project))}</span></span></th>${cells(project)}</tr>`
             )
             .join("");
-          return `<table class="mwi-trial-player-overview"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><thead><tr><th scope="col">${e(t("trialOverviewProject"))}</th><th scope="col">${e(t("trialRankingCount"))}</th><th scope="col">${e(t("trialOverviewAverage"))}</th></tr></thead><tbody>${rows}</tbody></table>`;
+          const summary = api.summarizePlayerProjects(categoryProjects);
+          return `<table class="mwi-trial-player-overview" data-trial-overview-kind="${kind}"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><colgroup><col class="mwi-trial-overview-name"><col class="mwi-trial-overview-count"><col><col></colgroup><thead><tr><th scope="col">${e(t("trialOverviewProject"))}</th><th scope="col">${e(t("trialRankingCount"))}</th><th scope="col">${e(t("trialOverviewAverage"))}</th><th scope="col">${e(t("trialOverviewTotal"))}</th></tr></thead><tbody>${rows}</tbody><tfoot><tr data-trial-overview-summary="${kind}"><th scope="row">${e(t("trialOverviewAllProjects"))}</th>${cells(summary)}</tr></tfoot></table>`;
         })
         .join("");
       return profileSection(

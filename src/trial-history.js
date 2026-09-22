@@ -856,16 +856,36 @@
       const player = participationRankings(groups.get(group.key) || []).find((entry) =>
         identity.id != null ? entry.id === String(identity.id) : entry.id === null && entry.name === identity.name
       );
+      const average = player?.[group.kind].average ?? null;
+      const samples = player?.all.count || 0;
+      const total = average === null ? null : average * samples;
       return {
         key: group.key,
         kind: group.kind,
         trialHrid: project.trialHrid,
         trialDetail: details[project.trialHrid] || project.trialDetail,
         participations: player?.participations || 0,
-        average: player?.[group.kind].average ?? null,
-        samples: player?.all.count || 0
+        average,
+        samples,
+        total: Number.isFinite(total) ? total : null
       };
     });
+  }
+
+  function summarizePlayerProjects(projects) {
+    const measured = projects.filter((project) => project.samples > 0 && Number.isFinite(project.average));
+    const samples = measured.reduce((sum, project) => sum + project.samples, 0);
+    const total = measured.reduce((sum, project) => sum + project.average * project.samples, 0);
+    return {
+      participations: projects.reduce((sum, project) => sum + project.participations, 0),
+      samples,
+      average: samples
+        ? Number.isFinite(total)
+          ? total / samples
+          : measured.reduce((sum, project) => sum + project.average * (project.samples / samples), 0)
+        : null,
+      total: samples && Number.isFinite(total) ? total : null
+    };
   }
 
   function sortEntries(entries, sort) {
@@ -945,6 +965,7 @@
     metricAverageMultiple,
     playerRankings,
     playerProjectOverview,
+    summarizePlayerProjects,
     displayRows,
     sortEntries,
     memberAbsent,
