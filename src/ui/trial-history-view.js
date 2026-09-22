@@ -302,7 +302,8 @@
       getBridge,
       resolveItemName,
       renderRecord,
-      renderRail
+      renderRail,
+      memberIdentityAttributes
     });
 
     function readPlayerProfile(panel, force = false) {
@@ -347,7 +348,11 @@
 
     function memberAttributes(record, row) {
       if (mode !== "project" && mode !== "player") return "";
-      const index = displayedMembers.push(trialHistoryApi.memberIdentity(record, row)) - 1;
+      return memberIdentityAttributes(trialHistoryApi.memberIdentity(record, row));
+    }
+
+    function memberIdentityAttributes(member) {
+      const index = displayedMembers.push(member) - 1;
       return ` data-trial-member="${index}"`;
     }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         公会助手 开发加载器
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.37
+// @version      1.2.38
 // @author       柆雨
 // @description  从本机开发服务加载公会助手；仅用于开发和自动测试。
 // @match        https://www.milkywayidle.com/*

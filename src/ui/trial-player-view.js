@@ -90,7 +90,8 @@
     getBridge,
     resolveItemName,
     renderRecord,
-    renderRail
+    renderRail,
+    memberIdentityAttributes
   }) {
     const tooltipRecords = new Map();
     function tooltipAttribute(kind, record) {
@@ -262,7 +263,7 @@
           if (value !== previous) rank = index + 1;
           previous = value;
           const name = entry.name || t("trialNameUnavailable");
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span>${metric === "average" && entry[scope].incomplete ? `<small data-trial-ranking-incomplete>${e(t("trialRankingIncomplete"))}</small>` : ""}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
       const title =

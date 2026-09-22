@@ -3551,6 +3551,31 @@
             .join(",") === (scope === "all" ? "4.00×,0.00×" : "2.00×,0.00×") &&
           rankedRows(scope).every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === count);
       }
+      const rankingHighlights = () => [...host.querySelectorAll(".mwi-trial-member-highlight")];
+      const rankingName = rankedRows("participations")[0].querySelector("[data-trial-ranking-player]");
+      const otherRankingName = rankedRows("combat")
+        .find((row) => row.dataset.trialRankingRow !== rankingName.dataset.trialRankingPlayer)
+        .querySelector("[data-trial-ranking-player]");
+      const highlightsPlayer = (button) =>
+        rankingHighlights().length === 4 &&
+        rankingHighlights().every((row) => row.dataset.trialRankingRow === button.dataset.trialRankingPlayer);
+      rankingName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.rankingHoverAcrossColumns = highlightsPlayer(rankingName);
+      rankingName.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: otherRankingName }));
+      checks.rankingHoverSwitchesPlayer = highlightsPlayer(otherRankingName);
+      otherRankingName.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: host }));
+      checks.rankingHoverClears = rankingHighlights().length === 0;
+      rankingName.focus();
+      checks.rankingFocusAcrossColumns = highlightsPlayer(rankingName);
+      otherRankingName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.rankingHoverOverridesFocus = highlightsPlayer(otherRankingName);
+      otherRankingName.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: host }));
+      checks.rankingFocusRestoredAfterHover = highlightsPlayer(rankingName);
+      rankingName.blur();
+      checks.rankingBlurClears = rankingHighlights().length === 0;
+      rankingName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.rankingRefreshClearsHighlight = rankingHighlights().length === 0;
       const rankingRail = host.querySelector("#mwi-trial-rail-player-rankings");
       checks.rankingContained =
         panel.scrollWidth <= panel.clientWidth &&
@@ -4272,7 +4297,8 @@
         Boolean(neverAttended) &&
         neverAttended.querySelector("[data-trial-ranking-value]").textContent === "0.00×" &&
         Number(neverAttended.querySelector("[data-trial-ranking-samples]").textContent) > 0;
-      checks.incompleteHistoryVisible = Boolean(host.querySelector("[data-trial-ranking-incomplete]"));
+      checks.incompleteHistoryHidden =
+        rankedRows("skilling").length > 0 && !host.querySelector("[data-trial-ranking-incomplete]");
       checks.membershipPassiveNoProfileQuery = profileFrames.length === beforeRosterFrames;
       neverAttended?.querySelector("[data-trial-ranking-player]").click();
       checks.neverAttendedProfileReachable =

@@ -703,7 +703,9 @@ Player search markup is temporarily commented out. The picker still supports key
 navigation, selection collapse, escaped names and a 60-player wrapping grid.
 Player ranking checks cover participation counts, ties, skilling/combat
 averages and their combined sum, valid-project counts, four simultaneously visible parallel columns, left/right
-scroll controls, focus and scroll restoration, and contained tables,
+scroll controls, focus and scroll restoration, and contained tables. Hovering or focusing a player name
+highlights that identity across all four rankings using the existing member-row highlight;
+checks cover player switching, pointer/focus precedence, clearing on blur and refresh, and
 click-through to player details and return to the ranking without background queries
 or storage changes. Rankings use only game-captured schema v1 records and exclude
 manual transcripts (schema v2 or explicit manual source), including manual records
