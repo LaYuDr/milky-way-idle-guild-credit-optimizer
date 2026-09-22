@@ -192,6 +192,13 @@
   });
   bridge.requestProfile = (name, listener, force = false) => profileReader?.request(name, listener, force) === true;
   bridge.disposeProfileReader = () => profileReader?.dispose();
+  const profileTooltipsApi = window.MwiGuildProfileTooltips || page.MwiGuildProfileTooltips;
+  const profileTooltips = profileTooltipsApi?.createRenderer({
+    page,
+    getController: () => findGameController("renderSharableProfile")
+  });
+  bridge.renderProfileTooltip = (...args) => profileTooltips?.render(...args) === true;
+  bridge.clearProfileTooltip = (container) => profileTooltips?.clear(container);
 
   function levelRecordKey(record, fallbackKey) {
     if (record && typeof record === "object") {

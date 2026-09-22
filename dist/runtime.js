@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.34";
+window.MwiGuildCreditVersion = "1.2.35";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -740,6 +740,7 @@ window.MwiGuildCreditVersion = "1.2.34";
       "alchemy",
       "enhancing"
     ],
+    GUILD_TRIAL_COMBAT_ORDER: ["badger", "chameleon", "jellyfish", "hedgehog", "swarm"],
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",
@@ -1379,6 +1380,49 @@ window.MwiGuildCreditVersion = "1.2.34";
     return [...players.values()];
   }
 
+  function playerProjectOverview(records, identity, details = {}) {
+    const captured = records.filter((record) => record.schemaVersion === 1 && record.source !== "manual");
+    const catalog = new Map();
+    for (const [kind, names] of [
+      ["skilling", config.GUILD_TRIAL_SKILL_ORDER],
+      ["combat", config.GUILD_TRIAL_COMBAT_ORDER]
+    ])
+      for (const [index, name] of names.entries()) {
+        const trialHrid = `/guild_${kind}/${name}`;
+        catalog.set(trialHrid, { kind, trialHrid, trialDetail: { sortIndex: index } });
+      }
+    for (const [trialHrid, detail] of Object.entries(details)) {
+      const kind = trialHrid.startsWith("/guild_skilling/")
+        ? "skilling"
+        : trialHrid.startsWith("/guild_combat/")
+          ? "combat"
+          : null;
+      if (kind)
+        catalog.set(trialHrid, { kind, trialHrid, trialDetail: { ...catalog.get(trialHrid)?.trialDetail, ...detail } });
+    }
+    for (const record of captured)
+      catalog.set(record.trialHrid, {
+        ...record,
+        trialDetail: { ...catalog.get(record.trialHrid)?.trialDetail, ...record.trialDetail }
+      });
+    const groups = new Map(historyProjects(captured, details).map((group) => [group.key, group.records]));
+    return historyProjects([...catalog.values()], details).map((group) => {
+      const project = group.records[0];
+      const player = playerRankings(groups.get(group.key) || []).find((entry) =>
+        identity.id != null ? entry.id === String(identity.id) : entry.id === null && entry.name === identity.name
+      );
+      return {
+        key: group.key,
+        kind: group.kind,
+        trialHrid: project.trialHrid,
+        trialDetail: details[project.trialHrid] || project.trialDetail,
+        participations: player?.participations || 0,
+        average: player?.all.average ?? null,
+        samples: player?.all.count || 0
+      };
+    });
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
@@ -1455,6 +1499,7 @@ window.MwiGuildCreditVersion = "1.2.34";
     metricShare,
     metricAverageMultiple,
     playerRankings,
+    playerProjectOverview,
     displayRows,
     sortEntries,
     memberAbsent,
@@ -1628,6 +1673,137 @@ window.MwiGuildCreditVersion = "1.2.34";
     return { request, dispose };
   }
   return { createReader, profileIdentity };
+});
+
+
+// SOURCE: src/runtime/profile-tooltips.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildProfileTooltips = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  function componentClass(type) {
+    const seen = new Set();
+    while (type && !seen.has(type)) {
+      seen.add(type);
+      if (type.prototype?.render) return type;
+      type = type.WrappedComponent || type.type;
+    }
+    return null;
+  }
+
+  function findElement(tree, predicate) {
+    const pending = [tree];
+    while (pending.length) {
+      const element = pending.pop();
+      if (Array.isArray(element)) pending.push(...element);
+      else if (element && typeof element === "object") {
+        if (predicate(element)) return element;
+        pending.push(element.props?.children);
+      }
+    }
+    return null;
+  }
+
+  // Reuse the installed game's renderers, never copy its XP/strengthening/effect formulas.
+  // Unwrap only the native profile's read-only components, with fresh explicit props.
+  function tooltipContent(controller, profile, kind, record) {
+    if (typeof controller?.renderSharableProfile !== "function" || typeof controller.props?.t !== "function")
+      return null;
+    const copy = {
+      ...profile,
+      characterSkills: Object.values(profile.characterSkills || {}).map((entry) => ({ ...entry })),
+      equippedAbilities: Object.values(profile.equippedAbilities || {}).map((entry) => ({ ...entry }))
+    };
+    const element = controller.renderSharableProfile.call({ state: { sharableProfile: copy } });
+    const Profile = componentClass(element?.type);
+    if (!Profile) return null;
+    const props = { profile: copy, t: controller.props.t };
+    const instance = new Profile(props);
+    let tree;
+    if (kind === "skill") tree = instance.renderSkillsTab?.();
+    else if (kind === "item" || kind === "ability") tree = instance.renderEquipmentTab?.();
+    else return null;
+    const field = { skill: "skillHrid", item: "itemHrid", ability: "abilityHrid" }[kind];
+    const template = findElement(tree, (entry) => entry.props?.[field] === record[field]);
+    const Component = componentClass(template?.type);
+    if (!Component) return null;
+    const nativeProps = { ...template.props, ...record, t: props.t };
+    // Never inherit action handlers or player equipment state from a live component.
+    for (const key of Object.keys(nativeProps)) if (/Handler$/.test(key)) delete nativeProps[key];
+    const native = new Component(nativeProps);
+    if (kind === "skill") return native.renderTooltipContent?.() || null;
+    if (kind === "ability") return native.renderTooltip?.() || null;
+    const tooltip = findElement(native.render(), (entry) => entry.props?.itemHrid === record.itemHrid);
+    const Tooltip = componentClass(tooltip?.type);
+    return Tooltip ? new Tooltip({ ...tooltip.props, t: props.t }).renderTooltipContent?.() || null : null;
+  }
+
+  function createRenderer({ page, getController }) {
+    let reactDOM = null;
+    const mounted = new Set();
+    function resolveReactDOM() {
+      if (reactDOM) return reactDOM;
+      const queue = page.webpackJsonprpg_web;
+      if (!Array.isArray(queue) || queue.push === Array.prototype.push) return null;
+      // Webpack 4 exposes no public require. Register one isolated local module to
+      // inspect already-loaded exports; do not execute or replace any game module.
+      const id = `mwi-profile-tooltip-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      let runtime;
+      queue.push([
+        [],
+        {
+          [id]: (_module, _exports, require) => {
+            runtime = require;
+          }
+        },
+        [[id]]
+      ]);
+      if (!runtime) return null;
+      try {
+        for (const module of Object.values(runtime.c || {})) {
+          const value = module?.exports;
+          if (typeof value?.render === "function" && typeof value?.unmountComponentAtNode === "function") {
+            reactDOM = value;
+            break;
+          }
+        }
+      } finally {
+        delete runtime.c?.[id];
+        delete runtime.m?.[id];
+      }
+      return reactDOM;
+    }
+    function clear(container) {
+      if (!mounted.delete(container)) return;
+      try {
+        reactDOM?.unmountComponentAtNode(container);
+      } catch (_) {
+        /* Optional tooltip. */
+      }
+    }
+    function render(container, profile, kind, record) {
+      clear(container);
+      try {
+        const content = tooltipContent(getController(), profile, kind, record);
+        const renderer = content && resolveReactDOM();
+        if (!renderer) return false;
+        mounted.add(container);
+        renderer.render(content, container);
+        return true;
+      } catch (_) {
+        clear(container);
+        return false;
+      }
+    }
+    function dispose() {
+      for (const container of mounted) clear(container);
+    }
+    return { render, clear, dispose };
+  }
+  return { componentClass, tooltipContent, createRenderer };
 });
 
 
@@ -1826,6 +2002,13 @@ window.MwiGuildCreditVersion = "1.2.34";
   });
   bridge.requestProfile = (name, listener, force = false) => profileReader?.request(name, listener, force) === true;
   bridge.disposeProfileReader = () => profileReader?.dispose();
+  const profileTooltipsApi = window.MwiGuildProfileTooltips || page.MwiGuildProfileTooltips;
+  const profileTooltips = profileTooltipsApi?.createRenderer({
+    page,
+    getController: () => findGameController("renderSharableProfile")
+  });
+  bridge.renderProfileTooltip = (...args) => profileTooltips?.render(...args) === true;
+  bridge.clearProfileTooltip = (container) => profileTooltips?.clear(container);
 
   function levelRecordKey(record, fallbackKey) {
     if (record && typeof record === "object") {
@@ -3564,6 +3747,12 @@ window.MwiGuildCreditVersion = "1.2.34";
       trialByProject: "按项目查看",
       trialByPlayer: "按玩家查看",
       trialPlayerRankings: "玩家排行榜",
+      trialPlayerOverview: "参试总览",
+      trialOverviewProject: "项目",
+      trialOverviewAverage: "相对人均",
+      trialOverviewMethod: "统计口径",
+      trialOverviewHelp:
+        "仅统计本地保存的游戏采集记录，不含手动整理记录。每参与一个项目计 1 次，含零贡献；0 次表示没有采集到参试记录。生活按工作量除以该场人均；战斗先平均伤害、治疗、承伤的有效人均倍数，再对同项目各场倍数等权平均。1× 为人均水平；缺失值和零分母跳过，无有效倍数显示 —。",
       trialRankingParticipations: "参与次数",
       trialRankingAverageTitle: "{scope} · 平均相对人均",
       trialRankingScope_skilling: "生活",
@@ -3680,6 +3869,7 @@ window.MwiGuildCreditVersion = "1.2.34";
       trialProfileAbilities: "技能配置",
       trialProfileHouse: "房屋",
       trialProfileRaw: "完整资料数据",
+      trialProfileTooltipUnavailable: "详细数据暂不可用",
       trialProfile_totalTaskPoints: "任务点数",
       trialProfile_labyrinthPoints: "迷宫点数",
       trialProfile_labyrinthHighestFloor: "迷宫最高层",
@@ -4197,6 +4387,12 @@ window.MwiGuildCreditVersion = "1.2.34";
       trialByProject: "By trial",
       trialByPlayer: "By player",
       trialPlayerRankings: "Player rankings",
+      trialPlayerOverview: "Trial overview",
+      trialOverviewProject: "Trial",
+      trialOverviewAverage: "Avg. multiple",
+      trialOverviewMethod: "Calculation",
+      trialOverviewHelp:
+        "Uses locally saved game captures, excluding manual records. Each project attended counts once, including zero contributions; 0 means no captured participation. Skilling uses work divided by that trial’s average. Combat averages the valid damage, healing and damage-taken multiples first. Multiples for each project are then averaged equally across trials. 1× is the per-person average. Missing values and zero denominators are skipped; no valid multiple shows —.",
       trialRankingParticipations: "Participation count",
       trialRankingAverageTitle: "{scope} · Average multiple",
       trialRankingScope_skilling: "Skilling",
@@ -4320,6 +4516,7 @@ window.MwiGuildCreditVersion = "1.2.34";
       trialProfileAbilities: "Abilities",
       trialProfileHouse: "House",
       trialProfileRaw: "Full profile data",
+      trialProfileTooltipUnavailable: "Detailed data is currently unavailable",
       trialProfile_totalTaskPoints: "Task points",
       trialProfile_labyrinthPoints: "Labyrinth points",
       trialProfile_labyrinthHighestFloor: "Highest labyrinth floor",
@@ -9232,7 +9429,7 @@ window.MwiGuildCreditVersion = "1.2.34";
         #mwi-credit-optimizer .mwi-trial-controls{display:flex;flex-wrap:wrap;align-items:end;gap:6px 8px;margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-controls label{display:grid;gap:4px;flex:1 1 240px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-controls select{width:100%;min-width:0;max-width:100%;height:34px}
-        #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+        #mwi-credit-optimizer .mwi-trial-table-scroll{position:relative;max-width:100%;overflow:visible}
         #mwi-credit-optimizer .mwi-trial-table{width:max-content;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.35}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
@@ -9317,6 +9514,17 @@ window.MwiGuildCreditVersion = "1.2.34";
         #mwi-credit-optimizer .mwi-trial-profile-section{margin-top:12px}
         #mwi-credit-optimizer .mwi-trial-profile-section>summary{padding:6px 0;min-height:32px;font-size:14px;font-weight:650;color:var(--trial-accent);cursor:pointer;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-section>summary:hover{text-decoration:underline;text-underline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-player-overview{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-trial-player-overview caption{text-align:left;padding:10px 0 4px;color:var(--trial-accent);font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-player-overview th,#mwi-credit-optimizer .mwi-trial-player-overview td{padding:5px 3px;border-bottom:1px solid var(--trial-line);text-align:right;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-player-overview th:first-child{width:46%;text-align:left}
+        #mwi-credit-optimizer .mwi-trial-player-overview thead th{white-space:normal;color:var(--trial-muted);font-weight:500}
+        #mwi-credit-optimizer .mwi-trial-player-overview tbody th{font-weight:400}
+        #mwi-credit-optimizer .mwi-trial-player-overview tbody th>span{display:flex;align-items:center;gap:5px}
+        #mwi-credit-optimizer .mwi-trial-player-overview td{white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-overview-help{margin-top:8px;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-overview-help summary{cursor:pointer}
+        #mwi-credit-optimizer .mwi-trial-overview-help p{margin:6px 0;line-height:1.5;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--trial-line)}
         #mwi-credit-optimizer .mwi-trial-profile-facts dt{display:flex;align-items:center;gap:6px;min-width:0;color:var(--trial-muted);overflow-wrap:anywhere}
@@ -9332,7 +9540,8 @@ window.MwiGuildCreditVersion = "1.2.34";
         #mwi-credit-optimizer .mwi-trial-equipment-level[data-tier="gold"]{color:#ffac00}
         #mwi-credit-optimizer .mwi-trial-slot-label{padding:3px;font-size:12px;text-align:center}
         #mwi-credit-optimizer .mwi-trial-equipment-extra{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:8px}
-        #mwi-credit-optimizer .mwi-trial-profile-abilities{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:12px}
+        #mwi-credit-optimizer .mwi-trial-profile-abilities{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:12px}
+        .mwi-trial-profile-tooltip{position:fixed;z-index:2147483647;box-sizing:border-box;width:max-content;max-width:min(420px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;padding:10px 12px;border-radius:5px;background:#b6bfe5;color:#10121b;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;white-space:pre-line;overflow-wrap:anywhere;box-shadow:0 6px 20px #0005}
         #mwi-credit-optimizer .mwi-trial-ability-slot,#mwi-credit-optimizer .mwi-trial-skill-slot{border-color:transparent}
         @container mwi-trials (max-width:760px){
           #mwi-credit-optimizer .mwi-trial-player-layout{grid-template-columns:minmax(0,1fr);gap:16px}
@@ -10643,6 +10852,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     renderRecord,
     renderRail
   }) {
+    const tooltipRecords = new Map();
+    function tooltipAttribute(kind, record) {
+      if (!record) return "";
+      const key = String(tooltipRecords.size);
+      tooltipRecords.set(key, { kind, record });
+      return `data-trial-profile-tooltip="${key}"`;
+    }
     const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
     const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
     const suffix = (value) =>
@@ -10666,7 +10882,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const description = `${name}${level ? ` ${level}` : ""}`;
       const icon = profileIcon("item", item.itemHrid);
       const tier = item.enhancementLevel >= 11 ? "gold" : item.enhancementLevel >= 8 ? "purple" : "blue";
-      return `<div class="mwi-trial-equipment-slot" ${attributes} tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${icon || `<span class="mwi-trial-slot-label">${e(name)}</span>`}${level ? `<span class="mwi-trial-equipment-level" data-tier="${tier}">${e(level)}</span>` : ""}</div>`;
+      return `<div class="mwi-trial-equipment-slot" ${attributes} ${tooltipAttribute("item", item)} tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${icon || `<span class="mwi-trial-slot-label">${e(name)}</span>`}${level ? `<span class="mwi-trial-equipment-level" data-tier="${tier}">${e(level)}</span>` : ""}</div>`;
     }
     function equipmentMarkup(profile) {
       if (!profile.wearableItemMap) return "";
@@ -10692,7 +10908,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         .map((item) => {
           const name = label(item.abilityHrid),
             level = `Lv.${number(item.level)}`;
-          return `<div class="mwi-trial-equipment-slot mwi-trial-ability-slot" tabindex="0" role="img" aria-label="${e(`${name} ${level}`)}" title="${e(`${name} ${level}`)}">${profileIcon("ability", item.abilityHrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-ability-slot" ${tooltipAttribute("ability", item)} tabindex="0" role="img" aria-label="${e(`${name} ${level}`)}" title="${e(`${name} ${level}`)}">${profileIcon("ability", item.abilityHrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
         })
         .join("")}</div>`;
     }
@@ -10704,7 +10920,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const name = label(hrid);
           const level = `Lv.${number(skill?.level)}`;
           const description = `${name} ${level}`;
-          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" ${tooltipAttribute("skill", skill)} style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
         })
         .join("")}</div>`;
     }
@@ -10712,13 +10928,35 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (!content) return "";
       return `<details class="mwi-trial-profile-section" data-trial-profile-section="${key}" ${sectionOpen[key] !== false ? "open" : ""}><summary>${e(t(title))}</summary>${content}</details>`;
     }
-    function profileMarkup(state, sectionOpen) {
+    function overviewMarkup(projects, sectionOpen) {
+      const tables = ["skilling", "combat"]
+        .map((kind) => {
+          const rows = projects
+            .filter((project) => project.kind === kind)
+            .map(
+              (project) =>
+                `<tr data-trial-overview-project="${e(project.trialHrid)}"><th scope="row"><span>${projectIcon(project)}${e(trialName(project))}</span></th><td data-trial-overview-count>${project.participations}</td><td data-trial-overview-average>${project.average === null ? "—" : `${project.average.toFixed(2)}×`}</td></tr>`
+            )
+            .join("");
+          return `<table class="mwi-trial-player-overview"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><thead><tr><th scope="col">${e(t("trialOverviewProject"))}</th><th scope="col">${e(t("trialRankingCount"))}</th><th scope="col">${e(t("trialOverviewAverage"))}</th></tr></thead><tbody>${rows}</tbody></table>`;
+        })
+        .join("");
+      return profileSection(
+        "overview",
+        "trialPlayerOverview",
+        `${tables}<details class="mwi-trial-overview-help"><summary>${e(t("trialOverviewMethod"))}</summary><p>${e(t("trialOverviewHelp"))}</p></details>`,
+        sectionOpen
+      );
+    }
+    function profileMarkup(state, sectionOpen, projects) {
+      const overview = overviewMarkup(projects, sectionOpen);
       if (state.status !== "ready")
-        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
+        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>${overview}`;
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
       let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}</dl>`;
+      html += overview;
       html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
       html += profileSection(
         "equipment",
@@ -10801,12 +11039,142 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
-    function render({ member, weeks, profileState, profileSectionsOpen = {} }) {
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+    function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
+      tooltipRecords.clear();
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
-    return { render, renderRankings };
+    return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
   return { createRenderer, equipmentLayout, skillLayout };
+});
+
+
+// SOURCE: src/ui/profile-tooltip.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildProfileTooltip = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  function createTooltip({ document, pageWindow, host, getData, getProfile, getBridge, t }) {
+    let anchor = null;
+    let tooltip = null;
+    let originalTitle = null;
+    let hideTimer = null;
+    function cancelHide() {
+      if (hideTimer !== null) pageWindow.clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    const listeners = [];
+    const on = (node, type, handler, capture = false) => {
+      node.addEventListener(type, handler, capture);
+      listeners.push(() => node.removeEventListener(type, handler, capture));
+    };
+    function hide() {
+      cancelHide();
+      if (anchor) {
+        anchor.removeAttribute("aria-describedby");
+        if (originalTitle !== null) anchor.setAttribute("title", originalTitle);
+      }
+      if (tooltip) {
+        getBridge()?.clearProfileTooltip?.(tooltip);
+        tooltip.remove();
+      }
+      anchor = tooltip = null;
+      originalTitle = null;
+    }
+    function position() {
+      if (!anchor || !tooltip) return;
+      const bounds = anchor.getBoundingClientRect();
+      const size = tooltip.getBoundingClientRect();
+      const width = document.documentElement.clientWidth;
+      const height = pageWindow.innerHeight;
+      const left = Math.max(8, Math.min(width - size.width - 8, bounds.left + (bounds.width - size.width) / 2));
+      const top =
+        bounds.top >= size.height + 8
+          ? bounds.top - size.height - 6
+          : Math.min(height - size.height - 8, bounds.bottom + 6);
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(height - size.height - 8, top))}px`;
+    }
+    function show(target) {
+      const next = target.closest?.("[data-trial-profile-tooltip]");
+      if (next) cancelHide();
+      if (!next || next === anchor) return;
+      hide();
+      const data = getData(next.dataset.trialProfileTooltip);
+      const profile = getProfile();
+      if (!data || !profile) return;
+      anchor = next;
+      originalTitle = anchor.getAttribute("title");
+      anchor.removeAttribute("title");
+      tooltip = document.createElement("div");
+      tooltip.id = "mwi-trial-profile-tooltip";
+      tooltip.className = "mwi-trial-profile-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+      const hasExperience =
+        data.kind === "item" || (Number.isFinite(data.record.level) && Number.isFinite(data.record.experience));
+      if (!hasExperience || getBridge()?.renderProfileTooltip?.(tooltip, profile, data.kind, data.record) !== true) {
+        tooltip.textContent = `${anchor.getAttribute("aria-label")}\n${t("trialProfileTooltipUnavailable")}`;
+      }
+      anchor.setAttribute("aria-describedby", tooltip.id);
+      tooltip.addEventListener("mouseleave", (event) => {
+        if (!anchor?.contains(event.relatedTarget)) hide();
+      });
+      tooltip.addEventListener("mouseenter", cancelHide);
+      position();
+    }
+    on(host, "mouseover", (event) => show(event.target));
+    on(host, "focusin", (event) => show(event.target));
+    on(host, "mouseout", (event) => {
+      if (
+        anchor?.contains(event.target) &&
+        !anchor.contains(event.relatedTarget) &&
+        !tooltip?.contains(event.relatedTarget)
+      )
+        hideTimer = pageWindow.setTimeout(hide, 120);
+    });
+    on(host, "focusout", (event) => {
+      if (anchor?.contains(event.target)) hide();
+    });
+    on(document, "keydown", (event) => {
+      if (event.key === "Escape") hide();
+    });
+    on(
+      document,
+      "scroll",
+      (event) => {
+        if (!tooltip?.contains(event.target)) hide();
+      },
+      true
+    );
+    on(pageWindow, "resize", hide);
+    on(
+      host,
+      "toggle",
+      (event) => {
+        if (!event.target.open && event.target.contains(anchor)) hide();
+      },
+      true
+    );
+    const observer = new pageWindow.MutationObserver(() => {
+      if (anchor && (!anchor.isConnected || !anchor.checkVisibility())) hide();
+    });
+    observer.observe(host.closest("#mwi-credit-optimizer") || host, {
+      attributes: true,
+      subtree: true,
+      childList: true,
+      attributeFilter: ["hidden", "open", "style", "class"]
+    });
+    function dispose() {
+      hide();
+      observer.disconnect();
+      listeners.forEach((remove) => remove());
+    }
+    return { hide, dispose };
+  }
+  return { createTooltip };
 });
 
 
@@ -10853,6 +11221,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     pluginStorage,
     trialHistoryApi,
     playerViewApi,
+    profileTooltipApi,
     profileReaderApi,
     resolveItemName,
     getBridge,
@@ -10863,6 +11232,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let selectedProject = "";
     let resetScroll = false;
     let resizeObserver = null;
+    let profileTooltip = null;
     let records = [];
     let multipleGuilds = false;
     let loadFailed = false;
@@ -10884,7 +11254,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let focusedMemberCell = null;
     let selectedMember = null;
     let profileState = { status: "loading" };
-    const profileSectionsOpen = { skills: true, equipment: true };
+    const profileSectionsOpen = { overview: true, skills: true, equipment: true };
     let profileRevision = 0;
     let playerReturn = null;
     let playerSearch = "";
@@ -11320,6 +11690,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function refresh(panel) {
+      profileTooltip?.hide();
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
@@ -11371,6 +11742,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           (selectedMember
             ? playerRenderer.render({
                 member: selectedMember,
+                projects: trialHistoryApi.playerProjectOverview(
+                  records,
+                  selectedMember,
+                  getBridge()?.trialHistoryContext?.details || {}
+                ),
                 weeks: trialHistoryApi.memberHistory(records, selectedMember),
                 profileState,
                 profileSectionsOpen
@@ -11487,6 +11863,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      profileTooltip?.dispose();
+      profileTooltip = profileTooltipApi?.createTooltip({
+        document,
+        pageWindow,
+        host,
+        getBridge,
+        t,
+        getData: playerRenderer.tooltipData,
+        getProfile: () => (selectedMember && profileState.status === "ready" ? profileState.profile : null)
+      });
       if (pageWindow.ResizeObserver) {
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
         resizeObserver.observe(host);
@@ -11696,7 +12082,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               };
             if (mode === "player") leavePlayer();
             mode = nextMode;
-          }
+          } else if (mode === "player" && selectedMember) leavePlayer();
           resetScroll = true;
           refresh(panel);
           host.querySelector(`[data-trial-mode="${mode}"]`)?.focus();
@@ -11733,6 +12119,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       capture();
     }
     function dispose() {
+      profileTooltip?.dispose();
       disposed = true;
       profileRevision += 1;
       getBridge()?.disposeProfileReader?.();
@@ -15796,6 +16183,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     trialHistoryApi,
     playerViewApi: window.MwiGuildTrialPlayerView,
     profileReaderApi: window.MwiGuildProfileReader,
+    profileTooltipApi: window.MwiGuildProfileTooltip,
     resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel

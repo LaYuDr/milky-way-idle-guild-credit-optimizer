@@ -55,6 +55,7 @@
       "alchemy",
       "enhancing"
     ],
+    GUILD_TRIAL_COMBAT_ORDER: ["badger", "chameleon", "jellyfish", "hedgehog", "swarm"],
     MARKET_LIVE_STORAGE_KEY: "mwi-guild-credit-live-market-v1",
     MARKETPLACE_SNAPSHOT_STORAGE_KEY: "mwi-guild-credit-market-snapshot-v1",
     MARKETPLACE_REQUEST_STATE_STORAGE_KEY: "mwi-guild-credit-market-request-v1",

@@ -600,6 +600,49 @@
     return [...players.values()];
   }
 
+  function playerProjectOverview(records, identity, details = {}) {
+    const captured = records.filter((record) => record.schemaVersion === 1 && record.source !== "manual");
+    const catalog = new Map();
+    for (const [kind, names] of [
+      ["skilling", config.GUILD_TRIAL_SKILL_ORDER],
+      ["combat", config.GUILD_TRIAL_COMBAT_ORDER]
+    ])
+      for (const [index, name] of names.entries()) {
+        const trialHrid = `/guild_${kind}/${name}`;
+        catalog.set(trialHrid, { kind, trialHrid, trialDetail: { sortIndex: index } });
+      }
+    for (const [trialHrid, detail] of Object.entries(details)) {
+      const kind = trialHrid.startsWith("/guild_skilling/")
+        ? "skilling"
+        : trialHrid.startsWith("/guild_combat/")
+          ? "combat"
+          : null;
+      if (kind)
+        catalog.set(trialHrid, { kind, trialHrid, trialDetail: { ...catalog.get(trialHrid)?.trialDetail, ...detail } });
+    }
+    for (const record of captured)
+      catalog.set(record.trialHrid, {
+        ...record,
+        trialDetail: { ...catalog.get(record.trialHrid)?.trialDetail, ...record.trialDetail }
+      });
+    const groups = new Map(historyProjects(captured, details).map((group) => [group.key, group.records]));
+    return historyProjects([...catalog.values()], details).map((group) => {
+      const project = group.records[0];
+      const player = playerRankings(groups.get(group.key) || []).find((entry) =>
+        identity.id != null ? entry.id === String(identity.id) : entry.id === null && entry.name === identity.name
+      );
+      return {
+        key: group.key,
+        kind: group.kind,
+        trialHrid: project.trialHrid,
+        trialDetail: details[project.trialHrid] || project.trialDetail,
+        participations: player?.participations || 0,
+        average: player?.all.average ?? null,
+        samples: player?.all.count || 0
+      };
+    });
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
@@ -676,6 +719,7 @@
     metricShare,
     metricAverageMultiple,
     playerRankings,
+    playerProjectOverview,
     displayRows,
     sortEntries,
     memberAbsent,

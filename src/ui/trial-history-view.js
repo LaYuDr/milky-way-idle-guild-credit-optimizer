@@ -40,6 +40,7 @@
     pluginStorage,
     trialHistoryApi,
     playerViewApi,
+    profileTooltipApi,
     profileReaderApi,
     resolveItemName,
     getBridge,
@@ -50,6 +51,7 @@
     let selectedProject = "";
     let resetScroll = false;
     let resizeObserver = null;
+    let profileTooltip = null;
     let records = [];
     let multipleGuilds = false;
     let loadFailed = false;
@@ -71,7 +73,7 @@
     let focusedMemberCell = null;
     let selectedMember = null;
     let profileState = { status: "loading" };
-    const profileSectionsOpen = { skills: true, equipment: true };
+    const profileSectionsOpen = { overview: true, skills: true, equipment: true };
     let profileRevision = 0;
     let playerReturn = null;
     let playerSearch = "";
@@ -507,6 +509,7 @@
     }
 
     function refresh(panel) {
+      profileTooltip?.hide();
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
@@ -558,6 +561,11 @@
           (selectedMember
             ? playerRenderer.render({
                 member: selectedMember,
+                projects: trialHistoryApi.playerProjectOverview(
+                  records,
+                  selectedMember,
+                  getBridge()?.trialHistoryContext?.details || {}
+                ),
                 weeks: trialHistoryApi.memberHistory(records, selectedMember),
                 profileState,
                 profileSectionsOpen
@@ -674,6 +682,16 @@
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      profileTooltip?.dispose();
+      profileTooltip = profileTooltipApi?.createTooltip({
+        document,
+        pageWindow,
+        host,
+        getBridge,
+        t,
+        getData: playerRenderer.tooltipData,
+        getProfile: () => (selectedMember && profileState.status === "ready" ? profileState.profile : null)
+      });
       if (pageWindow.ResizeObserver) {
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
         resizeObserver.observe(host);
@@ -883,7 +901,7 @@
               };
             if (mode === "player") leavePlayer();
             mode = nextMode;
-          }
+          } else if (mode === "player" && selectedMember) leavePlayer();
           resetScroll = true;
           refresh(panel);
           host.querySelector(`[data-trial-mode="${mode}"]`)?.focus();
@@ -920,6 +938,7 @@
       capture();
     }
     function dispose() {
+      profileTooltip?.dispose();
       disposed = true;
       profileRevision += 1;
       getBridge()?.disposeProfileReader?.();

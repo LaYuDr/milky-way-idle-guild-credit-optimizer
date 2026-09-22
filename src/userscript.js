@@ -680,6 +680,7 @@
     trialHistoryApi,
     playerViewApi: window.MwiGuildTrialPlayerView,
     profileReaderApi: window.MwiGuildProfileReader,
+    profileTooltipApi: window.MwiGuildProfileTooltip,
     resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel

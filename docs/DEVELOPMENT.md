@@ -720,10 +720,23 @@ participations and two skilling samples. Only captured rows are used;
 missing projects are not inferred. Stable character IDs group players; ID-less named
 records form a separate name-based group and are never merged into an ID group.
 
+Player profiles include a default-open, independently collapsible trial overview before
+skills and equipment. All ten skilling and five combat projects remain visible,
+including projects without captured participations (0 / em dash). Statistics reuse
+the ranking rules per project, averaging valid per-trial multiples equally. The
+overview uses local history and remains available while profile data is loading or
+unavailable. The trials matrix checks both categories, counts, zero vs missing
+multiples, ordering, collapse retention, and narrow-screen containment.
+
 Compact trial tables use intrinsic content widths. The width audit compares each
 column with its widest header/cell content across all display-field combinations,
 and checks that expanding raw JSON does not widen the project column. Headings,
 summaries and metadata wrap within the width determined by member data.
+Member-table wrappers are not scroll containers. Horizontal trackpad/wheel gestures
+over rows scroll the outer project/week rail, just like gestures over headings;
+vertical gestures continue to scroll the panel. This avoids nested horizontal
+overscroll bounce without intercepting wheel events. The fixture checks visible
+overflow and that assigning an inner scroll offset cannot shift the table.
 
 Profile skills use five-column tiles matching equipment dimensions. The profile
 audit checks native icon order, the 5/5/4/3 row grouping, accessible names, preserved
@@ -733,3 +746,19 @@ The profile facts show only total and combat levels. Skills and equipment use
 independent native disclosures, initially open, with their state retained during
 view refreshes. Equipment includes its following ability slots. The fixture checks
 collapse/reopen visibility, unchanged stored records and no extra profile requests.
+
+Equipped abilities also use five columns with the same tile dimensions as equipment.
+Profile tile tooltips reuse the installed game's read-only Skill, Ability and Item
+tooltip renderers through `runtime/profile-tooltips.js`; they pass the selected
+profile's XP, level and enhancement, without attaching game action handlers or
+requesting data on hover. The adapter unwraps the native profile component from
+`renderSharableProfile` and reads cached ReactDOM exports through an isolated
+Webpack 4 module. These private integration points were checked against
+`main.bdda2571.chunk.js`; missing APIs or missing XP fall back to an explicit
+unavailable message. No original profile arrays are sorted in place.
+
+`ui/profile-tooltip.js` owns the body-level tooltip, keyboard focus, Escape,
+viewport positioning and cleanup on scroll, collapse, rerender or disposal.
+The trial fixture covers five equal ability tiles, pointer/focus behavior, data
+forwarding, fallback, containment and no profile requests or history writes.
+Native game formula rendering still requires installed-game verification.

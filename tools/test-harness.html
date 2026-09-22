@@ -3419,7 +3419,7 @@
                 bestiaryPoints: 32,
                 famePoints: 10,
                 characterSkills: [
-                  { skillHrid: "/skills/milking", level: 143 },
+                  { skillHrid: "/skills/milking", level: 143, experience: 2347754 },
                   { skillHrid: "/skills/enhancing", level: 138 },
                   { skillHrid: "/skills/magic", level: 98 },
                   { skillHrid: "/skills/total_level", level: 1800 }
@@ -3442,8 +3442,11 @@
                   }
                 },
                 equippedAbilities: [
-                  { abilityHrid: "/abilities/puncture", level: 40, slotNumber: 2 },
-                  { abilityHrid: "/abilities/ice_spear", level: 5, slotNumber: 1 }
+                  { abilityHrid: "/abilities/puncture", level: 40, experience: 414669, slotNumber: 2 },
+                  { abilityHrid: "/abilities/ice_spear", level: 5, experience: 1200, slotNumber: 1 },
+                  { abilityHrid: "/abilities/heal", level: 31, experience: 10000, slotNumber: 3 },
+                  { abilityHrid: "/abilities/fireball", level: 30, experience: 9000, slotNumber: 4 },
+                  { abilityHrid: "/abilities/toxic_pollen", level: 65, experience: 414669, slotNumber: 5 }
                 ]
               },
               sharableGuildProfile: null
@@ -3582,6 +3585,30 @@
         profileFrames[0].viewProfileData.characterName === members[101].name &&
         !nativeProfile.open &&
         host.querySelector("[data-trial-profile-content]").textContent.includes("1800");
+      const overviewRows = () => [...host.querySelectorAll("[data-trial-overview-project]")];
+      const overviewCounts = () =>
+        overviewRows().map((row) => row.querySelector("[data-trial-overview-count]").textContent);
+      const overviewValues = () =>
+        overviewRows().map((row) => row.querySelector("[data-trial-overview-average]").textContent);
+      checks.playerOverviewAllProjects =
+        overviewRows().length === 15 &&
+        overviewRows().filter((row) => row.dataset.trialOverviewProject.startsWith("/guild_skilling/")).length === 10;
+      checks.playerOverviewCountsAndAverages =
+        overviewCounts().filter((value) => value === "1").length === 6 &&
+        overviewValues().filter((value) => value === "2.00×").length === 6 &&
+        overviewCounts().filter((value) => value === "0").length === 9 &&
+        overviewValues().filter((value) => value === "—").length === 9;
+      checks.playerOverviewBeforeSkills = Boolean(
+        host
+          .querySelector('[data-trial-profile-section="overview"]')
+          .compareDocumentPosition(host.querySelector('[data-trial-profile-section="skills"]')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+      );
+      checks.playerOverviewContained = [...host.querySelectorAll(".mwi-trial-player-overview")].every(
+        (table) =>
+          table.scrollWidth <= table.clientWidth &&
+          table.getBoundingClientRect().right <= host.getBoundingClientRect().right + 1
+      );
       const skillIcons = [...host.querySelectorAll(".mwi-trial-skill-grid .mwi-trial-profile-icon use")];
       checks.profileNativeSkillIcons =
         skillIcons.map((el) => el.getAttribute("href").split("#")[1]).join(",") ===
@@ -3606,7 +3633,7 @@
       checks.profileAbilitySlots =
         [...host.querySelectorAll(".mwi-trial-profile-abilities use")]
           .map((el) => el.getAttribute("href").split("#")[1])
-          .join(",") === "ice_spear,puncture" &&
+          .join(",") === "ice_spear,puncture,heal,fireball,toxic_pollen" &&
         host.querySelector(".mwi-trial-profile-abilities").textContent.includes("Lv.40");
       checks.profileEquipmentNamesAccessible = equipmentItems.every(
         (el) =>
@@ -3630,6 +3657,16 @@
           ).size === 1
       );
       const equipmentBounds = host.querySelector('[data-equipment-slot="back"]').getBoundingClientRect();
+      const abilityTiles = [...host.querySelectorAll(".mwi-trial-ability-slot")];
+      checks.profileAbilitiesFiveEqualSlots =
+        abilityTiles.length === 5 &&
+        new Set(abilityTiles.map((tile) => Math.round(tile.getBoundingClientRect().top))).size === 1 &&
+        abilityTiles.every((tile) => {
+          const bounds = tile.getBoundingClientRect();
+          return (
+            Math.abs(bounds.width - equipmentBounds.width) < 1 && Math.abs(bounds.height - equipmentBounds.height) < 1
+          );
+        });
       checks.profileSkillsSameSizeAsEquipment = skillTiles.every((tile) => {
         const bounds = tile.getBoundingClientRect();
         return (
@@ -3644,13 +3681,71 @@
         (el) => el.getAttribute("aria-hidden") === "true"
       );
       const profileFacts = host.querySelector(".mwi-trial-profile-facts");
+      const tooltipBridge = window.__mwiGuildCreditBridge;
+      const originalTooltipRenderer = tooltipBridge.renderProfileTooltip;
+      const tooltipCalls = [];
+      // Native formula forwarding is unit-tested separately; this fixture checks
+      // pointer/focus lifecycle and viewport geometry without live game modules.
+      tooltipBridge.renderProfileTooltip = (container, profile, kind, record) => {
+        tooltipCalls.push({ kind, record });
+        container.textContent = `${kind}: ${JSON.stringify(record)}`;
+        return true;
+      };
+      const tooltipRequestsBefore = profileFrames.length;
+      const tooltipSavedBefore = JSON.stringify(saved());
+      const tooltip = () => document.getElementById("mwi-trial-profile-tooltip");
+      const tooltipSkill = host.querySelector('[data-profile-skill="milking"]');
+      tooltipSkill.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.profileTooltipSkillExperience = tooltip()?.textContent.includes("2347754") === true;
+      checks.profileTooltipAccessible =
+        tooltipSkill.getAttribute("aria-describedby") === tooltip()?.id &&
+        tooltip()?.getAttribute("role") === "tooltip";
+      const tooltipBounds = tooltip().getBoundingClientRect();
+      checks.profileTooltipContained =
+        tooltipBounds.left >= 0 &&
+        tooltipBounds.right <= innerWidth &&
+        tooltipBounds.top >= 0 &&
+        tooltipBounds.bottom <= innerHeight;
+      tooltipSkill.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: tooltip() }));
+      checks.profileTooltipHoverable = Boolean(tooltip());
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      checks.profileTooltipEscapeCloses =
+        !tooltip() && !tooltipSkill.hasAttribute("aria-describedby") && tooltipSkill.hasAttribute("title");
+      abilityTiles[4].focus({ preventScroll: true });
+      checks.profileTooltipAbilityFocus =
+        tooltip()?.textContent.includes("toxic_pollen") === true && tooltip()?.textContent.includes("414669") === true;
+      abilityTiles[4].blur();
+      checks.profileTooltipBlurCloses = !tooltip();
+      equipmentItems[1].dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.profileTooltipEquipmentEnhancement =
+        tooltipCalls.at(-1)?.record.enhancementLevel === 5 && tooltipCalls.at(-1)?.kind === "item";
+      host.dispatchEvent(new Event("scroll"));
+      checks.profileTooltipScrollCloses = !tooltip();
+      const missingXp = host.querySelector('[data-profile-skill="magic"]');
+      const callsBeforeMissing = tooltipCalls.length;
+      missingXp.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.profileTooltipMissingXpNotInvented = Boolean(tooltip()) && tooltipCalls.length === callsBeforeMissing;
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      tooltipBridge.renderProfileTooltip = originalTooltipRenderer;
+      tooltipSkill.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.profileTooltipUnavailableFallback = Boolean(tooltip()) && !tooltip().textContent.includes("NaN");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      checks.profileTooltipsReadOnly =
+        profileFrames.length === tooltipRequestsBefore && JSON.stringify(saved()) === tooltipSavedBefore;
       checks.profileOnlyLevelFacts =
         profileFacts.children.length === 2 &&
         [...profileFacts.querySelectorAll("dd")].map((el) => el.textContent).join(",") === "1800,97.25";
       const profileStoredBefore = JSON.stringify(saved());
       const profileRequestsBefore = profileFrames.length;
       const profileSection = (key) => host.querySelector(`[data-trial-profile-section="${key}"]`);
-      checks.profileSectionsDefaultOpen = profileSection("skills").open && profileSection("equipment").open;
+      checks.profileSectionsDefaultOpen =
+        profileSection("overview").open && profileSection("skills").open && profileSection("equipment").open;
+      profileSection("overview").querySelector("summary").click();
+      checks.playerOverviewCollapseIndependent =
+        !profileSection("overview").open &&
+        !overviewRows()[0].checkVisibility() &&
+        profileSection("skills").open &&
+        profileSection("equipment").open;
       profileSection("skills").querySelector("summary").click();
       checks.profileSkillsCollapseIndependent =
         !profileSection("skills").open &&
@@ -3662,9 +3757,10 @@
         !profileSection("equipment").open &&
         !host.querySelector("[data-equipment-slot]").checkVisibility() &&
         !host.querySelector(".mwi-trial-profile-abilities").checkVisibility();
-      host.querySelector('[data-trial-mode="player"]').click();
-      checks.profileCollapseSurvivesRender = !profileSection("skills").open && !profileSection("equipment").open;
-      for (const key of ["skills", "equipment"]) profileSection(key).querySelector("summary").click();
+      host.querySelector("[data-trial-display]").dispatchEvent(new Event("change", { bubbles: true }));
+      checks.profileCollapseSurvivesRender =
+        !profileSection("overview").open && !profileSection("skills").open && !profileSection("equipment").open;
+      for (const key of ["overview", "skills", "equipment"]) profileSection(key).querySelector("summary").click();
       checks.profileSectionsReopen =
         host.querySelector("[data-profile-skill]").checkVisibility() &&
         host.querySelector("[data-equipment-slot]").checkVisibility() &&
@@ -3686,6 +3782,11 @@
             Math.round(el.getBoundingClientRect().top)
           )
         ).size === 1;
+      checks.memberTablesUseOuterRail = [...host.querySelectorAll(".mwi-trial-table-scroll")].every((wrapper) => {
+        const style = getComputedStyle(wrapper);
+        wrapper.scrollLeft = 20;
+        return style.overflowX === "visible" && style.overflowY === "visible" && wrapper.scrollLeft === 0;
+      });
       checks.playerTablesNoVerticalLimit = [...host.querySelectorAll(".mwi-trial-table-scroll")].every(
         (el) => el.scrollHeight <= el.clientHeight + 1
       );
@@ -3865,6 +3966,10 @@
       host.querySelector("[data-trial-profile-refresh]").click();
       host.querySelector("[data-trial-player-back]").click();
       host.querySelectorAll("[data-trial-profile]")[1].click();
+      checks.playerOverviewAvailableWhileLoading =
+        overviewRows().length === 15 &&
+        overviewCounts().some((value) => Number(value) > 0) &&
+        overviewValues().filter((value) => value === "0.00×").length === 6;
       checks.playerLoadingKeepsHistory =
         host.querySelectorAll("[data-trial-selected-member]").length === 6 && !nativeProfile.open;
       profileReplies[0]();
@@ -3997,6 +4102,38 @@
         document.activeElement?.closest("[data-trial-ranking-column]").dataset.trialRankingColumn === "all";
       checks.rankingReturnsWithScroll =
         host.querySelector("#mwi-trial-rail-player-rankings").scrollLeft === rankingScrollBefore;
+      const beforePlayerTabReturns = JSON.stringify(saved());
+      for (const source of ["week", "project", "ranking", "picker"]) {
+        host
+          .querySelector(`[data-trial-mode="${source === "week" || source === "project" ? source : "player"}"]`)
+          .click();
+        const entry =
+          source === "ranking"
+            ? host.querySelector("[data-trial-ranking-player]")
+            : source === "picker"
+              ? host.querySelector('[data-trial-choice="player"]')
+              : host.querySelector("[data-trial-profile]");
+        entry.click();
+        checks[`playerTabReturnFrom_${source}`] = Boolean(host.querySelector("[data-trial-player-title]"));
+        deferProfile = true;
+        host.querySelector("[data-trial-profile-refresh]").click();
+        const requestsBeforeReturn = profileFrames.length;
+        host.querySelector('[data-trial-mode="player"]').click();
+        const playerOverviewVisible = () =>
+          !host.querySelector("[data-trial-player-title], [data-trial-profile-content]") &&
+          Boolean(host.querySelector(".mwi-trial-rankings")) &&
+          host.querySelector(".mwi-trial-player-picker").open &&
+          !host.querySelector('[data-trial-choice="player"][aria-pressed="true"]') &&
+          document.activeElement === host.querySelector('[data-trial-mode="player"][aria-pressed="true"]');
+        checks[`playerTabReturnFrom_${source}`] &&= playerOverviewVisible();
+        profileReplies.at(-1)();
+        deferProfile = false;
+        checks[`playerTabIgnoresLateReply_${source}`] = playerOverviewVisible();
+        host.querySelector('[data-trial-mode="player"]').click();
+        checks[`playerTabRepeatStable_${source}`] =
+          playerOverviewVisible() && profileFrames.length === requestsBeforeReturn;
+      }
+      checks.playerTabReturnReadOnly = JSON.stringify(saved()) === beforePlayerTabReturns;
       host.querySelector('[data-trial-mode="week"]').click();
       const displayFrames = profileFrames.length;
       const displayTable = () =>
