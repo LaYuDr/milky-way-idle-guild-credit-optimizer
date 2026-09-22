@@ -216,8 +216,8 @@
         .join("");
     }
 
-    function renderRankings({ records, metric, scope, helpOpen }) {
-      const entries = api.playerRankings(records);
+    function renderRankingColumn(players, metric, scope) {
+      const entries = [...players];
       const score = (entry) => (metric === "participations" ? entry.participations : entry[scope].average);
       const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
       entries.sort((a, b) => {
@@ -241,8 +241,19 @@
           return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}${names.get(entry.name) > 1 ? `<small>${e(identity)}</small>` : ""}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
-      const title = t(metric === "participations" ? "trialRankingParticipations" : "trialRankingAverage");
-      return `<section class="mwi-trial-rankings" aria-label="${e(t("trialPlayerRankings"))}"><h3>${e(t("trialPlayerRankings"))}</h3><div class="mwi-trial-ranking-controls"><div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingMetric"))}">${["participations", "average"].map((value) => `<button type="button" data-trial-ranking-metric="${value}" aria-pressed="${metric === value}">${e(t(value === "participations" ? "trialRankingParticipations" : "trialRankingAverage"))}</button>`).join("")}</div>${metric === "average" ? `<div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingScope"))}">${["skilling", "combat", "all"].map((value) => `<button type="button" data-trial-ranking-scope="${value}" aria-pressed="${scope === value}">${e(t(`trialRankingScope_${value}`))}</button>`).join("")}</div>` : ""}</div><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t(metric === "participations" ? "trialRankingCountHelp" : "trialRankingAverageHelp"))}</p></details>${entries.length ? `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${e(title)}"><table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</section>`;
+      const title =
+        metric === "participations"
+          ? t("trialRankingParticipations")
+          : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+    }
+
+    function renderRankings({ records, helpOpen }) {
+      const players = api.playerRankings(records);
+      const columns =
+        renderRankingColumn(players, "participations") +
+        ["skilling", "combat", "all"].map((scope) => renderRankingColumn(players, "average", scope)).join("");
+      return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
     function render({ member, weeks, profileState }) {

@@ -73,8 +73,6 @@
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
-    let rankingMetric = "participations";
-    let rankingScope = "skilling";
     let playerSearch = "";
     let playerPickerOpen = true;
     let playerSearchComposing = false;
@@ -115,8 +113,7 @@
               if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
             const panel = getPanel();
-            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode !== "week")
-              refresh(panel);
+            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials") refresh(panel);
           })
           .catch(() => {});
       }
@@ -446,9 +443,9 @@
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
-    function renderColumn(title, items, attributes = "", jump = "") {
+    function renderColumn(title, items, attributes = "", jump = "", icon = "") {
       const showIdentity = items.length > 1 || multipleGuilds;
-      return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${icon}${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
@@ -550,8 +547,6 @@
         if (!selectedMember)
           markup += playerRenderer.renderRankings({
             records,
-            metric: rankingMetric,
-            scope: rankingScope,
             helpOpen: rankingHelpOpen
           });
         markup += renderPlayerPicker(members, current) + (selectedMember ? renderDisplaySettings() : "");
@@ -607,7 +602,8 @@
                 trialName(entry.records[0]),
                 entry.records,
                 `data-trial-project="${escapeHtml(entry.key)}"`,
-                `data-trial-jump-project="${escapeHtml(entry.key)}"`
+                `data-trial-jump-project="${escapeHtml(entry.key)}"`,
+                projectIcon(entry.records[0])
               )
             );
           while (columns.length < size)
@@ -742,25 +738,22 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
-        const rankingControl = event.target.closest("[data-trial-ranking-metric], [data-trial-ranking-scope]");
-        if (rankingControl) {
-          const metric = rankingControl.dataset.trialRankingMetric;
-          const scope = rankingControl.dataset.trialRankingScope;
-          if (metric) rankingMetric = metric;
-          if (scope) rankingScope = scope;
-          refresh(panel);
-          host
-            .querySelector(metric ? `[data-trial-ranking-metric="${metric}"]` : `[data-trial-ranking-scope="${scope}"]`)
-            ?.focus({ preventScroll: true });
-          return;
-        }
         const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
         if (rankingPlayer) {
           const member = trialHistoryApi
             .playerRankings(records)
             .find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
           if (!member?.name) return;
-          playerReturn = { mode: "player", rankingKey: member.key };
+          playerReturn = {
+            mode: "player",
+            rankingKey: member.key,
+            rankingColumn: rankingPlayer.closest("[data-trial-ranking-column]").dataset.trialRankingColumn,
+            scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+              el.dataset.trialScrollId,
+              el.scrollLeft,
+              el.scrollTop
+            ])
+          };
           selectedMember = { id: member.id, name: member.name };
           playerPickerOpen = false;
           resetScroll = true;
@@ -824,7 +817,9 @@
           }
           const returnTarget =
             [...host.querySelectorAll("[data-trial-ranking-player]")].find(
-              (el) => el.dataset.trialRankingPlayer === playerReturn?.rankingKey
+              (el) =>
+                el.dataset.trialRankingPlayer === playerReturn?.rankingKey &&
+                el.closest("[data-trial-ranking-column]").dataset.trialRankingColumn === playerReturn?.rankingColumn
             ) ||
             [...host.querySelectorAll("[data-trial-profile]")].find(
               (el) => el.dataset.trialProfile === playerReturn?.name

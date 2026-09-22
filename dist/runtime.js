@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.32";
+window.MwiGuildCreditVersion = "1.2.33";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3515,10 +3515,8 @@ window.MwiGuildCreditVersion = "1.2.32";
       trialByProject: "按项目查看",
       trialByPlayer: "按玩家查看",
       trialPlayerRankings: "玩家排行榜",
-      trialRankingMetric: "排行指标",
-      trialRankingScope: "试炼类别",
       trialRankingParticipations: "参与次数",
-      trialRankingAverage: "平均相对人均",
+      trialRankingAverageTitle: "{scope} · 平均相对人均",
       trialRankingScope_skilling: "生活",
       trialRankingScope_combat: "战斗",
       trialRankingScope_all: "生活＋战斗",
@@ -4149,10 +4147,8 @@ window.MwiGuildCreditVersion = "1.2.32";
       trialByProject: "By trial",
       trialByPlayer: "By player",
       trialPlayerRankings: "Player rankings",
-      trialRankingMetric: "Ranking metric",
-      trialRankingScope: "Trial category",
       trialRankingParticipations: "Participation count",
-      trialRankingAverage: "Average multiple",
+      trialRankingAverageTitle: "{scope} · Average multiple",
       trialRankingScope_skilling: "Skilling",
       trialRankingScope_combat: "Combat",
       trialRankingScope_all: "Skilling + combat",
@@ -9214,14 +9210,13 @@ window.MwiGuildCreditVersion = "1.2.32";
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-rankings h3{margin:0 0 8px;font-size:16px;font-weight:650}
-        #mwi-credit-optimizer .mwi-trial-ranking-controls{display:flex;flex-wrap:wrap;gap:6px 16px;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-ranking-controls .mwi-trial-choices{flex-wrap:wrap;overflow:visible}
-        #mwi-credit-optimizer .mwi-trial-ranking-table{width:100%;table-layout:fixed}
-        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td){white-space:normal;overflow-wrap:anywhere;padding:6px 4px}
-        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td):first-child{width:3em;text-align:center}
-        #mwi-credit-optimizer .mwi-trial-ranking-table th:nth-child(2){text-align:left;width:40%}
-        #mwi-credit-optimizer .mwi-trial-ranking-table .mwi-trial-heading-link{white-space:normal;overflow-wrap:anywhere;text-align:left}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="rankings"]{grid-template-columns:repeat(4,max-content)}
+        #mwi-credit-optimizer .mwi-trial-rankings .mwi-trial-rail{position:relative}
+        #mwi-credit-optimizer [data-trial-ranking-column]>h4{min-height:2.8em;text-align:center}
+        #mwi-credit-optimizer .mwi-trial-ranking-table{min-width:100%}
+        #mwi-credit-optimizer .mwi-trial-ranking-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td):first-child{text-align:center}
+        #mwi-credit-optimizer .mwi-trial-ranking-table th:nth-child(2){text-align:left}
         #mwi-credit-optimizer .mwi-trial-player-picker{margin:4px 0 12px}
         #mwi-credit-optimizer .mwi-trial-player-picker>summary{padding:6px 0;cursor:pointer;font-size:14px;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-player-search{margin-top:10px;text-align:left}
@@ -10719,8 +10714,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         .join("");
     }
 
-    function renderRankings({ records, metric, scope, helpOpen }) {
-      const entries = api.playerRankings(records);
+    function renderRankingColumn(players, metric, scope) {
+      const entries = [...players];
       const score = (entry) => (metric === "participations" ? entry.participations : entry[scope].average);
       const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
       entries.sort((a, b) => {
@@ -10744,8 +10739,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}${names.get(entry.name) > 1 ? `<small>${e(identity)}</small>` : ""}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
-      const title = t(metric === "participations" ? "trialRankingParticipations" : "trialRankingAverage");
-      return `<section class="mwi-trial-rankings" aria-label="${e(t("trialPlayerRankings"))}"><h3>${e(t("trialPlayerRankings"))}</h3><div class="mwi-trial-ranking-controls"><div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingMetric"))}">${["participations", "average"].map((value) => `<button type="button" data-trial-ranking-metric="${value}" aria-pressed="${metric === value}">${e(t(value === "participations" ? "trialRankingParticipations" : "trialRankingAverage"))}</button>`).join("")}</div>${metric === "average" ? `<div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingScope"))}">${["skilling", "combat", "all"].map((value) => `<button type="button" data-trial-ranking-scope="${value}" aria-pressed="${scope === value}">${e(t(`trialRankingScope_${value}`))}</button>`).join("")}</div>` : ""}</div><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t(metric === "participations" ? "trialRankingCountHelp" : "trialRankingAverageHelp"))}</p></details>${entries.length ? `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${e(title)}"><table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</section>`;
+      const title =
+        metric === "participations"
+          ? t("trialRankingParticipations")
+          : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+    }
+
+    function renderRankings({ records, helpOpen }) {
+      const players = api.playerRankings(records);
+      const columns =
+        renderRankingColumn(players, "participations") +
+        ["skilling", "combat", "all"].map((scope) => renderRankingColumn(players, "average", scope)).join("");
+      return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
     function render({ member, weeks, profileState }) {
@@ -10833,8 +10839,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
-    let rankingMetric = "participations";
-    let rankingScope = "skilling";
     let playerSearch = "";
     let playerPickerOpen = true;
     let playerSearchComposing = false;
@@ -10875,8 +10879,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
             const panel = getPanel();
-            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials" && mode !== "week")
-              refresh(panel);
+            if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials") refresh(panel);
           })
           .catch(() => {});
       }
@@ -11206,9 +11209,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
     }
 
-    function renderColumn(title, items, attributes = "", jump = "") {
+    function renderColumn(title, items, attributes = "", jump = "", icon = "") {
       const showIdentity = items.length > 1 || multipleGuilds;
-      return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" ${attributes}><h4>${jump ? `<button type="button" class="mwi-trial-heading-link" ${jump}>${icon}${escapeHtml(title)}</button>` : escapeHtml(title)}</h4>${items.length ? items.map((record) => renderRecord(record, showIdentity)).join("") : `<p class="mwi-trial-empty">${escapeHtml(t("trialMissingRecord"))}</p>`}</article>`;
     }
 
     function renderRail(id, title, columns, kind, timeline = false, showTitle = !timeline) {
@@ -11310,8 +11313,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (!selectedMember)
           markup += playerRenderer.renderRankings({
             records,
-            metric: rankingMetric,
-            scope: rankingScope,
             helpOpen: rankingHelpOpen
           });
         markup += renderPlayerPicker(members, current) + (selectedMember ? renderDisplaySettings() : "");
@@ -11367,7 +11368,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 trialName(entry.records[0]),
                 entry.records,
                 `data-trial-project="${escapeHtml(entry.key)}"`,
-                `data-trial-jump-project="${escapeHtml(entry.key)}"`
+                `data-trial-jump-project="${escapeHtml(entry.key)}"`,
+                projectIcon(entry.records[0])
               )
             );
           while (columns.length < size)
@@ -11502,25 +11504,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
-        const rankingControl = event.target.closest("[data-trial-ranking-metric], [data-trial-ranking-scope]");
-        if (rankingControl) {
-          const metric = rankingControl.dataset.trialRankingMetric;
-          const scope = rankingControl.dataset.trialRankingScope;
-          if (metric) rankingMetric = metric;
-          if (scope) rankingScope = scope;
-          refresh(panel);
-          host
-            .querySelector(metric ? `[data-trial-ranking-metric="${metric}"]` : `[data-trial-ranking-scope="${scope}"]`)
-            ?.focus({ preventScroll: true });
-          return;
-        }
         const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
         if (rankingPlayer) {
           const member = trialHistoryApi
             .playerRankings(records)
             .find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
           if (!member?.name) return;
-          playerReturn = { mode: "player", rankingKey: member.key };
+          playerReturn = {
+            mode: "player",
+            rankingKey: member.key,
+            rankingColumn: rankingPlayer.closest("[data-trial-ranking-column]").dataset.trialRankingColumn,
+            scroll: [...host.querySelectorAll("[data-trial-scroll-id]")].map((el) => [
+              el.dataset.trialScrollId,
+              el.scrollLeft,
+              el.scrollTop
+            ])
+          };
           selectedMember = { id: member.id, name: member.name };
           playerPickerOpen = false;
           resetScroll = true;
@@ -11584,7 +11583,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           }
           const returnTarget =
             [...host.querySelectorAll("[data-trial-ranking-player]")].find(
-              (el) => el.dataset.trialRankingPlayer === playerReturn?.rankingKey
+              (el) =>
+                el.dataset.trialRankingPlayer === playerReturn?.rankingKey &&
+                el.closest("[data-trial-ranking-column]").dataset.trialRankingColumn === playerReturn?.rankingColumn
             ) ||
             [...host.querySelectorAll("[data-trial-profile]")].find(
               (el) => el.dataset.trialProfile === playerReturn?.name

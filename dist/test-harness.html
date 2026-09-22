@@ -3369,6 +3369,11 @@
           ])
         ]
       };
+      const gameRoot = document.createElement("div");
+      gameRoot.id = "root";
+      gameRoot.innerHTML =
+        '<svg hidden aria-hidden="true"><use href="/assets/skills_sprite.svg#milking"></use><use href="/assets/combat_monsters_sprite.svg#trial_badger"></use><use href="/assets/abilities_sprite.svg#ice_spear"></use><use href="/assets/items_sprite.svg#holy_brush"></use></svg>';
+      document.body.append(gameRoot);
       send({ type: "guild_updated", guild });
       send({ type: "guild_characters_updated", guildSharableCharacterMap: members });
       send(message);
@@ -3388,10 +3393,6 @@
       nativeProfile.dataset.testProfile = "true";
       document.body.append(nativeProfile);
       const existingSocket = { send: (frame) => profileFrames.push(JSON.parse(frame)) };
-      const gameRoot = document.createElement("div");
-      gameRoot.id = "root";
-      gameRoot.innerHTML =
-        '<svg hidden aria-hidden="true"><use href="/assets/skills_sprite.svg#milking"></use><use href="/assets/abilities_sprite.svg#ice_spear"></use><use href="/assets/items_sprite.svg#holy_brush"></use></svg>';
       let deferProfile = false;
       const profileReplies = [];
       const profileController = {
@@ -3446,7 +3447,6 @@
         }
       };
       gameRoot.__reactContainer$trialAudit = { current: { child: { stateNode: profileController } } };
-      document.body.append(gameRoot);
       const checks = {
         fourthTab: panel.querySelectorAll(".mwi-view-tab").length === 4,
         emptyState: empty,
@@ -3461,6 +3461,11 @@
             .join(",") === [skills[0], skills[1], skills[2], skills[3]].join(","),
         twoCombat: host.querySelectorAll('[data-trial-group="combat"] .mwi-trial-column').length === 2,
         sixMemberTables: host.querySelectorAll('[data-role="trial-stats-table"]').length === 6,
+        weeklyProjectHeadingIcons:
+          host.querySelectorAll("[data-trial-project] h4 .mwi-trial-project-icon").length === 6 &&
+          [...host.querySelectorAll("[data-trial-project] h4 button")].every((button) =>
+            button.firstElementChild?.matches('svg.mwi-trial-project-icon[aria-hidden="true"]')
+          ),
         allMemberRows: host.querySelectorAll('[data-role="trial-stats-table"] tbody tr').length === 12,
         rawPrecisionPreserved:
           host.textContent.includes("123456789.125") &&
@@ -3510,46 +3515,52 @@
       checks.playerChoicesUnique = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
       checks.playerControlsTwoRows = controlsStacked();
       checks.playerChoicesEscaped = !host.querySelector('[data-role="trial-player"] b');
-      const rankedRows = () => [...host.querySelectorAll("[data-trial-ranking-row]")];
+      const rankedRows = (column) => [
+        ...host.querySelectorAll(`[data-trial-ranking-column="${column}"] [data-trial-ranking-row]`)
+      ];
+      const rankingStoredBefore = JSON.stringify(saved());
+      const rankingColumns = [...host.querySelectorAll("[data-trial-ranking-column]")];
+      checks.rankingsAllParallel =
+        rankingColumns.length === 4 &&
+        new Set(rankingColumns.map((el) => Math.round(el.getBoundingClientRect().top))).size === 1;
+      checks.rankingSwitchesAbsent = !host.querySelector("[data-trial-ranking-metric], [data-trial-ranking-scope]");
       checks.rankingParticipationCounts =
-        rankedRows().length === 2 &&
-        rankedRows().every(
+        rankedRows("participations").length === 2 &&
+        rankedRows("participations").every(
           (row) =>
             row.querySelector("[data-trial-ranking-value]").textContent === "6" &&
             row.firstElementChild.textContent === "1"
         );
-      const rankingStoredBefore = JSON.stringify(saved());
-      host.querySelector('[data-trial-ranking-metric="average"]').click();
+      for (const [scope, count] of [
+        ["skilling", "4"],
+        ["combat", "2"],
+        ["all", "6"]
+      ]) {
+        checks[`ranking${scope}Averages`] =
+          rankedRows(scope)
+            .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
+            .join(",") === "2.00×,0.00×" &&
+          rankedRows(scope).every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === count);
+      }
+      const rankingRail = host.querySelector("#mwi-trial-rail-player-rankings");
+      checks.rankingContained =
+        panel.scrollWidth <= panel.clientWidth &&
+        rankingRail.getBoundingClientRect().right <= host.getBoundingClientRect().right + 1;
+      host.querySelector('[data-trial-scroll="player-rankings"][data-step="1"]').click();
+      checks.rankingScrollRight =
+        rankingRail.scrollWidth > rankingRail.clientWidth
+          ? rankingRail.scrollLeft > 0
+          : host.querySelector('[data-trial-scroll="player-rankings"][data-step="1"]').disabled;
+      host.querySelector('[data-trial-scroll="player-rankings"][data-step="-1"]').click();
+      checks.rankingScrollLeft = rankingRail.scrollLeft === 0;
       const rankingHelp = host.querySelector("[data-trial-ranking-help]");
       checks.rankingMethodCollapsed = !rankingHelp.open;
       rankingHelp.open = true;
-      checks.rankingMetricFocus =
-        document.activeElement === host.querySelector('[data-trial-ranking-metric="average"]');
-      checks.rankingLifeAverages =
-        rankedRows()
-          .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
-          .join(",") === "2.00×,0.00×" &&
-        rankedRows().every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === "4");
-      for (const scope of ["combat", "all"]) {
-        host.querySelector(`[data-trial-ranking-scope="${scope}"]`).click();
-        checks[`ranking${scope}Averages`] =
-          rankedRows()
-            .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
-            .join(",") === "2.00×,0.00×" &&
-          rankedRows().every(
-            (row) => row.querySelector("[data-trial-ranking-samples]").textContent === (scope === "combat" ? "2" : "6")
-          );
-        checks[`ranking${scope}Contained`] =
-          panel.scrollWidth <= panel.clientWidth &&
-          host.querySelector(".mwi-trial-ranking-table").getBoundingClientRect().right <=
-            host.getBoundingClientRect().right + 1;
-      }
+      host.querySelector('[data-trial-mode="player"]').click();
       checks.rankingMethodRetained = host.querySelector("[data-trial-ranking-help]").open;
       host.querySelector("[data-trial-ranking-help]").open = false;
       checks.rankingNamesEscaped = !host.querySelector(".mwi-trial-ranking-table b");
       checks.rankingNoQueriesOrWrites = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
-      host.querySelector('[data-trial-ranking-metric="participations"]').click();
-
       checks.playerSearchTemporarilyHidden = !host.querySelector(
         "[data-trial-player-search-form], [data-trial-player-search]"
       );
@@ -3937,7 +3948,10 @@
       checks.playerModeReturnsToWeek =
         !host.querySelector("[data-trial-player-title]") && host.querySelectorAll("[data-trial-record]").length === 6;
       host.querySelector('[data-trial-mode="player"]').click();
-      const rankingButton = host.querySelector("[data-trial-ranking-player]");
+      const returnRankingRail = host.querySelector("#mwi-trial-rail-player-rankings");
+      returnRankingRail.scrollLeft = returnRankingRail.scrollWidth;
+      const rankingScrollBefore = returnRankingRail.scrollLeft;
+      const rankingButton = host.querySelector('[data-trial-ranking-column="all"] [data-trial-ranking-player]');
       const rankingKey = rankingButton.dataset.trialRankingPlayer;
       rankingButton.click();
       checks.rankingOpensPlayerDetails =
@@ -3945,7 +3959,10 @@
       host.querySelector("[data-trial-player-back]").click();
       checks.rankingReturnsWithFocus =
         Boolean(host.querySelector(".mwi-trial-rankings")) &&
-        document.activeElement?.dataset.trialRankingPlayer === rankingKey;
+        document.activeElement?.dataset.trialRankingPlayer === rankingKey &&
+        document.activeElement?.closest("[data-trial-ranking-column]").dataset.trialRankingColumn === "all";
+      checks.rankingReturnsWithScroll =
+        host.querySelector("#mwi-trial-rail-player-rankings").scrollLeft === rankingScrollBefore;
       host.querySelector('[data-trial-mode="week"]').click();
       const displayFrames = profileFrames.length;
       const displayTable = () =>

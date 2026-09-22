@@ -702,7 +702,8 @@ own per-region/character key and are not part of trial exports.
 Player search markup is temporarily commented out. The picker still supports keyboard
 navigation, selection collapse, escaped names and a 60-player wrapping grid.
 Player ranking checks cover participation counts, ties, skilling/combat/combined
-averages, valid-project counts, category switching, focus, contained tables,
+averages, valid-project counts, four simultaneously visible parallel columns, left/right
+scroll controls, focus and scroll restoration, and contained tables,
 click-through to player details and return to the ranking without background queries
 or storage changes. Each recorded project counts once, including zero contributions.
 Skilling uses work / project mean work. Combat averages the valid damage, healing and
