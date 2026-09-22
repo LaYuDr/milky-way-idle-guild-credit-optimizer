@@ -19,6 +19,7 @@ export const SUITES = {
   "market-filter": suite("marketFilterAudit", SMALL, [320, 610]),
   "locale-race": suite("localeRaceAudit", SMALL, []),
   "sidebar-resize": suite("sidebarResizeAudit", SMALL, []),
+  "sidebar-integration": suite("sidebarIntegrationAudit", SMALL, [320, 610]),
   "sidebar-startup": suite("sidebarStartupAudit", [420], []),
   "construction-snapshot": suite("constructionSnapshotAudit", [420], []),
   "token-guide": suite("tokenGuideAudit", [420], [])

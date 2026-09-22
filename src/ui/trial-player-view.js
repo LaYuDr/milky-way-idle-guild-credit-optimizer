@@ -216,10 +216,39 @@
         .join("");
     }
 
+    function renderRankings({ records, metric, scope, helpOpen }) {
+      const entries = api.playerRankings(records);
+      const score = (entry) => (metric === "participations" ? entry.participations : entry[scope].average);
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      entries.sort((a, b) => {
+        const left = score(a),
+          right = score(b);
+        if (left === null || right === null)
+          return left === right ? collator.compare(a.name, b.name) : left === null ? 1 : -1;
+        return right - left || collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
+      });
+      const names = new Map();
+      for (const entry of entries) names.set(entry.name, (names.get(entry.name) || 0) + 1);
+      let previous = null,
+        rank = 0;
+      const rows = entries
+        .map((entry, index) => {
+          const value = score(entry);
+          if (value !== previous) rank = index + 1;
+          previous = value;
+          const identity = entry.id === null ? t("trialManualSource") : `ID ${entry.id}`;
+          const name = entry.name || identity;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}${names.get(entry.name) > 1 ? `<small>${e(identity)}</small>` : ""}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+        })
+        .join("");
+      const title = t(metric === "participations" ? "trialRankingParticipations" : "trialRankingAverage");
+      return `<section class="mwi-trial-rankings" aria-label="${e(t("trialPlayerRankings"))}"><h3>${e(t("trialPlayerRankings"))}</h3><div class="mwi-trial-ranking-controls"><div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingMetric"))}">${["participations", "average"].map((value) => `<button type="button" data-trial-ranking-metric="${value}" aria-pressed="${metric === value}">${e(t(value === "participations" ? "trialRankingParticipations" : "trialRankingAverage"))}</button>`).join("")}</div>${metric === "average" ? `<div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingScope"))}">${["skilling", "combat", "all"].map((value) => `<button type="button" data-trial-ranking-scope="${value}" aria-pressed="${scope === value}">${e(t(`trialRankingScope_${value}`))}</button>`).join("")}</div>` : ""}</div><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t(metric === "participations" ? "trialRankingCountHelp" : "trialRankingAverageHelp"))}</p></details>${entries.length ? `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${e(title)}"><table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</section>`;
+    }
+
     function render({ member, weeks, profileState }) {
       return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
-    return { render };
+    return { render, renderRankings };
   }
   return { createRenderer, equipmentLayout, skillLayout };
 });

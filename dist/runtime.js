@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.31";
+window.MwiGuildCreditVersion = "1.2.32";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1002,8 +1002,29 @@ window.MwiGuildCreditVersion = "1.2.31";
     return snapshots;
   }
 
+  // The game stores a 0–1 ratio and floors its percentage for display.
+  // Missing progress in older archives is unknown, not zero.
+  function nextTierProgress(record) {
+    const value = record?.party?.nextTierProgress;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  }
+
+  function withSavedProgress(record, previous) {
+    if (
+      previous?.key !== record.key ||
+      previous.kind !== record.kind ||
+      !Number.isFinite(record.party?.highestTier) ||
+      previous.party?.highestTier !== record.party.highestTier ||
+      nextTierProgress(record) !== null ||
+      nextTierProgress(previous) === null
+    )
+      return record;
+    return { ...record, party: { ...record.party, nextTierProgress: nextTierProgress(previous) } };
+  }
+
   function validSnapshot(value) {
     if (!validMemberLevels(value || {})) return false;
+    if (value?.party?.nextTierProgress != null && nextTierProgress(value) === null) return false;
     if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
@@ -1262,6 +1283,53 @@ window.MwiGuildCreditVersion = "1.2.31";
     return Number.isFinite(multiple) ? multiple : null;
   }
 
+  // Aggregate only recorded participants. Missing projects never imply absence or zero.
+  function playerRankings(records) {
+    const players = new Map();
+    const seenRecords = new Set();
+    const bucket = () => ({ count: 0, average: null });
+    const add = (target, value) => {
+      target.count += 1;
+      target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
+    };
+    for (const record of records) {
+      if (seenRecords.has(record.key)) continue;
+      seenRecords.add(record.key);
+      const fields =
+        record.kind === "skilling" ? ["workDone"] : ["damageDealt", "healingDone", "premitigatedDamageTaken"];
+      const summaries = fields.map((field) => summarizeMetric(record, field));
+      const seenPlayers = new Set();
+      for (const row of record.rows) {
+        const identity = memberIdentity(record, row);
+        if (identity.id === null && !identity.name) continue;
+        // ID-less records stay separate from official identities, even when names match.
+        const key = JSON.stringify([identity.id === null ? "name" : "id", identity.id ?? identity.name]);
+        if (seenPlayers.has(key)) continue;
+        seenPlayers.add(key);
+        if (!players.has(key))
+          players.set(key, {
+            key,
+            ...identity,
+            participations: 0,
+            skilling: bucket(),
+            combat: bucket(),
+            all: bucket()
+          });
+        const player = players.get(key);
+        if (!player.name && identity.name) player.name = identity.name;
+        player.participations += 1;
+        const multiples = fields
+          .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
+          .filter((value) => value !== null);
+        if (!multiples.length) continue;
+        const multiple = multiples.reduce((sum, value) => sum + value / multiples.length, 0);
+        add(player[record.kind], multiple);
+        add(player.all, multiple);
+      }
+    }
+    return [...players.values()];
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
@@ -1337,6 +1405,7 @@ window.MwiGuildCreditVersion = "1.2.31";
     summarizeMetric,
     metricShare,
     metricAverageMultiple,
+    playerRankings,
     displayRows,
     sortEntries,
     memberAbsent,
@@ -1349,6 +1418,8 @@ window.MwiGuildCreditVersion = "1.2.31";
     withMemberLevels,
     updateContext,
     completedSnapshots,
+    nextTierProgress,
+    withSavedProgress,
     validSnapshot,
     parseImport,
     previewImport,
@@ -3094,8 +3165,8 @@ window.MwiGuildCreditVersion = "1.2.31";
       sidebarDisplayNameHint: "最多 24 个字符；留空恢复默认名称。保存后立即生效。",
       sidebarNameSave: "保存名称",
       sidebarNameReset: "恢复默认",
-      showConstructionView: "显示公会建设页签（测试版功能，效果不佳）",
-      showTrialHistoryView: "显示历史试炼数据页签（测试版功能，效果不佳）",
+      showConstructionView: "显示公会建设页签",
+      showTrialHistoryView: "显示历史试炼数据页签",
       showTrialHistoryViewHint: "默认关闭。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
       trialHistoryViewShown: "已显示历史试炼数据页签。",
       trialHistoryViewHidden: "已隐藏历史试炼数据页签；历史记录和自动保存不受影响。",
@@ -3443,6 +3514,22 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialByWeek: "按周查看",
       trialByProject: "按项目查看",
       trialByPlayer: "按玩家查看",
+      trialPlayerRankings: "玩家排行榜",
+      trialRankingMetric: "排行指标",
+      trialRankingScope: "试炼类别",
+      trialRankingParticipations: "参与次数",
+      trialRankingAverage: "平均相对人均",
+      trialRankingScope_skilling: "生活",
+      trialRankingScope_combat: "战斗",
+      trialRankingScope_all: "生活＋战斗",
+      trialRankingRank: "名次",
+      trialRankingCount: "次数",
+      trialRankingMultiple: "平均倍数",
+      trialRankingSamples: "样本数",
+      trialRankingMethod: "统计口径",
+      trialRankingCountHelp: "每参与一个已保存的试炼项目计 1 次，包含零贡献记录。未采集的项目不参与统计，同值并列。",
+      trialRankingAverageHelp:
+        "生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。之后对参试项目的倍数等权平均，生活＋战斗也按项目平均。仅统计已保存记录中的已知值（含零），缺失值和零分母跳过；无有效项目显示 —。1× 为该项目人均水平，同值并列。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -3501,7 +3588,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialExport: "导出全部 JSON",
       trialSkilling: "生活试炼",
       trialCombat: "战斗试炼",
-      trialSummary: "{count} 人 · {points} 点 · {tier} 层",
+      trialSummary: "{count} 人 · {points} 点 · {tier} 层 · 下一层 {progress}",
       trialStatsTable: "成员试炼统计",
       trialMember: "成员",
       trialNameUnavailable: "名称未读取",
@@ -3558,7 +3645,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialSkill_defense: "防御",
       trialSkill_ranged: "远程",
       trialSkill_magic: "魔法",
-      trialMemberAbsent: "已不在公会",
+      trialMemberAbsent: "已退出工会",
       trialOpenProfile: "查看 {name} 的参试历史",
       trialProfileUnavailable: "暂时无法打开玩家资料，请确认游戏已连接并刷新页面后重试。",
       trialRaw: "原始记录",
@@ -3584,7 +3671,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialName_brewing: "冲泡",
       trialName_alchemy: "炼金",
       trialName_enhancing: "强化",
-      sidebarCredit: "公会助手"
+      sidebarCredit: "公会"
     },
     en: {
       unknownItem: "Unknown item",
@@ -3693,8 +3780,8 @@ window.MwiGuildCreditVersion = "1.2.31";
       sidebarDisplayNameHint: "Up to 24 characters. Leave blank to use the default name. Applies when saved.",
       sidebarNameSave: "Save name",
       sidebarNameReset: "Reset name",
-      showConstructionView: "Show Guild construction (Beta feature; results may be unsatisfactory)",
-      showTrialHistoryView: "Show Trial history (Beta feature; results may be unsatisfactory)",
+      showConstructionView: "Show Guild construction",
+      showTrialHistoryView: "Show Trial history",
       showTrialHistoryViewHint:
         "Off by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
       trialHistoryViewShown: "The Trial history tab is now visible.",
@@ -4061,6 +4148,23 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialByWeek: "By week",
       trialByProject: "By trial",
       trialByPlayer: "By player",
+      trialPlayerRankings: "Player rankings",
+      trialRankingMetric: "Ranking metric",
+      trialRankingScope: "Trial category",
+      trialRankingParticipations: "Participation count",
+      trialRankingAverage: "Average multiple",
+      trialRankingScope_skilling: "Skilling",
+      trialRankingScope_combat: "Combat",
+      trialRankingScope_all: "Skilling + combat",
+      trialRankingRank: "Rank",
+      trialRankingCount: "Count",
+      trialRankingMultiple: "Avg. multiple",
+      trialRankingSamples: "Samples",
+      trialRankingMethod: "How rankings are calculated",
+      trialRankingCountHelp:
+        "Each recorded project attended counts once, including zero contributions. Unrecorded projects are excluded. Equal values share a rank.",
+      trialRankingAverageHelp:
+        "Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Then project multiples are averaged with equal weight, including in the combined category. Only known recorded values count (including zero); missing values and zero denominators are skipped. No valid projects shows —. 1× is the project average; equal values share a rank.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -4126,7 +4230,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialExport: "Export all JSON",
       trialSkilling: "Skilling trial",
       trialCombat: "Combat trial",
-      trialSummary: "{count} members · {points} points · Tier {tier}",
+      trialSummary: "{count} members · {points} points · Tier {tier} · Next tier {progress}",
       trialStatsTable: "Member trial statistics",
       trialMember: "Member",
       trialNameUnavailable: "Name unavailable",
@@ -4183,7 +4287,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialSkill_defense: "Defense",
       trialSkill_ranged: "Ranged",
       trialSkill_magic: "Magic",
-      trialMemberAbsent: "No longer in the guild",
+      trialMemberAbsent: "Has left the guild",
       trialOpenProfile: "View {name}'s trial history",
       trialProfileUnavailable:
         "Cannot open the player profile. Check the game connection and refresh the page before trying again.",
@@ -4210,7 +4314,7 @@ window.MwiGuildCreditVersion = "1.2.31";
       trialName_brewing: "Brewing",
       trialName_alchemy: "Alchemy",
       trialName_enhancing: "Enhancing",
-      sidebarCredit: "Guild Assistant"
+      sidebarCredit: "Guild"
     }
   };
 
@@ -6147,7 +6251,10 @@ window.MwiGuildCreditVersion = "1.2.31";
                 )
               }
             : {};
-        storage.setItem(key, JSON.stringify({ ...record, members, ...levels }));
+        storage.setItem(
+          key,
+          JSON.stringify({ ...trialHistoryApi.withSavedProgress(record, previous), members, ...levels })
+        );
         return true;
       } catch (_) {
         return false;
@@ -7865,6 +7972,257 @@ window.MwiGuildCreditVersion = "1.2.31";
     return bestIntegration;
   }
 
+  function createIntegrationLocator(documentRef, now = Date.now, find = findSidebarIntegration) {
+    let cached = null;
+    let scannedAt = -Infinity;
+    return function locate(locale) {
+      const tabBar = cached?.tabBar;
+      const current = tabBar && integrationForCustomTab(cached.tabPrototype);
+      const rect = tabBar?.getBoundingClientRect();
+      const valid =
+        tabBar?.isConnected &&
+        cached.panelHost.isConnected &&
+        cached.tabPrototype.parentElement === tabBar &&
+        current?.panelHost === cached.panelHost &&
+        rect.width > 0 &&
+        rect.height > 0;
+      if (!valid || now() - scannedAt >= 30000) {
+        cached = find(documentRef, locale);
+        scannedAt = now();
+      } else {
+        cached.detectedLocale = sidebarLocale(
+          Array.from(tabBar.children, (tab) =>
+            String(tab.textContent || "")
+              .replaceAll("\n", "")
+              .trim()
+          )
+        );
+      }
+      return cached;
+    };
+  }
+
+  function suppressStaleMounts(integration, tab, panel) {
+    let selected = false;
+    const documentRef = integration.tabBar.ownerDocument;
+    const stale = [
+      ...Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).filter((node) => node !== tab),
+      ...Array.from(documentRef.querySelectorAll("#mwi-credit-optimizer,[data-mwi-credit-stale-panel]")).filter(
+        (node) => node !== panel
+      )
+    ];
+    for (const node of stale) {
+      selected ||= node.getAttribute("aria-selected") === "true" && !node.hidden;
+      if (node.dataset.mwiCreditSuperseded === "true" && node.hidden) continue;
+      node.dataset.mwiCreditSuperseded = "true";
+      if (node.id === "mwi-credit-optimizer") node.dataset.mwiCreditStalePanel = "true";
+      node.hidden = true;
+      node.inert = true;
+      node.classList.remove("Mui-selected");
+      node.setAttribute("aria-hidden", "true");
+      node.setAttribute("aria-selected", "false");
+      node.setAttribute("tabindex", "-1");
+      // Old panel descendants have fixed IDs too; never let them shadow the live panel.
+      for (const identified of [node, ...node.querySelectorAll("[id]")]) identified.removeAttribute("id");
+    }
+    return selected;
+  }
+
+  function prepareTab(tab, panel) {
+    tab.id = "mwi-credit-sidebar-tab";
+    tab.hidden = false;
+    tab.inert = false;
+    for (const name of ["disabled", "aria-disabled", "aria-hidden", "data-mwi-credit-superseded"])
+      tab.removeAttribute(name);
+    tab.classList.remove("Mui-selected");
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", "false");
+    tab.setAttribute("aria-controls", panel.id);
+    tab.tabIndex = -1;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", tab.id);
+    panel.tabIndex = 0;
+  }
+
+  function createSelectionController(state) {
+    const hiddenNodes = new Map();
+    const tabStates = new Map();
+    function hide() {
+      if (state.panel) state.panel.hidden = true;
+      const creditTab = state.creditTab;
+      if (creditTab) {
+        creditTab.classList.remove("Mui-selected");
+        creditTab.setAttribute("aria-selected", "false");
+        creditTab.tabIndex = -1;
+      }
+      for (const [node, display] of hiddenNodes) {
+        // A different plugin may have already changed display. Only undo our own write.
+        if (node.isConnected && node.style.display === "none") node.style.display = display;
+      }
+      hiddenNodes.clear();
+      const otherSelected = Array.from(creditTab?.parentElement?.children || []).some(
+        (tab) =>
+          tab !== creditTab && (tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected"))
+      );
+      for (const [tab, previous] of tabStates) {
+        if (!tab.isConnected) continue;
+        if (tab.tabIndex === -1) {
+          if (previous.tabindex === null) tab.removeAttribute("tabindex");
+          else tab.setAttribute("tabindex", previous.tabindex);
+        }
+        if (!otherSelected) {
+          tab.classList.toggle("Mui-selected", previous.selected);
+          if (previous.aria === null) tab.removeAttribute("aria-selected");
+          else tab.setAttribute("aria-selected", previous.aria);
+        }
+      }
+      tabStates.clear();
+    }
+    function show(panelHost, tabBar) {
+      hide();
+      for (const node of panelHost.children) {
+        if (node === state.panel) continue;
+        hiddenNodes.set(node, node.style.display);
+        node.style.display = "none";
+      }
+      for (const tab of tabBar.children) {
+        if (tab === state.creditTab || tab.hidden) continue;
+        tabStates.set(tab, {
+          tabindex: tab.getAttribute("tabindex"),
+          aria: tab.getAttribute("aria-selected"),
+          selected: tab.classList.contains("Mui-selected")
+        });
+        tab.classList.remove("Mui-selected");
+        tab.setAttribute("aria-selected", "false");
+        tab.tabIndex = -1;
+      }
+      state.panel.hidden = false;
+      state.creditTab.classList.add("Mui-selected");
+      state.creditTab.setAttribute("aria-selected", "true");
+      state.creditTab.tabIndex = 0;
+    }
+    return { hide, show };
+  }
+
+  function createLifecycle(options) {
+    const { window: windowRef, state, onActivate, onDeactivate, onChange } = options;
+    const documentRef = windowRef.document;
+    const locate = createIntegrationLocator(documentRef);
+    let integration = null;
+    let observer = null;
+    let observedRoot = null;
+    let destroyed = false;
+    const elementTarget = (event) => (event.target?.nodeType === 1 ? event.target : event.target?.parentElement);
+    const eligibleTabs = () =>
+      Array.from(integration?.tabBar.children || []).filter(
+        (tab) =>
+          tab.matches('button,[role="tab"]') &&
+          !tab.hidden &&
+          !tab.disabled &&
+          tab.getAttribute("aria-disabled") !== "true" &&
+          tab.getClientRects().length
+      );
+    function clickedTab(event) {
+      const target = elementTarget(event);
+      return Array.from(integration?.tabBar.children || []).find((tab) => tab.contains(target));
+    }
+    function leave(event) {
+      const tab = clickedTab(event);
+      if (tab && tab !== state.creditTab && !tab.hidden && event.button !== 2) onDeactivate();
+    }
+    function activate(event) {
+      const tab = clickedTab(event);
+      if (tab !== state.creditTab || !tab || tab.hidden || tab.dataset.mwiCreditSuperseded === "true") return;
+      if (event.button > 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      tab.focus({ preventScroll: true });
+      if (state.panel.hidden || tab.getAttribute("aria-selected") !== "true")
+        onActivate(integration.panelHost, integration.tabBar);
+    }
+    function keydown(event) {
+      const tab = clickedTab(event);
+      if (!tab || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const tabs = eligibleTabs();
+      const index = tabs.indexOf(tab);
+      if (index < 0) return;
+      let next;
+      const rtl = windowRef.getComputedStyle(integration.tabBar).direction === "rtl";
+      if (event.key === "ArrowRight") next = tabs[(index + (rtl ? tabs.length - 1 : 1)) % tabs.length];
+      else if (event.key === "ArrowLeft") next = tabs[(index + (rtl ? 1 : tabs.length - 1)) % tabs.length];
+      else if (event.key === "Home") next = tabs[0];
+      else if (event.key === "End") next = tabs.at(-1);
+      else if (event.key === "Enter" || event.key === " ") next = tab;
+      else return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      // Manual activation: moving focus must not invoke another plugin's action.
+      for (const candidate of tabs) candidate.tabIndex = candidate === next ? 0 : -1;
+      next.focus({ preventScroll: true });
+      next.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (event.key === "Enter" || event.key === " ") next.click();
+    }
+    function watch(found) {
+      if (destroyed) return;
+      if (integration?.tabBar !== found?.tabBar) {
+        for (const type of ["pointerdown", "click"]) integration?.tabBar.removeEventListener(type, activate, true);
+        integration?.tabBar.removeEventListener("keydown", keydown, true);
+        for (const type of ["pointerdown", "click"]) found?.tabBar.addEventListener(type, activate, true);
+        found?.tabBar.addEventListener("keydown", keydown, true);
+      }
+      integration = found;
+      const root = found?.panelHost.parentElement?.parentElement || documentRef.documentElement;
+      if (observedRoot === root) return;
+      observer?.disconnect();
+      observedRoot = root;
+      observer = new windowRef.MutationObserver((records) => {
+        if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return;
+        if (!integration || !state.creditTab?.isConnected || !state.panel?.isConnected) return onChange();
+        const relevant = records.some(({ target }) => {
+          const element = target.nodeType === 1 ? target : target.parentElement;
+          return (
+            element === integration.panelHost ||
+            element === integration.tabBar ||
+            (integration.tabBar.contains(element) &&
+              element !== state.creditTab &&
+              !state.creditTab?.contains(element)) ||
+            element?.contains(integration.tabBar)
+          );
+        });
+        if (!relevant) return;
+        const others = Array.from(integration.tabBar.children).some(
+          (tab) =>
+            tab !== state.creditTab &&
+            !tab.hidden &&
+            (tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected"))
+        );
+        if (!state.panel.hidden && (others || state.creditTab.getAttribute("aria-selected") !== "true")) onDeactivate();
+        onChange();
+      });
+      observer.observe(root, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["class", "style", "hidden", "aria-selected"]
+      });
+    }
+    // Run before document/target handlers, even when they stop bubbling.
+    windowRef.addEventListener("pointerdown", leave, true);
+    windowRef.addEventListener("click", leave, true);
+    function destroy() {
+      destroyed = true;
+      observer?.disconnect();
+      for (const type of ["pointerdown", "click"]) {
+        windowRef.removeEventListener(type, leave, true);
+        integration?.tabBar.removeEventListener(type, activate, true);
+      }
+      integration?.tabBar.removeEventListener("keydown", keydown, true);
+      onDeactivate();
+    }
+    return { locate, watch, destroy };
+  }
+
   return {
     SIDEBAR_LABELS,
     SIDEBAR_ACTIVATION_EVENT,
@@ -7873,7 +8231,12 @@ window.MwiGuildCreditVersion = "1.2.31";
     enableSidebarTabWheelScrolling,
     createActivationCoordinator,
     createDocumentActivationCoordinator,
-    integrationForCustomTab
+    integrationForCustomTab,
+    createIntegrationLocator,
+    suppressStaleMounts,
+    prepareTab,
+    createSelectionController,
+    createLifecycle
   };
 });
 
@@ -8850,6 +9213,15 @@ window.MwiGuildCreditVersion = "1.2.31";
         #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-rankings h3{margin:0 0 8px;font-size:16px;font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls{display:flex;flex-wrap:wrap;gap:6px 16px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls .mwi-trial-choices{flex-wrap:wrap;overflow:visible}
+        #mwi-credit-optimizer .mwi-trial-ranking-table{width:100%;table-layout:fixed}
+        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td){white-space:normal;overflow-wrap:anywhere;padding:6px 4px}
+        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td):first-child{width:3em;text-align:center}
+        #mwi-credit-optimizer .mwi-trial-ranking-table th:nth-child(2){text-align:left;width:40%}
+        #mwi-credit-optimizer .mwi-trial-ranking-table .mwi-trial-heading-link{white-space:normal;overflow-wrap:anywhere;text-align:left}
         #mwi-credit-optimizer .mwi-trial-player-picker{margin:4px 0 12px}
         #mwi-credit-optimizer .mwi-trial-player-picker>summary{padding:6px 0;cursor:pointer;font-size:14px;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-player-search{margin-top:10px;text-align:left}
@@ -10347,10 +10719,39 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         .join("");
     }
 
+    function renderRankings({ records, metric, scope, helpOpen }) {
+      const entries = api.playerRankings(records);
+      const score = (entry) => (metric === "participations" ? entry.participations : entry[scope].average);
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+      entries.sort((a, b) => {
+        const left = score(a),
+          right = score(b);
+        if (left === null || right === null)
+          return left === right ? collator.compare(a.name, b.name) : left === null ? 1 : -1;
+        return right - left || collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
+      });
+      const names = new Map();
+      for (const entry of entries) names.set(entry.name, (names.get(entry.name) || 0) + 1);
+      let previous = null,
+        rank = 0;
+      const rows = entries
+        .map((entry, index) => {
+          const value = score(entry);
+          if (value !== previous) rank = index + 1;
+          previous = value;
+          const identity = entry.id === null ? t("trialManualSource") : `ID ${entry.id}`;
+          const name = entry.name || identity;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}${names.get(entry.name) > 1 ? `<small>${e(identity)}</small>` : ""}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+        })
+        .join("");
+      const title = t(metric === "participations" ? "trialRankingParticipations" : "trialRankingAverage");
+      return `<section class="mwi-trial-rankings" aria-label="${e(t("trialPlayerRankings"))}"><h3>${e(t("trialPlayerRankings"))}</h3><div class="mwi-trial-ranking-controls"><div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingMetric"))}">${["participations", "average"].map((value) => `<button type="button" data-trial-ranking-metric="${value}" aria-pressed="${metric === value}">${e(t(value === "participations" ? "trialRankingParticipations" : "trialRankingAverage"))}</button>`).join("")}</div>${metric === "average" ? `<div class="mwi-trial-choices" role="group" aria-label="${e(t("trialRankingScope"))}">${["skilling", "combat", "all"].map((value) => `<button type="button" data-trial-ranking-scope="${value}" aria-pressed="${scope === value}">${e(t(`trialRankingScope_${value}`))}</button>`).join("")}</div>` : ""}</div><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t(metric === "participations" ? "trialRankingCountHelp" : "trialRankingAverageHelp"))}</p></details>${entries.length ? `<div class="mwi-trial-table-scroll" role="region" tabindex="0" aria-label="${e(title)}"><table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</section>`;
+    }
+
     function render({ member, weeks, profileState }) {
       return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
-    return { render };
+    return { render, renderRankings };
   }
   return { createRenderer, equipmentLayout, skillLayout };
 });
@@ -10432,6 +10833,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
+    let rankingMetric = "participations";
+    let rankingScope = "skilling";
     let playerSearch = "";
     let playerPickerOpen = true;
     let playerSearchComposing = false;
@@ -10786,10 +11189,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       };
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       const sort = getSort(record.key, record.kind);
+      const progress = trialHistoryApi.nextTierProgress(record);
+      const progressLabel = progress === null ? "—" : `${Math.floor(progress * 100)}%`;
       // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
-        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier), progress: progressLabel }))}</p>
         ${renderOverview(record, summaries)}
         <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
           .displayRows(record, sort)
@@ -10836,7 +11241,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderPlayerPicker(members, current) {
-      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+      /* Search is temporarily disabled while player rankings are introduced.
+      const searchForm = `<form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form>`;
+      */
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
     }
 
     function filterPlayerResults(host) {
@@ -10866,6 +11274,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (!host) return;
       const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
       const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
+      const rankingHelpOpen = Boolean(host.querySelector("[data-trial-ranking-help]")?.open);
       displayedMembers = [];
       highlightedMember = null;
       hoveredMemberCell = null;
@@ -10897,7 +11306,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup += renderPlayerPicker(members, current) + "</div>" + renderDisplaySettings();
+        markup += "</div>";
+        if (!selectedMember)
+          markup += playerRenderer.renderRankings({
+            records,
+            metric: rankingMetric,
+            scope: rankingScope,
+            helpOpen: rankingHelpOpen
+          });
+        markup += renderPlayerPicker(members, current) + (selectedMember ? renderDisplaySettings() : "");
         host.innerHTML =
           markup +
           (selectedMember
@@ -11085,6 +11502,32 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const rankingControl = event.target.closest("[data-trial-ranking-metric], [data-trial-ranking-scope]");
+        if (rankingControl) {
+          const metric = rankingControl.dataset.trialRankingMetric;
+          const scope = rankingControl.dataset.trialRankingScope;
+          if (metric) rankingMetric = metric;
+          if (scope) rankingScope = scope;
+          refresh(panel);
+          host
+            .querySelector(metric ? `[data-trial-ranking-metric="${metric}"]` : `[data-trial-ranking-scope="${scope}"]`)
+            ?.focus({ preventScroll: true });
+          return;
+        }
+        const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
+        if (rankingPlayer) {
+          const member = trialHistoryApi
+            .playerRankings(records)
+            .find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
+          if (!member?.name) return;
+          playerReturn = { mode: "player", rankingKey: member.key };
+          selectedMember = { id: member.id, name: member.name };
+          playerPickerOpen = false;
+          resetScroll = true;
+          readPlayerProfile(panel);
+          host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
+          return;
+        }
         if (event.target.closest("[data-trial-player-search-clear]")) {
           const input = host.querySelector("[data-trial-player-search]");
           input.value = "";
@@ -11140,9 +11583,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             }
           }
           const returnTarget =
+            [...host.querySelectorAll("[data-trial-ranking-player]")].find(
+              (el) => el.dataset.trialRankingPlayer === playerReturn?.rankingKey
+            ) ||
             [...host.querySelectorAll("[data-trial-profile]")].find(
               (el) => el.dataset.trialProfile === playerReturn?.name
-            ) || host.querySelector(`[data-trial-mode="${mode}"]`);
+            ) ||
+            host.querySelector(`[data-trial-mode="${mode}"]`);
           returnTarget?.focus({ preventScroll: true });
           updateScrollButtons(host);
           return;
@@ -14730,7 +15177,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     guildBuffLevelsBridgeRevision: 0,
     detectedGameLocale: null,
     panelLocale: null,
-    sidebarIntegrationObserver: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
     upgradePresetNotice: "",
@@ -14768,7 +15214,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     panelOrder: savedUiState.panelOrder,
     panel: null,
     creditTab: null,
-    hiddenSidebarNodes: [],
     refreshTimer: null,
     refreshInFlight: false,
     refreshQueued: false,
@@ -15430,60 +15875,25 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     startGuildExchangeAdvisor
   } = exchangeAdvisor;
 
-  function findSidebarTabBar() {
-    return sidebarIntegrationApi.findSidebarIntegration(document, currentGameLocale());
-  }
-
-  function hideCreditPanel() {
-    if (state.panel) state.panel.hidden = true;
-    if (state.creditTab) {
-      state.creditTab.classList.remove("Mui-selected");
-      state.creditTab.setAttribute("aria-selected", "false");
-    }
-    for (const node of state.hiddenSidebarNodes) {
-      if (!node.isConnected) continue;
-      node.style.display = node.dataset.mwiCreditPreviousDisplay || "";
-      delete node.dataset.mwiCreditPreviousDisplay;
-    }
-    state.hiddenSidebarNodes = [];
-  }
+  const sidebarSelection = sidebarIntegrationApi.createSelectionController(state);
+  const hideCreditPanel = sidebarSelection.hide;
   const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
     window,
     "mwi-guild-credit-optimizer",
     hideCreditPanel
   );
-
-  function activateCreditTabFromPointer(event) {
-    const creditTab = state.creditTab;
-    if (!creditTab || !creditTab.isConnected) return false;
-    const rawTarget = event.target;
-    const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
-    if (!target || !creditTab.contains(target)) return false;
-    const integration = sidebarIntegrationApi.integrationForCustomTab(creditTab);
-    if (!integration) return false;
-    const { tabBar, panelHost } = integration;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    showCreditPanel(panelHost, tabBar);
-    return true;
-  }
+  const sidebarLifecycle = sidebarIntegrationApi.createLifecycle({
+    window,
+    state,
+    onActivate: showCreditPanel,
+    onDeactivate: hideCreditPanel,
+    onChange: scheduleSidebarIntegration
+  });
 
   function showCreditPanel(panelHost, tabBar) {
     if (!state.panel || !state.panel.isConnected) return;
     sidebarActivationCoordinator.announce();
-    hideCreditPanel();
-    state.hiddenSidebarNodes = Array.from(panelHost.children).filter((node) => node !== state.panel);
-    for (const node of state.hiddenSidebarNodes) {
-      node.dataset.mwiCreditPreviousDisplay = node.style.display;
-      node.style.display = "none";
-    }
-    state.panel.hidden = false;
-    for (const tab of tabBar.children) {
-      tab.classList.remove("Mui-selected");
-      tab.setAttribute("aria-selected", "false");
-    }
-    state.creditTab.classList.add("Mui-selected");
-    state.creditTab.setAttribute("aria-selected", "true");
+    sidebarSelection.show(panelHost, tabBar);
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
@@ -15499,11 +15909,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   }
 
   function ensureSidebarIntegration() {
+    if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return false;
     const itemNamesChanged = refreshOfficialItemNameCatalog();
-    const integration = findSidebarTabBar();
+    const integration = sidebarLifecycle.locate(currentGameLocale());
+    sidebarLifecycle.watch(integration);
     if (!integration || !integration.panelHost) return false;
     const { tabBar, tabPrototype, panelHost } = integration;
     if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
+    const staleSelected = sidebarIntegrationApi.suppressStaleMounts(integration, state.creditTab, state.panel);
     const locale = currentGameLocale();
     const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
     const currentIntegrationMatches = Boolean(
@@ -15517,19 +15930,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     if (currentIntegrationMatches && !localeChanged) {
       sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
       if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
-      stopSidebarIntegrationObserver();
+      if (staleSelected) showCreditPanel(panelHost, tabBar);
       return true;
     }
 
-    const keepPanelOpen = Boolean(
-      state.panel && !state.panel.hidden && state.creditTab && state.creditTab.getAttribute("aria-selected") === "true"
-    );
+    const keepPanelOpen =
+      staleSelected ||
+      Boolean(
+        state.panel &&
+        !state.panel.hidden &&
+        state.creditTab &&
+        state.creditTab.getAttribute("aria-selected") === "true"
+      );
     const replacementPanel =
       localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
     hideCreditPanel();
     if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
-    const existingTab = tabBar.querySelector('[data-mwi-credit-tab="true"]');
-    if (existingTab) existingTab.remove();
 
     if (replacementPanel) state.panel = replacementPanel;
     else if (state.panel && !state.panel.isConnected) state.panel = null;
@@ -15537,34 +15953,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     const creditTab = tabPrototype.cloneNode(true);
     creditTab.dataset.mwiCreditTab = "true";
-    creditTab.classList.remove("Mui-selected");
-    creditTab.removeAttribute("id");
-    creditTab.removeAttribute("disabled");
-    creditTab.removeAttribute("aria-disabled");
-    creditTab.setAttribute("aria-selected", "false");
-    creditTab.setAttribute("role", "tab");
-    if ("disabled" in creditTab) creditTab.disabled = false;
     creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
-    const activateCreditTab = (event) => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      showCreditPanel(panelHost, tabBar);
-    };
-    creditTab.addEventListener("pointerdown", activateCreditTab, true);
-    creditTab.addEventListener("click", activateCreditTab, true);
     tabBar.append(creditTab);
     sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
 
     const panel = state.panel || createPanel();
     panel.hidden = true;
     panelHost.append(panel);
-    if (tabBar.dataset.mwiCreditNativeTabListener !== "true") {
-      tabBar.dataset.mwiCreditNativeTabListener = "true";
-      tabBar.addEventListener("click", (event) => {
-        if (!state.creditTab || state.creditTab.parentElement !== tabBar || !state.creditTab.contains(event.target))
-          hideCreditPanel();
-      });
-    }
+    sidebarIntegrationApi.prepareTab(creditTab, panel);
     state.panel = panel;
     state.panelLocale = locale;
     state.creditTab = creditTab;
@@ -15575,40 +15971,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       scheduleShrineGuide();
     }
     if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
-    stopSidebarIntegrationObserver();
     return true;
   }
 
   function scheduleSidebarIntegration() {
-    sidebarIntegrationTask.schedule();
-  }
-
-  function sidebarIntegrationMounted() {
-    return Boolean(state.panel && state.panel.isConnected && state.creditTab && state.creditTab.isConnected);
-  }
-
-  function stopSidebarIntegrationObserver() {
-    if (!state.sidebarIntegrationObserver) return;
-    state.sidebarIntegrationObserver.disconnect();
-    state.sidebarIntegrationObserver = null;
-  }
-
-  function watchForSidebarIntegration() {
-    if (sidebarIntegrationMounted() || state.sidebarIntegrationObserver || typeof MutationObserver !== "function")
-      return;
-    const target = document.documentElement || document;
-    state.sidebarIntegrationObserver = new MutationObserver(() => {
-      if (sidebarIntegrationMounted()) {
-        stopSidebarIntegrationObserver();
-        return;
-      }
-      if (!sidebarIntegrationTask.pending()) scheduleSidebarIntegration();
-    });
-    state.sidebarIntegrationObserver.observe(target, { childList: true, subtree: true });
+    if (!sidebarIntegrationTask.pending()) sidebarIntegrationTask.schedule();
   }
 
   function bootstrapSidebarIntegration() {
-    if (!ensureSidebarIntegration()) watchForSidebarIntegration();
+    ensureSidebarIntegration();
   }
 
   function exchangeModalInteractionHandler(event) {
@@ -15628,7 +15999,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     sidebarIntegrationTask.dispose();
     sidebarActivationCoordinator.destroy();
     exchangeAdvisorFrameTask.dispose();
-    stopSidebarIntegrationObserver();
+    sidebarLifecycle.destroy();
     window.clearTimeout(state.refreshTimer);
     window.clearInterval(state.panelSearchTimer);
     stopShrineGuideObserver();
@@ -15640,8 +16011,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       window.removeEventListener("orientationchange", reposition);
       window.removeEventListener("scroll", reposition, true);
     }
-    document.removeEventListener("pointerdown", activateCreditTabFromPointer, true);
-    document.removeEventListener("click", activateCreditTabFromPointer, true);
     document.removeEventListener("input", exchangeModalInteractionHandler, true);
     document.removeEventListener("click", exchangeModalInteractionHandler, true);
     window.removeEventListener("resize", scheduleSidebarIntegration);
@@ -15652,8 +16021,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   hydrateBridgeData();
   extractItemDetailsFromReact();
   hydrateLocalInitData();
-  document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
-  document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
   state.panelSearchTimer = window.setInterval(bootstrapSidebarIntegration, 3000);

@@ -708,6 +708,15 @@
         #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
+        #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-rankings h3{margin:0 0 8px;font-size:16px;font-weight:650}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls{display:flex;flex-wrap:wrap;gap:6px 16px;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls .mwi-trial-choices{flex-wrap:wrap;overflow:visible}
+        #mwi-credit-optimizer .mwi-trial-ranking-table{width:100%;table-layout:fixed}
+        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td){white-space:normal;overflow-wrap:anywhere;padding:6px 4px}
+        #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td):first-child{width:3em;text-align:center}
+        #mwi-credit-optimizer .mwi-trial-ranking-table th:nth-child(2){text-align:left;width:40%}
+        #mwi-credit-optimizer .mwi-trial-ranking-table .mwi-trial-heading-link{white-space:normal;overflow-wrap:anywhere;text-align:left}
         #mwi-credit-optimizer .mwi-trial-player-picker{margin:4px 0 12px}
         #mwi-credit-optimizer .mwi-trial-player-picker>summary{padding:6px 0;cursor:pointer;font-size:14px;color:var(--trial-accent);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-player-search{margin-top:10px;text-align:left}

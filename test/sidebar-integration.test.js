@@ -133,3 +133,60 @@ test("coordinates custom sidebar tabs across independent userscripts", () => {
   eventTarget.dispatchEvent(new FakeCustomEvent(sidebarIntegration.SIDEBAR_ACTIVATION_EVENT, { detail: "other" }));
   assert.deepEqual(deactivations, ["invite"]);
 });
+
+test("cached sidebar lookup refreshes locale locally and rescans on expiry, removal or hidden layout", () => {
+  const labels = ["库存", "装备", "技能", "房屋", "配装"];
+  const tabBar = {
+    isConnected: true,
+    children: labels.map((textContent) => ({ textContent })),
+    getBoundingClientRect: () => ({ width: 500, height: 40 })
+  };
+  const panelHost = { isConnected: true, className: "TabsComponent_tabPanelsContainer" };
+  const sidebar = { children: [panelHost] };
+  tabBar.parentElement = { parentElement: { parentElement: { parentElement: sidebar } } };
+  const tabPrototype = tabBar.children[0];
+  tabPrototype.parentElement = tabBar;
+  const integration = { tabBar, panelHost, tabPrototype, detectedLocale: "zh-CN" };
+  let time = 0;
+  let scans = 0;
+  const locate = sidebarIntegration.createIntegrationLocator(
+    {},
+    () => time,
+    () => {
+      scans++;
+      return integration;
+    }
+  );
+  assert.equal(locate("zh-CN"), integration);
+  for (let i = 0; i < 10; i++) locate("zh-CN");
+  assert.equal(scans, 1);
+  ["Inventory", "Equipment", "Skills", "House", "Loadout"].forEach((label, i) => {
+    tabBar.children[i].textContent = label;
+  });
+  assert.equal(locate("en").detectedLocale, "en");
+  assert.equal(scans, 1);
+  time = 30000;
+  locate("en");
+  assert.equal(scans, 2);
+  tabBar.getBoundingClientRect = () => ({ width: 0, height: 0 });
+  locate("en");
+  assert.equal(scans, 3);
+  tabBar.isConnected = false;
+  locate("en");
+  assert.equal(scans, 4);
+});
+
+test("missing sidebar never caches a negative result across cold-start retries", () => {
+  let scans = 0;
+  const locate = sidebarIntegration.createIntegrationLocator(
+    {},
+    () => 0,
+    () => {
+      scans++;
+      return null;
+    }
+  );
+  assert.equal(locate("en"), null);
+  assert.equal(locate("en"), null);
+  assert.equal(scans, 2);
+});

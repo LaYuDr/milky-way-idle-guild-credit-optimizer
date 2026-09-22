@@ -73,6 +73,8 @@
     let profileState = { status: "loading" };
     let profileRevision = 0;
     let playerReturn = null;
+    let rankingMetric = "participations";
+    let rankingScope = "skilling";
     let playerSearch = "";
     let playerPickerOpen = true;
     let playerSearchComposing = false;
@@ -427,10 +429,12 @@
       };
       const caption = `${trialName(record)} · ${recordDate(record)} · ${t("trialStatsTable")}`;
       const sort = getSort(record.key, record.kind);
+      const progress = trialHistoryApi.nextTierProgress(record);
+      const progressLabel = progress === null ? "—" : `${Math.floor(progress * 100)}%`;
       // Sort only the displayed rows; stored records and raw JSON retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
-        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier) }))}</p>
+        <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier), progress: progressLabel }))}</p>
         ${renderOverview(record, summaries)}
         <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
           .displayRows(record, sort)
@@ -477,7 +481,10 @@
     }
 
     function renderPlayerPicker(members, current) {
-      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+      /* Search is temporarily disabled while player rankings are introduced.
+      const searchForm = `<form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form>`;
+      */
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
     }
 
     function filterPlayerResults(host) {
@@ -507,6 +514,7 @@
       if (!host) return;
       const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
       const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
+      const rankingHelpOpen = Boolean(host.querySelector("[data-trial-ranking-help]")?.open);
       displayedMembers = [];
       highlightedMember = null;
       hoveredMemberCell = null;
@@ -538,7 +546,15 @@
           members.find((member) => member.key === selectedKey)?.key ||
           (selectedMember?.id === null ? members.find((member) => member.name === selectedMember.name)?.key : "") ||
           "";
-        markup += renderPlayerPicker(members, current) + "</div>" + renderDisplaySettings();
+        markup += "</div>";
+        if (!selectedMember)
+          markup += playerRenderer.renderRankings({
+            records,
+            metric: rankingMetric,
+            scope: rankingScope,
+            helpOpen: rankingHelpOpen
+          });
+        markup += renderPlayerPicker(members, current) + (selectedMember ? renderDisplaySettings() : "");
         host.innerHTML =
           markup +
           (selectedMember
@@ -726,6 +742,32 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const rankingControl = event.target.closest("[data-trial-ranking-metric], [data-trial-ranking-scope]");
+        if (rankingControl) {
+          const metric = rankingControl.dataset.trialRankingMetric;
+          const scope = rankingControl.dataset.trialRankingScope;
+          if (metric) rankingMetric = metric;
+          if (scope) rankingScope = scope;
+          refresh(panel);
+          host
+            .querySelector(metric ? `[data-trial-ranking-metric="${metric}"]` : `[data-trial-ranking-scope="${scope}"]`)
+            ?.focus({ preventScroll: true });
+          return;
+        }
+        const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
+        if (rankingPlayer) {
+          const member = trialHistoryApi
+            .playerRankings(records)
+            .find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
+          if (!member?.name) return;
+          playerReturn = { mode: "player", rankingKey: member.key };
+          selectedMember = { id: member.id, name: member.name };
+          playerPickerOpen = false;
+          resetScroll = true;
+          readPlayerProfile(panel);
+          host.querySelector("[data-trial-player-title]")?.focus({ preventScroll: true });
+          return;
+        }
         if (event.target.closest("[data-trial-player-search-clear]")) {
           const input = host.querySelector("[data-trial-player-search]");
           input.value = "";
@@ -781,9 +823,13 @@
             }
           }
           const returnTarget =
+            [...host.querySelectorAll("[data-trial-ranking-player]")].find(
+              (el) => el.dataset.trialRankingPlayer === playerReturn?.rankingKey
+            ) ||
             [...host.querySelectorAll("[data-trial-profile]")].find(
               (el) => el.dataset.trialProfile === playerReturn?.name
-            ) || host.querySelector(`[data-trial-mode="${mode}"]`);
+            ) ||
+            host.querySelector(`[data-trial-mode="${mode}"]`);
           returnTarget?.focus({ preventScroll: true });
           updateScrollButtons(host);
           return;

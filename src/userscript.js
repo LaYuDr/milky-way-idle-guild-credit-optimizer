@@ -113,7 +113,6 @@
     guildBuffLevelsBridgeRevision: 0,
     detectedGameLocale: null,
     panelLocale: null,
-    sidebarIntegrationObserver: null,
     upgradePlans: savedUiState.upgradePlans.map((plan, index) => ({ id: `plan-${index + 1}`, ...plan })),
     nextUpgradePlanId: savedUiState.upgradePlans.length + 1,
     upgradePresetNotice: "",
@@ -151,7 +150,6 @@
     panelOrder: savedUiState.panelOrder,
     panel: null,
     creditTab: null,
-    hiddenSidebarNodes: [],
     refreshTimer: null,
     refreshInFlight: false,
     refreshQueued: false,
@@ -813,60 +811,25 @@
     startGuildExchangeAdvisor
   } = exchangeAdvisor;
 
-  function findSidebarTabBar() {
-    return sidebarIntegrationApi.findSidebarIntegration(document, currentGameLocale());
-  }
-
-  function hideCreditPanel() {
-    if (state.panel) state.panel.hidden = true;
-    if (state.creditTab) {
-      state.creditTab.classList.remove("Mui-selected");
-      state.creditTab.setAttribute("aria-selected", "false");
-    }
-    for (const node of state.hiddenSidebarNodes) {
-      if (!node.isConnected) continue;
-      node.style.display = node.dataset.mwiCreditPreviousDisplay || "";
-      delete node.dataset.mwiCreditPreviousDisplay;
-    }
-    state.hiddenSidebarNodes = [];
-  }
+  const sidebarSelection = sidebarIntegrationApi.createSelectionController(state);
+  const hideCreditPanel = sidebarSelection.hide;
   const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
     window,
     "mwi-guild-credit-optimizer",
     hideCreditPanel
   );
-
-  function activateCreditTabFromPointer(event) {
-    const creditTab = state.creditTab;
-    if (!creditTab || !creditTab.isConnected) return false;
-    const rawTarget = event.target;
-    const target = rawTarget && rawTarget.nodeType === 1 ? rawTarget : rawTarget && rawTarget.parentElement;
-    if (!target || !creditTab.contains(target)) return false;
-    const integration = sidebarIntegrationApi.integrationForCustomTab(creditTab);
-    if (!integration) return false;
-    const { tabBar, panelHost } = integration;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    showCreditPanel(panelHost, tabBar);
-    return true;
-  }
+  const sidebarLifecycle = sidebarIntegrationApi.createLifecycle({
+    window,
+    state,
+    onActivate: showCreditPanel,
+    onDeactivate: hideCreditPanel,
+    onChange: scheduleSidebarIntegration
+  });
 
   function showCreditPanel(panelHost, tabBar) {
     if (!state.panel || !state.panel.isConnected) return;
     sidebarActivationCoordinator.announce();
-    hideCreditPanel();
-    state.hiddenSidebarNodes = Array.from(panelHost.children).filter((node) => node !== state.panel);
-    for (const node of state.hiddenSidebarNodes) {
-      node.dataset.mwiCreditPreviousDisplay = node.style.display;
-      node.style.display = "none";
-    }
-    state.panel.hidden = false;
-    for (const tab of tabBar.children) {
-      tab.classList.remove("Mui-selected");
-      tab.setAttribute("aria-selected", "false");
-    }
-    state.creditTab.classList.add("Mui-selected");
-    state.creditTab.setAttribute("aria-selected", "true");
+    sidebarSelection.show(panelHost, tabBar);
     hydrateBridgeData();
     extractItemDetailsFromReact();
     hydrateLocalInitData();
@@ -882,11 +845,14 @@
   }
 
   function ensureSidebarIntegration() {
+    if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return false;
     const itemNamesChanged = refreshOfficialItemNameCatalog();
-    const integration = findSidebarTabBar();
+    const integration = sidebarLifecycle.locate(currentGameLocale());
+    sidebarLifecycle.watch(integration);
     if (!integration || !integration.panelHost) return false;
     const { tabBar, tabPrototype, panelHost } = integration;
     if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
+    const staleSelected = sidebarIntegrationApi.suppressStaleMounts(integration, state.creditTab, state.panel);
     const locale = currentGameLocale();
     const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
     const currentIntegrationMatches = Boolean(
@@ -900,19 +866,22 @@
     if (currentIntegrationMatches && !localeChanged) {
       sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
       if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
-      stopSidebarIntegrationObserver();
+      if (staleSelected) showCreditPanel(panelHost, tabBar);
       return true;
     }
 
-    const keepPanelOpen = Boolean(
-      state.panel && !state.panel.hidden && state.creditTab && state.creditTab.getAttribute("aria-selected") === "true"
-    );
+    const keepPanelOpen =
+      staleSelected ||
+      Boolean(
+        state.panel &&
+        !state.panel.hidden &&
+        state.creditTab &&
+        state.creditTab.getAttribute("aria-selected") === "true"
+      );
     const replacementPanel =
       localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
     hideCreditPanel();
     if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
-    const existingTab = tabBar.querySelector('[data-mwi-credit-tab="true"]');
-    if (existingTab) existingTab.remove();
 
     if (replacementPanel) state.panel = replacementPanel;
     else if (state.panel && !state.panel.isConnected) state.panel = null;
@@ -920,34 +889,14 @@
 
     const creditTab = tabPrototype.cloneNode(true);
     creditTab.dataset.mwiCreditTab = "true";
-    creditTab.classList.remove("Mui-selected");
-    creditTab.removeAttribute("id");
-    creditTab.removeAttribute("disabled");
-    creditTab.removeAttribute("aria-disabled");
-    creditTab.setAttribute("aria-selected", "false");
-    creditTab.setAttribute("role", "tab");
-    if ("disabled" in creditTab) creditTab.disabled = false;
     creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
-    const activateCreditTab = (event) => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      showCreditPanel(panelHost, tabBar);
-    };
-    creditTab.addEventListener("pointerdown", activateCreditTab, true);
-    creditTab.addEventListener("click", activateCreditTab, true);
     tabBar.append(creditTab);
     sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
 
     const panel = state.panel || createPanel();
     panel.hidden = true;
     panelHost.append(panel);
-    if (tabBar.dataset.mwiCreditNativeTabListener !== "true") {
-      tabBar.dataset.mwiCreditNativeTabListener = "true";
-      tabBar.addEventListener("click", (event) => {
-        if (!state.creditTab || state.creditTab.parentElement !== tabBar || !state.creditTab.contains(event.target))
-          hideCreditPanel();
-      });
-    }
+    sidebarIntegrationApi.prepareTab(creditTab, panel);
     state.panel = panel;
     state.panelLocale = locale;
     state.creditTab = creditTab;
@@ -958,40 +907,15 @@
       scheduleShrineGuide();
     }
     if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
-    stopSidebarIntegrationObserver();
     return true;
   }
 
   function scheduleSidebarIntegration() {
-    sidebarIntegrationTask.schedule();
-  }
-
-  function sidebarIntegrationMounted() {
-    return Boolean(state.panel && state.panel.isConnected && state.creditTab && state.creditTab.isConnected);
-  }
-
-  function stopSidebarIntegrationObserver() {
-    if (!state.sidebarIntegrationObserver) return;
-    state.sidebarIntegrationObserver.disconnect();
-    state.sidebarIntegrationObserver = null;
-  }
-
-  function watchForSidebarIntegration() {
-    if (sidebarIntegrationMounted() || state.sidebarIntegrationObserver || typeof MutationObserver !== "function")
-      return;
-    const target = document.documentElement || document;
-    state.sidebarIntegrationObserver = new MutationObserver(() => {
-      if (sidebarIntegrationMounted()) {
-        stopSidebarIntegrationObserver();
-        return;
-      }
-      if (!sidebarIntegrationTask.pending()) scheduleSidebarIntegration();
-    });
-    state.sidebarIntegrationObserver.observe(target, { childList: true, subtree: true });
+    if (!sidebarIntegrationTask.pending()) sidebarIntegrationTask.schedule();
   }
 
   function bootstrapSidebarIntegration() {
-    if (!ensureSidebarIntegration()) watchForSidebarIntegration();
+    ensureSidebarIntegration();
   }
 
   function exchangeModalInteractionHandler(event) {
@@ -1011,7 +935,7 @@
     sidebarIntegrationTask.dispose();
     sidebarActivationCoordinator.destroy();
     exchangeAdvisorFrameTask.dispose();
-    stopSidebarIntegrationObserver();
+    sidebarLifecycle.destroy();
     window.clearTimeout(state.refreshTimer);
     window.clearInterval(state.panelSearchTimer);
     stopShrineGuideObserver();
@@ -1023,8 +947,6 @@
       window.removeEventListener("orientationchange", reposition);
       window.removeEventListener("scroll", reposition, true);
     }
-    document.removeEventListener("pointerdown", activateCreditTabFromPointer, true);
-    document.removeEventListener("click", activateCreditTabFromPointer, true);
     document.removeEventListener("input", exchangeModalInteractionHandler, true);
     document.removeEventListener("click", exchangeModalInteractionHandler, true);
     window.removeEventListener("resize", scheduleSidebarIntegration);
@@ -1035,8 +957,6 @@
   hydrateBridgeData();
   extractItemDetailsFromReact();
   hydrateLocalInitData();
-  document.addEventListener("pointerdown", activateCreditTabFromPointer, true);
-  document.addEventListener("click", activateCreditTabFromPointer, true);
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
   state.panelSearchTimer = window.setInterval(bootstrapSidebarIntegration, 3000);

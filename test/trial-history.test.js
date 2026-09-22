@@ -937,3 +937,58 @@ test("工作量人均倍数以已知成员平均值为基准，零值参与平�
   const huge = { schemaVersion: 2, rows: [{ workDone: Number.MAX_VALUE }, { workDone: Number.MAX_VALUE }] };
   assert.equal(api.metricAverageMultiple(huge, huge.rows[0], "workDone"), 1);
 });
+
+test("下一层进度保留原始比例和零值，缺失与非法值保持未知", () => {
+  for (const value of [0, 0.66987, 1]) {
+    assert.equal(api.nextTierProgress({ party: { nextTierProgress: value } }), value);
+  }
+  for (const value of [undefined, null, -0.1, 1.1, Infinity, NaN, "0.66"]) {
+    assert.equal(api.nextTierProgress({ party: { nextTierProgress: value } }), null);
+  }
+});
+
+test("生活和战斗进度随完整快照保存，重新加载与导出导入保留精度", () => {
+  const { context, message } = fixture();
+  context.guild.currentTrialsData = JSON.stringify({
+    skilling: { parties: { milk: { done: true, highestTier: 11, nextTierProgress: 0.66987 } } },
+    combat: { parties: { beast: { done: true, highestTier: 8, nextTierProgress: 0 } } }
+  });
+  const records = api.completedSnapshots(context, message, now);
+  const { plugin, values } = storageFixture();
+  for (const record of records) assert.equal(plugin.saveTrialSnapshot(record), true);
+  const restored = storageFixture(values).plugin.loadTrialHistory().records;
+  const exported = JSON.stringify({ schemaVersion: 2, records: restored });
+  const imported = api.parseImport(exported);
+  assert.equal(api.nextTierProgress(imported.find((r) => r.kind === "skilling")), 0.66987);
+  assert.equal(api.nextTierProgress(imported.find((r) => r.kind === "combat")), 0);
+  assert.equal(
+    api.previewImport(imported, restored).every((r) => r.status === "duplicate"),
+    true
+  );
+  const record = records[0];
+  for (const value of [-1, 2, "66%"])
+    assert.throws(() =>
+      api.parseImport(
+        JSON.stringify({
+          schemaVersion: 2,
+          records: [{ ...record, party: { ...record.party, nextTierProgress: value } }]
+        })
+      )
+    );
+});
+
+test("重复采集缺失进度不抹掉同层进度，显式零更新有效，跨层不混用", () => {
+  const { context, message } = fixture();
+  const [record] = api.completedSnapshots(context, message, now);
+  const { plugin } = storageFixture();
+  const known = { ...record, party: { ...record.party, nextTierProgress: 0.66 } };
+  plugin.saveTrialSnapshot(known);
+  plugin.saveTrialSnapshot(record);
+  assert.equal(api.nextTierProgress(plugin.loadTrialHistory().records[0]), 0.66);
+  plugin.saveTrialSnapshot({ ...record, party: { ...record.party, nextTierProgress: 0 } });
+  assert.equal(api.nextTierProgress(plugin.loadTrialHistory().records[0]), 0);
+  plugin.saveTrialSnapshot({ ...record, party: { ...record.party, highestTier: 5 } });
+  assert.equal(api.nextTierProgress(plugin.loadTrialHistory().records[0]), null);
+  assert.equal(api.withSavedProgress({ ...record, key: "other" }, known).party.nextTierProgress, undefined);
+  assert.equal(record.party.nextTierProgress, undefined);
+});

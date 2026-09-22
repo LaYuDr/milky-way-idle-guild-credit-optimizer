@@ -2782,23 +2782,23 @@
 
     const localeAuditCopy = {
       "zh-CN": {
-        sidebarCredit: "公会助手",
+        sidebarCredit: "公会",
         panelTitle: "公会助手",
         creditView: "信用点性价比",
         upgradeView: "神龛升级",
         constructionView: "公会建设",
         settingsTitle: "设置",
-        constructionSwitch: "显示公会建设页签（测试版功能，效果不佳）",
+        constructionSwitch: "显示公会建设页签",
         dynamicPrefix: "公会神龛等级已读取："
       },
       en: {
-        sidebarCredit: "Guild Assistant",
+        sidebarCredit: "Guild",
         panelTitle: "Guild Assistant",
         creditView: "Credit value",
         upgradeView: "Shrine upgrades",
         constructionView: "Guild construction",
         settingsTitle: "Settings",
-        constructionSwitch: "Show Guild construction (Beta feature; results may be unsatisfactory)",
+        constructionSwitch: "Show Guild construction",
         dynamicPrefix: "Guild shrine levels read:"
       }
     };
@@ -2979,6 +2979,140 @@
         })
       : Promise.resolve(null);
 
+    const prepareSidebarIntegrationAudit = async () => {
+      const checks = {};
+      let tab = await waitFor(() => document.querySelector('#test-tabs [data-mwi-credit-tab="true"]'));
+      const bar = tab.parentElement;
+      const panel = document.getElementById("mwi-credit-optimizer");
+      const host = panel.parentElement;
+      const native = bar.querySelector("button");
+      const nativePanel = Array.from(host.children).find((node) => node !== panel);
+      nativePanel.style.display = "block";
+      native.setAttribute("aria-selected", "true");
+      native.classList.add("Mui-selected");
+      native.tabIndex = 0;
+      checks.ownedAriaLinks =
+        tab.getAttribute("aria-controls") === panel.id && panel.getAttribute("aria-labelledby") === tab.id;
+      tab.click();
+      checks.openHidesNative =
+        !panel.hidden && nativePanel.style.display === "none" && tab.tabIndex === 0 && native.tabIndex === -1;
+      const foreign = document.createElement("button");
+      foreign.textContent = "Foreign";
+      foreign.setAttribute("role", "tab");
+      foreign.tabIndex = -1;
+      bar.append(foreign);
+      const foreignPanel = document.createElement("section");
+      foreignPanel.hidden = true;
+      host.parentElement.append(foreignPanel);
+      // Model MWITools: hide the whole native panel host, and close at document capture.
+      const closeForeign = (event) => {
+        if (bar.contains(event.target) && !foreign.contains(event.target)) {
+          host.hidden = false;
+          host.style.display = "";
+          foreignPanel.hidden = true;
+          foreign.setAttribute("aria-selected", "false");
+        }
+      };
+      document.addEventListener("click", closeForeign, true);
+      const openForeign = (event) => {
+        if (!foreign.contains(event.target)) return;
+        event.stopImmediatePropagation();
+        host.hidden = true;
+        host.style.display = "none";
+        foreignPanel.hidden = false;
+        foreign.setAttribute("aria-selected", "true");
+      };
+      document.addEventListener("click", openForeign, true);
+      foreign.click();
+      checks.captureStoppedForeignClosesGuild =
+        panel.hidden && nativePanel.style.display === "block" && !foreignPanel.hidden;
+      tab.click();
+      checks.foreignCleanupPrecedesGuildOpen =
+        !panel.hidden &&
+        !host.hidden &&
+        host.style.display === "" &&
+        foreignPanel.hidden &&
+        nativePanel.style.display === "none";
+      // Target-level stopPropagation is the other common plugin pattern.
+      document.removeEventListener("click", openForeign, true);
+      foreign.addEventListener("click", openForeign);
+      foreign.click();
+      checks.targetStoppedForeignClosesGuild = panel.hidden && !foreignPanel.hidden;
+      tab.click();
+      checks.targetStoppedReturnToGuild = !panel.hidden && !host.hidden && foreignPanel.hidden;
+      native.click();
+      checks.originalDisplayRestored = panel.hidden && nativePanel.style.display === "block";
+      tab.focus();
+      const key = (value) =>
+        document.activeElement.dispatchEvent(
+          new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true })
+        );
+      key("Home");
+      checks.homeFocusesFirstWithoutOpening = document.activeElement === native && panel.hidden;
+      key("End");
+      checks.endFocusesLast = document.activeElement === foreign;
+      key("ArrowLeft");
+      checks.arrowReachesGuild = document.activeElement === tab;
+      key("Enter");
+      checks.enterOpensGuild = !panel.hidden && document.activeElement === tab;
+      // A sibling changing selection without a click must also close Guild.
+      foreign.setAttribute("aria-selected", "true");
+      await waitFor(() => panel.hidden, 1000);
+      checks.externalSelectionClosesGuild = panel.hidden;
+      foreign.setAttribute("aria-selected", "false");
+      tab.click();
+      const staleTab = tab.cloneNode(true);
+      const stalePanel = panel.cloneNode(true);
+      bar.prepend(staleTab);
+      host.prepend(stalePanel);
+      await waitFor(() => staleTab.hidden && stalePanel.hidden, 1000);
+      checks.staleMountsInertAndIdsUnique =
+        staleTab.inert &&
+        stalePanel.inert &&
+        !stalePanel.querySelector("[id]") &&
+        document.querySelectorAll("#mwi-credit-optimizer").length === 1 &&
+        document.querySelectorAll("#mwi-credit-sidebar-tab").length === 1;
+      checks.staleSelectionTransfers = !panel.hidden && tab.getAttribute("aria-selected") === "true";
+      const removedTab = tab;
+      removedTab.remove();
+      tab = await waitFor(
+        () =>
+          Array.from(bar.querySelectorAll('[data-mwi-credit-tab="true"]')).find(
+            (node) => !node.hidden && node !== removedTab
+          ),
+        1000
+      );
+      checks.removedTabRecovers = tab.isConnected && !panel.hidden;
+      checks.remountAriaLinks =
+        tab.getAttribute("aria-controls") === panel.id && panel.getAttribute("aria-labelledby") === tab.id;
+      // Mutating panel content must not repeatedly rebuild the outer tab.
+      const noise = document.createElement("span");
+      panel.append(noise);
+      for (let i = 0; i < 20; i++) noise.textContent = String(i);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      checks.contentDoesNotRemountTab = tab.isConnected;
+      noise.remove();
+      document.removeEventListener("click", closeForeign, true);
+      foreign.removeEventListener("click", openForeign);
+      foreign.remove();
+      foreignPanel.remove();
+      window.dispatchEvent(new Event("pagehide"));
+      checks.disposeRestoresNative = panel.hidden && nativePanel.style.display === "block";
+      tab.click();
+      checks.disposedListenersDoNotReopen = panel.hidden;
+      const report = { checks };
+      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      return report;
+    };
+    if (searchParams.get("sidebarIntegrationAudit") === "1") {
+      prepareSidebarIntegrationAudit().catch((error) => {
+        document.getElementById("layout-audit-output").textContent = JSON.stringify({
+          error: error.stack,
+          checks: { auditCompleted: false }
+        });
+      });
+    }
+
     const prepareSidebarStartupAudit = async () => {
       const fixtureInsertedAt = Number(
         await waitFor(() => document.body.dataset.sidebarStartupFixtureInsertedAt, 2000)
@@ -3013,7 +3147,7 @@
           report.creditTabBeforeFixtureInsert === "false" &&
           report.mutationCountAtMeasurement >= 5,
         creditTabMountsWithinHalfSecond: report.mountLatencyMs >= 0 && report.mountLatencyMs < 500,
-        creditTabUsesChineseGameLocale: report.creditTabLabel === "公会助手",
+        creditTabUsesChineseGameLocale: report.creditTabLabel === "公会",
         exactlyOneCreditTabAfterFurtherMutations: report.creditTabCount === 1,
         mountedPanelOpensNormally: report.panelConnected && report.panelVisibleAfterClick
       };
@@ -3201,8 +3335,16 @@
         name: "测试公会 / Test Guild",
         currentWeekStartAt: "2026-09-14T00:00:00Z",
         currentTrialsData: JSON.stringify({
-          skilling: { parties: Object.fromEntries(skills.map((hrid) => [hrid, { done: true, highestTier: 4 }])) },
-          combat: { parties: Object.fromEntries(combats.map((hrid) => [hrid, { done: true, highestTier: 6 }])) },
+          skilling: {
+            parties: Object.fromEntries(
+              skills.map((hrid) => [hrid, { done: true, highestTier: 4, nextTierProgress: 0.66987 }])
+            )
+          },
+          combat: {
+            parties: Object.fromEntries(
+              combats.map((hrid) => [hrid, { done: true, highestTier: 6, nextTierProgress: 0 }])
+            )
+          },
           points: Object.fromEntries([...skills, ...combats].map((hrid) => [hrid, 120]))
         })
       };
@@ -3368,45 +3510,49 @@
       checks.playerChoicesUnique = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
       checks.playerControlsTwoRows = controlsStacked();
       checks.playerChoicesEscaped = !host.querySelector('[data-role="trial-player"] b');
-      const searchPlayerInput = () => host.querySelector("[data-trial-player-search]");
-      const searchPlayers = (value) => {
-        searchPlayerInput().value = value;
-        searchPlayerInput().dispatchEvent(new Event("input", { bubbles: true }));
-      };
-      const framesBeforeSearch = profileFrames.length;
-      searchPlayers("  aLPHa  ");
-      checks.playerSearchPartialCaseInsensitive =
-        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
-        host.querySelector('[data-trial-choice="player"]').textContent.includes("Alpha");
-      const stableSearchInput = searchPlayerInput();
-      stableSearchInput.focus();
-      searchPlayers("长名字");
-      checks.playerSearchKeepsInputFocus =
-        searchPlayerInput() === stableSearchInput && document.activeElement === stableSearchInput;
-      searchPlayers("不存在的名字");
-      checks.playerSearchEmptyState =
-        host.querySelectorAll('[data-trial-choice="player"]').length === 0 &&
-        Boolean(host.querySelector("#mwi-trial-player-results .mwi-trial-empty"));
-      searchPlayers("<b>");
-      checks.playerSearchEscapesMarkup =
-        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
-        !host.querySelector('[data-role="trial-player"] b');
-      host.querySelector("[data-trial-player-search-clear]").click();
-      checks.playerSearchClear =
-        searchPlayerInput().value === "" && host.querySelectorAll('[data-trial-choice="player"]').length === 2;
-      searchPlayerInput().dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-      searchPlayers("长名字");
-      checks.playerSearchDefersComposition = host.querySelectorAll('[data-trial-choice="player"]').length === 2;
-      searchPlayerInput().dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
-      checks.playerSearchCompositionResult = host.querySelectorAll('[data-trial-choice="player"]').length === 1;
-      searchPlayerInput().value = "<b>";
-      const submit = new Event("submit", { bubbles: true, cancelable: true });
-      host.querySelector("[data-trial-player-search-form]").dispatchEvent(submit);
-      checks.playerSearchSubmit =
-        submit.defaultPrevented && host.querySelector('[data-trial-choice="player"]').textContent.includes("<b>");
-      checks.playerSearchDoesNotQueryOrSelect =
-        profileFrames.length === framesBeforeSearch && !host.querySelector("[data-trial-player-title]");
-      host.querySelector("[data-trial-player-search-clear]").click();
+      const rankedRows = () => [...host.querySelectorAll("[data-trial-ranking-row]")];
+      checks.rankingParticipationCounts =
+        rankedRows().length === 2 &&
+        rankedRows().every(
+          (row) =>
+            row.querySelector("[data-trial-ranking-value]").textContent === "6" &&
+            row.firstElementChild.textContent === "1"
+        );
+      const rankingStoredBefore = JSON.stringify(saved());
+      host.querySelector('[data-trial-ranking-metric="average"]').click();
+      const rankingHelp = host.querySelector("[data-trial-ranking-help]");
+      checks.rankingMethodCollapsed = !rankingHelp.open;
+      rankingHelp.open = true;
+      checks.rankingMetricFocus =
+        document.activeElement === host.querySelector('[data-trial-ranking-metric="average"]');
+      checks.rankingLifeAverages =
+        rankedRows()
+          .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
+          .join(",") === "2.00×,0.00×" &&
+        rankedRows().every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === "4");
+      for (const scope of ["combat", "all"]) {
+        host.querySelector(`[data-trial-ranking-scope="${scope}"]`).click();
+        checks[`ranking${scope}Averages`] =
+          rankedRows()
+            .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
+            .join(",") === "2.00×,0.00×" &&
+          rankedRows().every(
+            (row) => row.querySelector("[data-trial-ranking-samples]").textContent === (scope === "combat" ? "2" : "6")
+          );
+        checks[`ranking${scope}Contained`] =
+          panel.scrollWidth <= panel.clientWidth &&
+          host.querySelector(".mwi-trial-ranking-table").getBoundingClientRect().right <=
+            host.getBoundingClientRect().right + 1;
+      }
+      checks.rankingMethodRetained = host.querySelector("[data-trial-ranking-help]").open;
+      host.querySelector("[data-trial-ranking-help]").open = false;
+      checks.rankingNamesEscaped = !host.querySelector(".mwi-trial-ranking-table b");
+      checks.rankingNoQueriesOrWrites = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
+      host.querySelector('[data-trial-ranking-metric="participations"]').click();
+
+      checks.playerSearchTemporarilyHidden = !host.querySelector(
+        "[data-trial-player-search-form], [data-trial-player-search]"
+      );
 
       host.querySelector('[data-trial-mode="project"]').click();
       checks.projectControlsTwoRows = controlsStacked();
@@ -3551,7 +3697,7 @@
       checks.absentMemberLabel = [...host.querySelectorAll(".mwi-trial-member-absent")].every(
         (icon) =>
           icon.title ===
-            (new URLSearchParams(location.search).get("locale") === "en" ? "No longer in the guild" : "已不在公会") &&
+            (new URLSearchParams(location.search).get("locale") === "en" ? "Has left the guild" : "已退出工会") &&
           icon.getAttribute("aria-label") === icon.title &&
           icon.tabIndex === 0
       );
@@ -3790,6 +3936,17 @@
       host.querySelector('[data-trial-mode="week"]').click();
       checks.playerModeReturnsToWeek =
         !host.querySelector("[data-trial-player-title]") && host.querySelectorAll("[data-trial-record]").length === 6;
+      host.querySelector('[data-trial-mode="player"]').click();
+      const rankingButton = host.querySelector("[data-trial-ranking-player]");
+      const rankingKey = rankingButton.dataset.trialRankingPlayer;
+      rankingButton.click();
+      checks.rankingOpensPlayerDetails =
+        Boolean(host.querySelector("[data-trial-player-title]")) && !host.querySelector(".mwi-trial-rankings");
+      host.querySelector("[data-trial-player-back]").click();
+      checks.rankingReturnsWithFocus =
+        Boolean(host.querySelector(".mwi-trial-rankings")) &&
+        document.activeElement?.dataset.trialRankingPlayer === rankingKey;
+      host.querySelector('[data-trial-mode="week"]').click();
       const displayFrames = profileFrames.length;
       const displayTable = () =>
         host.querySelector('.mwi-trial-columns[data-kind="skilling"] [data-role="trial-stats-table"]');
@@ -3945,11 +4102,6 @@
         playerButtons.length === 60 &&
         playerResults.scrollWidth <= playerResults.clientWidth + 1 &&
         new Set(playerButtons.map((button) => Math.round(button.getBoundingClientRect().top))).size > 1;
-      searchPlayers("完整列表成员 58");
-      checks.playerSearchFindsLateMember =
-        host.querySelectorAll('[data-trial-choice="player"]').length === 1 &&
-        host.querySelector('[data-trial-choice="player"]').textContent.includes("58");
-      host.querySelector("[data-trial-player-search-clear]").click();
       host.querySelector(".mwi-trial-player-picker").open = false;
       host.querySelector(".mwi-trial-player-picker").dispatchEvent(new Event("toggle"));
 

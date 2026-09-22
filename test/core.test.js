@@ -2286,8 +2286,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /const currentIntegrationMatches = Boolean/);
   assert.match(source, /state\.panel\.parentElement === panelHost/);
   assert.match(source, /state\.creditTab\.parentElement === tabBar/);
-  assert.match(source, /mwiCreditNativeTabListener/);
-  assert.match(source, /state\.creditTab\.parentElement !== tabBar/);
   assert.doesNotMatch(
     source,
     /state\.panel && state\.panel\.isConnected && state\.creditTab && state\.creditTab\.isConnected\) return;/
@@ -2295,9 +2293,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
   assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
   assert.match(source, /function bootstrapSidebarIntegration\(\)/);
-  assert.match(source, /new MutationObserver\(\(\) =>/);
-  assert.match(source, /sidebarIntegrationTask\.pending\(\)/);
-  assert.match(source, /state\.sidebarIntegrationObserver\.disconnect\(\)/);
   assert.match(source, /window\.setInterval\(bootstrapSidebarIntegration, 3000\)/);
   assert.match(source, /\n\s*bootstrapSidebarIntegration\(\);\s*\n\}\)\(\);/);
   assert.doesNotMatch(source, /window\.setTimeout\(ensureSidebarIntegration, 1000\)/);
@@ -2308,7 +2303,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /data-role="toggle-credit-section"/);
   assert.match(source, /collapsedCreditSections/);
   assert.match(source, /mwi-credit-body/);
-  assert.match(source, /creditTab\.contains\(target\)/);
   assert.doesNotMatch(source, /const isHit = event\.clientX/);
   assert.match(source, /classList\.add\("Mui-selected"\)/);
   assert.match(source, /data-role="upgrade-plan-list"/);
@@ -2479,7 +2473,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /style\.pointerEvents !== "none"/);
   assert.match(source, /opacity > 0\.01/);
   assert.match(source, /attributeFilter: \["aria-hidden", "class", "hidden", "style"\]/);
-  assert.doesNotMatch(source, /characterData: true/);
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(__dirname, "..", "src", "ui", "exchange-advisor.js"), "utf8"),
+    /characterData: true/
+  );
   assert.match(source, /window\.requestAnimationFrame/);
   assert.match(source, /schedulerApi\.createFrameTask/);
   assert.match(source, /merge: \(current, next\) => Boolean\(current \|\| next\)/);

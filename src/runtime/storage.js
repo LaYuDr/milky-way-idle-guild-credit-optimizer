@@ -348,7 +348,10 @@
                 )
               }
             : {};
-        storage.setItem(key, JSON.stringify({ ...record, members, ...levels }));
+        storage.setItem(
+          key,
+          JSON.stringify({ ...trialHistoryApi.withSavedProgress(record, previous), members, ...levels })
+        );
         return true;
       } catch (_) {
         return false;

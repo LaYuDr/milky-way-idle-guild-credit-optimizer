@@ -103,7 +103,7 @@ npm run test:browser -- --suite trials --widths 320,900 --locales zh,en
 
 Suites: `layout`, `credit`, `construction`, `settings`, `trials`,
 `upgrade-empty`, `market-filter`, `locale-race`, `sidebar-resize`,
-`sidebar-startup`, `construction-snapshot`, `token-guide`. `--suite all` runs
+`sidebar-startup`, `sidebar-integration`, `construction-snapshot`, `token-guide`. `--suite all` runs
 all supported suites; it is not the default for a small feature change.
 
 The runner rebuilds current artifacts without archival, starts a loopback
@@ -229,6 +229,29 @@ JSON error with `checks.auditCompleted: false`. Require every value in `checks`
 to be `true`. Run this audit independently at sidebar widths `320`, `420`,
 `610`, and `900`; at every width the gutter contract, hit testing, drag delta,
 post-drag reachability, and root overflow checks must all pass.
+
+### Sidebar lifecycle and third-party interaction audit
+
+```bash
+npm run test:browser -- --suite sidebar-integration,sidebar-startup,locale-race,sidebar-resize --channel chrome
+```
+
+`sidebar-integration` covers Chinese widths 320/420/610/900 and English
+320/610. It exercises a foreign tab that hides the entire native panel host,
+handlers that stop events at document capture or the target, selection changes
+without clicks, original display restoration, keyboard Home/End/arrows and
+Enter, unique tab/panel ARIA links, stale duplicate suppression, removal and
+remount, content mutation isolation, and disposal. Require all `checks` true.
+These are synthetic compatibility contracts, not proof of an installed plugin
+version working in the live game; also verify the real Guild/Invite/Enhance/
+P&L/Planning/Profit tabs in both directions before release.
+
+The runtime checks cached node ownership/visibility every three seconds and
+performs a full sidebar search at most every thirty seconds while the cache is
+valid. Missing/disconnected/hidden layouts invalidate it immediately. A local
+observer catches tab changes and remounts; cold start observes the document
+until mounting. Scheduling is coalesced without resetting a pending deadline,
+so unrelated startup mutations cannot indefinitely delay mounting.
 
 ### Native sidebar tab interaction audit
 
@@ -619,7 +642,8 @@ Week and project selectors are horizontal rows of directly clickable buttons.
 All options render at once, with overflow contained in the selector; the active
 choice is highlighted and revealed on selection. Arrow keys and Home/End select
 adjacent or endpoint options. Background refresh preserves selector scroll position.
-There are no derived analytics, charts, rankings, growth rates or scores.
+The player view also offers recorded-participation and average-multiple rankings;
+week and project views retain their existing detail tables.
 `historyWeeks` groups by trial week number (Friday-based) newest first, puts unknown
 weeks last and retains all records. `historyProjects` groups by kind and project
 HRID without combining member rows. Multiple records retain their guild/source
@@ -675,10 +699,18 @@ remain above the member table and use known values only; unit tests cover missin
 records, zero denominators and overflowing totals. Display preferences use their
 own per-region/character key and are not part of trial exports.
 
-The player picker audit also covers case-insensitive name fragments, literal HTML
-text, no-match feedback, clearing, submit/Enter behavior, IME composition, input
-focus, keyboard navigation without queries, selection collapse, and a 60-player
-wrapping grid with the last member searchable. Search never merges identities.
+Player search markup is temporarily commented out. The picker still supports keyboard
+navigation, selection collapse, escaped names and a 60-player wrapping grid.
+Player ranking checks cover participation counts, ties, skilling/combat/combined
+averages, valid-project counts, category switching, focus, contained tables,
+click-through to player details and return to the ranking without background queries
+or storage changes. Each recorded project counts once, including zero contributions.
+Skilling uses work / project mean work. Combat averages the valid damage, healing and
+premitigated-damage-taken multiples within each project. Project multiples then have
+equal weight, including in the combined category. Missing values and zero denominators
+are excluded; no valid projects displays an em dash. Only recorded rows are used;
+missing projects are not inferred. Stable character IDs group players; ID-less named
+records form a separate name-based group and are never merged into an ID group.
 
 Compact trial tables use intrinsic content widths. The width audit compares each
 column with its widest header/cell content across all display-field combinations,

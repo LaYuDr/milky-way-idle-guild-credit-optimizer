@@ -223,8 +223,29 @@
     return snapshots;
   }
 
+  // The game stores a 0–1 ratio and floors its percentage for display.
+  // Missing progress in older archives is unknown, not zero.
+  function nextTierProgress(record) {
+    const value = record?.party?.nextTierProgress;
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  }
+
+  function withSavedProgress(record, previous) {
+    if (
+      previous?.key !== record.key ||
+      previous.kind !== record.kind ||
+      !Number.isFinite(record.party?.highestTier) ||
+      previous.party?.highestTier !== record.party.highestTier ||
+      nextTierProgress(record) !== null ||
+      nextTierProgress(previous) === null
+    )
+      return record;
+    return { ...record, party: { ...record.party, nextTierProgress: nextTierProgress(previous) } };
+  }
+
   function validSnapshot(value) {
     if (!validMemberLevels(value || {})) return false;
+    if (value?.party?.nextTierProgress != null && nextTierProgress(value) === null) return false;
     if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
       value &&
@@ -483,6 +504,53 @@
     return Number.isFinite(multiple) ? multiple : null;
   }
 
+  // Aggregate only recorded participants. Missing projects never imply absence or zero.
+  function playerRankings(records) {
+    const players = new Map();
+    const seenRecords = new Set();
+    const bucket = () => ({ count: 0, average: null });
+    const add = (target, value) => {
+      target.count += 1;
+      target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
+    };
+    for (const record of records) {
+      if (seenRecords.has(record.key)) continue;
+      seenRecords.add(record.key);
+      const fields =
+        record.kind === "skilling" ? ["workDone"] : ["damageDealt", "healingDone", "premitigatedDamageTaken"];
+      const summaries = fields.map((field) => summarizeMetric(record, field));
+      const seenPlayers = new Set();
+      for (const row of record.rows) {
+        const identity = memberIdentity(record, row);
+        if (identity.id === null && !identity.name) continue;
+        // ID-less records stay separate from official identities, even when names match.
+        const key = JSON.stringify([identity.id === null ? "name" : "id", identity.id ?? identity.name]);
+        if (seenPlayers.has(key)) continue;
+        seenPlayers.add(key);
+        if (!players.has(key))
+          players.set(key, {
+            key,
+            ...identity,
+            participations: 0,
+            skilling: bucket(),
+            combat: bucket(),
+            all: bucket()
+          });
+        const player = players.get(key);
+        if (!player.name && identity.name) player.name = identity.name;
+        player.participations += 1;
+        const multiples = fields
+          .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
+          .filter((value) => value !== null);
+        if (!multiples.length) continue;
+        const multiple = multiples.reduce((sum, value) => sum + value / multiples.length, 0);
+        add(player[record.kind], multiple);
+        add(player.all, multiple);
+      }
+    }
+    return [...players.values()];
+  }
+
   function sortEntries(entries, sort) {
     const result = [...entries];
     if (
@@ -558,6 +626,7 @@
     summarizeMetric,
     metricShare,
     metricAverageMultiple,
+    playerRankings,
     displayRows,
     sortEntries,
     memberAbsent,
@@ -570,6 +639,8 @@
     withMemberLevels,
     updateContext,
     completedSnapshots,
+    nextTierProgress,
+    withSavedProgress,
     validSnapshot,
     parseImport,
     previewImport,
