@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.39";
+window.MwiGuildCreditVersion = "1.2.40";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3609,8 +3609,6 @@ window.MwiGuildCreditVersion = "1.2.39";
       shrineUpgrade: "神龛升级",
       guildConstruction: "公会建设",
       panelViewOrder: "页签顺序",
-      moveViewLeft: "将当前页签左移",
-      moveViewRight: "将当前页签右移",
       interfaceSettings: "设置",
       interfaceSettingsHint: "调整一键填充范围和插件页面；修改会立即在本机生效。",
       openInterfaceSettings: "打开设置",
@@ -3626,10 +3624,10 @@ window.MwiGuildCreditVersion = "1.2.39";
       sidebarNameReset: "恢复默认",
       showConstructionView: "显示公会建设页签",
       showTrialHistoryView: "显示历史试炼数据页签",
-      showTrialHistoryViewHint: "默认关闭。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
+      showTrialHistoryViewHint: "默认开启。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
       trialHistoryViewShown: "已显示历史试炼数据页签。",
       trialHistoryViewHidden: "已隐藏历史试炼数据页签；历史记录和自动保存不受影响。",
-      showConstructionViewHint: "默认关闭。关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
+      showConstructionViewHint: "默认开启。关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
       settingsSaved: "设置已保存。",
       settingsSaveFailed: "设置已生效，但未能保存；刷新页面后可能恢复。",
       constructionViewShown: "已显示公会建设页面。",
@@ -3946,6 +3944,10 @@ window.MwiGuildCreditVersion = "1.2.39";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialScreenshotMode: "截图模式",
+      trialScreenshotExit: "退出截图模式",
+      trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
+      trialAnonymousPlayer: "玩家 {number}",
       trialGuide: "说明",
       trialDisplayNotice:
         "目前提供数据收集、展示及基础汇总。如需进一步分析，可导出数据交给 AI，并说明你希望了解的问题或呈现的效果。",
@@ -4230,8 +4232,6 @@ window.MwiGuildCreditVersion = "1.2.39";
       shrineUpgrade: "Shrine upgrades",
       guildConstruction: "Guild construction",
       panelViewOrder: "Tab order",
-      moveViewLeft: "Move current tab left",
-      moveViewRight: "Move current tab right",
       interfaceSettings: "Settings",
       interfaceSettingsHint:
         "Choose what batch fill includes and which plugin pages are visible. Changes apply locally.",
@@ -4250,11 +4250,11 @@ window.MwiGuildCreditVersion = "1.2.39";
       showConstructionView: "Show Guild construction",
       showTrialHistoryView: "Show Trial history",
       showTrialHistoryViewHint:
-        "Off by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
+        "On by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
       trialHistoryViewShown: "The Trial history tab is now visible.",
       trialHistoryViewHidden: "The Trial history tab is hidden; history and automatic saving are unaffected.",
       showConstructionViewHint:
-        "Off by default. Turning this off hides the tab but keeps every construction plan for later.",
+        "On by default. Turning this off hides the tab but keeps every construction plan for later.",
       settingsSaved: "Settings saved.",
       settingsSaveFailed: "The change is active but could not be saved; it may reset after a page refresh.",
       constructionViewShown: "The Guild construction page is now visible.",
@@ -4588,6 +4588,11 @@ window.MwiGuildCreditVersion = "1.2.39";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialScreenshotMode: "Screenshot mode",
+      trialScreenshotExit: "Exit screenshot mode",
+      trialScreenshotHint:
+        "Hides player names in trial history only. JSON exports keep original names. Resets on game reload.",
+      trialAnonymousPlayer: "Player {number}",
       trialGuide: "Help",
       trialDisplayNotice:
         "This feature collects and displays data with basic summaries. For further analysis, export your data and share it with an AI, explaining the questions you want answered or the results you would like to see.",
@@ -6759,8 +6764,8 @@ window.MwiGuildCreditVersion = "1.2.39";
         shrineGuideEnabled: false,
         maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
-        showConstructionView: false,
-        showTrialHistoryView: false,
+        showConstructionView: true,
+        showTrialHistoryView: true,
         sidebarDisplayName: "",
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
@@ -6821,8 +6826,8 @@ window.MwiGuildCreditVersion = "1.2.39";
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView === true,
-          showTrialHistoryView: stored.showTrialHistoryView === true,
+          showConstructionView: stored.showConstructionView !== false,
+          showTrialHistoryView: stored.showTrialHistoryView !== false,
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
@@ -8495,7 +8500,9 @@ window.MwiGuildCreditVersion = "1.2.39";
     let selected = false;
     const documentRef = integration.tabBar.ownerDocument;
     const stale = [
-      ...Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).filter((node) => node !== tab),
+      ...Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).filter(
+        (node) => node !== tab && isOwnedSidebarTab(node)
+      ),
       ...Array.from(documentRef.querySelectorAll("#mwi-credit-optimizer,[data-mwi-credit-stale-panel]")).filter(
         (node) => node !== panel
       )
@@ -8515,6 +8522,19 @@ window.MwiGuildCreditVersion = "1.2.39";
       for (const identified of [node, ...node.querySelectorAll("[id]")]) identified.removeAttribute("id");
     }
     return selected;
+  }
+
+  function isOwnedSidebarTab(node) {
+    if (node?.dataset?.mwiCreditTab !== "true") return false;
+    // cloneNode copies data-* too. MWITools can clone our tab (and then clone
+    // that clone for Planning); its own identity must take precedence.
+    if (
+      node.dataset.mwitoolsCharacterTab === "true" ||
+      node.dataset.mwiGitTab === "true" ||
+      node.hasAttribute("data-mooncake-enhancement-tab-button")
+    )
+      return false;
+    return node.id === "mwi-credit-sidebar-tab" || (!node.id && node.dataset.mwiCreditSuperseded === "true");
   }
 
   function prepareTab(tab, panel) {
@@ -8723,6 +8743,7 @@ window.MwiGuildCreditVersion = "1.2.39";
     integrationForCustomTab,
     createIntegrationLocator,
     suppressStaleMounts,
+    isOwnedSidebarTab,
     prepareTab,
     createSelectionController,
     createLifecycle
@@ -9003,10 +9024,10 @@ window.MwiGuildCreditVersion = "1.2.39";
         #mwi-credit-optimizer{--mwi-entry-min-width:300px;--mwi-entry-gap:10px;position:relative;z-index:0;box-sizing:border-box;flex:1;min-width:0;min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;margin:0;padding:12px;background:transparent;color:#f4f5ff;font:14px system-ui,sans-serif;container-type:inline-size}
         #mwi-credit-optimizer[hidden]{display:none} [data-mwi-credit-tab="true"]{user-select:none;pointer-events:auto!important;cursor:pointer!important}
         #mwi-credit-optimizer *{box-sizing:border-box} #mwi-credit-optimizer h3{margin:0 0 5px;font-size:17px}#mwi-credit-optimizer .mwi-plugin-version{margin:0 0 10px;padding:5px 7px;border:1px solid #474969;border-radius:4px;background:#292a46;color:#c9cbeb;font-size:11px;line-height:1.4}.mwi-plugin-version.mwi-update-available{border-color:#d8a33c;background:#463a21;color:#ffe09a;font-weight:700}
-        @container (max-width:320px){#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-view-tab{font-size:11px}}
+        @container (max-width:320px){#mwi-credit-optimizer .mwi-view-tabs-shell :is(.mwi-view-tab,.mwi-settings-trigger){font-size:11px}}
         #mwi-credit-optimizer [data-role="trials-view"] :focus-visible{outline:2px solid #77e1cb;outline-offset:2px}
-        #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer .mwi-view-tab{min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-view-order-actions{display:flex;align-items:center;gap:2px;background:transparent}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button{width:28px;min-width:28px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-left:before{transform:translate(-35%,-50%) rotate(-45deg)}#mwi-credit-optimizer .mwi-icon-right:before{transform:translate(-65%,-50%) rotate(135deg)}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
-        #mwi-credit-optimizer .mwi-settings-trigger{width:34px;min-width:34px;min-height:40px;border-width:0 0 0 1px!important;border-radius:0!important;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-settings-trigger:before{display:none}#mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-color:#77f3d0!important;background:#2c665d!important;color:#effffb!important}#mwi-credit-optimizer .mwi-settings-trigger>span{display:grid;place-items:center}
+        #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:flex;align-items:stretch;gap:0;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
+
         #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-switch+.mwi-settings-switch{margin-top:6px}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
         #mwi-credit-optimizer .mwi-settings-name{margin:0 0 8px;min-width:0}#mwi-credit-optimizer .mwi-settings-name>label{display:block;margin-bottom:5px;font-size:11px;font-weight:700}#mwi-credit-optimizer .mwi-settings-name-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}#mwi-credit-optimizer .mwi-settings-name-controls input{flex:1 1 160px;width:100%;min-width:0;max-width:100%;box-sizing:border-box}#mwi-credit-optimizer .mwi-settings-name-controls button{flex:0 0 auto}#mwi-credit-optimizer .mwi-settings-name p{margin:5px 0 0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
         @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
@@ -9412,24 +9433,23 @@ window.MwiGuildCreditVersion = "1.2.39";
         @media (prefers-reduced-motion:reduce){
           #mwi-credit-optimizer .mwi-upgrade-plan,#mwi-credit-optimizer .mwi-remove-plan{transition:none}
         }
-        #mwi-credit-optimizer .mwi-view-tab{border-bottom:2px solid transparent!important;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
+        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){border-bottom:2px solid transparent!important;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
         #mwi-credit-optimizer .mwi-view-tab-active{border-bottom-color:#77e1cb!important}
-        #mwi-credit-optimizer .mwi-view-tab:hover{color:#fff!important;background:#ffffff08!important}
+        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger):hover{color:#fff!important;background:#ffffff08!important}
         #mwi-credit-optimizer .mwi-view-tabs-shell button:focus-visible{outline:2px solid #77e1cb!important;outline-offset:-3px}
-        #mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger{width:30px;min-width:30px;min-height:30px;border:0!important;border-radius:5px!important;background:transparent!important;color:#aeb1cf!important}
-        #mwi-credit-optimizer .mwi-view-order-actions button:hover:not(:disabled),#mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger:hover{background:#ffffff0d!important;color:#fff!important}
-        @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-view-tab{transition:none}}
+        #mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger{flex:0 0 auto;width:auto;height:auto;align-self:stretch;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-settings-trigger[aria-expanded="true"]{border-bottom-color:#77e1cb!important;color:#a3f0df!important}
+
+        @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){transition:none}}
         @container (max-width:480px){
-          #mwi-credit-optimizer .mwi-view-tabs-shell{grid-template-columns:1fr auto;gap:0 6px;padding-top:4px}
-          #mwi-credit-optimizer .mwi-view-order-actions{grid-column:1;grid-row:1;justify-self:end}
-          #mwi-credit-optimizer .mwi-view-tabs-shell .mwi-settings-trigger{grid-column:2;grid-row:1}
-          #mwi-credit-optimizer .mwi-view-tabs{grid-column:1/-1;grid-row:2;overflow-x:hidden}
+          #mwi-credit-optimizer .mwi-view-tabs-shell{padding-top:4px}
+          #mwi-credit-optimizer .mwi-view-tabs{overflow-x:hidden}
           #mwi-credit-optimizer .mwi-view-tab-item:not([hidden]){
             display:flex;
-            flex:1 1 0;
+            flex:1 1 min-content;
             min-width:0;
           }
-          #mwi-credit-optimizer .mwi-view-tab{
+          #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){
             display:flex;
             align-items:center;
             justify-content:center;
@@ -9446,7 +9466,7 @@ window.MwiGuildCreditVersion = "1.2.39";
             white-space:normal;
             word-break:normal;
           }
-          #mwi-credit-optimizer .mwi-view-order-actions .mwi-icon-button,#mwi-credit-optimizer .mwi-settings-trigger{height:100%}
+
         }
 
         /* Construction workspace. Scoped tokens and one responsive rule set. */
@@ -11085,6 +11105,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     return { slots, extras };
   }
 
+  function createMemberNameFormatter({ t, isScreenshotMode }) {
+    const aliases = new Map();
+    return (member) => {
+      if (!isScreenshotMode()) return member.name || t("trialNameUnavailable");
+      if (member.id == null && !member.name) return t("trialNameUnavailable");
+      const key = JSON.stringify([member.id == null ? "name" : "id", member.id ?? member.name]);
+      if (!aliases.has(key)) aliases.set(key, aliases.size + 1);
+      return t("trialAnonymousPlayer", { number: aliases.get(key) });
+    };
+  }
+
   function createRenderer({
     t,
     escapeHtml: e,
@@ -11097,16 +11128,23 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     resolveItemName,
     renderRecord,
     renderRail,
-    memberIdentityAttributes
+    memberIdentityAttributes,
+    formatMemberName,
+    isScreenshotMode
   }) {
     const tooltipRecords = new Map();
     function tooltipAttribute(kind, record) {
-      if (!record) return "";
+      if (!record || isScreenshotMode()) return "";
       const key = String(tooltipRecords.size);
       tooltipRecords.set(key, { kind, record });
       return `data-trial-profile-tooltip="${key}"`;
     }
-    const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
+    const number = (value, digits) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? digits === undefined
+          ? String(value)
+          : value.toFixed(digits)
+        : "—";
     const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
     const suffix = (value) =>
       String(value || "")
@@ -11202,7 +11240,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
-      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}</dl>`;
+      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}</dl>`;
       html += overview;
       html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
       html += profileSection(
@@ -11216,7 +11254,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (values.length)
           html += `<h4>${e(t(heading))}</h4><dl class="mwi-trial-profile-facts">${values.map((item) => metric(label(item[hrid]), number(item.level))).join("")}</dl>`;
       }
-      html += `<details class="mwi-trial-raw"><summary>${e(t("trialProfileRaw"))}</summary><pre>${e(JSON.stringify(profile, null, 2))}</pre></details>`;
+      if (!isScreenshotMode())
+        html += `<details class="mwi-trial-raw"><summary>${e(t("trialProfileRaw"))}</summary><pre>${e(JSON.stringify(profile, null, 2))}</pre></details>`;
       return html;
     }
     function historyMarkup(weeks) {
@@ -11268,7 +11307,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const value = score(entry);
           if (value !== previous) rank = index + 1;
           previous = value;
-          const name = entry.name || t("trialNameUnavailable");
+          const name = formatMemberName(entry);
           return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
         })
         .join("");
@@ -11291,11 +11330,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
       tooltipRecords.clear();
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(formatMemberName(member))} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
-  return { createRenderer, equipmentLayout, skillLayout };
+  return { createRenderer, createMemberNameFormatter, equipmentLayout, skillLayout };
 });
 
 
@@ -11478,6 +11517,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     getPanel
   }) {
     let mode = "week";
+    let screenshotMode = false;
+    const isScreenshotMode = () => screenshotMode;
+    const formatMemberName = playerViewApi.createMemberNameFormatter({ t, isScreenshotMode });
     let selectedWeek = "";
     let selectedProject = "";
     let resetScroll = false;
@@ -11615,14 +11657,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
-          <p class="mwi-trial-meta">${escapeHtml(importPreview.name)}<br>${escapeHtml(t("trialImportSummary", summary))}</p>
+          <p class="mwi-trial-meta">${screenshotMode ? "" : `${escapeHtml(importPreview.name)}<br>`}${escapeHtml(t("trialImportSummary", summary))}</p>
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
           <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
@@ -11734,7 +11776,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       resolveItemName,
       renderRecord,
       renderRail,
-      memberIdentityAttributes
+      memberIdentityAttributes,
+      formatMemberName,
+      isScreenshotMode
     });
 
     function readPlayerProfile(panel, force = false) {
@@ -11764,12 +11808,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function renderMember(record, row) {
       const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
-      const name = rawName || t("trialNameUnavailable");
+      const name = formatMemberName(trialHistoryApi.memberIdentity(record, row));
       const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
         (rawName
-          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
+          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name }))}">${escapeHtml(name)}</button>`
           : escapeHtml(name)) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
@@ -11882,7 +11926,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
-        <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
+        ${screenshotMode ? "" : `<details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details>`}</section>`;
     }
 
     function renderColumn(title, items, attributes = "", jump = "", icon = "") {
@@ -11913,17 +11957,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderPlayerResults(members, current) {
-      const results = trialHistoryApi.searchHistoryMembers(members, playerSearch);
+      const results = trialHistoryApi
+        .searchHistoryMembers(
+          members.map((member) => ({ member, name: formatMemberName(member) })),
+          playerSearch
+        )
+        .map((result) => result.member);
       const names = new Map();
       for (const member of members) names.set(member.name, (names.get(member.name) || 0) + 1);
-      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(member.name)}</span>${names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
+      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(formatMemberName(member))}</span>${!screenshotMode && names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
     }
 
     function renderPlayerPicker(members, current) {
-      /* Search is temporarily disabled while player rankings are introduced.
       const searchForm = `<form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form>`;
-      */
-      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: formatMemberName(selectedMember) }) : t("trialPlayerFind"))}</summary>${searchForm}<div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
     }
 
     function filterPlayerResults(host) {
@@ -12129,7 +12176,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         getBridge,
         t,
         getData: playerRenderer.tooltipData,
-        getProfile: () => (selectedMember && profileState.status === "ready" ? profileState.profile : null)
+        getProfile: () =>
+          !screenshotMode && selectedMember && profileState.status === "ready" ? profileState.profile : null
       });
       if (pageWindow.ResizeObserver) {
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
@@ -12199,6 +12247,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-screenshot-mode]")) {
+          screenshotMode = !screenshotMode;
+          playerSearch = "";
+          playerSearchComposing = false;
+          refresh(panel);
+          host.querySelector("[data-trial-screenshot-mode]")?.focus({ preventScroll: true });
+          return;
+        }
         const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
         if (rankingPlayer) {
           const member = trialHistoryApi
@@ -14615,17 +14671,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (item) tabList.append(item);
       }
       persistPluginUiState();
-      updatePanelOrderButtons(panel);
       return true;
-    }
-
-    function updatePanelOrderButtons(panel) {
-      const visibleOrder = visiblePanelOrder();
-      const index = visibleOrder.indexOf(state.activeView);
-      const previous = panel.querySelector('[data-role="move-active-view"][data-direction="-1"]');
-      const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
-      if (previous) previous.disabled = index <= 0;
-      if (next) next.disabled = index < 0 || index >= visibleOrder.length - 1;
     }
 
     function syncPanelViewVisibility(panel) {
@@ -14642,7 +14688,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
         if (!enabled && content) content.hidden = true;
       }
-      updatePanelOrderButtons(panel);
     }
 
     function findConstructionControl(panel, target) {
@@ -14724,7 +14769,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       panel.dataset.activeView = selectedView;
       state.activeView = selectedView;
       const persisted = persistPluginUiState();
-      updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else if (selectedView === "trials") refreshTrialHistory(panel);
@@ -14979,8 +15023,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
         <div class="mwi-view-tabs-shell">
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
-          <div class="mwi-view-order-actions" role="group" aria-label="${escapeHtml(t("panelViewOrder"))}"><button class="mwi-icon-button mwi-icon-left" data-role="move-active-view" data-direction="-1" type="button" aria-label="${escapeHtml(t("moveViewLeft"))}" title="${escapeHtml(t("moveViewLeft"))}"></button><button class="mwi-icon-button mwi-icon-right" data-role="move-active-view" data-direction="1" type="button" aria-label="${escapeHtml(t("moveViewRight"))}" title="${escapeHtml(t("moveViewRight"))}"></button></div>
-          <button class="mwi-icon-button mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}"><span aria-hidden="true">&#9881;</span></button>
+          <button class="mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}">${escapeHtml(t("interfaceSettings"))}</button>
         </div>
         ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
@@ -15139,13 +15182,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       panel
         .querySelector('[data-role="view-construction"]')
         .addEventListener("click", () => setPanelView(panel, "construction"));
-      panel.querySelector(".mwi-view-order-actions").addEventListener("click", (event) => {
-        const button = event.target.closest('[data-role="move-active-view"]');
-        if (!button) return;
-        const index = visiblePanelOrder().indexOf(state.activeView);
-        reorderPanelView(panel, state.activeView, index + Number(button.dataset.direction));
-      });
-      updatePanelOrderButtons(panel);
       panel.querySelector(".mwi-view-tabs").addEventListener("keydown", (event) => {
         if (event.altKey) return;
         const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab-item:not([hidden]) .mwi-view-tab"));

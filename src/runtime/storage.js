@@ -382,8 +382,8 @@
         shrineGuideEnabled: false,
         maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
-        showConstructionView: false,
-        showTrialHistoryView: false,
+        showConstructionView: true,
+        showTrialHistoryView: true,
         sidebarDisplayName: "",
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
@@ -444,8 +444,8 @@
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView === true,
-          showTrialHistoryView: stored.showTrialHistoryView === true,
+          showConstructionView: stored.showConstructionView !== false,
+          showTrialHistoryView: stored.showTrialHistoryView !== false,
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),

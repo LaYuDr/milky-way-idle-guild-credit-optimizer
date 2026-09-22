@@ -47,6 +47,9 @@
     getPanel
   }) {
     let mode = "week";
+    let screenshotMode = false;
+    const isScreenshotMode = () => screenshotMode;
+    const formatMemberName = playerViewApi.createMemberNameFormatter({ t, isScreenshotMode });
     let selectedWeek = "";
     let selectedProject = "";
     let resetScroll = false;
@@ -184,14 +187,14 @@
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
-          <p class="mwi-trial-meta">${escapeHtml(importPreview.name)}<br>${escapeHtml(t("trialImportSummary", summary))}</p>
+          <p class="mwi-trial-meta">${screenshotMode ? "" : `${escapeHtml(importPreview.name)}<br>`}${escapeHtml(t("trialImportSummary", summary))}</p>
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
           <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
@@ -303,7 +306,9 @@
       resolveItemName,
       renderRecord,
       renderRail,
-      memberIdentityAttributes
+      memberIdentityAttributes,
+      formatMemberName,
+      isScreenshotMode
     });
 
     function readPlayerProfile(panel, force = false) {
@@ -333,12 +338,12 @@
 
     function renderMember(record, row) {
       const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
-      const name = rawName || t("trialNameUnavailable");
+      const name = formatMemberName(trialHistoryApi.memberIdentity(record, row));
       const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
         (rawName
-          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name: rawName }))}">${escapeHtml(name)}</button>`
+          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name }))}">${escapeHtml(name)}</button>`
           : escapeHtml(name)) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
@@ -451,7 +456,7 @@
               `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
-        <details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details></section>`;
+        ${screenshotMode ? "" : `<details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details>`}</section>`;
     }
 
     function renderColumn(title, items, attributes = "", jump = "", icon = "") {
@@ -482,17 +487,20 @@
     }
 
     function renderPlayerResults(members, current) {
-      const results = trialHistoryApi.searchHistoryMembers(members, playerSearch);
+      const results = trialHistoryApi
+        .searchHistoryMembers(
+          members.map((member) => ({ member, name: formatMemberName(member) })),
+          playerSearch
+        )
+        .map((result) => result.member);
       const names = new Map();
       for (const member of members) names.set(member.name, (names.get(member.name) || 0) + 1);
-      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(member.name)}</span>${names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
+      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(formatMemberName(member))}</span>${!screenshotMode && names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
     }
 
     function renderPlayerPicker(members, current) {
-      /* Search is temporarily disabled while player rankings are introduced.
       const searchForm = `<form class="mwi-trial-player-search" data-trial-player-search-form role="search"><label for="mwi-trial-player-search">${escapeHtml(t("trialPlayerSearchLabel"))}</label><div class="mwi-trial-player-search-bar"><input id="mwi-trial-player-search" type="text" enterkeyhint="search" data-trial-player-search autocomplete="off" spellcheck="false" placeholder="${escapeHtml(t("trialPlayerSearchPlaceholder"))}" value="${escapeHtml(playerSearch)}" aria-controls="mwi-trial-player-results"><div class="mwi-trial-player-search-actions"><button type="submit">${escapeHtml(t("trialPlayerSearchButton"))}</button><button type="button" data-trial-player-search-clear>${escapeHtml(t("trialPlayerSearchClear"))}</button></div></div></form>`;
-      */
-      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: selectedMember.name }) : t("trialPlayerFind"))}</summary><div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
+      return `<details class="mwi-trial-player-picker mwi-trial-choice-field" ${playerPickerOpen ? "open" : ""}><summary>${escapeHtml(selectedMember ? t("trialPlayerSwitch", { name: formatMemberName(selectedMember) }) : t("trialPlayerFind"))}</summary>${searchForm}<div id="mwi-trial-player-results">${renderPlayerResults(members, current)}</div></details>`;
     }
 
     function filterPlayerResults(host) {
@@ -698,7 +706,8 @@
         getBridge,
         t,
         getData: playerRenderer.tooltipData,
-        getProfile: () => (selectedMember && profileState.status === "ready" ? profileState.profile : null)
+        getProfile: () =>
+          !screenshotMode && selectedMember && profileState.status === "ready" ? profileState.profile : null
       });
       if (pageWindow.ResizeObserver) {
         resizeObserver = new pageWindow.ResizeObserver(() => updateScrollButtons(host));
@@ -768,6 +777,14 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-screenshot-mode]")) {
+          screenshotMode = !screenshotMode;
+          playerSearch = "";
+          playerSearchComposing = false;
+          refresh(panel);
+          host.querySelector("[data-trial-screenshot-mode]")?.focus({ preventScroll: true });
+          return;
+        }
         const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
         if (rankingPlayer) {
           const member = trialHistoryApi

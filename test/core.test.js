@@ -2160,7 +2160,7 @@ test("内部页签会持久化并恢复最后打开的可见视图", () => {
   assert.match(source, /data-role="upgrade-view"[\s\S]{0,150}state\.activeView === "upgrade"/);
   assert.match(source, /data-role="construction-view"[\s\S]{0,150}state\.activeView === "construction"/);
   assert.match(source, /activeView === "construction"\) refreshGuildConstruction/);
-  assert.match(source, /showConstructionView: stored\.showConstructionView === true/);
+  assert.match(source, /showConstructionView: stored\.showConstructionView !== false/);
   assert.match(source, /\.mwi-view-tab-item:not\(\[hidden\]\)/);
   assert.match(source, /createPointerSortable/);
 });

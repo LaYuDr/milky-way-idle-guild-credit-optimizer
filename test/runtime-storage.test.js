@@ -45,8 +45,8 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     shrineGuideEnabled: false,
     maxConversionItemUnitPrice: null,
     guildShrineAutofillExcludedBuffHrids: [],
-    showConstructionView: false,
-    showTrialHistoryView: false,
+    showConstructionView: true,
+    showTrialHistoryView: true,
     sidebarDisplayName: "",
     activeView: "credit",
     panelOrder: ["upgrade", "credit", "construction", "trials"],
@@ -68,8 +68,8 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   assert.deepEqual(migrated.panelOrder, ["upgrade", "credit", "construction", "trials"]);
   assert.equal(migrated.targetCredit, 200);
   assert.deepEqual(migrated.guildShrineAutofillExcludedBuffHrids, []);
-  assert.equal(migrated.showConstructionView, false);
-  assert.equal(migrated.showTrialHistoryView, false);
+  assert.equal(migrated.showConstructionView, true);
+  assert.equal(migrated.showTrialHistoryView, true);
   assert.equal(migrated.maxConversionItemUnitPrice, null);
 });
 
@@ -134,7 +134,10 @@ test("神龛填充排除项只保留合法 HRID 并与建设页可见性持久�
   assert.equal(persisted.showTrialHistoryView, false);
 });
 
-test("测试版页签默认关闭，仅保留明确开启的设置", () => {
+test("建设与历史试炼页签默认开启，并保留明确关闭的设置", () => {
+  const fresh = createStorage(memoryStorage()).loadSavedPluginUiState();
+  assert.equal(fresh.showConstructionView, true);
+  assert.equal(fresh.showTrialHistoryView, true);
   for (const value of [undefined, null, 0, 1, "false", "true", false, true]) {
     const storage = memoryStorage({
       [config.UI_STATE_STORAGE_KEY]: JSON.stringify({
@@ -144,11 +147,11 @@ test("测试版页签默认关闭，仅保留明确开启的设置", () => {
     });
     const api = createStorage(storage);
     const loaded = api.loadSavedPluginUiState();
-    assert.equal(loaded.showConstructionView, value === true);
-    assert.equal(loaded.showTrialHistoryView, value === true);
+    assert.equal(loaded.showConstructionView, value !== false);
+    assert.equal(loaded.showTrialHistoryView, value !== false);
     api.persistPluginUiState({ ...loaded, collapsedCreditSections: new Set(), guildTokenCreditHrids: new Set() });
-    assert.equal(api.loadSavedPluginUiState().showConstructionView, value === true);
-    assert.equal(api.loadSavedPluginUiState().showTrialHistoryView, value === true);
+    assert.equal(api.loadSavedPluginUiState().showConstructionView, value !== false);
+    assert.equal(api.loadSavedPluginUiState().showTrialHistoryView, value !== false);
   }
 });
 

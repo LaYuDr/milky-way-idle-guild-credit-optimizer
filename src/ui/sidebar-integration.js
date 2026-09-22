@@ -198,7 +198,9 @@
     let selected = false;
     const documentRef = integration.tabBar.ownerDocument;
     const stale = [
-      ...Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).filter((node) => node !== tab),
+      ...Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).filter(
+        (node) => node !== tab && isOwnedSidebarTab(node)
+      ),
       ...Array.from(documentRef.querySelectorAll("#mwi-credit-optimizer,[data-mwi-credit-stale-panel]")).filter(
         (node) => node !== panel
       )
@@ -218,6 +220,19 @@
       for (const identified of [node, ...node.querySelectorAll("[id]")]) identified.removeAttribute("id");
     }
     return selected;
+  }
+
+  function isOwnedSidebarTab(node) {
+    if (node?.dataset?.mwiCreditTab !== "true") return false;
+    // cloneNode copies data-* too. MWITools can clone our tab (and then clone
+    // that clone for Planning); its own identity must take precedence.
+    if (
+      node.dataset.mwitoolsCharacterTab === "true" ||
+      node.dataset.mwiGitTab === "true" ||
+      node.hasAttribute("data-mooncake-enhancement-tab-button")
+    )
+      return false;
+    return node.id === "mwi-credit-sidebar-tab" || (!node.id && node.dataset.mwiCreditSuperseded === "true");
   }
 
   function prepareTab(tab, panel) {
@@ -426,6 +441,7 @@
     integrationForCustomTab,
     createIntegrationLocator,
     suppressStaleMounts,
+    isOwnedSidebarTab,
     prepareTab,
     createSelectionController,
     createLifecycle

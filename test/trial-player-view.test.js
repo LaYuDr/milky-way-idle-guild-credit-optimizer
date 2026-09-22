@@ -68,3 +68,26 @@ test("技能方格固定五列和生活、基础战斗、战斗专精四行，�
   assert.ok(!slots.some((slot) => slot.key === "total_level"));
   assert.equal(JSON.stringify(source), before);
 });
+
+test("截图编号按角色身份稳定分配，同名不同 ID 与无 ID 记录保持独立", () => {
+  const { createMemberNameFormatter } = require("../src/ui/trial-player-view.js");
+  let enabled = false;
+  const format = createMemberNameFormatter({
+    isScreenshotMode: () => enabled,
+    t: (key, values) => (key === "trialAnonymousPlayer" ? `玩家 ${values.number}` : "未知玩家")
+  });
+  const member = { id: "1", name: "Original" };
+  assert.equal(format(member), "Original");
+  enabled = true;
+  assert.equal(format(member), "玩家 1");
+  assert.equal(format({ id: "1", name: "Renamed" }), "玩家 1");
+  assert.equal(format({ id: "2", name: "Original" }), "玩家 2");
+  assert.equal(format({ id: null, name: "Original" }), "玩家 3");
+  assert.equal(format({ id: null, name: "Original" }), "玩家 3");
+  assert.equal(format({ id: null, name: "" }), "未知玩家");
+  enabled = false;
+  assert.equal(format(member), "Original");
+  enabled = true;
+  assert.equal(format(member), "玩家 1");
+  assert.deepEqual(member, { id: "1", name: "Original" });
+});

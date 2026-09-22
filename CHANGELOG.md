@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.40] - 2026-09-23
+
+### Changed
+
+- Added anonymous screenshot mode for trial history and restored player search with anonymous-label support. Replaced tab move arrows and the settings gear with a text Settings button while preserving drag sorting. Show combat levels to one decimal place, enable construction and trial history by default while respecting saved choices, and preserve third-party cloned sidebar tabs.
+
 ## [1.2.39] - 2026-09-22
 
 ### Changed

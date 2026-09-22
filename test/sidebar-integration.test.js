@@ -190,3 +190,50 @@ test("missing sidebar never caches a negative result across cold-start retries",
   assert.equal(locate("en"), null);
   assert.equal(scans, 2);
 });
+
+test("stale cleanup preserves foreign tabs cloned from Guild, including already stripped IDs", () => {
+  function candidate(id, extra = {}) {
+    const attributes = new Map([
+      ["id", id],
+      ["aria-selected", "false"]
+    ]);
+    return {
+      id,
+      hidden: false,
+      inert: false,
+      dataset: { mwiCreditTab: "true", ...extra },
+      getAttribute: (name) => attributes.get(name) ?? null,
+      hasAttribute: (name) => attributes.has(name),
+      setAttribute: (name, value) => attributes.set(name, value),
+      removeAttribute(name) {
+        attributes.delete(name);
+        if (name === "id") this.id = "";
+      },
+      classList: { remove() {} },
+      querySelectorAll: () => []
+    };
+  }
+  const live = candidate("mwi-credit-sidebar-tab");
+  const stale = candidate("mwi-credit-sidebar-tab");
+  const asset = candidate("mwitools-asset-history-tab", { mwitoolsCharacterTab: "true" });
+  const planning = candidate("mwitools-planning-tab", { mwitoolsCharacterTab: "true" });
+  const previouslyDamaged = candidate("", { mwitoolsCharacterTab: "true", mwiCreditSuperseded: "true" });
+  const unknown = candidate("another-plugin-tab");
+  const unknownWithoutId = candidate("");
+  const tabs = [live, stale, asset, planning, previouslyDamaged, unknown, unknownWithoutId];
+  const doc = { querySelectorAll: (selector) => (selector.includes("data-mwi-credit-tab") ? tabs : []) };
+  sidebarIntegration.suppressStaleMounts({ tabBar: { ownerDocument: doc } }, live, {});
+  for (const node of [live, asset, planning, previouslyDamaged, unknown, unknownWithoutId]) {
+    assert.equal(node.hidden, false, `${node.id || "unidentified tab"} must not be hidden`);
+    assert.equal(node.inert, false);
+  }
+  assert.equal(asset.id, "mwitools-asset-history-tab");
+  assert.equal(planning.id, "mwitools-planning-tab");
+  assert.equal(stale.hidden, true);
+  assert.equal(stale.inert, true);
+  assert.equal(stale.id, "");
+  // Reappearing genuine stale nodes are still suppressed after their ID was removed.
+  stale.hidden = false;
+  sidebarIntegration.suppressStaleMounts({ tabBar: { ownerDocument: doc } }, live, {});
+  assert.equal(stale.hidden, true);
+});

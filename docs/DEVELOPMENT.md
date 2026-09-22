@@ -396,13 +396,16 @@ For the persistent settings and hidden-view interaction contract, open:
 http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&sidebarWidth=420
 ```
 
-Both beta tabs default to hidden unless their saved visibility is explicitly `true`.
-Feature audits with `resetState=1` explicitly enable them before runtime startup.
+Guild construction and Trial history default to visible when no preference is saved.
+Explicit saved `false` values remain hidden. Feature audits exercise these defaults
+without forcing visibility before runtime startup.
 
 `settingsAudit=1` seeds one existing Spirit Shrine (life) upgrade plan, one
 Guild Hall construction plan, and the complete panel order
 `construction, credit, upgrade`. It then exercises the real controls to:
 
+- require the text Settings button immediately after the left-aligned tab group,
+  without left/right move buttons; retain drag sorting and saved tab order;
 - open the inline settings region and inspect its accessible name, linked
   trigger, labelled inputs, live status, focus entry, and Escape focus return;
 - exclude only Spirit Shrine (life), fill life upgrades, and require the
@@ -699,8 +702,20 @@ remain above the member table and use known values only; unit tests cover missin
 records, zero denominators and overflowing totals. Display preferences use their
 own per-region/character key and are not part of trial exports.
 
-Player search markup is temporarily commented out. The picker still supports keyboard
-navigation, selection collapse, escaped names and a 60-player wrapping grid.
+Screenshot mode is a session-only trial-history view toggle. Player names use stable
+anonymous numbers keyed by character ID (or exact name when no ID exists), shared
+by rankings, original-stat tables, the player picker and profile headings. Raw JSON
+panels and profile tooltips are omitted while enabled. Turning it off restores names;
+game reload starts with the mode off. It does not anonymize exports or other game UI,
+mutate snapshots, change ranking values or issue profile requests on toggle. The trials
+matrix verifies both locales, all three views, detail navigation, stable aliases,
+identity-based highlighting, restoration and unchanged storage.
+
+Player search supports partial, case-insensitive names, Chinese composition, submit
+and clear controls, and an empty-result message. Screenshot mode searches anonymous
+labels; switching the mode clears the search input to avoid exposing a typed name.
+The picker supports keyboard navigation, selection collapse, escaped names and a
+60-player wrapping grid. Filtering never queries profiles or changes history.
 Player ranking checks cover participation counts, ties, skilling/combat
 averages and their combined sum, attendance sample counts, four simultaneously visible parallel columns, left/right
 scroll controls, focus and scroll restoration, and contained tables. Hovering or focusing a player name

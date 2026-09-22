@@ -303,7 +303,6 @@
         JSON.stringify({
           activeView: "construction",
           panelOrder: ["construction", "credit", "upgrade"],
-          showConstructionView: true,
           guildShrineAutofillExcludedBuffHrids: [],
           upgradePlans: [{ guildBuffHrid: "/guild_buffs/spirit_life", startLevel: 0, targetLevel: 1 }]
         })
@@ -321,22 +320,6 @@
     }
     if (searchParams.has("trialHistoryAudit") && searchParams.get("resetState") === "1") {
       localStorage.removeItem(`mwi-guild-trial-display-v1:mwi-guild-building-planner-v1:${location.hostname}:default`);
-    }
-    // Feature audits explicitly opt in; normal startup keeps beta tabs off by default.
-    if (
-      searchParams.get("resetState") === "1" &&
-      upgradeEmptyAuditStage !== "reloaded" &&
-      Array.from(searchParams).some(([key, value]) => key.endsWith("Audit") && value === "1")
-    ) {
-      const auditUiState = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1") || "{}");
-      localStorage.setItem(
-        "mwi-guild-credit-ui-state-v1",
-        JSON.stringify({
-          ...auditUiState,
-          showConstructionView: true,
-          showTrialHistoryView: true
-        })
-      );
     }
     if (constructionAudit || constructionSnapshotAudit || trackedEditAudit) localStorage.removeItem("initClientData");
     document.body.dataset.sidebarLayout = "wide";
@@ -2392,6 +2375,10 @@
         boundaryOverflow,
         controlOverlaps,
         trigger: {
+          text: settingsTrigger.textContent.trim(),
+          rect: elementRect(settingsTrigger),
+          tabsRect: elementRect(root.querySelector(".mwi-view-tabs")),
+          arrowCount: root.querySelectorAll('[data-role="move-active-view"]').length,
           label: settingsTrigger.getAttribute("aria-label") || "",
           controls: settingsTrigger.getAttribute("aria-controls") || "",
           expanded: settingsTrigger.getAttribute("aria-expanded") || ""
@@ -2679,6 +2666,11 @@
           initial.constructionPlans.length === 1 &&
           initial.constructionPlans[0].buildingHrid === "/guild_buildings/guild_hall" &&
           upgradePlanFor(initial.upgradePlans, spiritLifeHrid)?.targetLevel === 1,
+        settingsTextFollowsTabs:
+          opened.trigger.text === (document.documentElement.lang.startsWith("zh") ? "设置" : "Settings") &&
+          opened.trigger.arrowCount === 0 &&
+          Math.abs(opened.trigger.rect.left - opened.trigger.tabsRect.right) <= 1 &&
+          Math.abs(opened.trigger.rect.top - opened.trigger.tabsRect.top) <= 1,
         inlineSettingsAreAccessible:
           opened.trigger.controls === "mwi-settings-panel" &&
           opened.trigger.expanded === "true" &&
@@ -3061,6 +3053,34 @@
       checks.externalSelectionClosesGuild = panel.hidden;
       foreign.setAttribute("aria-selected", "false");
       tab.click();
+      // MWITools may use Guild as its template, inheriting our data marker.
+      const clonedAsset = tab.cloneNode(true);
+      clonedAsset.id = "mwitools-asset-history-tab";
+      clonedAsset.dataset.mwitoolsCharacterTab = "true";
+      clonedAsset.setAttribute("aria-selected", "false");
+      clonedAsset.classList.remove("Mui-selected");
+      clonedAsset.textContent = "P/L";
+      const clonedPlanning = clonedAsset.cloneNode(true);
+      clonedPlanning.id = "mwitools-planning-tab";
+      clonedPlanning.textContent = "Planning";
+      bar.append(clonedAsset, clonedPlanning);
+      let clonedTabClicks = 0;
+      clonedAsset.addEventListener("click", () => clonedTabClicks++);
+      clonedPlanning.addEventListener("click", () => clonedTabClicks++);
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      clonedAsset.click();
+      clonedPlanning.click();
+      checks.foreignClonesRemainVisibleAndClickable =
+        !clonedAsset.hidden &&
+        !clonedPlanning.hidden &&
+        !clonedAsset.inert &&
+        !clonedPlanning.inert &&
+        clonedTabClicks === 2;
+      checks.foreignCloneIdsPreserved =
+        clonedAsset.id === "mwitools-asset-history-tab" && clonedPlanning.id === "mwitools-planning-tab";
+      clonedAsset.remove();
+      clonedPlanning.remove();
+      tab.click();
       const staleTab = tab.cloneNode(true);
       const stalePanel = panel.cloneNode(true);
       bar.prepend(staleTab);
@@ -3411,7 +3431,7 @@
               sharableProfile: {
                 sharableCharacter: { name: characterName, id: characterName === members[101].name ? 101 : 102 },
                 guildName: "Profile Guild",
-                combatLevel: 97.25,
+                combatLevel: 112.80000000000001,
                 totalTaskPoints: 904,
                 labyrinthPoints: 104,
                 labyrinthHighestFloor: 3,
@@ -3602,9 +3622,42 @@
       host.querySelector("[data-trial-ranking-help]").open = false;
       checks.rankingNamesEscaped = !host.querySelector(".mwi-trial-ranking-table b");
       checks.rankingNoQueriesOrWrites = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
-      checks.playerSearchTemporarilyHidden = !host.querySelector(
-        "[data-trial-player-search-form], [data-trial-player-search]"
-      );
+      const searchInput = () => host.querySelector("[data-trial-player-search]");
+      const searchResults = () => [...host.querySelectorAll('[data-trial-choice="player"]')];
+      const setPlayerSearch = (query) => {
+        searchInput().value = query;
+        searchInput().dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const searchPicker = host.querySelector(".mwi-trial-player-picker");
+      searchPicker.open = true;
+      searchPicker.dispatchEvent(new Event("toggle"));
+      checks.playerSearchVisible = elementIsVisible(searchInput());
+      const allSearchResults = searchResults().length;
+      setPlayerSearch("  ALPHA  ");
+      checks.playerSearchPartialCaseInsensitive =
+        searchResults().length === 1 && searchResults()[0].textContent.includes(members[101].name);
+      searchInput().dispatchEvent(new Event("compositionstart", { bubbles: true }));
+      setPlayerSearch("原样");
+      checks.playerSearchWaitsForComposition = searchResults()[0].textContent.includes(members[101].name);
+      searchInput().dispatchEvent(new Event("compositionend", { bubbles: true }));
+      checks.playerSearchChineseAndEscaped =
+        searchResults().length === 1 &&
+        searchResults()[0].textContent.includes(members[102].name) &&
+        !host.querySelector('[data-role="trial-player"] b');
+      searchInput().value = "no-matching-player";
+      host
+        .querySelector("[data-trial-player-search-form]")
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      checks.playerSearchEmptyMessage =
+        searchResults().length === 0 && Boolean(host.querySelector("#mwi-trial-player-results .mwi-trial-empty"));
+      host.querySelector("[data-trial-player-search-clear]").click();
+      checks.playerSearchClearRestores =
+        searchInput().value === "" &&
+        searchResults().length === allSearchResults &&
+        document.activeElement === searchInput();
+      checks.playerSearchReadOnly = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
+      searchPicker.open = false;
+      searchPicker.dispatchEvent(new Event("toggle"));
 
       host.querySelector('[data-trial-mode="project"]').click();
       checks.projectControlsTwoRows = controlsStacked();
@@ -3766,7 +3819,7 @@
         profileFrames.length === tooltipRequestsBefore && JSON.stringify(saved()) === tooltipSavedBefore;
       checks.profileOnlyLevelFacts =
         profileFacts.children.length === 2 &&
-        [...profileFacts.querySelectorAll("dd")].map((el) => el.textContent).join(",") === "1800,97.25";
+        [...profileFacts.querySelectorAll("dd")].map((el) => el.textContent).join(",") === "1800,112.8";
       const profileStoredBefore = JSON.stringify(saved());
       const profileRequestsBefore = profileFrames.length;
       const profileSection = (key) => host.querySelector(`[data-trial-profile-section="${key}"]`);
@@ -4134,6 +4187,75 @@
         document.activeElement?.closest("[data-trial-ranking-column]").dataset.trialRankingColumn === "all";
       checks.rankingReturnsWithScroll =
         host.querySelector("#mwi-trial-rail-player-rankings").scrollLeft === rankingScrollBefore;
+      const screenshotStoredBefore = JSON.stringify(saved());
+      const screenshotFramesBefore = profileFrames.length;
+      const screenshotToggle = () => host.querySelector("[data-trial-screenshot-mode]");
+      const screenshotHasNames = () => {
+        const text =
+          host.textContent +
+          [...host.querySelectorAll("[title], [aria-label]")]
+            .map((el) => `${el.title || ""} ${el.getAttribute("aria-label") || ""}`)
+            .join(" ");
+        return Object.values(members).some((member) => text.includes(member.name));
+      };
+      const rankingValues = () =>
+        [...host.querySelectorAll("[data-trial-ranking-value], [data-trial-ranking-samples]")]
+          .map((el) => el.textContent)
+          .join("|");
+      const screenshotScores = rankingValues();
+      checks.screenshotModeDefaultOff = screenshotToggle().getAttribute("aria-pressed") === "false";
+      setPlayerSearch(members[101].name);
+      screenshotToggle().click();
+      checks.screenshotClearsNameSearch = searchInput().value === "";
+      const anonymousButton = [...host.querySelectorAll("[data-trial-ranking-player]")].find(
+        (el) => el.dataset.trialRankingPlayer === rankingKey
+      );
+      const anonymousLabel = anonymousButton.textContent;
+      checks.screenshotRankingsAnonymous =
+        !screenshotHasNames() &&
+        [...host.querySelectorAll("[data-trial-ranking-player]")]
+          .filter((el) => el.dataset.trialRankingPlayer === rankingKey)
+          .every((el) => el.textContent === anonymousLabel);
+      checks.screenshotScoresUnchanged = rankingValues() === screenshotScores;
+      checks.screenshotToggleNoQueries = profileFrames.length === screenshotFramesBefore;
+      checks.screenshotToggleFocus = document.activeElement === screenshotToggle();
+      setPlayerSearch(anonymousLabel);
+      checks.screenshotSearchByAlias = searchResults().some((button) => button.value === rankingKey);
+      setPlayerSearch(members[101].name);
+      checks.screenshotSearchExcludesRealNames = searchResults().length === 0;
+      setPlayerSearch("");
+      anonymousButton.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.screenshotHighlightIdentity =
+        [...host.querySelectorAll(".mwi-trial-member-highlight")].length === 4 &&
+        [...host.querySelectorAll(".mwi-trial-member-highlight")].every(
+          (el) => el.dataset.trialRankingRow === rankingKey
+        );
+      anonymousButton.click();
+      checks.screenshotPlayerDetailsAnonymous =
+        !screenshotHasNames() &&
+        host.querySelector("[data-trial-player-title]").textContent.includes(anonymousLabel) &&
+        !host.querySelector(".mwi-trial-raw, [data-trial-profile-tooltip]");
+      screenshotToggle().click();
+      checks.screenshotDetailsRestored = screenshotHasNames() && Boolean(host.querySelector(".mwi-trial-raw"));
+      screenshotToggle().click();
+      checks.screenshotReenabledStable = host
+        .querySelector("[data-trial-player-title]")
+        .textContent.includes(anonymousLabel);
+      for (const view of ["week", "project"]) {
+        host.querySelector(`[data-trial-mode="${view}"]`).click();
+        checks[`screenshotAnonymous_${view}`] =
+          !screenshotHasNames() &&
+          !host.querySelector(".mwi-trial-raw") &&
+          [...host.querySelectorAll("[data-trial-profile]")]
+            .filter((el) => JSON.parse(el.dataset.trialIdentity).id === JSON.parse(rankingKey)[1])
+            .every((el) => el.textContent === anonymousLabel);
+      }
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.screenshotSurvivesViewSwitch =
+        screenshotToggle().getAttribute("aria-pressed") === "true" && !screenshotHasNames();
+      screenshotToggle().click();
+      checks.screenshotNamesRestored = screenshotHasNames() && rankingValues() === screenshotScores;
+      checks.screenshotStorageUnchanged = JSON.stringify(saved()) === screenshotStoredBefore;
       const beforePlayerTabReturns = JSON.stringify(saved());
       for (const source of ["week", "project", "ranking", "picker"]) {
         host

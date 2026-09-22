@@ -79,6 +79,17 @@
     return { slots, extras };
   }
 
+  function createMemberNameFormatter({ t, isScreenshotMode }) {
+    const aliases = new Map();
+    return (member) => {
+      if (!isScreenshotMode()) return member.name || t("trialNameUnavailable");
+      if (member.id == null && !member.name) return t("trialNameUnavailable");
+      const key = JSON.stringify([member.id == null ? "name" : "id", member.id ?? member.name]);
+      if (!aliases.has(key)) aliases.set(key, aliases.size + 1);
+      return t("trialAnonymousPlayer", { number: aliases.get(key) });
+    };
+  }
+
   function createRenderer({
     t,
     escapeHtml: e,
@@ -91,16 +102,23 @@
     resolveItemName,
     renderRecord,
     renderRail,
-    memberIdentityAttributes
+    memberIdentityAttributes,
+    formatMemberName,
+    isScreenshotMode
   }) {
     const tooltipRecords = new Map();
     function tooltipAttribute(kind, record) {
-      if (!record) return "";
+      if (!record || isScreenshotMode()) return "";
       const key = String(tooltipRecords.size);
       tooltipRecords.set(key, { kind, record });
       return `data-trial-profile-tooltip="${key}"`;
     }
-    const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
+    const number = (value, digits) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? digits === undefined
+          ? String(value)
+          : value.toFixed(digits)
+        : "—";
     const entries = (value) => (Array.isArray(value) ? value : Object.values(value || {}));
     const suffix = (value) =>
       String(value || "")
@@ -196,7 +214,7 @@
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
-      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}</dl>`;
+      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}</dl>`;
       html += overview;
       html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
       html += profileSection(
@@ -210,7 +228,8 @@
         if (values.length)
           html += `<h4>${e(t(heading))}</h4><dl class="mwi-trial-profile-facts">${values.map((item) => metric(label(item[hrid]), number(item.level))).join("")}</dl>`;
       }
-      html += `<details class="mwi-trial-raw"><summary>${e(t("trialProfileRaw"))}</summary><pre>${e(JSON.stringify(profile, null, 2))}</pre></details>`;
+      if (!isScreenshotMode())
+        html += `<details class="mwi-trial-raw"><summary>${e(t("trialProfileRaw"))}</summary><pre>${e(JSON.stringify(profile, null, 2))}</pre></details>`;
       return html;
     }
     function historyMarkup(weeks) {
@@ -262,7 +281,7 @@
           const value = score(entry);
           if (value !== previous) rank = index + 1;
           previous = value;
-          const name = entry.name || t("trialNameUnavailable");
+          const name = formatMemberName(entry);
           return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
         })
         .join("");
@@ -285,9 +304,9 @@
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
       tooltipRecords.clear();
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(formatMemberName(member))} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
-  return { createRenderer, equipmentLayout, skillLayout };
+  return { createRenderer, createMemberNameFormatter, equipmentLayout, skillLayout };
 });

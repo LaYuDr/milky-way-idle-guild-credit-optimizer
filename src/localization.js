@@ -93,8 +93,6 @@
       shrineUpgrade: "神龛升级",
       guildConstruction: "公会建设",
       panelViewOrder: "页签顺序",
-      moveViewLeft: "将当前页签左移",
-      moveViewRight: "将当前页签右移",
       interfaceSettings: "设置",
       interfaceSettingsHint: "调整一键填充范围和插件页面；修改会立即在本机生效。",
       openInterfaceSettings: "打开设置",
@@ -110,10 +108,10 @@
       sidebarNameReset: "恢复默认",
       showConstructionView: "显示公会建设页签",
       showTrialHistoryView: "显示历史试炼数据页签",
-      showTrialHistoryViewHint: "默认关闭。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
+      showTrialHistoryViewHint: "默认开启。隐藏页签后，历史记录和自动保存不受影响，可随时重新开启。",
       trialHistoryViewShown: "已显示历史试炼数据页签。",
       trialHistoryViewHidden: "已隐藏历史试炼数据页签；历史记录和自动保存不受影响。",
-      showConstructionViewHint: "默认关闭。关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
+      showConstructionViewHint: "默认开启。关闭后隐藏页签；施工计划仍会保留，可随时重新开启。",
       settingsSaved: "设置已保存。",
       settingsSaveFailed: "设置已生效，但未能保存；刷新页面后可能恢复。",
       constructionViewShown: "已显示公会建设页面。",
@@ -430,6 +428,10 @@
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialScreenshotMode: "截图模式",
+      trialScreenshotExit: "退出截图模式",
+      trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
+      trialAnonymousPlayer: "玩家 {number}",
       trialGuide: "说明",
       trialDisplayNotice:
         "目前提供数据收集、展示及基础汇总。如需进一步分析，可导出数据交给 AI，并说明你希望了解的问题或呈现的效果。",
@@ -714,8 +716,6 @@
       shrineUpgrade: "Shrine upgrades",
       guildConstruction: "Guild construction",
       panelViewOrder: "Tab order",
-      moveViewLeft: "Move current tab left",
-      moveViewRight: "Move current tab right",
       interfaceSettings: "Settings",
       interfaceSettingsHint:
         "Choose what batch fill includes and which plugin pages are visible. Changes apply locally.",
@@ -734,11 +734,11 @@
       showConstructionView: "Show Guild construction",
       showTrialHistoryView: "Show Trial history",
       showTrialHistoryViewHint:
-        "Off by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
+        "On by default. Hiding the tab keeps history and automatic saving active; you can show it again anytime.",
       trialHistoryViewShown: "The Trial history tab is now visible.",
       trialHistoryViewHidden: "The Trial history tab is hidden; history and automatic saving are unaffected.",
       showConstructionViewHint:
-        "Off by default. Turning this off hides the tab but keeps every construction plan for later.",
+        "On by default. Turning this off hides the tab but keeps every construction plan for later.",
       settingsSaved: "Settings saved.",
       settingsSaveFailed: "The change is active but could not be saved; it may reset after a page refresh.",
       constructionViewShown: "The Guild construction page is now visible.",
@@ -1072,6 +1072,11 @@
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialScreenshotMode: "Screenshot mode",
+      trialScreenshotExit: "Exit screenshot mode",
+      trialScreenshotHint:
+        "Hides player names in trial history only. JSON exports keep original names. Resets on game reload.",
+      trialAnonymousPlayer: "Player {number}",
       trialGuide: "Help",
       trialDisplayNotice:
         "This feature collects and displays data with basic summaries. For further analysis, export your data and share it with an AI, explaining the questions you want answered or the results you would like to see.",

@@ -124,17 +124,7 @@
         if (item) tabList.append(item);
       }
       persistPluginUiState();
-      updatePanelOrderButtons(panel);
       return true;
-    }
-
-    function updatePanelOrderButtons(panel) {
-      const visibleOrder = visiblePanelOrder();
-      const index = visibleOrder.indexOf(state.activeView);
-      const previous = panel.querySelector('[data-role="move-active-view"][data-direction="-1"]');
-      const next = panel.querySelector('[data-role="move-active-view"][data-direction="1"]');
-      if (previous) previous.disabled = index <= 0;
-      if (next) next.disabled = index < 0 || index >= visibleOrder.length - 1;
     }
 
     function syncPanelViewVisibility(panel) {
@@ -151,7 +141,6 @@
         }
         if (!enabled && content) content.hidden = true;
       }
-      updatePanelOrderButtons(panel);
     }
 
     function findConstructionControl(panel, target) {
@@ -233,7 +222,6 @@
       panel.dataset.activeView = selectedView;
       state.activeView = selectedView;
       const persisted = persistPluginUiState();
-      updatePanelOrderButtons(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else if (selectedView === "trials") refreshTrialHistory(panel);
@@ -488,8 +476,7 @@
         <div class="mwi-plugin-version" data-role="version-status" aria-live="polite"></div>
         <div class="mwi-view-tabs-shell">
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
-          <div class="mwi-view-order-actions" role="group" aria-label="${escapeHtml(t("panelViewOrder"))}"><button class="mwi-icon-button mwi-icon-left" data-role="move-active-view" data-direction="-1" type="button" aria-label="${escapeHtml(t("moveViewLeft"))}" title="${escapeHtml(t("moveViewLeft"))}"></button><button class="mwi-icon-button mwi-icon-right" data-role="move-active-view" data-direction="1" type="button" aria-label="${escapeHtml(t("moveViewRight"))}" title="${escapeHtml(t("moveViewRight"))}"></button></div>
-          <button class="mwi-icon-button mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}"><span aria-hidden="true">&#9881;</span></button>
+          <button class="mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}">${escapeHtml(t("interfaceSettings"))}</button>
         </div>
         ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
@@ -648,13 +635,6 @@
       panel
         .querySelector('[data-role="view-construction"]')
         .addEventListener("click", () => setPanelView(panel, "construction"));
-      panel.querySelector(".mwi-view-order-actions").addEventListener("click", (event) => {
-        const button = event.target.closest('[data-role="move-active-view"]');
-        if (!button) return;
-        const index = visiblePanelOrder().indexOf(state.activeView);
-        reorderPanelView(panel, state.activeView, index + Number(button.dataset.direction));
-      });
-      updatePanelOrderButtons(panel);
       panel.querySelector(".mwi-view-tabs").addEventListener("keydown", (event) => {
         if (event.altKey) return;
         const tabs = Array.from(panel.querySelectorAll(".mwi-view-tab-item:not([hidden]) .mwi-view-tab"));
