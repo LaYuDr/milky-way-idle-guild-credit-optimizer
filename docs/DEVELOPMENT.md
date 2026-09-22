@@ -702,7 +702,7 @@ own per-region/character key and are not part of trial exports.
 Player search markup is temporarily commented out. The picker still supports keyboard
 navigation, selection collapse, escaped names and a 60-player wrapping grid.
 Player ranking checks cover participation counts, ties, skilling/combat
-averages and their combined sum, valid-project counts, four simultaneously visible parallel columns, left/right
+averages and their combined sum, attendance sample counts, four simultaneously visible parallel columns, left/right
 scroll controls, focus and scroll restoration, and contained tables. Hovering or focusing a player name
 highlights that identity across all four rankings using the existing member-row highlight;
 checks cover player switching, pointer/focus precedence, clearing on blur and refresh, and
@@ -726,7 +726,10 @@ and marked incomplete, as are known gaps within membership intervals. Only saved
 completed weeks are covered. Manual records never provide attendance, membership,
 completeness, or denominator evidence. Stable IDs stay separate from ID-less names.
 The combined ranking adds both category averages without dividing by two. Its
-count is the sum of category weeks; each category at 1× yields a combined 2×.
+displayed sample count sums the two categories. Each category counts actual captured
+attendance at most once per week, including zero or unknown metrics; absence has no
+sample. This `sampleCount` is separate from the eligible-week `count` used to average
+confirmed absences as zero. Each category at 1× yields a combined 2×.
 The pure weekly-ranking tests cover the 1.5/2.2/0.8 and absent/2.2/0.8 examples,
 join boundaries, never-participating members, partial captures, cross-guild and
 rejoin gaps, manual exclusion, evidence validation and recapture preservation.

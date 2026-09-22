@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.38";
+window.MwiGuildCreditVersion = "1.2.39";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1502,7 +1502,14 @@ window.MwiGuildCreditVersion = "1.2.38";
       if (!weeks.has(weekKey)) weeks.set(weekKey, { guild, at: record.weekStartAt, records: [] });
       weeks.get(weekKey).records.push(record);
     }
-    const bucket = () => ({ count: 0, average: null, absentWeeks: 0, unknownWeeks: 0, incomplete: false });
+    const bucket = () => ({
+      count: 0,
+      sampleCount: 0,
+      average: null,
+      absentWeeks: 0,
+      unknownWeeks: 0,
+      incomplete: false
+    });
     for (const player of players.values()) {
       player.skilling = bucket();
       player.combat = bucket();
@@ -1530,6 +1537,8 @@ window.MwiGuildCreditVersion = "1.2.38";
               return identity.id === player.id && (player.id !== null || identity.name === player.name);
             })
           );
+          // Attendance samples are independent of the eligible-week averaging denominator.
+          if (appeared) result.sampleCount += 1;
           const complete =
             expected.length > 0 && expected.every((hrid) => category.some((record) => record.trialHrid === hrid));
           const score = actual?.average ?? (!appeared && eligible && complete ? 0 : null);
@@ -1583,6 +1592,7 @@ window.MwiGuildCreditVersion = "1.2.38";
         ...player,
         all: {
           count: player.skilling.count + player.combat.count,
+          sampleCount: player.skilling.sampleCount + player.combat.sampleCount,
           unknownWeeks: player.skilling.unknownWeeks + player.combat.unknownWeeks,
           incomplete: player.skilling.incomplete || player.combat.incomplete,
           total:
@@ -3981,12 +3991,11 @@ window.MwiGuildCreditVersion = "1.2.38";
       trialRankingCount: "次数",
       trialRankingMultiple: "平均倍数",
       trialRankingSamples: "样本数",
-      trialRankingWeeks: "计入周数",
       trialRankingMethod: "统计口径",
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗先平均伤害、治疗、承伤的有效人均倍数，再对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。计入周数包含确认缺席周，合并榜为两类周数之和。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗先平均伤害、治疗、承伤的有效人均倍数，再对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4624,12 +4633,11 @@ window.MwiGuildCreditVersion = "1.2.38";
       trialRankingCount: "Count",
       trialRankingMultiple: "Avg. multiple",
       trialRankingSamples: "Samples",
-      trialRankingWeeks: "Weeks counted",
       trialRankingMethod: "How rankings are calculated",
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat first averages valid damage, healing and damage-taken multiples. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Weeks counted include confirmed absences; the combined count sums both categories.",
+        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat first averages valid damage, healing and damage-taken multiples. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Samples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -11261,7 +11269,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           if (value !== previous) rank = index + 1;
           previous = value;
           const name = entry.name || t("trialNameUnavailable");
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
@@ -11270,7 +11278,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           : scope === "all"
             ? t("trialRankingTotalTitle")
             : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
-      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingWeeks"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
     }
 
     function renderRankings({ records, helpOpen }) {

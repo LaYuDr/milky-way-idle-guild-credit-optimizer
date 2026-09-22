@@ -3533,6 +3533,13 @@
         rankingColumns.length === 4 &&
         new Set(rankingColumns.map((el) => Math.round(el.getBoundingClientRect().top))).size === 1;
       checks.rankingSwitchesAbsent = !host.querySelector("[data-trial-ranking-metric], [data-trial-ranking-scope]");
+      checks.rankingSampleHeaders = rankingColumns
+        .slice(1)
+        .every(
+          (column) =>
+            column.querySelector("thead th:last-child").textContent ===
+            (new URLSearchParams(location.search).get("locale") === "en" ? "Samples" : "样本数")
+        );
       checks.rankingParticipationCounts =
         rankedRows("participations").length === 2 &&
         rankedRows("participations").every(
@@ -4296,7 +4303,13 @@
       checks.knownAbsenceRankedAsZero =
         Boolean(neverAttended) &&
         neverAttended.querySelector("[data-trial-ranking-value]").textContent === "0.00×" &&
-        Number(neverAttended.querySelector("[data-trial-ranking-samples]").textContent) > 0;
+        neverAttended.querySelector("[data-trial-ranking-samples]").textContent === "0";
+      checks.absenceHasNoSamples = ["skilling", "combat", "all"].every(
+        (scope) =>
+          rankedRows(scope)
+            .find((row) => JSON.parse(row.dataset.trialRankingRow)[1] === lateMemberId)
+            ?.querySelector("[data-trial-ranking-samples]").textContent === "0"
+      );
       checks.incompleteHistoryHidden =
         rankedRows("skilling").length > 0 && !host.querySelector("[data-trial-ranking-incomplete]");
       checks.membershipPassiveNoProfileQuery = profileFrames.length === beforeRosterFrames;

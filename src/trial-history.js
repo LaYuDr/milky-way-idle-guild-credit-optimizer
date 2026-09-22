@@ -722,7 +722,14 @@
       if (!weeks.has(weekKey)) weeks.set(weekKey, { guild, at: record.weekStartAt, records: [] });
       weeks.get(weekKey).records.push(record);
     }
-    const bucket = () => ({ count: 0, average: null, absentWeeks: 0, unknownWeeks: 0, incomplete: false });
+    const bucket = () => ({
+      count: 0,
+      sampleCount: 0,
+      average: null,
+      absentWeeks: 0,
+      unknownWeeks: 0,
+      incomplete: false
+    });
     for (const player of players.values()) {
       player.skilling = bucket();
       player.combat = bucket();
@@ -750,6 +757,8 @@
               return identity.id === player.id && (player.id !== null || identity.name === player.name);
             })
           );
+          // Attendance samples are independent of the eligible-week averaging denominator.
+          if (appeared) result.sampleCount += 1;
           const complete =
             expected.length > 0 && expected.every((hrid) => category.some((record) => record.trialHrid === hrid));
           const score = actual?.average ?? (!appeared && eligible && complete ? 0 : null);
@@ -803,6 +812,7 @@
         ...player,
         all: {
           count: player.skilling.count + player.combat.count,
+          sampleCount: player.skilling.sampleCount + player.combat.sampleCount,
           unknownWeeks: player.skilling.unknownWeeks + player.combat.unknownWeeks,
           incomplete: player.skilling.incomplete || player.combat.incomplete,
           total:

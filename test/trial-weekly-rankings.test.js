@@ -167,3 +167,53 @@ test("名册证据导入校验、旧格式兼容，重复采集不能抹掉历�
   assert.deepEqual(saved.membershipEvidence, original.membershipEvidence);
   assert.deepEqual(saved.weekTrials, original.weekTrials);
 });
+
+test("LAYU 仅参加生活：生活样本 1、战斗样本 0、合计样本 1，缺席仍参与平均", () => {
+  const combat = record(0, null, {
+    key: "combat",
+    kind: "combat",
+    trialHrid: combatHrid,
+    rows: [{ characterId: 2, damageDealt: 10 }],
+    weekTrials: { skilling: [hrid], combat: [combatHrid] }
+  });
+  const records = [record(0, 2.54), combat];
+  const before = JSON.stringify(records);
+  const result = player(records);
+  assert.deepEqual([result.skilling.sampleCount, result.combat.sampleCount, result.all.sampleCount], [1, 0, 1]);
+  assert.ok(Math.abs(result.skilling.average - 2.54) < 1e-12);
+  assert.equal(result.combat.average, 0);
+  assert.equal(result.combat.count, 1);
+  assert.equal(result.all.total, result.skilling.average);
+  assert.equal(JSON.stringify(records), before);
+});
+
+test("样本按每周每类去重，跨周累计；实际零贡献参试也计样本", () => {
+  const first = record(0, 0);
+  const extra = record(0, 1, { key: "other-project", trialHrid: "/guild_skilling/foraging" });
+  const combat = record(0, null, {
+    key: "combat",
+    kind: "combat",
+    trialHrid: combatHrid,
+    rows: [
+      { characterId: 1, damageDealt: 0 },
+      { characterId: 2, damageDealt: 10 }
+    ],
+    weekTrials: { skilling: [hrid], combat: [combatHrid] }
+  });
+  const result = player([first, first, extra, combat, record(1, 0), record(2, null)]);
+  assert.deepEqual([result.skilling.sampleCount, result.combat.sampleCount, result.all.sampleCount], [2, 1, 3]);
+  assert.equal(result.skilling.count, 3);
+  assert.equal(result.participations, 4);
+  assert.equal(result.combat.average, 0);
+});
+
+test("参试但数值未知仍计样本；只有名册或手动记录不能提供参试样本", () => {
+  const unknown = record(0, null, { rows: [{ characterId: 1, workDone: null }] });
+  const result = player([unknown, record(1, null), record(2, 1, { source: "manual" })]);
+  assert.equal(result.skilling.sampleCount, 1);
+  assert.equal(result.skilling.unknownWeeks, 1);
+  assert.equal(result.skilling.absentWeeks, 1);
+  const absent = player([record(0, null)]);
+  assert.equal(absent.skilling.sampleCount, 0);
+  assert.equal(absent.all.sampleCount, 0);
+});
