@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.42";
+window.MwiGuildCreditVersion = "1.2.43";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3979,6 +3979,18 @@ window.MwiGuildCreditVersion = "1.2.42";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialScreenshotGuide: "长图截图帮助",
+      trialScreenshotCopy: "复制长图",
+      trialScreenshotDownload: "下载 PNG",
+      trialScreenshotHelp:
+        "截取当前所选周、项目或玩家的完整视图，含滚动区域中的全部表格。长图按两列排版，省略操作区、原始数据和装饰图标，技能装备图标转为文字；保留当前显示字段与匿名设置。",
+      trialScreenshotReady: "分享前可开启截图模式隐藏玩家名。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
+      trialScreenshotWorking: "正在生成完整长图…",
+      trialScreenshotCopied: "长图已复制，可直接粘贴。",
+      trialScreenshotDownloaded: "已发起 PNG 下载，请查看浏览器下载列表。",
+      trialScreenshotFallback: "无法写入剪贴板，已改为下载 PNG，请查看浏览器下载列表。",
+      trialScreenshotTooLarge: "当前视图过大，无法生成清晰长图。请切换到单周或单个玩家后重试。",
+      trialScreenshotFailed: "长图生成失败。请重试或切换到单周视图后下载 PNG。",
       trialScreenshotMode: "截图模式",
       trialScreenshotExit: "退出截图模式",
       trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
@@ -4638,6 +4650,19 @@ window.MwiGuildCreditVersion = "1.2.42";
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialScreenshotGuide: "Image capture help",
+      trialScreenshotCopy: "Copy image",
+      trialScreenshotDownload: "Download PNG",
+      trialScreenshotHelp:
+        "Capture the selected week, project or player, including full scrollable tables. Images use two columns and omit controls, raw data and decorative icons; skills and equipment use text labels. Visible fields and anonymity settings are preserved.",
+      trialScreenshotReady:
+        "Enable screenshot mode to hide player names before sharing. If copying is unavailable, the image downloads instead. Your browser controls the save location.",
+      trialScreenshotWorking: "Generating full image…",
+      trialScreenshotCopied: "Image copied. Ready to paste.",
+      trialScreenshotDownloaded: "PNG download started. Check your browser downloads.",
+      trialScreenshotFallback: "Clipboard unavailable. PNG download started instead. Check your browser downloads.",
+      trialScreenshotTooLarge: "This view is too large for a readable image. Select a single week or player and retry.",
+      trialScreenshotFailed: "Could not generate the image. Retry or select a single week and download PNG.",
       trialScreenshotMode: "Screenshot mode",
       trialScreenshotExit: "Exit screenshot mode",
       trialScreenshotHint:
@@ -9501,7 +9526,7 @@ window.MwiGuildCreditVersion = "1.2.42";
         @media (prefers-reduced-motion:reduce){
           #mwi-credit-optimizer .mwi-upgrade-plan,#mwi-credit-optimizer .mwi-remove-plan{transition:none}
         }
-        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){border-bottom:2px solid transparent!important;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
+        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){border-bottom:2px solid transparent!important;white-space:nowrap;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
         #mwi-credit-optimizer .mwi-view-tab-active{border-bottom-color:#77e1cb!important}
         #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger):hover{color:#fff!important;background:#ffffff08!important}
         #mwi-credit-optimizer .mwi-view-tabs-shell button:focus-visible{outline:2px solid #77e1cb!important;outline-offset:-3px}
@@ -9511,28 +9536,9 @@ window.MwiGuildCreditVersion = "1.2.42";
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){transition:none}}
         @container (max-width:480px){
           #mwi-credit-optimizer .mwi-view-tabs-shell{padding-top:4px}
-          #mwi-credit-optimizer .mwi-view-tabs{overflow-x:hidden}
-          #mwi-credit-optimizer .mwi-view-tab-item:not([hidden]){
-            display:flex;
-            flex:1 1 min-content;
-            min-width:0;
-          }
           #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            width:100%;
-            min-width:0;
-            height:100%;
-            min-height:40px!important;
             padding:8px 4px!important;
             font-size:12px;
-            line-height:1.35;
-            overflow-wrap:normal;
-            hyphens:none;
-            text-align:center;
-            white-space:normal;
-            word-break:normal;
           }
 
         }
@@ -11544,6 +11550,192 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 });
 
 
+// SOURCE: src/ui/trial-screenshot.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildTrialScreenshot = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  // Bound allocation before creating a canvas; never silently crop or shrink text.
+  function imageSize(width, height) {
+    width = Math.ceil(width);
+    height = Math.ceil(height);
+    if (!(width > 0 && height > 0) || width > 16000 || height > 16000 || width * height > 24000000)
+      throw Object.assign(new Error("Screenshot exceeds canvas budget"), { code: "trialScreenshotTooLarge" });
+    const scale = Math.min(2, 16000 / width, 16000 / height, Math.sqrt(24000000 / (width * height)));
+    return { width, height, pixelWidth: Math.floor(width * scale), pixelHeight: Math.floor(height * scale) };
+  }
+
+  const STYLE_PROPERTIES = (
+    "display box-sizing width height min-width min-height max-width max-height margin-top margin-right margin-bottom margin-left " +
+    "padding-top padding-right padding-bottom padding-left border-top border-right border-bottom border-left border-radius " +
+    "border-collapse border-spacing table-layout background-color color opacity font-family font-size font-weight font-style " +
+    "font-variant-numeric line-height letter-spacing text-align text-decoration text-transform text-indent white-space " +
+    "word-break overflow-wrap vertical-align overflow overflow-x overflow-y position top right bottom left z-index " +
+    "flex-direction flex-wrap flex-grow flex-shrink flex-basis align-items align-self align-content justify-content " +
+    "gap justify-items grid-template-columns grid-auto-flow grid-auto-columns grid-column grid-row " +
+    "list-style-type clip-path visibility fill stroke stroke-width"
+  ).split(" ");
+
+  function snapshot(host, document, pageWindow) {
+    const stage = document.createElement("div");
+    stage.dataset.trialScreenshotStage = "";
+    stage.inert = true;
+    stage.setAttribute("aria-hidden", "true");
+    stage.style.cssText = "position:fixed;left:-100000px;top:0;width:1200px;pointer-events:none;";
+    const copy = host.cloneNode(true);
+    // Icon-only skills/equipment carry information: retain their accessible labels.
+    for (const slot of copy.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")) {
+      const label = document.createElement("span");
+      label.className = "mwi-trial-slot-label";
+      label.textContent = slot.getAttribute("aria-label");
+      slot.replaceChildren(label);
+      Object.assign(slot.style, { aspectRatio: "auto", minHeight: "64px", padding: "4px" });
+    }
+    // Only the selected view is captured. Remove navigation and implementation details,
+    // but retain selected labels to identify the week/project and the visible columns.
+    copy
+      .querySelectorAll(
+        ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-guide,.mwi-trial-display-settings," +
+          ".mwi-trial-scroll-buttons,.mwi-trial-player-picker,.mwi-trial-raw,.mwi-trial-import-preview," +
+          "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
+          "[data-trial-player-back],[data-trial-profile-refresh]," +
+          "[data-trial-mode][aria-pressed='false'],[data-trial-choice][aria-pressed='false']," +
+          "script,style,iframe,svg[aria-hidden='true'],img"
+      )
+      .forEach((element) => element.remove());
+    for (const element of [copy, ...copy.querySelectorAll("*")]) {
+      element.removeAttribute("id");
+      if (element.matches(".mwi-trial-member-highlight,.mwi-trial-player-selected"))
+        element.classList.remove("mwi-trial-member-highlight", "mwi-trial-player-selected");
+    }
+    copy.style.cssText =
+      "display:block;width:1200px;max-width:none;height:auto;max-height:none;padding:24px;background:#191c2e;box-sizing:border-box;";
+    stage.appendChild(copy);
+    host.parentElement.appendChild(stage);
+    try {
+      for (const element of copy.querySelectorAll("[data-trial-scroll-id],.mwi-trial-table-scroll")) {
+        Object.assign(element.style, { overflow: "visible", maxWidth: "none", maxHeight: "none", height: "auto" });
+      }
+      for (const element of copy.querySelectorAll(".mwi-trial-columns")) {
+        Object.assign(element.style, {
+          gridTemplateColumns: "repeat(2, max-content)",
+          gridAutoFlow: "row",
+          gridAutoColumns: "auto",
+          gap: "24px"
+        });
+      }
+      for (const element of copy.querySelectorAll("th")) element.style.position = "static";
+      // Expand to include wide tables rather than clipping the rightmost column.
+      const width = Math.max(1200, copy.scrollWidth + 24);
+      copy.style.width = `${width}px`;
+      imageSize(width, Math.max(copy.scrollHeight, copy.getBoundingClientRect().height));
+      // Freeze computed styles while still under the real panel's CSS selectors.
+      const nodes = [copy, ...copy.querySelectorAll("*")];
+      const styles = nodes.map((element) => {
+        const computed = pageWindow.getComputedStyle(element);
+        return STYLE_PROPERTIES.map((name) => `${name}:${computed.getPropertyValue(name)};`).join("");
+      });
+      nodes.forEach((element, index) => {
+        element.style.cssText = styles[index];
+        // Used table-cell heights include padding in some engines. Reapplying them
+        // as CSS heights grows rows and overlaps subsequent sections in the SVG.
+        if (element.namespaceURI !== "http://www.w3.org/2000/svg") element.style.height = "auto";
+      });
+      copy.style.containerType = "normal";
+      const size = imageSize(width, Math.max(copy.scrollHeight, copy.getBoundingClientRect().height));
+      copy.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      const content = new pageWindow.XMLSerializer().serializeToString(copy);
+      return {
+        ...size,
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><foreignObject width="100%" height="100%">${content}</foreignObject></svg>`
+      };
+    } finally {
+      stage.remove();
+    }
+  }
+
+  async function renderPng(host, { document, pageWindow }) {
+    const captured = snapshot(host, document, pageWindow);
+    const image = new pageWindow.Image();
+    await new Promise((resolve, reject) => {
+      const timer = pageWindow.setTimeout(() => {
+        image.src = "";
+        reject(new Error("Image timeout"));
+      }, 15000);
+      image.onload = () => {
+        pageWindow.clearTimeout(timer);
+        resolve();
+      };
+      image.onerror = () => {
+        pageWindow.clearTimeout(timer);
+        reject(new Error("Image decode failed"));
+      };
+      // A self-contained data URL avoids external assets and SVG blob origin tainting.
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(captured.svg)}`;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = captured.pixelWidth;
+    canvas.height = captured.pixelHeight;
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas unavailable");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("PNG encoding failed"))), "image/png");
+      });
+    } finally {
+      canvas.width = canvas.height = 0;
+      image.src = "";
+    }
+  }
+
+  function download(blob, { document, pageWindow }) {
+    const url = pageWindow.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `guild-trial-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+    document.body.appendChild(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 60000);
+    }
+  }
+
+  async function deliverPng(png, target, environment) {
+    const { pageWindow } = environment;
+    if (target === "copy") {
+      try {
+        if (!pageWindow.navigator.clipboard?.write || !pageWindow.ClipboardItem)
+          throw new Error("Clipboard unavailable");
+        await pageWindow.navigator.clipboard.write([new pageWindow.ClipboardItem({ "image/png": png })]);
+        return "trialScreenshotCopied";
+      } catch (error) {
+        download(await png, environment);
+        return "trialScreenshotFallback";
+      }
+    }
+    download(await png, environment);
+    return "trialScreenshotDownloaded";
+  }
+
+  function exportImage(host, target, environment) {
+    // Schedule rendering after registering the clipboard write during user activation.
+    return deliverPng(
+      Promise.resolve().then(() => renderPng(host, environment)),
+      target,
+      environment
+    );
+  }
+
+  return { imageSize, snapshot, renderPng, deliverPng, exportImage };
+});
+
+
 // SOURCE: src/ui/trial-history-view.js
 (function (root, factory) {
   const api = factory();
@@ -11587,6 +11779,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     pluginStorage,
     trialHistoryApi,
     playerViewApi,
+    screenshotApi,
     profileTooltipApi,
     profileReaderApi,
     resolveItemName,
@@ -11595,6 +11788,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   }) {
     let mode = "week";
     let screenshotMode = false;
+    let screenshotBusy = false;
+    let screenshotNotice = "";
+    let screenshotHelpOpen = false;
     const isScreenshotMode = () => screenshotMode;
     const formatMemberName = playerViewApi.createMemberNameFormatter({ t, isScreenshotMode });
     let selectedWeek = "";
@@ -11734,8 +11930,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
+        <details class="mwi-trial-guide" data-trial-image-help${screenshotHelpOpen ? " open" : ""}><summary>${escapeHtml(t("trialScreenshotGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotHelp"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotReady"))}</p></details>
+        <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
@@ -12243,6 +12441,28 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 0);
     }
 
+    async function exportScreenshot(host, target) {
+      if (screenshotBusy) return;
+      screenshotBusy = true;
+      screenshotNotice = "";
+      const update = () => {
+        if (disposed || !host.isConnected) return;
+        for (const button of host.querySelectorAll("[data-trial-image]"))
+          button.disabled = screenshotBusy || !records.length;
+        const status = host.querySelector("[data-trial-image-status]");
+        if (status) status.textContent = t(screenshotBusy ? "trialScreenshotWorking" : screenshotNotice);
+      };
+      update();
+      try {
+        screenshotNotice = await screenshotApi.exportImage(host, target, { document, pageWindow });
+      } catch (error) {
+        screenshotNotice = error.code === "trialScreenshotTooLarge" ? error.code : "trialScreenshotFailed";
+      } finally {
+        screenshotBusy = false;
+        update();
+      }
+    }
+
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
       profileTooltip?.dispose();
@@ -12267,7 +12487,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       host.addEventListener(
         "toggle",
         (event) => {
-          if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
+          if (event.target.matches("[data-trial-image-help]")) screenshotHelpOpen = event.target.open;
+          else if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
           if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
           if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
             playerPickerOpen = event.target.open;
@@ -12324,6 +12545,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const imageButton = event.target.closest("[data-trial-image]");
+        if (imageButton) {
+          void exportScreenshot(host, imageButton.dataset.trialImage);
+          return;
+        }
         if (event.target.closest("[data-trial-screenshot-mode]")) {
           screenshotMode = !screenshotMode;
           playerSearch = "";
@@ -14924,6 +15150,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else if (selectedView === "trials") refreshTrialHistory(panel);
       else refreshPanel(panel);
+      const selectedTab = panel.querySelector(`[data-role="view-${selectedView}"]`);
+      const tabList = panel.querySelector(".mwi-view-tabs");
+      if (selectedTab && tabList) {
+        const tabRect = selectedTab.getBoundingClientRect();
+        const listRect = tabList.getBoundingClientRect();
+        if (tabRect.left < listRect.left) tabList.scrollLeft += tabRect.left - listRect.left;
+        else if (tabRect.right > listRect.right) tabList.scrollLeft += tabRect.right - listRect.right;
+      }
       return persisted;
     }
 
@@ -16631,6 +16865,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     pluginStorage,
     trialHistoryApi,
     playerViewApi: window.MwiGuildTrialPlayerView,
+    screenshotApi: window.MwiGuildTrialScreenshot,
     profileReaderApi: window.MwiGuildProfileReader,
     profileTooltipApi: window.MwiGuildProfileTooltip,
     resolveItemName,

@@ -2329,12 +2329,22 @@
       );
       const visibleElements = auditElements.filter(elementIsVisible);
       const rootRect = elementRect(root);
+      // Tab labels stay full-width inside a horizontal scroller. Audit painted
+      // bounds so clipped tabs are not mistaken for overlap with pinned Settings.
+      const paintedRect = (element) => {
+        const rect = elementRect(element);
+        const scroller = element.closest(".mwi-view-tabs");
+        if (!rect || !scroller || element === scroller) return rect;
+        const bounds = elementRect(scroller);
+        return { ...rect, left: Math.max(rect.left, bounds.left), right: Math.min(rect.right, bounds.right) };
+      };
       const horizontalOverflow = visibleElements
         .filter((element) => {
           const style = getComputedStyle(element);
           const intentionallyEllipsized =
             style.textOverflow === "ellipsis" && ["hidden", "clip"].includes(style.overflowX);
-          return !intentionallyEllipsized && element.scrollWidth > element.clientWidth + 2;
+          const tabScroller = element.matches(".mwi-view-tabs") && style.overflowX === "auto";
+          return !intentionallyEllipsized && !tabScroller && element.scrollWidth > element.clientWidth + 2;
         })
         .map((element) => ({
           className: String(element.className || ""),
@@ -2344,8 +2354,13 @@
         }));
       const boundaryOverflow = visibleElements
         .filter((element) => {
-          const rect = elementRect(element);
-          return rect && rootRect && (rect.left < rootRect.left - 1 || rect.right > rootRect.right + 1);
+          const rect = paintedRect(element);
+          return (
+            rect &&
+            rect.right > rect.left &&
+            rootRect &&
+            (rect.left < rootRect.left - 1 || rect.right > rootRect.right + 1)
+          );
         })
         .map((element) => ({
           className: String(element.className || ""),
@@ -2361,8 +2376,8 @@
           const left = interactiveElements[leftIndex];
           const right = interactiveElements[rightIndex];
           if (left.contains(right) || right.contains(left)) continue;
-          const leftRect = elementRect(left);
-          const rightRect = elementRect(right);
+          const leftRect = paintedRect(left);
+          const rightRect = paintedRect(right);
           const overlapWidth = Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
           const overlapHeight = Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
           if (overlapWidth > 1 && overlapHeight > 1)
@@ -4307,8 +4322,30 @@
       checks.screenshotReenabledStable = host
         .querySelector("[data-trial-player-title]")
         .textContent.includes(anonymousLabel);
+      const checkImageSnapshot = (view) => {
+        const before = host.innerHTML;
+        const image = window.MwiGuildTrialScreenshot.snapshot(host, document, window);
+        const parsed = new DOMParser().parseFromString(image.svg, "image/svg+xml");
+        checks[`imageComplete_${view}`] =
+          parsed.querySelectorAll("tbody tr").length === host.querySelectorAll("tbody tr").length &&
+          [...parsed.querySelectorAll("tbody tr")].map((row) => row.textContent).join("|") ===
+            [...host.querySelectorAll("tbody tr")].map((row) => row.textContent).join("|");
+        checks[`imageAnonymous_${view}`] = !Object.values(members).some((member) =>
+          parsed.documentElement.textContent.includes(member.name)
+        );
+        checks[`imageProfileLabels_${view}`] = [
+          ...host.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")
+        ].every((slot) => parsed.documentElement.textContent.includes(slot.getAttribute("aria-label")));
+        checks[`imageNoControls_${view}`] = !parsed.querySelector(
+          "[data-trial-image],.mwi-trial-raw,.mwi-trial-display-settings"
+        );
+        checks[`imageNoSideEffects_${view}`] =
+          host.innerHTML === before && !document.querySelector("[data-trial-screenshot-stage]");
+      };
+      checkImageSnapshot("player-detail");
       for (const view of ["week", "project"]) {
         host.querySelector(`[data-trial-mode="${view}"]`).click();
+        checkImageSnapshot(view);
         checks[`screenshotAnonymous_${view}`] =
           !screenshotHasNames() &&
           !host.querySelector(".mwi-trial-raw") &&
@@ -4317,6 +4354,29 @@
             .every((el) => el.textContent === anonymousLabel);
       }
       host.querySelector('[data-trial-mode="player"]').click();
+      checkImageSnapshot("rankings");
+      // Exercise a long table beyond the viewport without changing stored fixture records.
+      const longHost = host.cloneNode(true);
+      host.parentElement.appendChild(longHost);
+      try {
+        const body = longHost.querySelector("tbody");
+        for (let index = 0; index < 80; index++) body.appendChild(body.firstElementChild.cloneNode(true));
+        const row = body.lastElementChild;
+        row.querySelector("th,td").textContent = "PNG-END-ROW";
+        const snapshot = window.MwiGuildTrialScreenshot.snapshot(longHost, document, window);
+        const blob = await window.MwiGuildTrialScreenshot.renderPng(longHost, { document, pageWindow: window });
+        const bitmap = await createImageBitmap(blob);
+        checks.imageLongPng =
+          blob.type === "image/png" &&
+          blob.size > 10000 &&
+          snapshot.height > window.innerHeight &&
+          bitmap.width === snapshot.pixelWidth &&
+          bitmap.height === snapshot.pixelHeight &&
+          snapshot.svg.includes("PNG-END-ROW");
+        bitmap.close();
+      } finally {
+        longHost.remove();
+      }
       checks.screenshotSurvivesViewSwitch =
         screenshotToggle().getAttribute("aria-pressed") === "true" && !screenshotHasNames();
       screenshotToggle().click();

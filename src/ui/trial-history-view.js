@@ -40,6 +40,7 @@
     pluginStorage,
     trialHistoryApi,
     playerViewApi,
+    screenshotApi,
     profileTooltipApi,
     profileReaderApi,
     resolveItemName,
@@ -48,6 +49,9 @@
   }) {
     let mode = "week";
     let screenshotMode = false;
+    let screenshotBusy = false;
+    let screenshotNotice = "";
+    let screenshotHelpOpen = false;
     const isScreenshotMode = () => screenshotMode;
     const formatMemberName = playerViewApi.createMemberNameFormatter({ t, isScreenshotMode });
     let selectedWeek = "";
@@ -187,8 +191,10 @@
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
+        <details class="mwi-trial-guide" data-trial-image-help${screenshotHelpOpen ? " open" : ""}><summary>${escapeHtml(t("trialScreenshotGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotHelp"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotReady"))}</p></details>
+        <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
         <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
@@ -696,6 +702,28 @@
       pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 0);
     }
 
+    async function exportScreenshot(host, target) {
+      if (screenshotBusy) return;
+      screenshotBusy = true;
+      screenshotNotice = "";
+      const update = () => {
+        if (disposed || !host.isConnected) return;
+        for (const button of host.querySelectorAll("[data-trial-image]"))
+          button.disabled = screenshotBusy || !records.length;
+        const status = host.querySelector("[data-trial-image-status]");
+        if (status) status.textContent = t(screenshotBusy ? "trialScreenshotWorking" : screenshotNotice);
+      };
+      update();
+      try {
+        screenshotNotice = await screenshotApi.exportImage(host, target, { document, pageWindow });
+      } catch (error) {
+        screenshotNotice = error.code === "trialScreenshotTooLarge" ? error.code : "trialScreenshotFailed";
+      } finally {
+        screenshotBusy = false;
+        update();
+      }
+    }
+
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
       profileTooltip?.dispose();
@@ -720,7 +748,8 @@
       host.addEventListener(
         "toggle",
         (event) => {
-          if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
+          if (event.target.matches("[data-trial-image-help]")) screenshotHelpOpen = event.target.open;
+          else if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
           if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
           if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
             playerPickerOpen = event.target.open;
@@ -777,6 +806,11 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const imageButton = event.target.closest("[data-trial-image]");
+        if (imageButton) {
+          void exportScreenshot(host, imageButton.dataset.trialImage);
+          return;
+        }
         if (event.target.closest("[data-trial-screenshot-mode]")) {
           screenshotMode = !screenshotMode;
           playerSearch = "";

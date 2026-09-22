@@ -441,6 +441,18 @@
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
+      trialScreenshotGuide: "长图截图帮助",
+      trialScreenshotCopy: "复制长图",
+      trialScreenshotDownload: "下载 PNG",
+      trialScreenshotHelp:
+        "截取当前所选周、项目或玩家的完整视图，含滚动区域中的全部表格。长图按两列排版，省略操作区、原始数据和装饰图标，技能装备图标转为文字；保留当前显示字段与匿名设置。",
+      trialScreenshotReady: "分享前可开启截图模式隐藏玩家名。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
+      trialScreenshotWorking: "正在生成完整长图…",
+      trialScreenshotCopied: "长图已复制，可直接粘贴。",
+      trialScreenshotDownloaded: "已发起 PNG 下载，请查看浏览器下载列表。",
+      trialScreenshotFallback: "无法写入剪贴板，已改为下载 PNG，请查看浏览器下载列表。",
+      trialScreenshotTooLarge: "当前视图过大，无法生成清晰长图。请切换到单周或单个玩家后重试。",
+      trialScreenshotFailed: "长图生成失败。请重试或切换到单周视图后下载 PNG。",
       trialScreenshotMode: "截图模式",
       trialScreenshotExit: "退出截图模式",
       trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
@@ -1100,6 +1112,19 @@
       noAffordableReplacement:
         "Selling this quantity yields {gold} after tax, which is not enough to buy an alternative exchange item.",
       trialHistory: "Trial history",
+      trialScreenshotGuide: "Image capture help",
+      trialScreenshotCopy: "Copy image",
+      trialScreenshotDownload: "Download PNG",
+      trialScreenshotHelp:
+        "Capture the selected week, project or player, including full scrollable tables. Images use two columns and omit controls, raw data and decorative icons; skills and equipment use text labels. Visible fields and anonymity settings are preserved.",
+      trialScreenshotReady:
+        "Enable screenshot mode to hide player names before sharing. If copying is unavailable, the image downloads instead. Your browser controls the save location.",
+      trialScreenshotWorking: "Generating full image…",
+      trialScreenshotCopied: "Image copied. Ready to paste.",
+      trialScreenshotDownloaded: "PNG download started. Check your browser downloads.",
+      trialScreenshotFallback: "Clipboard unavailable. PNG download started instead. Check your browser downloads.",
+      trialScreenshotTooLarge: "This view is too large for a readable image. Select a single week or player and retry.",
+      trialScreenshotFailed: "Could not generate the image. Retry or select a single week and download PNG.",
       trialScreenshotMode: "Screenshot mode",
       trialScreenshotExit: "Exit screenshot mode",
       trialScreenshotHint:

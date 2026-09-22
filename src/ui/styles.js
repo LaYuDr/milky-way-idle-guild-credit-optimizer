@@ -418,7 +418,7 @@
         @media (prefers-reduced-motion:reduce){
           #mwi-credit-optimizer .mwi-upgrade-plan,#mwi-credit-optimizer .mwi-remove-plan{transition:none}
         }
-        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){border-bottom:2px solid transparent!important;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
+        #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){border-bottom:2px solid transparent!important;white-space:nowrap;font-size:13px;line-height:1.4;transition:color .15s ease,background-color .15s ease}
         #mwi-credit-optimizer .mwi-view-tab-active{border-bottom-color:#77e1cb!important}
         #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger):hover{color:#fff!important;background:#ffffff08!important}
         #mwi-credit-optimizer .mwi-view-tabs-shell button:focus-visible{outline:2px solid #77e1cb!important;outline-offset:-3px}
@@ -428,28 +428,9 @@
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){transition:none}}
         @container (max-width:480px){
           #mwi-credit-optimizer .mwi-view-tabs-shell{padding-top:4px}
-          #mwi-credit-optimizer .mwi-view-tabs{overflow-x:hidden}
-          #mwi-credit-optimizer .mwi-view-tab-item:not([hidden]){
-            display:flex;
-            flex:1 1 min-content;
-            min-width:0;
-          }
           #mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            width:100%;
-            min-width:0;
-            height:100%;
-            min-height:40px!important;
             padding:8px 4px!important;
             font-size:12px;
-            line-height:1.35;
-            overflow-wrap:normal;
-            hyphens:none;
-            text-align:center;
-            white-space:normal;
-            word-break:normal;
           }
 
         }

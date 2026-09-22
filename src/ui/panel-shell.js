@@ -226,6 +226,14 @@
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else if (selectedView === "trials") refreshTrialHistory(panel);
       else refreshPanel(panel);
+      const selectedTab = panel.querySelector(`[data-role="view-${selectedView}"]`);
+      const tabList = panel.querySelector(".mwi-view-tabs");
+      if (selectedTab && tabList) {
+        const tabRect = selectedTab.getBoundingClientRect();
+        const listRect = tabList.getBoundingClientRect();
+        if (tabRect.left < listRect.left) tabList.scrollLeft += tabRect.left - listRect.left;
+        else if (tabRect.right > listRect.right) tabList.scrollLeft += tabRect.right - listRect.right;
+      }
       return persisted;
     }
 

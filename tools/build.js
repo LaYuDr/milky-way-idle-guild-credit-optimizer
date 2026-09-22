@@ -98,6 +98,7 @@ const SOURCE_FILES = [
   "src/ui/construction-view.js",
   "src/ui/trial-player-view.js",
   "src/ui/profile-tooltip.js",
+  "src/ui/trial-screenshot.js",
   "src/ui/trial-history-view.js",
   "src/ui/upgrade-view.js",
   "src/ui/settings-view.js",
