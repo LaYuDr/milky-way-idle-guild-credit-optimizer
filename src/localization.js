@@ -468,9 +468,10 @@
       trialRankingMultiple: "平均倍数",
       trialRankingSamples: "样本数",
       trialRankingMethod: "统计口径",
-      trialRankingCountHelp: "每参与一个已保存的试炼项目计 1 次，包含零贡献记录。未采集的项目不参与统计，同值并列。",
+      trialRankingCountHelp:
+        "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。之后对参试项目的倍数等权平均，生活＋战斗也按项目平均。仅统计已保存记录中的已知值（含零），缺失值和零分母跳过；无有效项目显示 —。1× 为该项目人均水平，同值并列。",
+        "样本数是当前榜单中可计算倍数的项目数：生活榜只计生活，战斗榜只计战斗，合并榜计两者。生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。之后对参试项目的倍数等权平均。仅统计游戏采集记录中的已知值（含零），缺失值和零分母跳过，因此样本数可能少于参与次数；无有效项目显示 —。1× 为该项目人均水平，同值并列。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -1101,9 +1102,9 @@
       trialRankingSamples: "Samples",
       trialRankingMethod: "How rankings are calculated",
       trialRankingCountHelp:
-        "Each recorded project attended counts once, including zero contributions. Unrecorded projects are excluded. Equal values share a rank.",
+        "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Then project multiples are averaged with equal weight, including in the combined category. Only known recorded values count (including zero); missing values and zero denominators are skipped. No valid projects shows —. 1× is the project average; equal values share a rank.",
+        "Samples count projects with a valid multiple in this ranking: skilling only, combat only, or both. Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Then project multiples are averaged with equal weight. Only known game-captured values count (including zero); missing values and zero denominators are skipped, so samples can be fewer than participations. No valid projects shows —. 1× is the project average; equal values share a rank.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",

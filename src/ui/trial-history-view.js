@@ -71,6 +71,7 @@
     let focusedMemberCell = null;
     let selectedMember = null;
     let profileState = { status: "loading" };
+    const profileSectionsOpen = { skills: true, equipment: true };
     let profileRevision = 0;
     let playerReturn = null;
     let playerSearch = "";
@@ -509,6 +510,8 @@
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      for (const section of host.querySelectorAll("[data-trial-profile-section]"))
+        profileSectionsOpen[section.dataset.trialProfileSection] = section.open;
       const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
       const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
       const rankingHelpOpen = Boolean(host.querySelector("[data-trial-ranking-help]")?.open);
@@ -556,7 +559,8 @@
             ? playerRenderer.render({
                 member: selectedMember,
                 weeks: trialHistoryApi.memberHistory(records, selectedMember),
-                profileState
+                profileState,
+                profileSectionsOpen
               })
             : `<p class="mwi-status">${escapeHtml(t(members.length ? "trialSelectPlayerPrompt" : "trialNoNamedPlayers"))}</p>`);
         for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {

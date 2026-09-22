@@ -280,9 +280,56 @@
     return Math.floor((weekStartAt - config.GUILD_TRIAL_FIRST_START_AT) / WEEK_MS) + 1;
   }
 
+  // One verified legacy spreadsheet replaced k/K with 000 in its name column.
+  // Scope corrections to its exact provenance, row and source cell; never infer
+  // identities by globally replacing text or assign character IDs to imports.
+  function repairLegacyMemberNames(record) {
+    if (
+      record?.schemaVersion !== 2 ||
+      record.source !== "manual" ||
+      record.recordId !== "7b1591d8-9b9c-5aaf-9552-39dcebea9277" ||
+      record.sourceSha256 !== "f85b3a0c18ad9217bae121da5eeba254922f4907fa7a683a752f99025f68f1e8" ||
+      record.kind !== "combat" ||
+      record.trialHrid !== "/guild_combat/swarm" ||
+      !isObject(record.members) ||
+      !Array.isArray(record.rows)
+    )
+      return record;
+    let members = record.members;
+    for (const [line, originalName, name] of [
+      [6, "000wy", "kwy"],
+      [11, "BS000", "BSK"],
+      [14, "ABCDEFGHIJ000MLN", "ABCDEFGHIJKMLN"],
+      [19, "BigBa000a", "BigBaKa"],
+      [29, "catcoo000ie", "catcookie"],
+      [32, "tian000ongyiran", "tiankongyiran"],
+      [35, "000aela", "Kaela"],
+      [37, "su000hoiwham", "sukhoiwham"],
+      [42, "Ryuu000u2", "Ryuuku2"],
+      [47, "000ali000uno", "kalikuno"]
+    ]) {
+      const key = `excel-row-${line}`;
+      const row = record.rows.find((entry) => entry?.memberKey === key);
+      if (
+        row?.characterId !== null ||
+        row.sourceCells?.[`J${line}`]?.value !== originalName ||
+        members[key]?.name !== originalName
+      )
+        continue;
+      if (members === record.members) members = { ...members };
+      members[key] = {
+        ...members[key],
+        name,
+        nameCorrection: { originalName, reason: "legacy-excel-k-replacement" }
+      };
+    }
+    return members === record.members ? record : { ...record, members };
+  }
+
   // Calendar dates are interpreted in UTC, independent of browser timezone.
   // Never infer a year from the current clock or a yearless chat timestamp.
   function normalizeSnapshot(record) {
+    record = repairLegacyMemberNames(record);
     if (record?.schemaVersion !== 2 || typeof record.trialDate !== "string") return record;
     const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(record.trialDate);
     if (!match) return record;
@@ -504,7 +551,8 @@
     return Number.isFinite(multiple) ? multiple : null;
   }
 
-  // Aggregate only recorded participants. Missing projects never imply absence or zero.
+  // Rankings use game-captured v1 records only; manual v2 transcripts remain in history.
+  // Missing projects never imply absence or zero.
   function playerRankings(records) {
     const players = new Map();
     const seenRecords = new Set();
@@ -514,6 +562,7 @@
       target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
     };
     for (const record of records) {
+      if (record.schemaVersion !== 1 || record.source === "manual") continue;
       if (seenRecords.has(record.key)) continue;
       seenRecords.add(record.key);
       const fields =

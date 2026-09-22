@@ -3412,6 +3412,12 @@
                 sharableCharacter: { name: characterName, id: characterName === members[101].name ? 101 : 102 },
                 guildName: "Profile Guild",
                 combatLevel: 97.25,
+                totalTaskPoints: 904,
+                labyrinthPoints: 104,
+                labyrinthHighestFloor: 3,
+                collectionPoints: 591,
+                bestiaryPoints: 32,
+                famePoints: 10,
                 characterSkills: [
                   { skillHrid: "/skills/milking", level: 143 },
                   { skillHrid: "/skills/enhancing", level: 138 },
@@ -3637,6 +3643,34 @@
       checks.profileIconsDecorative = [...host.querySelectorAll(".mwi-trial-profile-icon")].every(
         (el) => el.getAttribute("aria-hidden") === "true"
       );
+      const profileFacts = host.querySelector(".mwi-trial-profile-facts");
+      checks.profileOnlyLevelFacts =
+        profileFacts.children.length === 2 &&
+        [...profileFacts.querySelectorAll("dd")].map((el) => el.textContent).join(",") === "1800,97.25";
+      const profileStoredBefore = JSON.stringify(saved());
+      const profileRequestsBefore = profileFrames.length;
+      const profileSection = (key) => host.querySelector(`[data-trial-profile-section="${key}"]`);
+      checks.profileSectionsDefaultOpen = profileSection("skills").open && profileSection("equipment").open;
+      profileSection("skills").querySelector("summary").click();
+      checks.profileSkillsCollapseIndependent =
+        !profileSection("skills").open &&
+        !host.querySelector("[data-profile-skill]").checkVisibility() &&
+        profileSection("equipment").open &&
+        host.querySelector("[data-equipment-slot]").checkVisibility();
+      profileSection("equipment").querySelector("summary").click();
+      checks.profileEquipmentCollapsesAbilities =
+        !profileSection("equipment").open &&
+        !host.querySelector("[data-equipment-slot]").checkVisibility() &&
+        !host.querySelector(".mwi-trial-profile-abilities").checkVisibility();
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.profileCollapseSurvivesRender = !profileSection("skills").open && !profileSection("equipment").open;
+      for (const key of ["skills", "equipment"]) profileSection(key).querySelector("summary").click();
+      checks.profileSectionsReopen =
+        host.querySelector("[data-profile-skill]").checkVisibility() &&
+        host.querySelector("[data-equipment-slot]").checkVisibility() &&
+        host.querySelector(".mwi-trial-profile-abilities").checkVisibility();
+      checks.profileCollapseNoRequestsOrWrites =
+        profileFrames.length === profileRequestsBefore && JSON.stringify(saved()) === profileStoredBefore;
       checks.playerAllProjects = host.querySelectorAll("[data-trial-selected-member]").length === 6;
       checks.playerIncludesOtherNames = host
         .querySelector(".mwi-trial-player-history")

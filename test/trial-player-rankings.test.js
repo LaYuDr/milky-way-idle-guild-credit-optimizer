@@ -47,15 +47,10 @@ test("零分母和未知字段不补零，有效零贡献参与平均；重复�
       { characterId: 1, damageDealt: 0 },
       { characterId: 2, damageDealt: 10 }
     ]),
-    record(
-      "manual",
-      "combat",
-      [
-        { characterId: 1, damageDealt: 10 },
-        { characterId: 2, damageDealt: 10 }
-      ],
-      { schemaVersion: 2 }
-    )
+    record("nonzero", "combat", [
+      { characterId: 1, damageDealt: 10 },
+      { characterId: 2, damageDealt: 10 }
+    ])
   ]);
   assert.equal(rows[0].participations, 4);
   assert.equal(rows[0].skilling.average, null);
@@ -66,7 +61,7 @@ test("零分母和未知字段不补零，有效零贡献参与平均；重复�
   assert.deepEqual(api.playerRankings([]), []);
 });
 
-test("角色改名仍按 ID 汇总，同名不同 ID 与无 ID 的记录不合并", () => {
+test("角色改名仍按 ID 汇总，同名不同 ID 保持独立，手动记录不参与", () => {
   const rows = api.playerRankings([
     record(
       "new",
@@ -84,9 +79,40 @@ test("角色改名仍按 ID 汇总，同名不同 ID 与无 ID 的记录不合�
     }),
     record("unnamed", "skilling", [{ characterId: 3, workDone: 1 }], { members: {} })
   ]);
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 3);
   assert.equal(rows.find((row) => row.id === "1").participations, 2);
   assert.equal(rows.find((row) => row.id === "2").participations, 1);
-  assert.equal(rows.find((row) => row.id === null).participations, 1);
+  assert.equal(
+    rows.some((row) => row.id === null),
+    false
+  );
   assert.equal(rows.find((row) => row.id === "3").participations, 1);
+});
+
+test("排行榜仅纳入游戏采集来源，手动记录即使有角色 ID 也不能计次或影响平均", () => {
+  const captured = record("captured", "skilling", [
+    { characterId: 1, workDone: 30 },
+    { characterId: 2, workDone: 10 }
+  ]);
+  const manual = record(
+    "manual",
+    "combat",
+    [
+      { characterId: 1, damageDealt: 100 },
+      { characterId: 3, damageDealt: 0 }
+    ],
+    { schemaVersion: 2, source: "manual", members: { 1: { name: "Alpha" }, 3: { name: "Manual only" } } }
+  );
+  const records = [
+    manual,
+    { ...manual, key: "manual-without-marker", source: undefined },
+    { ...manual, key: "manual-v1", schemaVersion: 1 },
+    captured
+  ];
+  const before = JSON.stringify(records);
+  assert.deepEqual(api.playerRankings(records), api.playerRankings([captured]));
+  assert.deepEqual(api.playerRankings(records.slice(0, 3)), []);
+  assert.equal(JSON.stringify(records), before);
+  // Exporting and restoring a game capture does not turn it into a manual transcript.
+  assert.deepEqual(api.playerRankings(JSON.parse(JSON.stringify([captured]))), api.playerRankings([captured]));
 });

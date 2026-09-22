@@ -705,11 +705,18 @@ Player ranking checks cover participation counts, ties, skilling/combat/combined
 averages, valid-project counts, four simultaneously visible parallel columns, left/right
 scroll controls, focus and scroll restoration, and contained tables,
 click-through to player details and return to the ranking without background queries
-or storage changes. Each recorded project counts once, including zero contributions.
+or storage changes. Rankings use only game-captured schema v1 records and exclude
+manual transcripts (schema v2 or explicit manual source), including manual records
+with character IDs. Exported/restored game captures remain eligible; stored manual
+records remain available to the existing history views. Each captured project counts
+once, including zero contributions.
 Skilling uses work / project mean work. Combat averages the valid damage, healing and
 premitigated-damage-taken multiples within each project. Project multiples then have
 equal weight, including in the combined category. Missing values and zero denominators
-are excluded; no valid projects displays an em dash. Only recorded rows are used;
+are excluded; no valid projects displays an em dash. Participation counts combine all
+captured skilling and combat projects; samples count only valid projects in that
+ranking category, so two skilling projects plus one combat project means three
+participations and two skilling samples. Only captured rows are used;
 missing projects are not inferred. Stable character IDs group players; ID-less named
 records form a separate name-based group and are never merged into an ID group.
 
@@ -722,3 +729,7 @@ Profile skills use five-column tiles matching equipment dimensions. The profile
 audit checks native icon order, the 5/5/4/3 row grouping, accessible names, preserved
 levels and unknown placeholders, and measures equal skill/equipment tile sizes
 across the width matrix.
+The profile facts show only total and combat levels. Skills and equipment use
+independent native disclosures, initially open, with their state retained during
+view refreshes. Equipment includes its following ability slots. The fixture checks
+collapse/reopen visibility, unchanged stored records and no extra profile requests.

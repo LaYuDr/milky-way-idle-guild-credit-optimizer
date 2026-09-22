@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.33";
+window.MwiGuildCreditVersion = "1.2.34";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1059,9 +1059,56 @@ window.MwiGuildCreditVersion = "1.2.33";
     return Math.floor((weekStartAt - config.GUILD_TRIAL_FIRST_START_AT) / WEEK_MS) + 1;
   }
 
+  // One verified legacy spreadsheet replaced k/K with 000 in its name column.
+  // Scope corrections to its exact provenance, row and source cell; never infer
+  // identities by globally replacing text or assign character IDs to imports.
+  function repairLegacyMemberNames(record) {
+    if (
+      record?.schemaVersion !== 2 ||
+      record.source !== "manual" ||
+      record.recordId !== "7b1591d8-9b9c-5aaf-9552-39dcebea9277" ||
+      record.sourceSha256 !== "f85b3a0c18ad9217bae121da5eeba254922f4907fa7a683a752f99025f68f1e8" ||
+      record.kind !== "combat" ||
+      record.trialHrid !== "/guild_combat/swarm" ||
+      !isObject(record.members) ||
+      !Array.isArray(record.rows)
+    )
+      return record;
+    let members = record.members;
+    for (const [line, originalName, name] of [
+      [6, "000wy", "kwy"],
+      [11, "BS000", "BSK"],
+      [14, "ABCDEFGHIJ000MLN", "ABCDEFGHIJKMLN"],
+      [19, "BigBa000a", "BigBaKa"],
+      [29, "catcoo000ie", "catcookie"],
+      [32, "tian000ongyiran", "tiankongyiran"],
+      [35, "000aela", "Kaela"],
+      [37, "su000hoiwham", "sukhoiwham"],
+      [42, "Ryuu000u2", "Ryuuku2"],
+      [47, "000ali000uno", "kalikuno"]
+    ]) {
+      const key = `excel-row-${line}`;
+      const row = record.rows.find((entry) => entry?.memberKey === key);
+      if (
+        row?.characterId !== null ||
+        row.sourceCells?.[`J${line}`]?.value !== originalName ||
+        members[key]?.name !== originalName
+      )
+        continue;
+      if (members === record.members) members = { ...members };
+      members[key] = {
+        ...members[key],
+        name,
+        nameCorrection: { originalName, reason: "legacy-excel-k-replacement" }
+      };
+    }
+    return members === record.members ? record : { ...record, members };
+  }
+
   // Calendar dates are interpreted in UTC, independent of browser timezone.
   // Never infer a year from the current clock or a yearless chat timestamp.
   function normalizeSnapshot(record) {
+    record = repairLegacyMemberNames(record);
     if (record?.schemaVersion !== 2 || typeof record.trialDate !== "string") return record;
     const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(record.trialDate);
     if (!match) return record;
@@ -1283,7 +1330,8 @@ window.MwiGuildCreditVersion = "1.2.33";
     return Number.isFinite(multiple) ? multiple : null;
   }
 
-  // Aggregate only recorded participants. Missing projects never imply absence or zero.
+  // Rankings use game-captured v1 records only; manual v2 transcripts remain in history.
+  // Missing projects never imply absence or zero.
   function playerRankings(records) {
     const players = new Map();
     const seenRecords = new Set();
@@ -1293,6 +1341,7 @@ window.MwiGuildCreditVersion = "1.2.33";
       target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
     };
     for (const record of records) {
+      if (record.schemaVersion !== 1 || record.source === "manual") continue;
       if (seenRecords.has(record.key)) continue;
       seenRecords.add(record.key);
       const fields =
@@ -3525,9 +3574,10 @@ window.MwiGuildCreditVersion = "1.2.33";
       trialRankingMultiple: "平均倍数",
       trialRankingSamples: "样本数",
       trialRankingMethod: "统计口径",
-      trialRankingCountHelp: "每参与一个已保存的试炼项目计 1 次，包含零贡献记录。未采集的项目不参与统计，同值并列。",
+      trialRankingCountHelp:
+        "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。之后对参试项目的倍数等权平均，生活＋战斗也按项目平均。仅统计已保存记录中的已知值（含零），缺失值和零分母跳过；无有效项目显示 —。1× 为该项目人均水平，同值并列。",
+        "样本数是当前榜单中可计算倍数的项目数：生活榜只计生活，战斗榜只计战斗，合并榜计两者。生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。之后对参试项目的倍数等权平均。仅统计游戏采集记录中的已知值（含零），缺失值和零分母跳过，因此样本数可能少于参与次数；无有效项目显示 —。1× 为该项目人均水平，同值并列。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4158,9 +4208,9 @@ window.MwiGuildCreditVersion = "1.2.33";
       trialRankingSamples: "Samples",
       trialRankingMethod: "How rankings are calculated",
       trialRankingCountHelp:
-        "Each recorded project attended counts once, including zero contributions. Unrecorded projects are excluded. Equal values share a rank.",
+        "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Then project multiples are averaged with equal weight, including in the combined category. Only known recorded values count (including zero); missing values and zero denominators are skipped. No valid projects shows —. 1× is the project average; equal values share a rank.",
+        "Samples count projects with a valid multiple in this ranking: skilling only, combat only, or both. Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Then project multiples are averaged with equal weight. Only known game-captured values count (including zero); missing values and zero denominators are skipped, so samples can be fewer than participations. No valid projects shows —. 1× is the project average; equal values share a rank.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -9264,6 +9314,9 @@ window.MwiGuildCreditVersion = "1.2.33";
         #mwi-credit-optimizer .mwi-trial-player-profile header{display:flex;align-items:center;justify-content:space-between;gap:8px}
         #mwi-credit-optimizer .mwi-trial-player-profile h3{margin:0 0 6px;font-size:14px}
         #mwi-credit-optimizer .mwi-trial-player-profile h4{margin:16px 0 4px;font-size:14px;color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-profile-section{margin-top:12px}
+        #mwi-credit-optimizer .mwi-trial-profile-section>summary{padding:6px 0;min-height:32px;font-size:14px;font-weight:650;color:var(--trial-accent);cursor:pointer;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-trial-profile-section>summary:hover{text-decoration:underline;text-underline-offset:3px}
         #mwi-credit-optimizer .mwi-trial-profile-facts{margin:8px 0}
         #mwi-credit-optimizer .mwi-trial-profile-facts>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid var(--trial-line)}
         #mwi-credit-optimizer .mwi-trial-profile-facts dt{display:flex;align-items:center;gap:6px;min-width:0;color:var(--trial-muted);overflow-wrap:anywhere}
@@ -10618,7 +10671,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function equipmentMarkup(profile) {
       if (!profile.wearableItemMap) return "";
       const { slots, extras } = equipmentLayout(profile.wearableItemMap, getBridge()?.itemDetails);
-      let html = `<h4>${e(t("trialProfileEquipment"))}</h4><div class="mwi-trial-equipment-grid">${slots
+      let html = `<div class="mwi-trial-equipment-grid">${slots
         .map(({ key, row, column, item }) => {
           const attributes = `data-equipment-slot="${key}" style="grid-row:${row};grid-column:${column}"`;
           return item
@@ -10645,9 +10698,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     function skillsMarkup(skills) {
       if (!skills.some((skill) => suffix(skill.skillHrid) !== "total_level")) return "";
-      return `<h4>${e(t("trialProfileSkills"))}</h4><div class="mwi-trial-skill-grid" aria-label="${e(t("trialProfileSkills"))}">${skillLayout(
-        skills
-      )
+      return `<div class="mwi-trial-skill-grid" aria-label="${e(t("trialProfileSkills"))}">${skillLayout(skills)
         .map(({ key, row, column, skill }) => {
           const hrid = skill?.skillHrid || `/skills/${key}`;
           const name = label(hrid);
@@ -10657,25 +10708,24 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         })
         .join("")}</div>`;
     }
-    function profileMarkup(state) {
+    function profileSection(key, title, content, sectionOpen) {
+      if (!content) return "";
+      return `<details class="mwi-trial-profile-section" data-trial-profile-section="${key}" ${sectionOpen[key] !== false ? "open" : ""}><summary>${e(t(title))}</summary>${content}</details>`;
+    }
+    function profileMarkup(state, sectionOpen) {
       if (state.status !== "ready")
         return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>`;
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
-      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileGuild"), profile.guildName || "—")}${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}`;
-      for (const field of [
-        "totalTaskPoints",
-        "labyrinthPoints",
-        "labyrinthHighestFloor",
-        "collectionPoints",
-        "bestiaryPoints",
-        "famePoints"
-      ])
-        if (profile[field] != null) html += metric(t(`trialProfile_${field}`), number(profile[field]));
-      html += "</dl>";
-      html += skillsMarkup(skills);
-      html += equipmentMarkup(profile) + abilitiesMarkup(profile);
+      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel))}</dl>`;
+      html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
+      html += profileSection(
+        "equipment",
+        "trialProfileEquipment",
+        equipmentMarkup(profile) + abilitiesMarkup(profile),
+        sectionOpen
+      );
       for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
         if (values.length)
@@ -10725,8 +10775,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           return left === right ? collator.compare(a.name, b.name) : left === null ? 1 : -1;
         return right - left || collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
       });
-      const names = new Map();
-      for (const entry of entries) names.set(entry.name, (names.get(entry.name) || 0) + 1);
       let previous = null,
         rank = 0;
       const rows = entries
@@ -10734,9 +10782,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const value = score(entry);
           if (value !== previous) rank = index + 1;
           previous = value;
-          const identity = entry.id === null ? t("trialManualSource") : `ID ${entry.id}`;
-          const name = entry.name || identity;
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}${names.get(entry.name) > 1 ? `<small>${e(identity)}</small>` : ""}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+          const name = entry.name || t("trialNameUnavailable");
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
@@ -10754,8 +10801,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
-    function render({ member, weeks, profileState }) {
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+    function render({ member, weeks, profileState, profileSectionsOpen = {} }) {
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(member.name)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings };
   }
@@ -10837,6 +10884,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let focusedMemberCell = null;
     let selectedMember = null;
     let profileState = { status: "loading" };
+    const profileSectionsOpen = { skills: true, equipment: true };
     let profileRevision = 0;
     let playerReturn = null;
     let playerSearch = "";
@@ -11275,6 +11323,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
+      for (const section of host.querySelectorAll("[data-trial-profile-section]"))
+        profileSectionsOpen[section.dataset.trialProfileSection] = section.open;
       const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
       const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
       const rankingHelpOpen = Boolean(host.querySelector("[data-trial-ranking-help]")?.open);
@@ -11322,7 +11372,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             ? playerRenderer.render({
                 member: selectedMember,
                 weeks: trialHistoryApi.memberHistory(records, selectedMember),
-                profileState
+                profileState,
+                profileSectionsOpen
               })
             : `<p class="mwi-status">${escapeHtml(t(members.length ? "trialSelectPlayerPrompt" : "trialNoNamedPlayers"))}</p>`);
         for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
