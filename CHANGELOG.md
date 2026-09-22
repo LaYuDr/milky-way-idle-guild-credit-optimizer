@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.36] - 2026-09-22
+
+### Changed
+
+- 玩家合并榜改为生活与战斗平均相对人均直接相加，不再平均；同步合计标题、统计说明和缺失值回归测试。
+
 ## [1.2.35] - 2026-09-22
 
 ### Changed

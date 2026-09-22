@@ -29,7 +29,7 @@ test("排行榜逐项目计次，倍数先在项目内归一化再等权平均",
   assert.equal(alpha.skilling.average, 1);
   assert.equal(alpha.combat.average, 2 / 3);
   assert.equal(beta.combat.average, 4 / 3);
-  assert.ok(Math.abs(alpha.all.average - 8 / 9) < 1e-12);
+  assert.ok(Math.abs(alpha.all.total - 5 / 3) < 1e-12);
   assert.equal(alpha.all.count, 3);
   assert.equal(JSON.stringify(records), before);
 });
@@ -57,6 +57,7 @@ test("零分母和未知字段不补零，有效零贡献参与平均；重复�
   assert.equal(rows[0].skilling.count, 0);
   assert.equal(rows[0].combat.count, 2);
   assert.equal(rows[0].combat.average, 0.5);
+  assert.equal(rows[0].all.total, 0.5);
   assert.equal(rows[1].skilling.average, 1);
   assert.deepEqual(api.playerRankings([]), []);
 });
@@ -115,4 +116,23 @@ test("排行榜仅纳入游戏采集来源，手动记录即使有角色 ID 也�
   assert.equal(JSON.stringify(records), before);
   // Exporting and restoring a game capture does not turn it into a manual transcript.
   assert.deepEqual(api.playerRankings(JSON.parse(JSON.stringify([captured]))), api.playerRankings([captured]));
+});
+
+test("合并榜直接相加两类平均倍数，两类人均为 2 倍，零与缺失保持区分", () => {
+  const equal = (kind) =>
+    record(kind, kind, [
+      { characterId: 1, workDone: 10, damageDealt: 10 },
+      { characterId: 2, workDone: 10, damageDealt: 10 }
+    ]);
+  assert.equal(api.playerRankings([equal("skilling"), equal("combat")])[0].all.total, 2);
+  assert.equal(api.playerRankings([equal("skilling")])[0].all.total, 1);
+  assert.equal(api.playerRankings([equal("combat")])[0].all.total, 1);
+  const missing = (kind) => record(kind, kind, [{ characterId: 1, workDone: null, damageDealt: null }]);
+  assert.deepEqual(api.playerRankings([missing("skilling"), missing("combat")])[0].all, { count: 0, total: null });
+  const zero = (kind) =>
+    record(kind, kind, [
+      { characterId: 1, workDone: 0, damageDealt: 0 },
+      { characterId: 2, workDone: 10, damageDealt: 10 }
+    ]);
+  assert.equal(api.playerRankings([zero("skilling"), zero("combat")])[0].all.total, 0);
 });

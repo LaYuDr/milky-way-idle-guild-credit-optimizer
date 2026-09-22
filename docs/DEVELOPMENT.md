@@ -701,8 +701,8 @@ own per-region/character key and are not part of trial exports.
 
 Player search markup is temporarily commented out. The picker still supports keyboard
 navigation, selection collapse, escaped names and a 60-player wrapping grid.
-Player ranking checks cover participation counts, ties, skilling/combat/combined
-averages, valid-project counts, four simultaneously visible parallel columns, left/right
+Player ranking checks cover participation counts, ties, skilling/combat
+averages and their combined sum, valid-project counts, four simultaneously visible parallel columns, left/right
 scroll controls, focus and scroll restoration, and contained tables,
 click-through to player details and return to the ranking without background queries
 or storage changes. Rankings use only game-captured schema v1 records and exclude
@@ -711,8 +711,10 @@ with character IDs. Exported/restored game captures remain eligible; stored manu
 records remain available to the existing history views. Each captured project counts
 once, including zero contributions.
 Skilling uses work / project mean work. Combat averages the valid damage, healing and
-premitigated-damage-taken multiples within each project. Project multiples then have
-equal weight, including in the combined category. Missing values and zero denominators
+premitigated-damage-taken multiples within each project. Project multiples have equal weight within each category. The combined ranking
+adds the skilling average and combat average directly, without dividing by two or
+weighting by category sample counts. One valid category retains its own average;
+both unavailable yields an em dash. Each category at 1× yields a combined 2×. Missing values and zero denominators
 are excluded; no valid projects displays an em dash. Participation counts combine all
 captured skilling and combat projects; samples count only valid projects in that
 ranking category, so two skilling projects plus one combat project means three

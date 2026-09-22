@@ -3548,7 +3548,7 @@
         checks[`ranking${scope}Averages`] =
           rankedRows(scope)
             .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
-            .join(",") === "2.00×,0.00×" &&
+            .join(",") === (scope === "all" ? "4.00×,0.00×" : "2.00×,0.00×") &&
           rankedRows(scope).every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === count);
       }
       const rankingRail = host.querySelector("#mwi-trial-rail-player-rankings");

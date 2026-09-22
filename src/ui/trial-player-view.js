@@ -244,7 +244,8 @@
 
     function renderRankingColumn(players, metric, scope) {
       const entries = [...players];
-      const score = (entry) => (metric === "participations" ? entry.participations : entry[scope].average);
+      const score = (entry) =>
+        metric === "participations" ? entry.participations : scope === "all" ? entry.all.total : entry[scope].average;
       const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
       entries.sort((a, b) => {
         const left = score(a),
@@ -267,8 +268,10 @@
       const title =
         metric === "participations"
           ? t("trialRankingParticipations")
-          : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
-      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+          : scope === "all"
+            ? t("trialRankingTotalTitle")
+            : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
     }
 
     function renderRankings({ records, helpOpen }) {

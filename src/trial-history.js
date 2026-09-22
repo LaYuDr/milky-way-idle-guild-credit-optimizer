@@ -582,8 +582,7 @@
             ...identity,
             participations: 0,
             skilling: bucket(),
-            combat: bucket(),
-            all: bucket()
+            combat: bucket()
           });
         const player = players.get(key);
         if (!player.name && identity.name) player.name = identity.name;
@@ -594,10 +593,20 @@
         if (!multiples.length) continue;
         const multiple = multiples.reduce((sum, value) => sum + value / multiples.length, 0);
         add(player[record.kind], multiple);
-        add(player.all, multiple);
       }
     }
-    return [...players.values()];
+    return [...players.values()].map((player) => ({
+      ...player,
+      all: {
+        count: player.skilling.count + player.combat.count,
+        total:
+          player.skilling.average === null
+            ? player.combat.average
+            : player.combat.average === null
+              ? player.skilling.average
+              : player.skilling.average + player.combat.average
+      }
+    }));
   }
 
   function playerProjectOverview(records, identity, details = {}) {
@@ -637,7 +646,7 @@
         trialHrid: project.trialHrid,
         trialDetail: details[project.trialHrid] || project.trialDetail,
         participations: player?.participations || 0,
-        average: player?.all.average ?? null,
+        average: player?.[group.kind].average ?? null,
         samples: player?.all.count || 0
       };
     });
