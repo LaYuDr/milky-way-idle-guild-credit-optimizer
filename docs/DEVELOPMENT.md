@@ -710,17 +710,24 @@ manual transcripts (schema v2 or explicit manual source), including manual recor
 with character IDs. Exported/restored game captures remain eligible; stored manual
 records remain available to the existing history views. Each captured project counts
 once, including zero contributions.
-Skilling uses work / project mean work. Combat averages the valid damage, healing and
-premitigated-damage-taken multiples within each project. Project multiples have equal weight within each category. The combined ranking
-adds the skilling average and combat average directly, without dividing by two or
-weighting by category sample counts. One valid category retains its own average;
-both unavailable yields an em dash. Each category at 1× yields a combined 2×. Missing values and zero denominators
-are excluded; no valid projects displays an em dash. Participation counts combine all
-captured skilling and combat projects; samples count only valid projects in that
-ranking category, so two skilling projects plus one combat project means three
-participations and two skilling samples. Only captured rows are used;
-missing projects are not inferred. Stable character IDs group players; ID-less named
-records form a separate name-based group and are never merged into an ID group.
+Skilling uses work / project mean work. Combat averages valid damage, healing
+and premitigated-damage-taken multiples. Each category averages by guild week,
+with one denominator per eligible week. Confirmed eligible absences count as zero;
+membership must begin before the week starts. Native guildCharacterMap.joinTime
+is captured passively with observation time and persisted as optional
+membershipEvidence on game records. Evidence is isolated by guild and character
+ID; different join periods remain separate. Recapture merges evidence without
+discarding earlier periods. weekTrials preserves the expected category projects;
+missing attendance becomes zero only when all those completed projects are saved.
+Unknown membership, incomplete categories and unavailable multiples are excluded
+and marked incomplete, as are known gaps within membership intervals. Only saved
+completed weeks are covered. Manual records never provide attendance, membership,
+completeness, or denominator evidence. Stable IDs stay separate from ID-less names.
+The combined ranking adds both category averages without dividing by two. Its
+count is the sum of category weeks; each category at 1× yields a combined 2×.
+The pure weekly-ranking tests cover the 1.5/2.2/0.8 and absent/2.2/0.8 examples,
+join boundaries, never-participating members, partial captures, cross-guild and
+rejoin gaps, manual exclusion, evidence validation and recapture preservation.
 
 Player profiles include a default-open, independently collapsible trial overview before
 skills and equipment. All ten skilling and five combat projects remain visible,

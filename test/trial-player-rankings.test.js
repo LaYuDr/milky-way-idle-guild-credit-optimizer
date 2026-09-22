@@ -128,7 +128,12 @@ test("合并榜直接相加两类平均倍数，两类人均为 2 倍，零与�
   assert.equal(api.playerRankings([equal("skilling")])[0].all.total, 1);
   assert.equal(api.playerRankings([equal("combat")])[0].all.total, 1);
   const missing = (kind) => record(kind, kind, [{ characterId: 1, workDone: null, damageDealt: null }]);
-  assert.deepEqual(api.playerRankings([missing("skilling"), missing("combat")])[0].all, { count: 0, total: null });
+  assert.deepEqual(api.playerRankings([missing("skilling"), missing("combat")])[0].all, {
+    count: 0,
+    total: null,
+    unknownWeeks: 2,
+    incomplete: true
+  });
   const zero = (kind) =>
     record(kind, kind, [
       { characterId: 1, workDone: 0, damageDealt: 0 },

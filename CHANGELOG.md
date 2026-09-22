@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.37] - 2026-09-22
+
+### Changed
+
+- 生活与战斗贡献榜改为按具备参试资格的在会周数平均，确认缺席计零；保存入会时间证据，未知历史标注不完整，手动导入记录完全排除。合并榜继续直接相加两类均值。
+
 ## [1.2.36] - 2026-09-22
 
 ### Changed

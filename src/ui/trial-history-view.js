@@ -150,7 +150,10 @@
       for (const record of bridge?.pendingTrialSnapshots?.splice(0) || []) unsaved.set(record.key, record);
       reload();
       for (const record of records) {
-        const enriched = trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext);
+        const enriched = trialHistoryApi.withMembershipEvidence(
+          trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext),
+          bridge?.trialHistoryContext
+        );
         if (enriched !== record) unsaved.set(record.key, enriched);
       }
       for (const [key, record] of unsaved) {

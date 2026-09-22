@@ -262,7 +262,7 @@
           if (value !== previous) rank = index + 1;
           previous = value;
           const name = entry.name || t("trialNameUnavailable");
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span>${metric === "average" && entry[scope].incomplete ? `<small data-trial-ranking-incomplete>${e(t("trialRankingIncomplete"))}</small>` : ""}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
@@ -271,7 +271,7 @@
           : scope === "all"
             ? t("trialRankingTotalTitle")
             : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
-      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingWeeks"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
     }
 
     function renderRankings({ records, helpOpen }) {

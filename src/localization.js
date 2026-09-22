@@ -475,11 +475,13 @@
       trialRankingCount: "次数",
       trialRankingMultiple: "平均倍数",
       trialRankingSamples: "样本数",
+      trialRankingWeeks: "计入周数",
+      trialRankingIncomplete: "统计不完整",
       trialRankingMethod: "统计口径",
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "样本数是当前榜单中可计算倍数的项目数：生活榜只计生活，战斗榜只计战斗，合并榜计两者。生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。生活、战斗各自在类内对参试项目的倍数等权平均；合并榜直接相加这两个平均倍数，不再除以 2，也不按两类样本数加权。只有一类有效时保留该类倍数。仅统计游戏采集记录中的已知值（含零），缺失值和零分母跳过，因此样本数可能少于参与次数；无有效项目显示 —。生活和战斗各为 1× 时，合计为 2×；同值并列。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗先平均伤害、治疗、承伤的有效人均倍数，再对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零，并标记统计不完整。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。计入周数包含确认缺席周，合并榜为两类周数之和。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -1117,11 +1119,13 @@
       trialRankingCount: "Count",
       trialRankingMultiple: "Avg. multiple",
       trialRankingSamples: "Samples",
+      trialRankingWeeks: "Weeks counted",
+      trialRankingIncomplete: "Incomplete history",
       trialRankingMethod: "How rankings are calculated",
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Samples count projects with a valid multiple in this ranking: skilling only, combat only, or both. Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Project multiples are averaged equally within each category. The combined score adds the skilling and combat averages directly, without dividing by 2 or weighting by sample counts. If only one category has valid data, its average is used. Only known game-captured values count (including zero); missing values and zero denominators are skipped, so samples can be fewer than participations. No valid projects shows —. 1× in each category gives a combined score of 2×; equal values share a rank.",
+        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat first averages valid damage, healing and damage-taken multiples. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero and are marked incomplete. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Weeks counted include confirmed absences; the combined count sums both categories.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",

@@ -350,7 +350,22 @@
             : {};
         storage.setItem(
           key,
-          JSON.stringify({ ...trialHistoryApi.withSavedProgress(record, previous), members, ...levels })
+          JSON.stringify({
+            ...trialHistoryApi.withSavedProgress(record, previous),
+            members,
+            ...levels,
+            ...(record.weekTrials || previous?.weekTrials
+              ? { weekTrials: record.weekTrials || previous.weekTrials }
+              : {}),
+            ...(record.membershipEvidence || previous?.membershipEvidence
+              ? {
+                  membershipEvidence: trialHistoryApi.mergeMembershipEvidence(
+                    previous?.membershipEvidence || [],
+                    record.membershipEvidence || []
+                  )
+                }
+              : {})
+          })
         );
         return true;
       } catch (_) {

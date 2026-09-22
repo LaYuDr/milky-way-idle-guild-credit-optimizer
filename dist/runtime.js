@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.36";
+window.MwiGuildCreditVersion = "1.2.37";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -796,7 +796,7 @@ window.MwiGuildCreditVersion = "1.2.36";
     }
   }
 
-  function updateContext(previous = {}, message) {
+  function updateContext(previous = {}, message, observedAt = Date.now()) {
     if (!message || typeof message !== "object") return previous;
     let next = previous;
     if (message.guildTrialDetailMap) next = { ...next, details: message.guildTrialDetailMap };
@@ -809,6 +809,7 @@ window.MwiGuildCreditVersion = "1.2.36";
         guild,
         members: changed ? {} : previous.members,
         roster: changed ? null : previous.roster,
+        membershipEvidence: changed ? [] : previous.membershipEvidence,
         signups: changed || weekChanged ? {} : previous.signups,
         signupLevels: changed || weekChanged ? {} : previous.signupLevels
       };
@@ -829,6 +830,17 @@ window.MwiGuildCreditVersion = "1.2.36";
             { name: message.guildSharableCharacterMap?.[id]?.name || member?.name || null }
           ])
         )
+      };
+    }
+    if (next.guild?.id != null && isObject(message.guildCharacterMap)) {
+      next = {
+        ...next,
+        membershipEvidence: Object.entries(message.guildCharacterMap).flatMap(([id, member]) => {
+          const joinedAt = timestamp(member?.joinTime);
+          return Number.isSafeInteger(joinedAt) && joinedAt > 0 && joinedAt <= observedAt
+            ? [{ characterId: String(id), name: next.members?.[id]?.name || member?.name || "", joinedAt, observedAt }]
+            : [];
+        })
       };
     }
     if (isObject(message.guildCharacterMap)) next = { ...next, signups: message.guildCharacterMap };
@@ -882,6 +894,72 @@ window.MwiGuildCreditVersion = "1.2.36";
       changed = true;
     }
     return changed ? { ...record, memberLevels } : record;
+  }
+
+  function mergeMembershipEvidence(...lists) {
+    const merged = new Map();
+    for (const entry of lists.flat()) {
+      const key = JSON.stringify([entry.characterId, entry.joinedAt]);
+      if (!merged.has(key) || merged.get(key).observedAt < entry.observedAt) merged.set(key, entry);
+    }
+    return [...merged.values()].sort((a, b) => a.characterId.localeCompare(b.characterId) || a.joinedAt - b.joinedAt);
+  }
+
+  function withMembershipEvidence(record, context = {}) {
+    if (record.schemaVersion !== 1 || record.source === "manual" || record.guildId !== String(context.guild?.id))
+      return record;
+    const evidence = mergeMembershipEvidence(record.membershipEvidence || [], context.membershipEvidence || []);
+    const trials = objectData(context.guild?.currentTrialsData);
+    const weekTrials =
+      !record.weekTrials &&
+      record.weekStartAt === timestamp(context.guild?.currentWeekStartAt) &&
+      isObject(trials.skilling?.parties) &&
+      isObject(trials.combat?.parties)
+        ? Object.fromEntries(["skilling", "combat"].map((kind) => [kind, Object.keys(trials[kind].parties)]))
+        : record.weekTrials;
+    const evidenceChanged =
+      evidence.length > 0 && JSON.stringify(evidence) !== JSON.stringify(record.membershipEvidence);
+    if (!evidenceChanged && weekTrials === record.weekTrials) return record;
+    return {
+      ...record,
+      ...(evidenceChanged ? { membershipEvidence: evidence } : {}),
+      ...(weekTrials ? { weekTrials } : {})
+    };
+  }
+
+  function validMembershipEvidence(record) {
+    if (record.membershipEvidence === undefined) return true;
+    return (
+      record.schemaVersion === 1 &&
+      Array.isArray(record.membershipEvidence) &&
+      record.membershipEvidence.length <= 10000 &&
+      record.membershipEvidence.every(
+        (entry) =>
+          isObject(entry) &&
+          isText(entry.characterId) &&
+          typeof entry.name === "string" &&
+          entry.name.length <= 500 &&
+          Number.isSafeInteger(entry.joinedAt) &&
+          entry.joinedAt > 0 &&
+          Number.isSafeInteger(entry.observedAt) &&
+          entry.observedAt >= entry.joinedAt
+      )
+    );
+  }
+
+  function validWeekTrials(record) {
+    return (
+      record.weekTrials === undefined ||
+      (record.schemaVersion === 1 &&
+        isObject(record.weekTrials) &&
+        ["skilling", "combat"].every(
+          (kind) =>
+            Array.isArray(record.weekTrials[kind]) &&
+            record.weekTrials[kind].length <= 100 &&
+            record.weekTrials[kind].every(isText) &&
+            new Set(record.weekTrials[kind]).size === record.weekTrials[kind].length
+        ))
+    );
   }
 
   function validMemberLevels(record) {
@@ -987,6 +1065,9 @@ window.MwiGuildCreditVersion = "1.2.36";
                   trialHrid,
                   kind,
                   capturedAt,
+                  weekTrials: Object.fromEntries(
+                    ["skilling", "combat"].map((kind) => [kind, Object.keys(trials[kind]?.parties || {})])
+                  ),
                   points: trials.points?.[trialHrid] ?? null,
                   party,
                   rows,
@@ -1000,7 +1081,7 @@ window.MwiGuildCreditVersion = "1.2.36";
         );
       }
     }
-    return snapshots;
+    return snapshots.map((record) => withMembershipEvidence(record, context));
   }
 
   // The game stores a 0–1 ratio and floors its percentage for display.
@@ -1024,7 +1105,8 @@ window.MwiGuildCreditVersion = "1.2.36";
   }
 
   function validSnapshot(value) {
-    if (!validMemberLevels(value || {})) return false;
+    if (!validMemberLevels(value || {}) || !validMembershipEvidence(value || {}) || !validWeekTrials(value || {}))
+      return false;
     if (value?.party?.nextTierProgress != null && nextTierProgress(value) === null) return false;
     if (value?.schemaVersion === 2) return validManualSnapshot(value);
     return Boolean(
@@ -1333,7 +1415,7 @@ window.MwiGuildCreditVersion = "1.2.36";
 
   // Rankings use game-captured v1 records only; manual v2 transcripts remain in history.
   // Missing projects never imply absence or zero.
-  function playerRankings(records) {
+  function participationRankings(records) {
     const players = new Map();
     const seenRecords = new Set();
     const bucket = () => ({ count: 0, average: null });
@@ -1389,6 +1471,130 @@ window.MwiGuildCreditVersion = "1.2.36";
     }));
   }
 
+  // A guild week is one denominator unit per category, regardless of project count.
+  // Absence requires both membership evidence and a completely captured category.
+  function playerRankings(records) {
+    const captured = [
+      ...new Map(
+        records
+          .filter((record) => record.schemaVersion === 1 && record.source !== "manual")
+          .map((record) => [record.key, record])
+      ).values()
+    ];
+    const players = new Map(participationRankings(captured).map((player) => [player.key, player]));
+    const guilds = new Map();
+    const weeks = new Map();
+    for (const record of captured) {
+      const guildKey = record.guildId ?? "";
+      if (!guilds.has(guildKey)) guilds.set(guildKey, { players: new Set(), evidence: new Map() });
+      const guild = guilds.get(guildKey);
+      for (const row of record.rows) {
+        const identity = memberIdentity(record, row);
+        guild.players.add(JSON.stringify([identity.id === null ? "name" : "id", identity.id ?? identity.name]));
+      }
+      for (const entry of record.membershipEvidence || []) {
+        const key = JSON.stringify(["id", entry.characterId]);
+        guild.players.add(key);
+        guild.evidence.set(key, mergeMembershipEvidence(guild.evidence.get(key) || [], [entry]));
+        if (!players.has(key)) players.set(key, { key, id: entry.characterId, name: entry.name, participations: 0 });
+      }
+      const weekKey = JSON.stringify([guildKey, record.weekStartAt ?? record.key]);
+      if (!weeks.has(weekKey)) weeks.set(weekKey, { guild, at: record.weekStartAt, records: [] });
+      weeks.get(weekKey).records.push(record);
+    }
+    const bucket = () => ({ count: 0, average: null, absentWeeks: 0, unknownWeeks: 0, incomplete: false });
+    for (const player of players.values()) {
+      player.skilling = bucket();
+      player.combat = bucket();
+    }
+    for (const week of weeks.values()) {
+      const attendees = new Map(participationRankings(week.records).map((player) => [player.key, player]));
+      for (const key of week.guild.players) {
+        const player = players.get(key);
+        if (!player) continue;
+        const attendance = attendees.get(key);
+        const evidence = week.guild.evidence.get(key) || [];
+        const eligible =
+          attendance || evidence.some((entry) => entry.joinedAt < week.at && entry.observedAt >= week.at);
+        // Exclude weeks before the earliest documented joining, unless actual attendance proves otherwise.
+        if (!eligible && evidence.length && evidence.every((entry) => entry.joinedAt >= week.at)) continue;
+        for (const kind of ["skilling", "combat"]) {
+          const category = week.records.filter((record) => record.kind === kind);
+          const expected = [...new Set(week.records.flatMap((record) => record.weekTrials?.[kind] || []))];
+          if (!category.length && !expected.length) continue;
+          const result = player[kind];
+          const actual = attendance?.[kind];
+          const appeared = category.some((record) =>
+            record.rows.some((row) => {
+              const identity = memberIdentity(record, row);
+              return identity.id === player.id && (player.id !== null || identity.name === player.name);
+            })
+          );
+          const complete =
+            expected.length > 0 && expected.every((hrid) => category.some((record) => record.trialHrid === hrid));
+          const score = actual?.average ?? (!appeared && eligible && complete ? 0 : null);
+          if (score === null) {
+            result.unknownWeeks += 1;
+            result.incomplete = true;
+            continue;
+          }
+          result.count += 1;
+          result.average = result.average === null ? score : result.average + (score - result.average) / result.count;
+          if (!appeared) result.absentWeeks += 1;
+        }
+      }
+    }
+    // Flag gaps before/between saved weeks without inventing zero contributions.
+    for (const guild of guilds.values()) {
+      const guildWeeks = [...weeks.values()].filter((week) => week.guild === guild && Number.isFinite(week.at));
+      for (const [key, evidence] of guild.evidence) {
+        const player = players.get(key);
+        for (const kind of ["skilling", "combat"]) {
+          const dates = [
+            ...new Set(
+              guildWeeks.filter((week) => week.records.some((record) => record.kind === kind)).map((week) => week.at)
+            )
+          ];
+          if (!dates.length) continue;
+          const latest = Math.max(...dates);
+          for (const entry of evidence) {
+            const first = Math.max(
+              config.GUILD_TRIAL_FIRST_START_AT,
+              config.GUILD_TRIAL_FIRST_START_AT +
+                (Math.floor((entry.joinedAt - config.GUILD_TRIAL_FIRST_START_AT) / WEEK_MS) + 1) * WEEK_MS
+            );
+            const last = Math.min(latest, entry.observedAt);
+            const expected = Math.max(0, Math.floor((last - first) / WEEK_MS) + 1);
+            if (dates.filter((at) => at >= first && at <= last).length < expected) player[kind].incomplete = true;
+          }
+        }
+      }
+    }
+    return [...players.values()]
+      .filter(
+        (player) =>
+          player.participations ||
+          player.skilling.count ||
+          player.combat.count ||
+          player.skilling.unknownWeeks ||
+          player.combat.unknownWeeks
+      )
+      .map((player) => ({
+        ...player,
+        all: {
+          count: player.skilling.count + player.combat.count,
+          unknownWeeks: player.skilling.unknownWeeks + player.combat.unknownWeeks,
+          incomplete: player.skilling.incomplete || player.combat.incomplete,
+          total:
+            player.skilling.average === null
+              ? player.combat.average
+              : player.combat.average === null
+                ? player.skilling.average
+                : player.skilling.average + player.combat.average
+        }
+      }));
+  }
+
   function playerProjectOverview(records, identity, details = {}) {
     const captured = records.filter((record) => record.schemaVersion === 1 && record.source !== "manual");
     const catalog = new Map();
@@ -1417,7 +1623,7 @@ window.MwiGuildCreditVersion = "1.2.36";
     const groups = new Map(historyProjects(captured, details).map((group) => [group.key, group.records]));
     return historyProjects([...catalog.values()], details).map((group) => {
       const project = group.records[0];
-      const player = playerRankings(groups.get(group.key) || []).find((entry) =>
+      const player = participationRankings(groups.get(group.key) || []).find((entry) =>
         identity.id != null ? entry.id === String(identity.id) : entry.id === null && entry.name === identity.name
       );
       return {
@@ -1519,6 +1725,8 @@ window.MwiGuildCreditVersion = "1.2.36";
     sameMember,
     memberLevel,
     withMemberLevels,
+    withMembershipEvidence,
+    mergeMembershipEvidence,
     updateContext,
     completedSnapshots,
     nextTierProgress,
@@ -3773,11 +3981,13 @@ window.MwiGuildCreditVersion = "1.2.36";
       trialRankingCount: "次数",
       trialRankingMultiple: "平均倍数",
       trialRankingSamples: "样本数",
+      trialRankingWeeks: "计入周数",
+      trialRankingIncomplete: "统计不完整",
       trialRankingMethod: "统计口径",
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "样本数是当前榜单中可计算倍数的项目数：生活榜只计生活，战斗榜只计战斗，合并榜计两者。生活按工作量计算；战斗先将伤害、治疗、承伤各自除以该项目对应人均值，再取有效项平均。生活、战斗各自在类内对参试项目的倍数等权平均；合并榜直接相加这两个平均倍数，不再除以 2，也不按两类样本数加权。只有一类有效时保留该类倍数。仅统计游戏采集记录中的已知值（含零），缺失值和零分母跳过，因此样本数可能少于参与次数；无有效项目显示 —。生活和战斗各为 1× 时，合计为 2×；同值并列。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗先平均伤害、治疗、承伤的有效人均倍数，再对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零，并标记统计不完整。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。计入周数包含确认缺席周，合并榜为两类周数之和。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4415,11 +4625,13 @@ window.MwiGuildCreditVersion = "1.2.36";
       trialRankingCount: "Count",
       trialRankingMultiple: "Avg. multiple",
       trialRankingSamples: "Samples",
+      trialRankingWeeks: "Weeks counted",
+      trialRankingIncomplete: "Incomplete history",
       trialRankingMethod: "How rankings are calculated",
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Samples count projects with a valid multiple in this ranking: skilling only, combat only, or both. Skilling uses work. Combat averages the valid damage, healing and damage-taken multiples relative to each project's per-person average. Project multiples are averaged equally within each category. The combined score adds the skilling and combat averages directly, without dividing by 2 or weighting by sample counts. If only one category has valid data, its average is used. Only known game-captured values count (including zero); missing values and zero denominators are skipped, so samples can be fewer than participations. No valid projects shows —. 1× in each category gives a combined score of 2×; equal values share a rank.",
+        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat first averages valid damage, healing and damage-taken multiples. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero and are marked incomplete. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Weeks counted include confirmed absences; the combined count sums both categories.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -6509,7 +6721,22 @@ window.MwiGuildCreditVersion = "1.2.36";
             : {};
         storage.setItem(
           key,
-          JSON.stringify({ ...trialHistoryApi.withSavedProgress(record, previous), members, ...levels })
+          JSON.stringify({
+            ...trialHistoryApi.withSavedProgress(record, previous),
+            members,
+            ...levels,
+            ...(record.weekTrials || previous?.weekTrials
+              ? { weekTrials: record.weekTrials || previous.weekTrials }
+              : {}),
+            ...(record.membershipEvidence || previous?.membershipEvidence
+              ? {
+                  membershipEvidence: trialHistoryApi.mergeMembershipEvidence(
+                    previous?.membershipEvidence || [],
+                    record.membershipEvidence || []
+                  )
+                }
+              : {})
+          })
         );
         return true;
       } catch (_) {
@@ -11035,7 +11262,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           if (value !== previous) rank = index + 1;
           previous = value;
           const name = entry.name || t("trialNameUnavailable");
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row">${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span>${metric === "average" && entry[scope].incomplete ? `<small data-trial-ranking-incomplete>${e(t("trialRankingIncomplete"))}</small>` : ""}</td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].count}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
@@ -11044,7 +11271,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           : scope === "all"
             ? t("trialRankingTotalTitle")
             : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
-      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingWeeks"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
     }
 
     function renderRankings({ records, helpOpen }) {
@@ -11347,7 +11574,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       for (const record of bridge?.pendingTrialSnapshots?.splice(0) || []) unsaved.set(record.key, record);
       reload();
       for (const record of records) {
-        const enriched = trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext);
+        const enriched = trialHistoryApi.withMembershipEvidence(
+          trialHistoryApi.withMemberLevels(record, bridge?.trialHistoryContext),
+          bridge?.trialHistoryContext
+        );
         if (enriched !== record) unsaved.set(record.key, enriched);
       }
       for (const [key, record] of unsaved) {

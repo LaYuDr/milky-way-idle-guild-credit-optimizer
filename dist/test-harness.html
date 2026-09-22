@@ -3541,9 +3541,9 @@
             row.firstElementChild.textContent === "1"
         );
       for (const [scope, count] of [
-        ["skilling", "4"],
-        ["combat", "2"],
-        ["all", "6"]
+        ["skilling", "1"],
+        ["combat", "1"],
+        ["all", "2"]
       ]) {
         checks[`ranking${scope}Averages`] =
           rankedRows(scope)
@@ -4246,6 +4246,38 @@
       setDisplay("workMultiple", false);
       host.querySelector('[data-trial-mode="week"]').click();
       checks.viewReadOnly = JSON.stringify(saved()) === before;
+      // Late native roster data must enrich existing captures, never manual imports.
+      const beforeRosterFrames = profileFrames.length;
+      const lateMemberId = "999";
+      send({
+        type: "guild_characters_updated",
+        guildSharableCharacterMap: { ...members, [lateMemberId]: { name: "从未参加的成员" } },
+        guildCharacterMap: {
+          101: { joinTime: "2026-08-01T00:00:00Z" },
+          102: { joinTime: "2026-08-01T00:00:00Z" },
+          [lateMemberId]: { joinTime: "2026-08-01T00:00:00Z" }
+        }
+      });
+      checks.lateMembershipSaved = saved()
+        .filter((record) => record.schemaVersion === 1)
+        .every((record) => record.membershipEvidence?.some((entry) => entry.characterId === lateMemberId));
+      checks.manualMembershipUntouched = saved()
+        .filter((record) => record.schemaVersion === 2)
+        .every((record) => record.membershipEvidence === undefined);
+      host.querySelector('[data-trial-mode="player"]').click();
+      const neverAttended = rankedRows("skilling").find(
+        (row) => JSON.parse(row.dataset.trialRankingRow)[1] === lateMemberId
+      );
+      checks.knownAbsenceRankedAsZero =
+        Boolean(neverAttended) &&
+        neverAttended.querySelector("[data-trial-ranking-value]").textContent === "0.00×" &&
+        Number(neverAttended.querySelector("[data-trial-ranking-samples]").textContent) > 0;
+      checks.incompleteHistoryVisible = Boolean(host.querySelector("[data-trial-ranking-incomplete]"));
+      checks.membershipPassiveNoProfileQuery = profileFrames.length === beforeRosterFrames;
+      neverAttended?.querySelector("[data-trial-ranking-player]").click();
+      checks.neverAttendedProfileReachable =
+        host.querySelector("[data-trial-player-title]")?.textContent.includes("从未参加的成员") === true;
+      host.querySelector('[data-trial-mode="week"]').click();
       // Longer official-stat fixtures verify full rows without nested vertical scrolling.
       const extraMembers = Object.fromEntries(
         Array.from({ length: 58 }, (_, index) => [200 + index, { name: `完整列表成员 ${index + 1}` }])
