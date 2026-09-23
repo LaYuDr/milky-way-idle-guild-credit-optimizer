@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- Local test artwork, not game assets. Nested references test self-contained exports. -->
+  <defs><g id="trial-fixture-art"><path fill="#f49b24" d="M2 2h16v16H2z"/><circle fill="#53ddcc" cx="10" cy="10" r="5"/></g></defs>
+  <symbol id="milking" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="foraging" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="woodcutting" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="cheesesmithing" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="crafting" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="tailoring" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="cooking" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="brewing" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="alchemy" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="enhancing" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="stamina" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="intelligence" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="attack" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="defense" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="melee" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="ranged" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="magic" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="total_level" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="trial_badger" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="trial_chameleon" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="trial_hedgehog" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="trial_jellyfish" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="trial_swarm" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="ice_spear" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="puncture" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="heal" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="fireball" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="toxic_pollen" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="artificer_cape" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="enchanted_gloves" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+  <symbol id="holy_brush" viewBox="0 0 20 20"><use href="#trial-fixture-art"/></symbol>
+</svg>

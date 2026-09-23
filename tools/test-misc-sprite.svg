@@ -42,4 +42,5 @@
   <symbol id="guild_shrine_force" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
   <symbol id="guild_shrine_rarity" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
   <symbol id="guild_shrine_scholar" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
+  <symbol id="trial_swarm" viewBox="0 0 50 50"><use href="#guild-building-fixture" /></symbol>
 </svg>

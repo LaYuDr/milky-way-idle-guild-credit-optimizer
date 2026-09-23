@@ -18,16 +18,21 @@ function createDevServer() {
       "/test-harness.html": "test-harness.html",
       "/game_data/marketplace.json": "test-marketplace.json",
       "/asset-manifest.json": "test-asset-manifest.json",
-      "/assets/misc_sprite.svg": "test-misc-sprite.svg"
+      "/assets/misc_sprite.svg": "test-misc-sprite.svg",
+      "/assets/skills_sprite.svg": "test-trial-sprite.svg",
+      "/assets/combat_monsters_sprite.svg": "test-trial-sprite.svg",
+      "/assets/abilities_sprite.svg": "test-trial-sprite.svg",
+      "/assets/items_sprite.svg": "test-trial-sprite.svg"
     };
     const filename = files[pathname];
     if (!filename) {
       response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       return response.end("Not found");
     }
-    const file = ["/game_data/marketplace.json", "/asset-manifest.json", "/assets/misc_sprite.svg"].includes(pathname)
-      ? path.join(root, "tools", filename)
-      : path.join(dist, filename);
+    const file =
+      pathname.startsWith("/assets/") || ["/game_data/marketplace.json", "/asset-manifest.json"].includes(pathname)
+        ? path.join(root, "tools", filename)
+        : path.join(dist, filename);
     if (!fs.existsSync(file)) {
       response.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
       return response.end("Run npm run build first");

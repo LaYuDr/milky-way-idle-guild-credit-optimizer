@@ -717,7 +717,9 @@
       try {
         screenshotNotice = await screenshotApi.exportImage(host, target, { document, pageWindow });
       } catch (error) {
-        screenshotNotice = error.code === "trialScreenshotTooLarge" ? error.code : "trialScreenshotFailed";
+        screenshotNotice = ["trialScreenshotTooLarge", "trialScreenshotIconFailed"].includes(error.code)
+          ? error.code
+          : "trialScreenshotFailed";
       } finally {
         screenshotBusy = false;
         update();

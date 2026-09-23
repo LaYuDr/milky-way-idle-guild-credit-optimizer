@@ -4330,12 +4330,27 @@
           parsed.querySelectorAll("tbody tr").length === host.querySelectorAll("tbody tr").length &&
           [...parsed.querySelectorAll("tbody tr")].map((row) => row.textContent).join("|") ===
             [...host.querySelectorAll("tbody tr")].map((row) => row.textContent).join("|");
+        checks[`imageGridColumns_${view}`] = [...parsed.querySelectorAll(".mwi-trial-columns")].every((grid) => {
+          const expected = grid.classList.contains("mwi-trial-timeline")
+            ? Math.min(5, grid.children.length)
+            : grid.dataset.kind === "combat"
+              ? 2
+              : 4;
+          return grid.style.gridTemplateColumns.trim().split(/\s+/).length === expected;
+        });
         checks[`imageAnonymous_${view}`] = !Object.values(members).some((member) =>
           parsed.documentElement.textContent.includes(member.name)
         );
         checks[`imageProfileLabels_${view}`] = [
           ...host.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")
-        ].every((slot) => parsed.documentElement.textContent.includes(slot.getAttribute("aria-label")));
+        ].every((slot) =>
+          [...parsed.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")].some(
+            (copy) => copy.getAttribute("aria-label") === slot.getAttribute("aria-label")
+          )
+        );
+        checks[`imagePreservesIcons_${view}`] =
+          parsed.querySelectorAll(".mwi-trial-project-icon,.mwi-trial-profile-icon").length > 0 ||
+          host.querySelectorAll(".mwi-trial-project-icon,.mwi-trial-profile-icon").length === 0;
         checks[`imageNoControls_${view}`] = !parsed.querySelector(
           "[data-trial-image],.mwi-trial-raw,.mwi-trial-display-settings"
         );
@@ -4346,6 +4361,25 @@
       for (const view of ["week", "project"]) {
         host.querySelector(`[data-trial-mode="${view}"]`).click();
         checkImageSnapshot(view);
+        if (view === "project") {
+          const sample = host.cloneNode(true);
+          host.parentElement.appendChild(sample);
+          try {
+            const timeline = sample.querySelector(".mwi-trial-timeline");
+            while (timeline.children.length < 7) timeline.appendChild(timeline.firstElementChild.cloneNode(true));
+            [...timeline.children].forEach((column, index) => (column.dataset.imagePeriod = String(index)));
+            const image = window.MwiGuildTrialScreenshot.snapshot(sample, document, window);
+            const parsed = new DOMParser().parseFromString(image.svg, "image/svg+xml");
+            checks.imageLatestFiveOnly =
+              [...parsed.querySelectorAll("[data-image-period]")]
+                .map((column) => column.dataset.imagePeriod)
+                .join(",") === "0,1,2,3,4" && timeline.children.length === 7;
+            checks.imageFivePeriodsOneRow =
+              parsed.querySelector(".mwi-trial-timeline").style.gridTemplateColumns.trim().split(/\s+/).length === 5;
+          } finally {
+            sample.remove();
+          }
+        }
         checks[`screenshotAnonymous_${view}`] =
           !screenshotHasNames() &&
           !host.querySelector(".mwi-trial-raw") &&
@@ -4363,7 +4397,19 @@
         for (let index = 0; index < 80; index++) body.appendChild(body.firstElementChild.cloneNode(true));
         const row = body.lastElementChild;
         row.querySelector("th,td").textContent = "PNG-END-ROW";
+        const fixtureIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        fixtureIcon.setAttribute("width", "20");
+        fixtureIcon.setAttribute("height", "20");
+        fixtureIcon.innerHTML = '<use href="/assets/skills_sprite.svg#milking" width="20" height="20"/>';
+        longHost.appendChild(fixtureIcon);
         const snapshot = window.MwiGuildTrialScreenshot.snapshot(longHost, document, window);
+        const embedded = await window.MwiGuildTrialScreenshot.embedSprites(snapshot.svg, window);
+        const embeddedDoc = new DOMParser().parseFromString(embedded, "image/svg+xml");
+        checks.imageIconsSelfContained =
+          [...embeddedDoc.querySelectorAll("use")].every((use) => {
+            const href = use.getAttribute("href");
+            return href?.startsWith("#") && Boolean(embeddedDoc.getElementById(href.slice(1)));
+          }) && Boolean(embeddedDoc.querySelector('path[fill="#f49b24"]'));
         const blob = await window.MwiGuildTrialScreenshot.renderPng(longHost, { document, pageWindow: window });
         const bitmap = await createImageBitmap(blob);
         checks.imageLongPng =

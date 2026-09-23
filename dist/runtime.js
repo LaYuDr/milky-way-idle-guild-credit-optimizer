@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.43";
+window.MwiGuildCreditVersion = "1.2.44";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3983,16 +3983,17 @@ window.MwiGuildCreditVersion = "1.2.43";
       trialScreenshotCopy: "复制长图",
       trialScreenshotDownload: "下载 PNG",
       trialScreenshotHelp:
-        "截取当前所选周、项目或玩家的完整视图，含滚动区域中的全部表格。长图按两列排版，省略操作区、原始数据和装饰图标，技能装备图标转为文字；保留当前显示字段与匿名设置。",
-      trialScreenshotReady: "分享前可开启截图模式隐藏玩家名。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
+        "截取当前所选视图的完整表格。按周：上排四个生活项目，下排两个战斗项目；按项目：仅最新五个周期横排；玩家排行：四个列表横排。图片按内容宽度生成，保留原版图标，省略操作区和原始数据；保留当前显示字段与匿名设置。",
+      trialScreenshotReady: "分享前可开启隐藏玩家名模式。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
       trialScreenshotWorking: "正在生成完整长图…",
       trialScreenshotCopied: "长图已复制，可直接粘贴。",
       trialScreenshotDownloaded: "已发起 PNG 下载，请查看浏览器下载列表。",
       trialScreenshotFallback: "无法写入剪贴板，已改为下载 PNG，请查看浏览器下载列表。",
       trialScreenshotTooLarge: "当前视图过大，无法生成清晰长图。请切换到单周或单个玩家后重试。",
+      trialScreenshotIconFailed: "原版图标加载失败，请检查网络后重试截图。",
       trialScreenshotFailed: "长图生成失败。请重试或切换到单周视图后下载 PNG。",
-      trialScreenshotMode: "截图模式",
-      trialScreenshotExit: "退出截图模式",
+      trialScreenshotMode: "隐藏玩家名模式",
+      trialScreenshotExit: "退出隐藏玩家名模式",
       trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
       trialAnonymousPlayer: "玩家 {number}",
       trialGuide: "说明",
@@ -4654,17 +4655,18 @@ window.MwiGuildCreditVersion = "1.2.43";
       trialScreenshotCopy: "Copy image",
       trialScreenshotDownload: "Download PNG",
       trialScreenshotHelp:
-        "Capture the selected week, project or player, including full scrollable tables. Images use two columns and omit controls, raw data and decorative icons; skills and equipment use text labels. Visible fields and anonymity settings are preserved.",
+        "Capture full tables in the selected view. Weekly: four skilling projects above two combat projects. By project: only the latest five periods in one row. Player rankings: four lists in one row. Images fit the content width, preserve original icons and omit controls and raw data. Visible fields and anonymity settings are preserved.",
       trialScreenshotReady:
-        "Enable screenshot mode to hide player names before sharing. If copying is unavailable, the image downloads instead. Your browser controls the save location.",
+        "Enable “Hide player names” before sharing. If copying is unavailable, the image downloads instead. Your browser controls the save location.",
       trialScreenshotWorking: "Generating full image…",
       trialScreenshotCopied: "Image copied. Ready to paste.",
       trialScreenshotDownloaded: "PNG download started. Check your browser downloads.",
       trialScreenshotFallback: "Clipboard unavailable. PNG download started instead. Check your browser downloads.",
       trialScreenshotTooLarge: "This view is too large for a readable image. Select a single week or player and retry.",
+      trialScreenshotIconFailed: "Could not load original icons. Check your connection and retry.",
       trialScreenshotFailed: "Could not generate the image. Retry or select a single week and download PNG.",
-      trialScreenshotMode: "Screenshot mode",
-      trialScreenshotExit: "Exit screenshot mode",
+      trialScreenshotMode: "Hide player names",
+      trialScreenshotExit: "Show player names",
       trialScreenshotHint:
         "Hides player names in trial history only. JSON exports keep original names. Resets on game reload.",
       trialAnonymousPlayer: "Player {number}",
@@ -11586,13 +11588,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     stage.setAttribute("aria-hidden", "true");
     stage.style.cssText = "position:fixed;left:-100000px;top:0;width:1200px;pointer-events:none;";
     const copy = host.cloneNode(true);
-    // Icon-only skills/equipment carry information: retain their accessible labels.
-    for (const slot of copy.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")) {
-      const label = document.createElement("span");
-      label.className = "mwi-trial-slot-label";
-      label.textContent = slot.getAttribute("aria-label");
-      slot.replaceChildren(label);
-      Object.assign(slot.style, { aspectRatio: "auto", minHeight: "64px", padding: "4px" });
+    const projectView = Boolean(host.querySelector('[data-trial-mode="project"][aria-pressed="true"]'));
+    if (projectView) {
+      // History timelines are newest first. Limit the image only, never stored data.
+      for (const timeline of copy.querySelectorAll(".mwi-trial-timeline"))
+        [...timeline.children].slice(5).forEach((column) => column.remove());
     }
     // Only the selected view is captured. Remove navigation and implementation details,
     // but retain selected labels to identify the week/project and the visible columns.
@@ -11603,7 +11603,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
           "[data-trial-player-back],[data-trial-profile-refresh]," +
           "[data-trial-mode][aria-pressed='false'],[data-trial-choice][aria-pressed='false']," +
-          "script,style,iframe,svg[aria-hidden='true'],img"
+          "script,style,iframe,img"
       )
       .forEach((element) => element.remove());
     for (const element of [copy, ...copy.querySelectorAll("*")]) {
@@ -11620,8 +11620,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         Object.assign(element.style, { overflow: "visible", maxWidth: "none", maxHeight: "none", height: "auto" });
       }
       for (const element of copy.querySelectorAll(".mwi-trial-columns")) {
+        const columns = element.classList.contains("mwi-trial-timeline")
+          ? Math.min(5, element.children.length)
+          : element.dataset.kind === "combat"
+            ? 2
+            : 4;
         Object.assign(element.style, {
-          gridTemplateColumns: "repeat(2, max-content)",
+          gridTemplateColumns: `repeat(${Math.max(1, columns)}, max-content)`,
           gridAutoFlow: "row",
           gridAutoColumns: "auto",
           gap: "24px"
@@ -11629,7 +11634,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
       for (const element of copy.querySelectorAll("th")) element.style.position = "static";
       // Expand to include wide tables rather than clipping the rightmost column.
-      const width = Math.max(1200, copy.scrollWidth + 24);
+      const columns = [...copy.querySelectorAll(".mwi-trial-columns > .mwi-trial-column")];
+      const origin = copy.getBoundingClientRect().left;
+      const contentRight = Math.max(0, ...columns.map((column) => column.getBoundingClientRect().right - origin));
+      const width = Math.ceil(Math.max(copy.querySelector(".mwi-trial-player-layout") ? 1200 : 480, contentRight + 24));
       copy.style.width = `${width}px`;
       imageSize(width, Math.max(copy.scrollHeight, copy.getBoundingClientRect().height));
       // Freeze computed styles while still under the real panel's CSS selectors.
@@ -11657,8 +11665,86 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
   }
 
+  const spriteCache = new Map();
+
+  async function embedSprites(svg, pageWindow) {
+    const parser = new pageWindow.DOMParser();
+    const image = parser.parseFromString(svg, "image/svg+xml");
+    const uses = [...image.querySelectorAll("use")];
+    const sources = new Map();
+    for (const use of uses) {
+      const href = use.getAttribute("href") || use.getAttribute("xlink:href");
+      if (!href || href.startsWith("#")) continue;
+      const url = new URL(href, pageWindow.location.href);
+      const id = decodeURIComponent(url.hash.slice(1));
+      url.hash = "";
+      if (!sources.has(url.href)) sources.set(url.href, []);
+      sources.get(url.href).push({ use, id });
+    }
+    let index = 0;
+    for (const [url, entries] of sources) {
+      if (!spriteCache.has(url)) {
+        const pending = (async () => {
+          const controller = new pageWindow.AbortController();
+          const timer = pageWindow.setTimeout(() => controller.abort(), 10000);
+          try {
+            const response = await pageWindow.fetch(url, { cache: "force-cache", signal: controller.signal });
+            if (!response.ok) throw new Error("Sprite unavailable");
+            const parsed = parser.parseFromString(await response.text(), "image/svg+xml");
+            if (parsed.querySelector("parsererror")) throw new Error("Invalid sprite");
+            return parsed;
+          } finally {
+            pageWindow.clearTimeout(timer);
+          }
+        })();
+        spriteCache.set(url, pending);
+        pending.catch(() => spriteCache.delete(url));
+      }
+      let source;
+      try {
+        source = await spriteCache.get(url);
+      } catch (error) {
+        throw Object.assign(error, { code: "trialScreenshotIconFailed" });
+      }
+      const prefix = `mwi-image-${index++}-`;
+      const defs = image.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const included = new Set();
+      const include = (id) => {
+        if (included.has(id)) return;
+        included.add(id);
+        const original = source.getElementById(id);
+        if (!original) throw Object.assign(new Error("Missing sprite symbol"), { code: "trialScreenshotIconFailed" });
+        const copy = image.importNode(original, true);
+        for (const node of [copy, ...copy.querySelectorAll("*")]) {
+          if (node.id) node.id = prefix + node.id;
+          for (const attribute of [...node.attributes]) {
+            let value = attribute.value;
+            if (attribute.localName === "href" && value.startsWith("#")) {
+              include(value.slice(1));
+              value = "#" + prefix + value.slice(1);
+            }
+            value = value.replace(/url\(["']?#([^\s)'"]+)["']?\)/g, (_match, reference) => {
+              include(reference);
+              return `url(#${prefix}${reference})`;
+            });
+            node.setAttributeNS(attribute.namespaceURI, attribute.name, value);
+          }
+        }
+        defs.appendChild(copy);
+      };
+      for (const { use, id } of entries) {
+        include(id);
+        use.removeAttribute("xlink:href");
+        use.setAttribute("href", `#${prefix}${id}`);
+      }
+      image.documentElement.prepend(defs);
+    }
+    return new pageWindow.XMLSerializer().serializeToString(image);
+  }
+
   async function renderPng(host, { document, pageWindow }) {
     const captured = snapshot(host, document, pageWindow);
+    const svg = await embedSprites(captured.svg, pageWindow);
     const image = new pageWindow.Image();
     await new Promise((resolve, reject) => {
       const timer = pageWindow.setTimeout(() => {
@@ -11674,7 +11760,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         reject(new Error("Image decode failed"));
       };
       // A self-contained data URL avoids external assets and SVG blob origin tainting.
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(captured.svg)}`;
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     });
     const canvas = document.createElement("canvas");
     canvas.width = captured.pixelWidth;
@@ -11732,7 +11818,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     );
   }
 
-  return { imageSize, snapshot, renderPng, deliverPng, exportImage };
+  return { imageSize, snapshot, renderPng, embedSprites, deliverPng, exportImage };
 });
 
 
@@ -12456,7 +12542,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       try {
         screenshotNotice = await screenshotApi.exportImage(host, target, { document, pageWindow });
       } catch (error) {
-        screenshotNotice = error.code === "trialScreenshotTooLarge" ? error.code : "trialScreenshotFailed";
+        screenshotNotice = ["trialScreenshotTooLarge", "trialScreenshotIconFailed"].includes(error.code)
+          ? error.code
+          : "trialScreenshotFailed";
       } finally {
         screenshotBusy = false;
         update();

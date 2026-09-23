@@ -33,13 +33,11 @@
     stage.setAttribute("aria-hidden", "true");
     stage.style.cssText = "position:fixed;left:-100000px;top:0;width:1200px;pointer-events:none;";
     const copy = host.cloneNode(true);
-    // Icon-only skills/equipment carry information: retain their accessible labels.
-    for (const slot of copy.querySelectorAll(".mwi-trial-equipment-slot[aria-label]")) {
-      const label = document.createElement("span");
-      label.className = "mwi-trial-slot-label";
-      label.textContent = slot.getAttribute("aria-label");
-      slot.replaceChildren(label);
-      Object.assign(slot.style, { aspectRatio: "auto", minHeight: "64px", padding: "4px" });
+    const projectView = Boolean(host.querySelector('[data-trial-mode="project"][aria-pressed="true"]'));
+    if (projectView) {
+      // History timelines are newest first. Limit the image only, never stored data.
+      for (const timeline of copy.querySelectorAll(".mwi-trial-timeline"))
+        [...timeline.children].slice(5).forEach((column) => column.remove());
     }
     // Only the selected view is captured. Remove navigation and implementation details,
     // but retain selected labels to identify the week/project and the visible columns.
@@ -50,7 +48,7 @@
           "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
           "[data-trial-player-back],[data-trial-profile-refresh]," +
           "[data-trial-mode][aria-pressed='false'],[data-trial-choice][aria-pressed='false']," +
-          "script,style,iframe,svg[aria-hidden='true'],img"
+          "script,style,iframe,img"
       )
       .forEach((element) => element.remove());
     for (const element of [copy, ...copy.querySelectorAll("*")]) {
@@ -67,8 +65,13 @@
         Object.assign(element.style, { overflow: "visible", maxWidth: "none", maxHeight: "none", height: "auto" });
       }
       for (const element of copy.querySelectorAll(".mwi-trial-columns")) {
+        const columns = element.classList.contains("mwi-trial-timeline")
+          ? Math.min(5, element.children.length)
+          : element.dataset.kind === "combat"
+            ? 2
+            : 4;
         Object.assign(element.style, {
-          gridTemplateColumns: "repeat(2, max-content)",
+          gridTemplateColumns: `repeat(${Math.max(1, columns)}, max-content)`,
           gridAutoFlow: "row",
           gridAutoColumns: "auto",
           gap: "24px"
@@ -76,7 +79,10 @@
       }
       for (const element of copy.querySelectorAll("th")) element.style.position = "static";
       // Expand to include wide tables rather than clipping the rightmost column.
-      const width = Math.max(1200, copy.scrollWidth + 24);
+      const columns = [...copy.querySelectorAll(".mwi-trial-columns > .mwi-trial-column")];
+      const origin = copy.getBoundingClientRect().left;
+      const contentRight = Math.max(0, ...columns.map((column) => column.getBoundingClientRect().right - origin));
+      const width = Math.ceil(Math.max(copy.querySelector(".mwi-trial-player-layout") ? 1200 : 480, contentRight + 24));
       copy.style.width = `${width}px`;
       imageSize(width, Math.max(copy.scrollHeight, copy.getBoundingClientRect().height));
       // Freeze computed styles while still under the real panel's CSS selectors.
@@ -104,8 +110,86 @@
     }
   }
 
+  const spriteCache = new Map();
+
+  async function embedSprites(svg, pageWindow) {
+    const parser = new pageWindow.DOMParser();
+    const image = parser.parseFromString(svg, "image/svg+xml");
+    const uses = [...image.querySelectorAll("use")];
+    const sources = new Map();
+    for (const use of uses) {
+      const href = use.getAttribute("href") || use.getAttribute("xlink:href");
+      if (!href || href.startsWith("#")) continue;
+      const url = new URL(href, pageWindow.location.href);
+      const id = decodeURIComponent(url.hash.slice(1));
+      url.hash = "";
+      if (!sources.has(url.href)) sources.set(url.href, []);
+      sources.get(url.href).push({ use, id });
+    }
+    let index = 0;
+    for (const [url, entries] of sources) {
+      if (!spriteCache.has(url)) {
+        const pending = (async () => {
+          const controller = new pageWindow.AbortController();
+          const timer = pageWindow.setTimeout(() => controller.abort(), 10000);
+          try {
+            const response = await pageWindow.fetch(url, { cache: "force-cache", signal: controller.signal });
+            if (!response.ok) throw new Error("Sprite unavailable");
+            const parsed = parser.parseFromString(await response.text(), "image/svg+xml");
+            if (parsed.querySelector("parsererror")) throw new Error("Invalid sprite");
+            return parsed;
+          } finally {
+            pageWindow.clearTimeout(timer);
+          }
+        })();
+        spriteCache.set(url, pending);
+        pending.catch(() => spriteCache.delete(url));
+      }
+      let source;
+      try {
+        source = await spriteCache.get(url);
+      } catch (error) {
+        throw Object.assign(error, { code: "trialScreenshotIconFailed" });
+      }
+      const prefix = `mwi-image-${index++}-`;
+      const defs = image.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const included = new Set();
+      const include = (id) => {
+        if (included.has(id)) return;
+        included.add(id);
+        const original = source.getElementById(id);
+        if (!original) throw Object.assign(new Error("Missing sprite symbol"), { code: "trialScreenshotIconFailed" });
+        const copy = image.importNode(original, true);
+        for (const node of [copy, ...copy.querySelectorAll("*")]) {
+          if (node.id) node.id = prefix + node.id;
+          for (const attribute of [...node.attributes]) {
+            let value = attribute.value;
+            if (attribute.localName === "href" && value.startsWith("#")) {
+              include(value.slice(1));
+              value = "#" + prefix + value.slice(1);
+            }
+            value = value.replace(/url\(["']?#([^\s)'"]+)["']?\)/g, (_match, reference) => {
+              include(reference);
+              return `url(#${prefix}${reference})`;
+            });
+            node.setAttributeNS(attribute.namespaceURI, attribute.name, value);
+          }
+        }
+        defs.appendChild(copy);
+      };
+      for (const { use, id } of entries) {
+        include(id);
+        use.removeAttribute("xlink:href");
+        use.setAttribute("href", `#${prefix}${id}`);
+      }
+      image.documentElement.prepend(defs);
+    }
+    return new pageWindow.XMLSerializer().serializeToString(image);
+  }
+
   async function renderPng(host, { document, pageWindow }) {
     const captured = snapshot(host, document, pageWindow);
+    const svg = await embedSprites(captured.svg, pageWindow);
     const image = new pageWindow.Image();
     await new Promise((resolve, reject) => {
       const timer = pageWindow.setTimeout(() => {
@@ -121,7 +205,7 @@
         reject(new Error("Image decode failed"));
       };
       // A self-contained data URL avoids external assets and SVG blob origin tainting.
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(captured.svg)}`;
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     });
     const canvas = document.createElement("canvas");
     canvas.width = captured.pixelWidth;
@@ -179,5 +263,5 @@
     );
   }
 
-  return { imageSize, snapshot, renderPng, deliverPng, exportImage };
+  return { imageSize, snapshot, renderPng, embedSprites, deliverPng, exportImage };
 });
