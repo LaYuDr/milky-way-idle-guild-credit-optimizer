@@ -403,7 +403,8 @@
               .map((plan) => ({
                 guildBuffHrid: plan.guildBuffHrid,
                 startLevel: plan.startLevel,
-                targetLevel: plan.targetLevel
+                targetLevel: plan.targetLevel,
+                ...(plan.collapsed === true ? { collapsed: true } : {})
               }))
           : [];
         const targetCredit = Number(stored.targetCredit);
@@ -569,7 +570,8 @@
         const upgradePlans = state.upgradePlans.map((plan) => ({
           guildBuffHrid: plan.guildBuffHrid,
           startLevel: plan.startLevel,
-          targetLevel: plan.targetLevel
+          targetLevel: plan.targetLevel,
+          ...(plan.collapsed === true ? { collapsed: true } : {})
         }));
         storage.setItem(
           config.UI_STATE_STORAGE_KEY,

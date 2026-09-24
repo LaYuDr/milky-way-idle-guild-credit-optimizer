@@ -1,10 +1,11 @@
 (function (root, factory) {
   const api = factory(
-    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects,
+    typeof module !== "undefined" && module.exports ? require("./shrine-picker.js") : root.MwiGuildShrinePicker
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditUpgradeView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi, pickerApi) {
   "use strict";
 
   function createUpgradeView(dependencies) {
@@ -46,6 +47,7 @@
     } = dependencies;
 
     const effects = effectApi.createFormatter({ core, t, ui });
+    const pickers = new WeakMap();
 
     function guildBuffEntries() {
       hydrateBridgeData();
@@ -441,6 +443,12 @@
 
     function renderGuildUpgradePlans(panel, entries) {
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
+      let picker = pickers.get(list);
+      if (!picker) {
+        picker = pickerApi.createManager(list, escapeHtml);
+        pickers.set(list, picker);
+      }
+      const pickerSnapshot = picker.capture();
       const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
       const openPlans = new Set(
         [...list.querySelectorAll("details[data-shrine-steps][open]")].map(
@@ -476,19 +484,38 @@
           const aboveCap = cap !== null && plan.targetLevel > cap;
           const icon = guildBuildingIconMarkup?.({ hrid: shrineHrid }, sprite) || "";
           const title = guildBuffLabel(entry.detail, entry.hrid);
+          const collapsed = plan.collapsed === true;
+          const bodyId = `mwi-shrine-plan-body-${plan.id}`;
           return `<article class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${isCombatGuildBuff(entry) ? "combat" : "life"}" aria-label="${escapeHtml(title)}">
-          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><div class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></div><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <div class="mwi-shrine-collapse-bar"><span>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</span><button type="button" data-role="toggle-plan" aria-expanded="${!collapsed}" aria-controls="${escapeHtml(bodyId)}" aria-label="${escapeHtml(t(collapsed ? "shrineExpandNamed" : "shrineCollapseNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>${escapeHtml(t(collapsed ? "shrineExpand" : "shrineCollapse"))}</button></div>
+          <div class="mwi-shrine-plan-body" id="${escapeHtml(bodyId)}"${collapsed ? " hidden" : ""}>
           <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap), max: formatNumber(entry.maxLevel) }))}</p>
-          <div class="mwi-shrine-level-controls"><label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
+          <div class="mwi-shrine-level-controls"><div class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></div><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><div class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></div><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
           ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
           ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}
           <section class="mwi-shrine-plan-effects" aria-label="${escapeHtml(t("shrineEffectComparison"))}"><h4>${escapeHtml(t("shrineEffectComparison"))}<small>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</small></h4>${renderPlanEffects(preview)}</section>
           <section class="mwi-shrine-plan-cost" aria-label="${escapeHtml(t("shrineRangeCost"))}"><h4>${escapeHtml(t("shrineRangeCost"))}</h4>${renderPlanMaterials(preview)}</section>
           <details class="mwi-shrine-steps" data-shrine-steps${openPlans.has(plan.id) ? " open" : ""}><summary data-shrine-steps-summary>${escapeHtml(t("shrineSteps", { count: preview.steps.length }))}</summary><p class="mwi-shrine-muted">${escapeHtml(t("shrineStepsHint"))}</p><ol>${preview.steps.map((step) => `<li data-shrine-step="${step.level}"><div class="mwi-shrine-step-heading"><strong>${escapeHtml(t("shrineStepLevel", { start: step.level - 1, target: step.level }))}</strong><span>${step.effects.length ? step.effects.map((effect) => escapeHtml(`${effects.name(effect)} ${effects.value(effect, effect.value)}`)).join(" · ") : escapeHtml(t("shrineEffectsUnavailable"))}</span></div>${renderPlanMaterials({ status: "ok", totals: step.totals })}</li>`).join("")}</ol>${preview.status !== "ok" ? renderPlanMaterials(preview) : ""}</details>
+          </div>
         </article>`;
         })
         .join("");
-      updateRenderedMarkup(list, plansMarkup);
+      const replaced = updateRenderedMarkup(list, plansMarkup);
+      picker.sync(
+        (select, option) => {
+          if (select.dataset.role !== "plan-buff") return {};
+          const candidate = entries.find((item) => item.hrid === option.value);
+          if (!candidate) return {};
+          return {
+            icon: guildBuildingIconMarkup?.({ hrid: candidate.detail.shrineHrid }, sprite) || "",
+            description: effects.summary(candidate.detail),
+            reason: option.disabled ? t(plannedHrids.has(candidate.hrid) ? "shrineAlreadyPlanned" : "shrineMaxed") : ""
+          };
+        },
+        pickerSnapshot,
+        replaced
+      );
       if (focusedPlan && (focusedRole || focusedSteps)) {
         const row = [...list.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === focusedPlan);
         const control = focusedSteps

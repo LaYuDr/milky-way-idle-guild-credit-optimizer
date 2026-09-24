@@ -78,7 +78,16 @@
         )
         .join(separator);
     }
-    return { name, value, perLevel };
+    function summary(detail) {
+      const effects = core.guildBuffLevelEffects(detail);
+      if (!effects.length) return t("shrineEffectsUnavailable");
+      const describe = (field) =>
+        effects.map((effect) => `${name(effect)} ${value(effect, effect[field])}`).join(" · ");
+      return effects.every((effect) => effect.first === effect.increment)
+        ? t("shrineEffectsPerLevel", { effects: describe("increment") })
+        : t("shrineEffectsFirstAndPerLevel", { first: describe("first"), later: describe("increment") });
+    }
+    return { name, value, perLevel, summary };
   }
   return { createFormatter };
 });

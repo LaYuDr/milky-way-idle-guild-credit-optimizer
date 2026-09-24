@@ -1013,11 +1013,68 @@
       const row = () => list.querySelector('[data-guild-buff-hrid="/guild_buffs/tempo_combat"]');
       const change = async (role, value) => {
         const input = row().querySelector(`[data-role="${role}"]`);
-        input.focus();
+        row().querySelector(`[data-picker-role="${role}"]`).focus();
         input.value = String(value);
         input.dispatchEvent(new Event("change", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 80));
       };
+      const trigger = (role) => row().querySelector(`[data-picker-role="${role}"]`);
+      const popup = () => document.querySelector(".mwi-shrine-picker-popover");
+      const key = (element, value) =>
+        element.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
+      const delay = () => new Promise((resolve) => setTimeout(resolve, 80));
+      checks.nativeChoicesHidden = [...row().querySelectorAll("select")].every(
+        (el) => el.hidden && !el.getClientRects().length
+      );
+      trigger("plan-buff").scrollIntoView({ block: "center" });
+      await delay();
+      trigger("plan-buff").click();
+      checks.customGroups = popup().querySelectorAll('[role="group"]').length === 2;
+      checks.choiceDescriptions = Boolean(popup().querySelector(".mwi-shrine-picker-copy small"));
+      checks.selectedIndicator = Boolean(popup().querySelector('[aria-selected="true"] .mwi-shrine-picker-check svg'));
+      const bounds = popup().getBoundingClientRect();
+      checks.popupWithinViewport =
+        bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
+      checks.popupTopLayer = popup().matches(":popover-open");
+      const disabled = popup().querySelector('[aria-disabled="true"]');
+      const beforeChoice = row().dataset.guildBuffHrid;
+      disabled?.click();
+      checks.disabledCannotSelect =
+        Boolean(disabled) && Boolean(popup()) && row().dataset.guildBuffHrid === beforeChoice;
+      key(popup(), "Escape");
+      checks.escapeReturnsFocus = !popup() && document.activeElement === trigger("plan-buff");
+      trigger("plan-target").click();
+      key(popup(), "Home");
+      key(popup(), "Enter");
+      await delay();
+      checks.keyboardSelectsLevel = row().querySelector('[data-role="plan-target"]').value === "1";
+      checks.selectionReturnsFocus = document.activeElement === trigger("plan-target");
+      trigger("plan-target").click();
+      key(popup(), "End");
+      checks.keyboardEnd = popup().querySelector("[data-active]").dataset.optionIndex === "1";
+      key(popup(), "ArrowUp");
+      checks.keyboardArrows = popup().querySelector("[data-active]").dataset.optionIndex === "0";
+      key(popup(), "2");
+      checks.typeahead = popup().querySelector("[data-active]").dataset.optionIndex === "1";
+      popup().querySelector('[data-option-index="1"]').click();
+      await delay();
+      checks.pointerSelectsLevel = row().querySelector('[data-role="plan-target"]').value === "2";
+      trigger("plan-target").click();
+      key(popup(), "Tab");
+      checks.tabCloses = !popup();
+      trigger("plan-buff").click();
+      panel.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      checks.outsideDismisses = !popup();
+      trigger("plan-target").click();
+      const refreshSelect = row().querySelector('[data-role="plan-start"]');
+      refreshSelect.value = "1";
+      refreshSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      await delay();
+      checks.popupSurvivesRefresh =
+        Boolean(popup()) &&
+        trigger("plan-target").getAttribute("aria-expanded") === "true" &&
+        popup().querySelectorAll('[role="option"]').length === 1;
+      key(popup(), "Escape");
       checks.groupedChoices = row().querySelectorAll('[data-role="plan-buff"] optgroup').length === 2;
       checks.shrineGameIcon = Boolean(row().querySelector('[data-icon-source="game"] use'));
       checks.effectsAvailable = row().querySelectorAll(".mwi-shrine-effect-comparison>div").length === 2;
@@ -1031,7 +1088,7 @@
         (el) => el.textContent === "+0%"
       );
       checks.costTotal = row().querySelector(".mwi-shrine-plan-cost").textContent.includes("2,400");
-      checks.focusRetained = document.activeElement === row().querySelector('[data-role="plan-target"]');
+      checks.focusRetained = document.activeElement === row().querySelector('[data-picker-role="plan-target"]');
       row().querySelector("summary[data-shrine-steps-summary]").click();
       checks.twoSteps = row().querySelectorAll("[data-shrine-step]").length === 2;
       checks.firstStepCost = row().querySelector('[data-shrine-step="1"]').textContent.includes("900");
@@ -1056,6 +1113,33 @@
       row().querySelector("summary[data-shrine-steps-summary]").click();
       row().querySelector("summary[data-shrine-steps-summary]").click();
       checks.onlyLocalPlanning = JSON.stringify(window.__mwiGuildCreditBridge.guildBuffLevels) === savedBefore;
+      const collapse = () => row().querySelector('[data-role="toggle-plan"]');
+      const planBody = () => row().querySelector(".mwi-shrine-plan-body");
+      const totalsBefore = panel.querySelector('[data-role="upgrade-results"]').textContent;
+      const heightBefore = row().getBoundingClientRect().height;
+      collapse().focus();
+      collapse().click();
+      checks.planCollapsed = planBody().hidden && !planBody().getClientRects().length;
+      checks.collapsedHeight = row().getBoundingClientRect().height < heightBefore / 2;
+      checks.collapseAria =
+        collapse().getAttribute("aria-expanded") === "false" &&
+        document.getElementById(collapse().getAttribute("aria-controls")) === planBody();
+      checks.collapseFocus = document.activeElement === collapse();
+      checks.collapseIndependent =
+        [...list.querySelectorAll(".mwi-shrine-plan-body")].filter((el) => el.hidden).length === 1;
+      checks.collapsedSummary =
+        Boolean(row().querySelector('[data-picker-role="plan-buff"]').getClientRects().length) &&
+        row().querySelector(".mwi-shrine-collapse-bar").textContent.includes("2");
+      checks.collapseKeepsTotals = panel.querySelector('[data-role="upgrade-results"]').textContent === totalsBefore;
+      const storedPlans = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1")).upgradePlans;
+      checks.collapsePersisted =
+        storedPlans.find((plan) => plan.guildBuffHrid === "/guild_buffs/tempo_combat").collapsed === true;
+      const otherPlan = [...list.querySelectorAll("[data-plan-id]")].find((node) => node !== row());
+      otherPlan.querySelector('[data-role="shrine-target-next"]').click();
+      checks.collapseAfterRefresh = planBody().hidden;
+      collapse().click();
+      checks.planExpanded = !planBody().hidden && Boolean(planBody().getClientRects().length);
+      checks.innerDetailsPreserved = row().querySelector("details[data-shrine-steps]").open;
       // A captured lower guild cap affects the warning, never erases the future plan.
       const bridge = window.__mwiGuildCreditBridge;
       const previousShrines = bridge.guildShrineLevels;
@@ -1068,6 +1152,29 @@
       bridge.guildShrineLevels = previousShrines;
       bridge.onCharacterItemsUpdated?.();
       await new Promise((resolve) => setTimeout(resolve, 300));
+      const other = [...list.querySelectorAll("[data-plan-id]")].find((node) => node !== row());
+      const otherHrid = other.dataset.guildBuffHrid;
+      const planId = row().dataset.planId;
+      other.querySelector('[data-role="remove-plan"]').click();
+      collapse().click();
+      trigger("plan-buff").click();
+      const otherIndex = [...row().querySelector('[data-role="plan-buff"]').options].findIndex(
+        (option) => option.value === otherHrid
+      );
+      popup().querySelector(`[data-option-index="${otherIndex}"]`).click();
+      await delay();
+      const changedRow = [...list.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === planId);
+      checks.changedShrineExpands = !changedRow.querySelector(".mwi-shrine-plan-body").hidden;
+      checks.pointerSelectsShrine =
+        changedRow.dataset.guildBuffHrid === otherHrid &&
+        changedRow.querySelector(".mwi-shrine-effect-comparison") !== null;
+      changedRow.querySelector('[data-picker-role="plan-buff"]').click();
+      const oldIndex = [...changedRow.querySelector('[data-role="plan-buff"]').options].findIndex(
+        (option) => option.value === "/guild_buffs/tempo_combat"
+      );
+      popup().querySelector(`[data-option-index="${oldIndex}"]`).click();
+      panel.querySelector('[data-role="add-upgrade-plan"]').click();
+      checks.shrineChangeRestored = Boolean(row()) && list.querySelectorAll("[data-plan-id]").length === 4;
       return { checks, layout: window.__mwiCollectLayoutAudit() };
     }
     if (searchParams.has("shrineUpgradeAudit")) {

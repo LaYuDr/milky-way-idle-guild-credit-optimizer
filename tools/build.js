@@ -107,6 +107,7 @@ const SOURCE_FILES = [
   "src/ui/trial-screenshot.js",
   "src/ui/trial-history-view.js",
   "src/ui/shrine-effects.js",
+  "src/ui/shrine-picker.js",
   "src/ui/upgrade-view.js",
   "src/ui/settings-view.js",
   "src/ui/shrine-guide-ui.js",

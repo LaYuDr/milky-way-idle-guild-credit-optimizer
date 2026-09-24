@@ -624,7 +624,7 @@
         #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-building-icon{display:block;width:32px;height:32px}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{align-self:center}
-        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan label{display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan :is(.mwi-upgrade-plan-shrine,.mwi-upgrade-plan-start,.mwi-upgrade-plan-target){display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;color:#b7bfd4;font-size:12px}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan select{width:100%!important;min-height:36px;padding:5px 8px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,sans-serif}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan{grid-column:auto;grid-row:auto;display:grid;place-items:center;align-self:end;min-width:32px;width:32px;height:36px;min-height:36px;padding:4px!important;border:0;background:transparent!important;color:#b7bfd4!important;box-shadow:none}
@@ -661,6 +661,42 @@
         #mwi-credit-optimizer .mwi-shrine-step-heading strong{color:#edf0fa;font-weight:600}
         #mwi-credit-optimizer .mwi-shrine-step-heading span{color:#91dfcb}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-shrine-level-controls{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr)}#mwi-credit-optimizer .mwi-shrine-target-actions{grid-column:1/-1}}
+
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:30px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button:hover{background:#34394f}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button[aria-expanded="true"] svg{transform:rotate(180deg)}
+        #mwi-credit-optimizer .mwi-shrine-plan-body[hidden]{display:none!important}
+
+        /* Custom shrine choices stay in the top layer, outside sidebar clipping. */
+        #mwi-credit-optimizer .mwi-upgrade-plan select[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;min-height:36px;padding:6px 10px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,-apple-system,"Microsoft YaHei",sans-serif;text-align:left;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger>span{min-width:0;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger>svg{flex:0 0 16px;color:#b7bfd4;transition:transform .16s ease-out}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger:hover{background:#24273b;border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger[aria-expanded="true"]{border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger[aria-expanded="true"]>svg{transform:rotate(180deg)}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        .mwi-shrine-picker-popover{position:fixed;inset:auto;margin:0;padding:6px;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;border:0;border-radius:6px;background:#24273b;color:#edf0fa;box-shadow:0 8px 20px #10111ccc;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-width:thin;scrollbar-color:#66708b #24273b;z-index:2147483647;text-align:left;color-scheme:dark}
+        .mwi-shrine-picker-popover[data-fallback]{display:block}
+        .mwi-shrine-picker-popover:focus{outline:2px solid #91dfcb;outline-offset:1px}
+        .mwi-shrine-picker-popover::selection{background:#34685e;color:#fff}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-group{padding:8px 8px 6px;font-size:12px;color:#b7bfd4;font-weight:600}
+        .mwi-shrine-picker-popover [role="group"]+[role="group"]{margin-top:6px;padding-top:4px;border-top:1px solid #41465f}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option{display:flex;align-items:center;gap:10px;padding:9px 8px;min-height:36px;box-sizing:border-box;border-radius:4px;cursor:pointer;scroll-margin:6px}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-selected="true"]{background:#34514e;color:#d5f7ed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[data-active]{outline:1px solid #91dfcb;outline-offset:-1px;background:#34394f}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-selected="true"][data-active]{background:#34514e}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy{flex:1;min-width:0;overflow-wrap:anywhere}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy>span{display:block;font-weight:600}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy>small{display:block;margin-top:3px;color:#b7bfd4;font-size:12px;font-weight:400}
+        .mwi-shrine-picker-popover [aria-selected="true"] .mwi-shrine-picker-copy>small{color:#d5f7ed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-icon{display:flex;flex:0 0 28px;align-items:center;justify-content:center}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-icon :is(svg,img){width:28px;height:28px}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-check{display:flex;flex:0 0 16px;align-items:center;color:#91dfcb}
+        @media(prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-shrine-picker-trigger>svg{transition:none}}
 
           /* Trial workspace inherits the construction page's compact visual system. */
         #mwi-credit-optimizer [data-role="trials-view"]{--trial-surface:#24273b;--trial-field:#191c2e;--trial-line:#41465f;--trial-text:#edf0fa;--trial-muted:#b7bfd4;--trial-accent:#91dfcb;--trial-warning:#e9c487;--trial-danger:#ffa7b5;container-type:inline-size;container-name:mwi-trials;color:var(--trial-text);font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-color:#66708b var(--trial-surface)}

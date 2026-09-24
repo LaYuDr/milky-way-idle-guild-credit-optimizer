@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.48";
+window.MwiGuildCreditVersion = "1.2.49";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3582,7 +3582,13 @@ window.MwiGuildCreditVersion = "1.2.48";
       updateNow: "立即更新",
       updateLatest: "当前版本 v{current} · 最新版本 v{latest} · 已是最新",
       updateUnavailable: "当前版本 v{current} · 最新版本：暂时无法读取",
+      shrineCollapse: "收起",
+      shrineExpand: "展开",
+      shrineCollapseNamed: "收起{shrine}升级计划",
+      shrineExpandNamed: "展开{shrine}升级计划",
       shrineNoMaterials: "无需材料",
+      shrineAlreadyPlanned: "已在其他计划中",
+      shrineMaxed: "已达最高等级",
       shrineGain: "增量 {value}",
       shrineRemoveNamed: "移除{shrine}计划",
       shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级 · 规则上限 {max} 级",
@@ -3597,6 +3603,8 @@ window.MwiGuildCreditVersion = "1.2.48";
       shrineSteps: "逐级效果与花费 · {count} 级",
       shrineStepsHint: "列出所选区间的每次升级：显示升至该级后的总效果，以及仅该次升级所需的材料。",
       shrineStepLevel: "{start} → {target} 级",
+      shrineEffectsPerLevel: "每级：{effects}",
+      shrineEffectsFirstAndPerLevel: "首级：{first}；后续每级：{later}",
       shrineEffectPerLevel: "每级：{effect} {value}",
       shrineEffectFirstAndPerLevel: "{effect}：首级 {first}；后续每级 {value}",
       shrineEffectsUnavailable: "每级效果暂未读取",
@@ -4271,7 +4279,13 @@ window.MwiGuildCreditVersion = "1.2.48";
       updateNow: "Update now",
       updateLatest: "Current v{current} · Latest v{latest} · Up to date",
       updateUnavailable: "Current v{current} · Latest: unavailable",
+      shrineCollapse: "Collapse",
+      shrineExpand: "Expand",
+      shrineCollapseNamed: "Collapse {shrine} plan",
+      shrineExpandNamed: "Expand {shrine} plan",
       shrineNoMaterials: "No materials required",
+      shrineAlreadyPlanned: "Already in another plan",
+      shrineMaxed: "Maximum level reached",
       shrineGain: "Gain {value}",
       shrineRemoveNamed: "Remove {shrine} plan",
       shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap} · Rule cap {max}",
@@ -4288,6 +4302,8 @@ window.MwiGuildCreditVersion = "1.2.48";
       shrineSteps: "Per-level effects & costs · {count} levels",
       shrineStepsHint: "Each step shows the total effect at that level and the materials for that step only.",
       shrineStepLevel: "Lv. {start} → {target}",
+      shrineEffectsPerLevel: "Per level: {effects}",
+      shrineEffectsFirstAndPerLevel: "Level 1: {first}; each later level: {later}",
       shrineEffectPerLevel: "Per level: {effect} {value}",
       shrineEffectFirstAndPerLevel: "{effect}: level 1 {first}; each later level {value}",
       shrineEffectsUnavailable: "Per-level effects not yet available",
@@ -7098,7 +7114,8 @@ window.MwiGuildCreditVersion = "1.2.48";
               .map((plan) => ({
                 guildBuffHrid: plan.guildBuffHrid,
                 startLevel: plan.startLevel,
-                targetLevel: plan.targetLevel
+                targetLevel: plan.targetLevel,
+                ...(plan.collapsed === true ? { collapsed: true } : {})
               }))
           : [];
         const targetCredit = Number(stored.targetCredit);
@@ -7264,7 +7281,8 @@ window.MwiGuildCreditVersion = "1.2.48";
         const upgradePlans = state.upgradePlans.map((plan) => ({
           guildBuffHrid: plan.guildBuffHrid,
           startLevel: plan.startLevel,
-          targetLevel: plan.targetLevel
+          targetLevel: plan.targetLevel,
+          ...(plan.collapsed === true ? { collapsed: true } : {})
         }));
         storage.setItem(
           config.UI_STATE_STORAGE_KEY,
@@ -9945,7 +9963,7 @@ window.MwiGuildCreditVersion = "1.2.48";
         #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-building-icon{display:block;width:32px;height:32px}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{align-self:center}
-        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan label{display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan :is(.mwi-upgrade-plan-shrine,.mwi-upgrade-plan-start,.mwi-upgrade-plan-target){display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;color:#b7bfd4;font-size:12px}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan select{width:100%!important;min-height:36px;padding:5px 8px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,sans-serif}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan{grid-column:auto;grid-row:auto;display:grid;place-items:center;align-self:end;min-width:32px;width:32px;height:36px;min-height:36px;padding:4px!important;border:0;background:transparent!important;color:#b7bfd4!important;box-shadow:none}
@@ -9982,6 +10000,42 @@ window.MwiGuildCreditVersion = "1.2.48";
         #mwi-credit-optimizer .mwi-shrine-step-heading strong{color:#edf0fa;font-weight:600}
         #mwi-credit-optimizer .mwi-shrine-step-heading span{color:#91dfcb}
         @container (max-width:520px){#mwi-credit-optimizer .mwi-shrine-level-controls{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr)}#mwi-credit-optimizer .mwi-shrine-target-actions{grid-column:1/-1}}
+
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:30px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button:hover{background:#34394f}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button[aria-expanded="true"] svg{transform:rotate(180deg)}
+        #mwi-credit-optimizer .mwi-shrine-plan-body[hidden]{display:none!important}
+
+        /* Custom shrine choices stay in the top layer, outside sidebar clipping. */
+        #mwi-credit-optimizer .mwi-upgrade-plan select[hidden]{display:none!important}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-width:0;min-height:36px;padding:6px 10px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,-apple-system,"Microsoft YaHei",sans-serif;text-align:left;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger>span{min-width:0;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger>svg{flex:0 0 16px;color:#b7bfd4;transition:transform .16s ease-out}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger:hover{background:#24273b;border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-picker-trigger[aria-expanded="true"]{border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger[aria-expanded="true"]>svg{transform:rotate(180deg)}
+        #mwi-credit-optimizer .mwi-shrine-picker-trigger:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        .mwi-shrine-picker-popover{position:fixed;inset:auto;margin:0;padding:6px;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;border:0;border-radius:6px;background:#24273b;color:#edf0fa;box-shadow:0 8px 20px #10111ccc;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-width:thin;scrollbar-color:#66708b #24273b;z-index:2147483647;text-align:left;color-scheme:dark}
+        .mwi-shrine-picker-popover[data-fallback]{display:block}
+        .mwi-shrine-picker-popover:focus{outline:2px solid #91dfcb;outline-offset:1px}
+        .mwi-shrine-picker-popover::selection{background:#34685e;color:#fff}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-group{padding:8px 8px 6px;font-size:12px;color:#b7bfd4;font-weight:600}
+        .mwi-shrine-picker-popover [role="group"]+[role="group"]{margin-top:6px;padding-top:4px;border-top:1px solid #41465f}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option{display:flex;align-items:center;gap:10px;padding:9px 8px;min-height:36px;box-sizing:border-box;border-radius:4px;cursor:pointer;scroll-margin:6px}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-selected="true"]{background:#34514e;color:#d5f7ed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[data-active]{outline:1px solid #91dfcb;outline-offset:-1px;background:#34394f}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-selected="true"][data-active]{background:#34514e}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-option[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy{flex:1;min-width:0;overflow-wrap:anywhere}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy>span{display:block;font-weight:600}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-copy>small{display:block;margin-top:3px;color:#b7bfd4;font-size:12px;font-weight:400}
+        .mwi-shrine-picker-popover [aria-selected="true"] .mwi-shrine-picker-copy>small{color:#d5f7ed}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-icon{display:flex;flex:0 0 28px;align-items:center;justify-content:center}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-icon :is(svg,img){width:28px;height:28px}
+        .mwi-shrine-picker-popover .mwi-shrine-picker-check{display:flex;flex:0 0 16px;align-items:center;color:#91dfcb}
+        @media(prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-shrine-picker-trigger>svg{transition:none}}
 
           /* Trial workspace inherits the construction page's compact visual system. */
         #mwi-credit-optimizer [data-role="trials-view"]{--trial-surface:#24273b;--trial-field:#191c2e;--trial-line:#41465f;--trial-text:#edf0fa;--trial-muted:#b7bfd4;--trial-accent:#91dfcb;--trial-warning:#e9c487;--trial-danger:#ffa7b5;container-type:inline-size;container-name:mwi-trials;color:var(--trial-text);font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-color:#66708b var(--trial-surface)}
@@ -13255,20 +13309,293 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         )
         .join(separator);
     }
-    return { name, value, perLevel };
+    function summary(detail) {
+      const effects = core.guildBuffLevelEffects(detail);
+      if (!effects.length) return t("shrineEffectsUnavailable");
+      const describe = (field) =>
+        effects.map((effect) => `${name(effect)} ${value(effect, effect[field])}`).join(" · ");
+      return effects.every((effect) => effect.first === effect.increment)
+        ? t("shrineEffectsPerLevel", { effects: describe("increment") })
+        : t("shrineEffectsFirstAndPerLevel", { first: describe("first"), later: describe("increment") });
+    }
+    return { name, value, perLevel, summary };
   }
   return { createFormatter };
+});
+
+
+// SOURCE: src/ui/shrine-picker.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildShrinePicker = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  let sequence = 0;
+  const chevron =
+    '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>';
+  const check =
+    '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg>';
+
+  // The hidden select remains the local plan adapter; only these controls receive user input.
+  function createManager(host, escapeHtml) {
+    const doc = host.ownerDocument;
+    const win = doc.defaultView;
+    const controls = new WeakMap();
+    let opened = null;
+    let describe = () => ({});
+
+    function close(restoreFocus = false) {
+      if (!opened) return;
+      const { trigger, popup, controller, observer } = opened;
+      opened = null;
+      controller.abort();
+      observer.disconnect();
+      trigger.setAttribute("aria-expanded", "false");
+      popup.remove();
+      if (restoreFocus && trigger.isConnected) trigger.focus({ preventScroll: true });
+    }
+
+    function open(select, initial = null) {
+      close();
+      const trigger = controls.get(select);
+      if (!trigger || select.disabled || !trigger.isConnected) return;
+      const options = [...select.options];
+      const popup = doc.createElement("div");
+      popup.className = "mwi-shrine-picker-popover";
+      popup.id = trigger.getAttribute("aria-controls");
+      popup.setAttribute("popover", "auto");
+      popup.setAttribute("role", "listbox");
+      popup.setAttribute("aria-label", select.getAttribute("aria-label"));
+      popup.tabIndex = -1;
+      let previousGroup = null;
+      let groupNode = popup;
+      options.forEach((option, index) => {
+        const group = option.parentElement.tagName === "OPTGROUP" ? option.parentElement : null;
+        if (group !== previousGroup) {
+          previousGroup = group;
+          groupNode = doc.createElement("div");
+          groupNode.setAttribute("role", "group");
+          const heading = doc.createElement("div");
+          heading.className = "mwi-shrine-picker-group";
+          heading.id = `${popup.id}-group-${index}`;
+          heading.textContent = group.label;
+          groupNode.setAttribute("aria-labelledby", heading.id);
+          groupNode.append(heading);
+          popup.append(groupNode);
+        }
+        const item = doc.createElement("div");
+        const details = describe(select, option);
+        item.id = `${popup.id}-option-${index}`;
+        item.className = "mwi-shrine-picker-option";
+        item.dataset.optionIndex = String(index);
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", String(option.selected));
+        item.setAttribute("aria-disabled", String(option.disabled || group?.disabled || false));
+        item.setAttribute("aria-labelledby", `${item.id}-name`);
+        if (details.description || details.reason) item.setAttribute("aria-describedby", `${item.id}-description`);
+        item.innerHTML = `${details.icon ? `<span class="mwi-shrine-picker-icon" aria-hidden="true">${details.icon}</span>` : ""}<span class="mwi-shrine-picker-copy"><span id="${item.id}-name">${escapeHtml(option.textContent)}</span>${details.description || details.reason ? `<small id="${item.id}-description">${escapeHtml([details.description, details.reason].filter(Boolean).join(" · "))}</small>` : ""}</span><span class="mwi-shrine-picker-check">${option.selected ? check : ""}</span>`;
+        groupNode.append(item);
+      });
+      doc.body.append(popup);
+      const controller = new win.AbortController();
+      const observer = new win.MutationObserver(() => {
+        if (!trigger.isConnected || !trigger.getClientRects().length) close();
+      });
+      const events = { signal: controller.signal };
+      const items = [...popup.querySelectorAll('[role="option"]')];
+      const enabled = items.filter((item) => item.getAttribute("aria-disabled") !== "true");
+      let activeIndex = -1;
+      let typed = "";
+      let typedAt = 0;
+      function activate(item) {
+        if (!item || !enabled.includes(item)) return;
+        items[activeIndex]?.removeAttribute("data-active");
+        activeIndex = items.indexOf(item);
+        item.dataset.active = "true";
+        popup.setAttribute("aria-activedescendant", item.id);
+        item.scrollIntoView({ block: "nearest" });
+      }
+      function choose(item) {
+        if (!enabled.includes(item)) return;
+        const value = options[Number(item.dataset.optionIndex)].value;
+        close(true);
+        if (value === select.value) return;
+        select.value = value;
+        select.dispatchEvent(new win.Event("change", { bubbles: true }));
+      }
+      function position() {
+        if (!trigger.isConnected || !trigger.getClientRects().length) return close();
+        const rect = trigger.getBoundingClientRect();
+        const panel = host.closest("#mwi-credit-optimizer").getBoundingClientRect();
+        const width = Math.min(
+          select.dataset.role === "plan-buff" ? Math.max(rect.width, 280) : Math.max(rect.width, 144),
+          panel.width - 24,
+          win.innerWidth - 16
+        );
+        popup.style.width = `${width}px`;
+        popup.style.left = `${Math.max(8, Math.min(rect.left, panel.right - width - 12, win.innerWidth - width - 8))}px`;
+        const below = win.innerHeight - rect.bottom - 12;
+        const above = rect.top - 12;
+        const upwards = below < Math.min(300, popup.scrollHeight) && above > below;
+        popup.style.maxHeight = `${Math.max(80, Math.min(420, upwards ? above : below))}px`;
+        popup.style.top = `${upwards ? Math.max(8, rect.top - popup.getBoundingClientRect().height - 6) : rect.bottom + 6}px`;
+      }
+      opened = { select, trigger, popup, controller, observer };
+      trigger.setAttribute("aria-expanded", "true");
+      if (typeof popup.showPopover === "function") popup.showPopover();
+      else popup.dataset.fallback = "true";
+      position();
+      popup.focus({ preventScroll: true });
+      activate(
+        items.find((item, index) => options[index].value === initial) || items[select.selectedIndex] || enabled[0]
+      );
+      if (activeIndex < 0) activate(enabled[0]);
+      popup.addEventListener("click", (event) => choose(event.target.closest('[role="option"]')), events);
+      popup.addEventListener("pointermove", (event) => activate(event.target.closest('[role="option"]')), events);
+      popup.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            close(true);
+          } else if (event.key === "Tab") {
+            close(true); // Native Tab proceeds from the trigger to the next/previous field.
+          } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            const index = enabled.indexOf(items[activeIndex]);
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? enabled.length - 1
+                  : (index + (event.key === "ArrowDown" ? 1 : -1) + enabled.length) % enabled.length;
+            activate(enabled[next]);
+          } else if (["Enter", " "].includes(event.key)) {
+            event.preventDefault();
+            choose(items[activeIndex]);
+          } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            const now = Date.now();
+            typed = now - typedAt > 700 ? event.key : typed + event.key;
+            typedAt = now;
+            const query = typed.toLocaleLowerCase();
+            activate(
+              enabled.find((item) =>
+                (select.dataset.role !== "plan-buff"
+                  ? options[Number(item.dataset.optionIndex)].value
+                  : options[Number(item.dataset.optionIndex)].textContent
+                )
+                  .trim()
+                  .toLocaleLowerCase()
+                  .startsWith(query)
+              )
+            );
+          }
+        },
+        events
+      );
+      popup.addEventListener(
+        "toggle",
+        (event) => {
+          if (event.newState === "closed" && opened?.popup === popup) close();
+        },
+        events
+      );
+      doc.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (!popup.contains(event.target) && !trigger.contains(event.target)) close();
+        },
+        events
+      );
+      doc.addEventListener(
+        "scroll",
+        (event) => {
+          if (!popup.contains(event.target)) close();
+        },
+        { ...events, capture: true }
+      );
+      win.addEventListener("resize", position, events);
+      observer.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    }
+
+    function capture() {
+      const active = doc.activeElement;
+      const select = opened?.select || (active?.dataset?.pickerRole ? active.previousElementSibling : null);
+      if (!select || !host.contains(select)) return null;
+      return {
+        plan: select.closest("[data-plan-id]").dataset.planId,
+        role: select.dataset.role,
+        open: Boolean(opened)
+      };
+    }
+
+    function sync(description, snapshot, replaced) {
+      describe = description;
+      if (replaced) close();
+      for (const select of host.querySelectorAll(
+        'select[data-role="plan-buff"],select[data-role="plan-start"],select[data-role="plan-target"]'
+      )) {
+        let trigger = controls.get(select);
+        if (!trigger) {
+          select.hidden = true;
+          select.tabIndex = -1;
+          trigger = doc.createElement("button");
+          trigger.type = "button";
+          trigger.className = "mwi-shrine-picker-trigger";
+          trigger.dataset.pickerRole = select.dataset.role;
+          trigger.setAttribute("role", "combobox");
+          trigger.setAttribute("aria-haspopup", "listbox");
+          trigger.setAttribute("aria-expanded", "false");
+          trigger.setAttribute("aria-controls", `mwi-shrine-picker-${++sequence}`);
+          select.after(trigger);
+          controls.set(select, trigger);
+          trigger.addEventListener("click", () => (opened?.select === select ? close(true) : open(select)));
+          trigger.addEventListener("keydown", (event) => {
+            if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+              event.preventDefault();
+              const enabled = [...select.options].filter((option) => !option.disabled);
+              open(
+                select,
+                event.key === "Home" ? enabled[0]?.value : event.key === "End" ? enabled.at(-1)?.value : null
+              );
+            }
+          });
+        }
+        trigger.disabled = select.disabled;
+        const label = select.getAttribute("aria-label");
+        const value = select.selectedOptions[0]?.textContent || "";
+        trigger.setAttribute("aria-label", `${label}: ${value}`);
+        trigger.innerHTML = `<span>${escapeHtml(value)}</span>${chevron}`;
+      }
+      if (snapshot && replaced) {
+        const row = [...host.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === snapshot.plan);
+        const select = [...(row?.querySelectorAll("select[data-role]") || [])].find(
+          (node) => node.dataset.role === snapshot.role
+        );
+        if (select) {
+          controls.get(select)?.focus({ preventScroll: true });
+          if (snapshot.open) open(select);
+        }
+      }
+    }
+    return { capture, sync };
+  }
+  return { createManager };
 });
 
 
 // SOURCE: src/ui/upgrade-view.js
 (function (root, factory) {
   const api = factory(
-    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects,
+    typeof module !== "undefined" && module.exports ? require("./shrine-picker.js") : root.MwiGuildShrinePicker
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditUpgradeView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi, pickerApi) {
   "use strict";
 
   function createUpgradeView(dependencies) {
@@ -13310,6 +13637,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     } = dependencies;
 
     const effects = effectApi.createFormatter({ core, t, ui });
+    const pickers = new WeakMap();
 
     function guildBuffEntries() {
       hydrateBridgeData();
@@ -13705,6 +14033,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function renderGuildUpgradePlans(panel, entries) {
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
+      let picker = pickers.get(list);
+      if (!picker) {
+        picker = pickerApi.createManager(list, escapeHtml);
+        pickers.set(list, picker);
+      }
+      const pickerSnapshot = picker.capture();
       const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
       const openPlans = new Set(
         [...list.querySelectorAll("details[data-shrine-steps][open]")].map(
@@ -13740,19 +14074,38 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const aboveCap = cap !== null && plan.targetLevel > cap;
           const icon = guildBuildingIconMarkup?.({ hrid: shrineHrid }, sprite) || "";
           const title = guildBuffLabel(entry.detail, entry.hrid);
+          const collapsed = plan.collapsed === true;
+          const bodyId = `mwi-shrine-plan-body-${plan.id}`;
           return `<article class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${isCombatGuildBuff(entry) ? "combat" : "life"}" aria-label="${escapeHtml(title)}">
-          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><div class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></div><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <div class="mwi-shrine-collapse-bar"><span>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</span><button type="button" data-role="toggle-plan" aria-expanded="${!collapsed}" aria-controls="${escapeHtml(bodyId)}" aria-label="${escapeHtml(t(collapsed ? "shrineExpandNamed" : "shrineCollapseNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>${escapeHtml(t(collapsed ? "shrineExpand" : "shrineCollapse"))}</button></div>
+          <div class="mwi-shrine-plan-body" id="${escapeHtml(bodyId)}"${collapsed ? " hidden" : ""}>
           <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap), max: formatNumber(entry.maxLevel) }))}</p>
-          <div class="mwi-shrine-level-controls"><label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
+          <div class="mwi-shrine-level-controls"><div class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></div><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><div class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></div><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
           ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
           ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}
           <section class="mwi-shrine-plan-effects" aria-label="${escapeHtml(t("shrineEffectComparison"))}"><h4>${escapeHtml(t("shrineEffectComparison"))}<small>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</small></h4>${renderPlanEffects(preview)}</section>
           <section class="mwi-shrine-plan-cost" aria-label="${escapeHtml(t("shrineRangeCost"))}"><h4>${escapeHtml(t("shrineRangeCost"))}</h4>${renderPlanMaterials(preview)}</section>
           <details class="mwi-shrine-steps" data-shrine-steps${openPlans.has(plan.id) ? " open" : ""}><summary data-shrine-steps-summary>${escapeHtml(t("shrineSteps", { count: preview.steps.length }))}</summary><p class="mwi-shrine-muted">${escapeHtml(t("shrineStepsHint"))}</p><ol>${preview.steps.map((step) => `<li data-shrine-step="${step.level}"><div class="mwi-shrine-step-heading"><strong>${escapeHtml(t("shrineStepLevel", { start: step.level - 1, target: step.level }))}</strong><span>${step.effects.length ? step.effects.map((effect) => escapeHtml(`${effects.name(effect)} ${effects.value(effect, effect.value)}`)).join(" · ") : escapeHtml(t("shrineEffectsUnavailable"))}</span></div>${renderPlanMaterials({ status: "ok", totals: step.totals })}</li>`).join("")}</ol>${preview.status !== "ok" ? renderPlanMaterials(preview) : ""}</details>
+          </div>
         </article>`;
         })
         .join("");
-      updateRenderedMarkup(list, plansMarkup);
+      const replaced = updateRenderedMarkup(list, plansMarkup);
+      picker.sync(
+        (select, option) => {
+          if (select.dataset.role !== "plan-buff") return {};
+          const candidate = entries.find((item) => item.hrid === option.value);
+          if (!candidate) return {};
+          return {
+            icon: guildBuildingIconMarkup?.({ hrid: candidate.detail.shrineHrid }, sprite) || "",
+            description: effects.summary(candidate.detail),
+            reason: option.disabled ? t(plannedHrids.has(candidate.hrid) ? "shrineAlreadyPlanned" : "shrineMaxed") : ""
+          };
+        },
+        pickerSnapshot,
+        replaced
+      );
       if (focusedPlan && (focusedRole || focusedSteps)) {
         const row = [...list.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === focusedPlan);
         const control = focusedSteps
@@ -16447,6 +16800,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const entry = entries.find((candidate) => candidate.hrid === targetHrid);
           if (!entry || currentGuildBuffLevel(entry) >= entry.maxLevel) return;
           plan.guildBuffHrid = entry.hrid;
+          plan.collapsed = false;
           plan.startLevel = currentGuildBuffLevel(entry);
           plan.targetLevel = Math.min(plan.startLevel + 1, entry.maxLevel);
         } else if (event.target.matches('[data-role="plan-start"]')) {
@@ -16461,6 +16815,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         refreshGuildUpgrade(panel);
       });
       panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
+        const collapseButton = event.target.closest('[data-role="toggle-plan"]');
+        if (collapseButton) {
+          const row = collapseButton.closest("[data-plan-id]");
+          const plan = state.upgradePlans.find((candidate) => candidate.id === row.dataset.planId);
+          if (plan) {
+            plan.collapsed = plan.collapsed !== true;
+            persistPluginUiState();
+            refreshGuildUpgrade(panel);
+          }
+          return;
+        }
         const targetButton = event.target.closest('[data-role="shrine-target-next"],[data-role="shrine-target-cap"]');
         if (targetButton && !targetButton.disabled) {
           const row = targetButton.closest("[data-plan-id]");

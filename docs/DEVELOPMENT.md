@@ -307,9 +307,21 @@ Run the full contract at sidebar widths `320`, `360`, `420`, `460`, `480`,
 
 ### Shrine upgrade plan editor
 
-The shrine selector uses native, keyboard-accessible life/combat option groups. Each plan
-keeps its starting/target levels, purchased level, guild cap, effect comparison and total
-materials visible. One level and To guild cap are local planning shortcuts. A target above
+Interaction references: [Radix Select](https://www.radix-ui.com/primitives/docs/components/select)
+and [React Aria Select](https://react-spectrum.adobe.com/react-aria/Select.html).
+`src/ui/shrine-picker.js` implements the project-native interaction without adding React.
+The popup uses the browser top layer (a fixed body portal fallback), bounds itself to the
+viewport/sidebar, and removes its temporary listeners when closed or its source is removed.
+
+Shrine and level selectors use a custom, themed listbox popover. Shrine options are grouped
+by life/combat, with official icons, effect descriptions, selected marks and unavailable reasons.
+The hidden native select is only an adapter for the existing plan change handlers; it cannot
+receive user focus or open a system picker. Each plan
+can independently collapse its details while keeping the shrine selector, domain, level
+range, remove control and expand action visible. Existing and newly added plans start expanded;
+only an explicit true `collapsed` flag is saved in local UI state. Collapsing changes no costs,
+levels or guide plans. Changing the selected shrine expands that plan for review.
+Expanded plans show purchased levels, guild cap, effect comparison and total materials. One level and To guild cap are local planning shortcuts. A target above
 the guild cap remains a future plan with a warning; an unread cap is not treated as zero.
 The per-level disclosure lists only the selected interval, with effects at each destination
 level and materials for that step. It preserves expansion and control focus across refreshes.
@@ -326,7 +338,9 @@ levels, not guild-building upgrade costs or a character's fully combined stats.
 
 Run `npm run test:browser -- --suite shrine-upgrade,layout,settings,upgrade-empty --channel chrome`.
 The new shrine-upgrade suite covers all eleven Chinese widths and English 320/610/900,
-including zero-to-first effects, start/target changes, exact total and per-step costs,
+including custom group rendering, hidden native controls, keyboard arrows/Home/End/typeahead,
+Enter and pointer selection, Escape/Tab/outside dismissal, popup refresh retention, viewport
+placement, zero-to-first effects, start/target changes, exact total and per-step costs,
 independent combat effects, disclosure and focus retention, shortcuts, duplicate selection,
 future-cap warnings and overflow. Plan height follows the visible content rather than the
 previous single-line row limit. Preserve the existing empty-plan and guide regressions.

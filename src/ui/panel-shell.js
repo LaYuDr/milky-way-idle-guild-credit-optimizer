@@ -1001,6 +1001,7 @@
           const entry = entries.find((candidate) => candidate.hrid === targetHrid);
           if (!entry || currentGuildBuffLevel(entry) >= entry.maxLevel) return;
           plan.guildBuffHrid = entry.hrid;
+          plan.collapsed = false;
           plan.startLevel = currentGuildBuffLevel(entry);
           plan.targetLevel = Math.min(plan.startLevel + 1, entry.maxLevel);
         } else if (event.target.matches('[data-role="plan-start"]')) {
@@ -1015,6 +1016,17 @@
         refreshGuildUpgrade(panel);
       });
       panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
+        const collapseButton = event.target.closest('[data-role="toggle-plan"]');
+        if (collapseButton) {
+          const row = collapseButton.closest("[data-plan-id]");
+          const plan = state.upgradePlans.find((candidate) => candidate.id === row.dataset.planId);
+          if (plan) {
+            plan.collapsed = plan.collapsed !== true;
+            persistPluginUiState();
+            refreshGuildUpgrade(panel);
+          }
+          return;
+        }
         const targetButton = event.target.closest('[data-role="shrine-target-next"],[data-role="shrine-target-cap"]');
         if (targetButton && !targetButton.disabled) {
           const row = targetButton.closest("[data-plan-id]");

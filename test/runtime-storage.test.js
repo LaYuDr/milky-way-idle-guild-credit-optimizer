@@ -575,3 +575,30 @@ test("目标信用点默认 100，非法保存值回退，合法手动值保留"
     assert.equal(createStorage(saved).loadSavedPluginUiState().targetCredit, targetCredit);
   }
 });
+
+test("神龛折叠状态仅接受显式 true，并与计划等级一起保存", () => {
+  const storage = memoryStorage({
+    [config.UI_STATE_STORAGE_KEY]: JSON.stringify({
+      upgradePlans: [true, false, "true", undefined].map((collapsed, index) => ({
+        guildBuffHrid: `/guild_buffs/test-${index}`,
+        startLevel: 1,
+        targetLevel: 3,
+        collapsed
+      }))
+    })
+  });
+  const api = createStorage(storage);
+  const state = api.loadSavedPluginUiState();
+  assert.deepEqual(
+    state.upgradePlans.map((plan) => plan.collapsed === true),
+    [true, false, false, false]
+  );
+  const save = () =>
+    api.persistPluginUiState({ ...state, collapsedCreditSections: new Set(), guildTokenCreditHrids: new Set() });
+  assert.equal(save(), true);
+  assert.deepEqual(api.loadSavedPluginUiState().upgradePlans, state.upgradePlans);
+  state.upgradePlans[0].collapsed = false;
+  save();
+  assert.equal(api.loadSavedPluginUiState().upgradePlans[0].collapsed, undefined);
+  assert.equal(api.loadSavedPluginUiState().upgradePlans[0].targetLevel, 3);
+});
