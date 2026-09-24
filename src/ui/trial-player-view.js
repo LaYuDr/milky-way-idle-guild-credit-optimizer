@@ -302,7 +302,9 @@
       const players = api.playerRankings(records);
       const columns =
         renderRankingColumn(players, "participations") +
-        ["skilling", "combat", "all"].map((scope) => renderRankingColumn(players, "average", scope)).join("");
+        ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken", "all"]
+          .map((scope) => renderRankingColumn(players, "average", scope))
+          .join("");
       return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 

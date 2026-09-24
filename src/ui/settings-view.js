@@ -1,8 +1,10 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditSettingsView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
   "use strict";
 
   function createSettingsView(dependencies) {
@@ -18,54 +20,9 @@
       guildBuildingIconMarkup,
       updateRenderedMarkup
     } = dependencies;
-    const effectNameKeys = {
-      action_speed: "shrineEffectActionSpeed",
-      attack_speed: "shrineEffectAttackSpeed",
-      cast_speed: "shrineEffectCastSpeed",
-      efficiency: "shrineEffectEfficiency",
-      damage: "shrineEffectDamage",
-      essence_find: "shrineEffectEssenceFind",
-      max_hitpoints: "shrineEffectMaxHp",
-      max_manapoints: "shrineEffectMaxMp",
-      rare_find: "shrineEffectRareFind",
-      wisdom: "shrineEffectExperience",
-      skilling_experience: "shrineEffectExperience",
-      combat_experience: "shrineEffectExperience"
-    };
-    const flatPercentTypes = new Set([
-      "action_speed",
-      "cast_speed",
-      "efficiency",
-      "essence_find",
-      "rare_find",
-      "wisdom",
-      "skilling_experience",
-      "combat_experience"
-    ]);
-
+    const effects = effectApi.createFormatter({ core, t, ui });
     function renderGuildBuffEffects(detail) {
-      const effects = core.guildBuffLevelEffects(detail);
-      if (!effects.length) return escapeHtml(t("shrineEffectsUnavailable"));
-      return effects
-        .map((effect) => {
-          const type = effect.typeHrid.split("/").pop();
-          const name = effectNameKeys[type] ? t(effectNameKeys[type]) : effect.typeHrid;
-          const percent = effect.kind === "ratio" || flatPercentTypes.has(type);
-          const format = (value) =>
-            new Intl.NumberFormat(ui().locale, {
-              style: percent ? "percent" : "decimal",
-              maximumFractionDigits: 3,
-              signDisplay: "always"
-            }).format(value);
-          return escapeHtml(
-            t(effect.first === effect.increment ? "shrineEffectPerLevel" : "shrineEffectFirstAndPerLevel", {
-              effect: name,
-              value: format(effect.increment),
-              first: format(effect.first)
-            })
-          );
-        })
-        .join("<br>");
+      return effects.perLevel(detail, "\n").split("\n").map(escapeHtml).join("<br>");
     }
 
     function currentExcludedGuildBuffHrids() {

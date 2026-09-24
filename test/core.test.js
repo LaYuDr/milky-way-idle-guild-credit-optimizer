@@ -2334,7 +2334,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /\.mwi-upgrade-plan label\.mwi-upgrade-plan-shrine\{grid-column:1;grid-row:1\}/);
   assert.match(source, /\.mwi-upgrade-plan select\{width:100%!important/);
   assert.match(source, /function updateRenderedMarkup\(element, markup, propertyName\)/);
-  assert.match(source, /updateRenderedMarkup\(list, columnHeaders \+ plansMarkup\)/);
+  assert.match(source, /updateRenderedMarkup\(list, plansMarkup\)/);
   assert.doesNotMatch(source, /mwi-upgrade-plan-index|mwi-route-arrive|mwi-upgrade-plan-list::before/);
   assert.match(source, /characterGuildBuffMap/);
   assert.match(source, /characterGuildBuffDict/);
@@ -2534,7 +2534,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /upgrade-refresh/);
   assert.doesNotMatch(source, /get_market_item_order_books/);
   assert.doesNotMatch(source, /window\.WebSocket/);
-  assert.doesNotMatch(buildSource, /@downloadURL|@updateURL/);
   assert.match(buildSource, /@match        https:\/\/www\.milkywayidle\.com\/\*/);
   assert.match(buildSource, /@match        https:\/\/www\.milkywayidlecn\.com\/\*/);
 });

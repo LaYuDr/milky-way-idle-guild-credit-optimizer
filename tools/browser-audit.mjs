@@ -15,6 +15,7 @@ export const SUITES = {
   construction: suite("constructionAudit"),
   settings: suite("settingsAudit"),
   trials: suite("trialHistoryAudit"),
+  "shrine-upgrade": suite("shrineUpgradeAudit"),
   "upgrade-empty": suite("upgradeEmptyAudit", SMALL, [320, 610]),
   "market-filter": suite("marketFilterAudit", SMALL, [320, 610]),
   "locale-race": suite("localeRaceAudit", SMALL, []),
@@ -104,6 +105,12 @@ export function reportFailures(name, report) {
     }
   } else {
     checkGroup(report.checks, "checks");
+    if (name === "shrine-upgrade") {
+      empty(report.layout?.overflow, "layout.overflow");
+      empty(report.layout?.boundaryOverflow, "layout.boundaryOverflow");
+      empty(report.layout?.controlOverlaps, "layout.controlOverlaps");
+      requireValue(report.layout?.panel?.scrollWidth <= report.layout?.panel?.clientWidth, "layout.panel overflow");
+    }
     if (name === "settings") {
       empty(report.layout?.horizontalOverflow, "layout.horizontalOverflow");
       empty(report.layout?.boundaryOverflow, "layout.boundaryOverflow");

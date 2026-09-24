@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.46";
+window.MwiGuildCreditVersion = "1.2.47";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1445,13 +1445,20 @@ window.MwiGuildCreditVersion = "1.2.46";
             ...identity,
             participations: 0,
             skilling: bucket(),
-            combat: bucket()
+            combat: bucket(),
+            damageDealt: bucket(),
+            healingDone: bucket(),
+            premitigatedDamageTaken: bucket()
           });
         const player = players.get(key);
         if (!player.name && identity.name) player.name = identity.name;
         player.participations += 1;
         const multiples = fields
-          .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
+          .map((field, index) => {
+            const value = metricAverageMultiple(record, row, field, summaries[index]);
+            if (record.kind === "combat" && value !== null) add(player[field], value);
+            return value;
+          })
           .filter((value) => value !== null);
         if (!multiples.length) continue;
         const multiple = multiples.reduce((sum, value) => sum + value, 0);
@@ -1514,6 +1521,7 @@ window.MwiGuildCreditVersion = "1.2.46";
     for (const player of players.values()) {
       player.skilling = bucket();
       player.combat = bucket();
+      for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) player[field] = bucket();
     }
     for (const week of weeks.values()) {
       const attendees = new Map(participationRankings(week.records).map((player) => [player.key, player]));
@@ -1526,12 +1534,13 @@ window.MwiGuildCreditVersion = "1.2.46";
           attendance || evidence.some((entry) => entry.joinedAt < week.at && entry.observedAt >= week.at);
         // Exclude weeks before the earliest documented joining, unless actual attendance proves otherwise.
         if (!eligible && evidence.length && evidence.every((entry) => entry.joinedAt >= week.at)) continue;
-        for (const kind of ["skilling", "combat"]) {
+        for (const scope of ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+          const kind = scope === "skilling" ? "skilling" : "combat";
           const category = week.records.filter((record) => record.kind === kind);
           const expected = [...new Set(week.records.flatMap((record) => record.weekTrials?.[kind] || []))];
           if (!category.length && !expected.length) continue;
-          const result = player[kind];
-          const actual = attendance?.[kind];
+          const result = player[scope];
+          const actual = attendance?.[scope];
           const appeared = category.some((record) =>
             record.rows.some((row) => {
               const identity = memberIdentity(record, row);
@@ -1559,7 +1568,8 @@ window.MwiGuildCreditVersion = "1.2.46";
       const guildWeeks = [...weeks.values()].filter((week) => week.guild === guild && Number.isFinite(week.at));
       for (const [key, evidence] of guild.evidence) {
         const player = players.get(key);
-        for (const kind of ["skilling", "combat"]) {
+        for (const scope of ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+          const kind = scope === "skilling" ? "skilling" : "combat";
           const dates = [
             ...new Set(
               guildWeeks.filter((week) => week.records.some((record) => record.kind === kind)).map((week) => week.at)
@@ -1575,7 +1585,7 @@ window.MwiGuildCreditVersion = "1.2.46";
             );
             const last = Math.min(latest, entry.observedAt);
             const expected = Math.max(0, Math.floor((last - first) / WEEK_MS) + 1);
-            if (dates.filter((at) => at >= first && at <= last).length < expected) player[kind].incomplete = true;
+            if (dates.filter((at) => at >= first && at <= last).length < expected) player[scope].incomplete = true;
           }
         }
       }
@@ -3572,6 +3582,21 @@ window.MwiGuildCreditVersion = "1.2.46";
       updateNow: "立即更新",
       updateLatest: "当前版本 v{current} · 最新版本 v{latest} · 已是最新",
       updateUnavailable: "当前版本 v{current} · 最新版本：暂时无法读取",
+      shrineNoMaterials: "无需材料",
+      shrineGain: "增量 {value}",
+      shrineRemoveNamed: "移除{shrine}计划",
+      shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级 · 规则上限 {max} 级",
+      shrineNextLevel: "升一级",
+      shrineToGuildCap: "到公会上限",
+      shrineStartAssumed: "个人等级尚未读取。起始等级仅用于估算，请按实际等级调整。",
+      shrineCapUnknown: "公会神龛等级尚未读取，暂无法确认目标是否可用。",
+      shrineAboveCap: "目标超过当前公会 {level} 级上限，仅用于未来规划；超出部分暂不生效。",
+      shrineEffectComparison: "效果变化",
+      shrineLevelRange: "{start} 级 → {target} 级",
+      shrineRangeCost: "本计划所需材料",
+      shrineSteps: "逐级效果与花费 · {count} 级",
+      shrineStepsHint: "列出所选区间的每次升级：显示升至该级后的总效果，以及仅该次升级所需的材料。",
+      shrineStepLevel: "{start} → {target} 级",
       shrineEffectPerLevel: "每级：{effect} {value}",
       shrineEffectFirstAndPerLevel: "{effect}：首级 {first}；后续每级 {value}",
       shrineEffectsUnavailable: "每级效果暂未读取",
@@ -3619,6 +3644,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       costSummary: "成本概览",
       inventoryAndMissing: "库存 {owned} · 缺 {missing}",
       inventory: "库存 {count}",
+      missingCount: "缺 {count}",
       inventoryNotRead: "库存未读取",
       inventoryCoveredNoExchange: "现有库存已覆盖，无需兑换",
       backpackInventory: "背包库存 {count}",
@@ -3999,7 +4025,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialScreenshotCopy: "快速截图",
       trialScreenshotDownload: "下载截图",
       trialScreenshotHelp:
-        "截取当前所选视图的完整表格。按周：上排四个生活项目，下排两个战斗项目；按项目：仅最新五个周期横排；玩家排行：四个列表横排。图片按内容宽度生成，保留原版图标，省略操作区和原始数据；保留当前显示字段与匿名设置。",
+        "截取当前所选视图的完整表格。按周：上排四个生活项目，下排两个战斗项目；按项目：仅最新五个周期横排；玩家排行：全部列表横排。图片按内容宽度生成，保留原版图标，省略操作区和原始数据；保留当前显示字段与匿名设置。",
       trialScreenshotReady: "分享前可开启隐藏玩家名。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
       trialScreenshotWorking: "正在生成完整截图…",
       trialScreenshotCopied: "截图已复制，可直接粘贴。",
@@ -4077,6 +4103,9 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialRankingTotalMultiple: "合计倍数",
       trialRankingScope_skilling: "生活",
       trialRankingScope_combat: "战斗",
+      trialRankingScope_damageDealt: "伤害",
+      trialRankingScope_healingDone: "治疗",
+      trialRankingScope_premitigatedDamageTaken: "承伤",
       trialRankingScope_all: "生活＋战斗",
       trialRankingRank: "名次",
       trialRankingCount: "次数",
@@ -4086,7 +4115,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗每个项目将伤害、治疗、承伤的有效人均倍数直接相加，再对当周有效项目取平均，最后对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗每个项目将伤害、治疗、承伤的有效人均倍数直接相加，再对当周有效项目取平均，最后对各周等权平均。伤害、治疗、承伤三个独立榜分别只使用对应指标的人均倍数，承伤采用减伤前承伤；每项独立排除缺失或分母为零的数据。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4242,6 +4271,23 @@ window.MwiGuildCreditVersion = "1.2.46";
       updateNow: "Update now",
       updateLatest: "Current v{current} · Latest v{latest} · Up to date",
       updateUnavailable: "Current v{current} · Latest: unavailable",
+      shrineNoMaterials: "No materials required",
+      shrineGain: "Gain {value}",
+      shrineRemoveNamed: "Remove {shrine} plan",
+      shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap} · Rule cap {max}",
+      shrineNextLevel: "One level",
+      shrineToGuildCap: "To guild cap",
+      shrineStartAssumed:
+        "Your purchased level is unavailable. Adjust the starting level to match your actual level before using this estimate.",
+      shrineCapUnknown: "Guild shrine level is unavailable; target availability is unconfirmed.",
+      shrineAboveCap:
+        "Target exceeds the current guild cap of {level}. This is a future plan; the excess levels are not active yet.",
+      shrineEffectComparison: "Effect change",
+      shrineLevelRange: "Lv. {start} → {target}",
+      shrineRangeCost: "Materials for this plan",
+      shrineSteps: "Per-level effects & costs · {count} levels",
+      shrineStepsHint: "Each step shows the total effect at that level and the materials for that step only.",
+      shrineStepLevel: "Lv. {start} → {target}",
       shrineEffectPerLevel: "Per level: {effect} {value}",
       shrineEffectFirstAndPerLevel: "{effect}: level 1 {first}; each later level {value}",
       shrineEffectsUnavailable: "Per-level effects not yet available",
@@ -4290,6 +4336,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       costSummary: "Cost summary",
       inventoryAndMissing: "Owned {owned} · Missing {missing}",
       inventory: "Owned {count}",
+      missingCount: "Missing {count}",
       inventoryNotRead: "Inventory unavailable",
       inventoryCoveredNoExchange: "Existing inventory covers this requirement; no exchange is needed",
       backpackInventory: "Backpack: {count}",
@@ -4693,7 +4740,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialScreenshotCopy: "Copy image",
       trialScreenshotDownload: "Download PNG",
       trialScreenshotHelp:
-        "Capture full tables in the selected view. Weekly: four skilling projects above two combat projects. By project: only the latest five periods in one row. Player rankings: four lists in one row. Images fit the content width, preserve original icons and omit controls and raw data. Visible fields and anonymity settings are preserved.",
+        "Capture full tables in the selected view. Weekly: four skilling projects above two combat projects. By project: only the latest five periods in one row. Player rankings: all lists in one row. Images fit the content width, preserve original icons and omit controls and raw data. Visible fields and anonymity settings are preserved.",
       trialScreenshotReady:
         "Enable “Hide player names” before sharing. If copying is unavailable, the image downloads instead. Your browser controls the save location.",
       trialScreenshotWorking: "Generating full image…",
@@ -4774,6 +4821,9 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialRankingTotalMultiple: "Total multiple",
       trialRankingScope_skilling: "Skilling",
       trialRankingScope_combat: "Combat",
+      trialRankingScope_damageDealt: "Damage",
+      trialRankingScope_healingDone: "Healing",
+      trialRankingScope_premitigatedDamageTaken: "Damage taken",
       trialRankingScope_all: "Skilling + combat",
       trialRankingRank: "Rank",
       trialRankingCount: "Count",
@@ -4783,7 +4833,7 @@ window.MwiGuildCreditVersion = "1.2.46";
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat sums the valid damage, healing and damage-taken multiples for each project, averages the valid projects within each week, then averages across weeks. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Samples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
+        "The separate damage, healing and pre-mitigation damage taken rankings use only their own metric multiples, excluding missing values and zero denominators independently. Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat sums the valid damage, healing and damage-taken multiples for each project, averages the valid projects within each week, then averages across weeks. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Samples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -6294,6 +6344,43 @@ window.MwiGuildCreditVersion = "1.2.46";
     });
   }
 
+  function guildBuffEffectAtLevel(effect, level) {
+    if (
+      !Number.isSafeInteger(level) ||
+      level < 0 ||
+      !effect ||
+      !Number.isFinite(effect.first) ||
+      !Number.isFinite(effect.increment)
+    )
+      return null;
+    const value = level === 0 ? 0 : effect.first + (level - 1) * effect.increment;
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function guildBuffUpgradePreview(detail, startLevel, targetLevel) {
+    const cost = aggregateGuildBuffLevelCosts(detail?.levelCosts, startLevel, targetLevel);
+    if (cost.status !== "ok") return { ...cost, effects: [], steps: [] };
+    const effects = guildBuffLevelEffects(detail);
+    const comparison = effects.map((effect) => {
+      const start = guildBuffEffectAtLevel(effect, cost.startLevel);
+      const target = guildBuffEffectAtLevel(effect, cost.targetLevel);
+      const difference = start !== null && target !== null ? target - start : null;
+      return { ...effect, start, target, gain: Number.isFinite(difference) ? difference : null };
+    });
+    return {
+      ...cost,
+      effects: comparison,
+      steps: Array.from({ length: cost.targetLevel - cost.startLevel }, (_, index) => {
+        const level = cost.startLevel + index + 1;
+        return {
+          level,
+          effects: effects.map((effect) => ({ ...effect, value: guildBuffEffectAtLevel(effect, level) })),
+          totals: aggregateGuildBuffLevelCosts(detail.levelCosts, level - 1, level).totals
+        };
+      })
+    };
+  }
+
   function isUnitPriceWithinLimit(unitPrice, maxUnitPrice) {
     const limit = Number(maxUnitPrice);
     if (!Number.isSafeInteger(limit) || limit <= 0) return true;
@@ -6303,6 +6390,8 @@ window.MwiGuildCreditVersion = "1.2.46";
 
   return {
     guildBuffLevelEffects,
+    guildBuffEffectAtLevel,
+    guildBuffUpgradePreview,
     normalizeAsks,
     quoteAsks,
     evaluateConversion,
@@ -9270,6 +9359,7 @@ window.MwiGuildCreditVersion = "1.2.46";
         @container (max-width:520px){#mwi-credit-optimizer .mwi-upgrade-preset{grid-template-columns:minmax(0,1fr);align-items:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch}#mwi-credit-optimizer .mwi-upgrade-preset-buttons button{width:100%;min-width:0}}
         #mwi-credit-optimizer .mwi-upgrade-plan-list{display:grid;gap:var(--mwi-entry-gap)}#mwi-credit-optimizer .mwi-upgrade-plan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;gap:9px;align-items:end;padding:11px;border:1px solid #45486d;border-radius:8px;background:linear-gradient(135deg,#2c2e4d,#252640);box-shadow:0 4px 13px #13142555}#mwi-credit-optimizer .mwi-upgrade-plan label{min-width:0;text-align:left;justify-items:stretch;font-size:12px}#mwi-credit-optimizer .mwi-upgrade-plan label:first-child{grid-column:1/-1;grid-row:1}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(2){grid-column:1;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan label:nth-child(3){grid-column:2;grid-row:2}#mwi-credit-optimizer .mwi-upgrade-plan select{width:100%!important;max-width:none;min-width:0}#mwi-credit-optimizer .mwi-remove-plan{grid-column:3;grid-row:2;width:36px;min-width:36px;padding:0!important;font-size:21px;line-height:1;background:#555773!important;color:#fff!important}#mwi-credit-optimizer .mwi-upgrade-actions{display:flex;justify-content:center;gap:9px;margin:12px 0 4px}#mwi-credit-optimizer .mwi-clear-upgrade-plans{background:#a04455!important;color:#fff!important}#mwi-credit-optimizer .mwi-clear-upgrade-plans:hover{background:#bd4d61!important}#mwi-credit-optimizer .mwi-token-budget{display:grid;gap:8px;margin:10px 0 4px;padding:10px 11px;border:1px solid #56597f;border-radius:8px;background:linear-gradient(135deg,#30314f,#292a46)}#mwi-credit-optimizer .mwi-token-budget-heading{display:flex;justify-content:space-between;align-items:start;gap:10px;color:#e8e9f6}#mwi-credit-optimizer .mwi-token-budget-heading>span:first-child{display:grid;gap:2px}#mwi-credit-optimizer .mwi-token-budget-heading strong{font-size:12px}#mwi-credit-optimizer .mwi-token-budget-heading small{color:#bfc2de;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-token-budget-heading>span:last-child{color:#77f3d0;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-token-budget-inputs{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}#mwi-credit-optimizer .mwi-token-budget-inputs input[type="range"]{width:100%;min-height:24px;padding:0;border:0;background:transparent;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-token-budget-inputs label{display:flex;align-items:center;gap:5px;color:#c9cbeb;font-size:11px}#mwi-credit-optimizer .mwi-token-budget-inputs input[type="number"]{width:100px;min-height:30px}#mwi-credit-optimizer .mwi-token-credit-plan-toggle{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;column-gap:9px;width:100%;margin:9px 0 4px;padding:9px 11px!important;border:1px solid #56597f!important;border-radius:8px!important;background:linear-gradient(135deg,#30314f,#292a46)!important;color:#e8e9f6!important;text-align:left}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"]{border-color:#43c4ad!important;background:linear-gradient(135deg,#20453f,#243e3c)!important;color:#e4fff8!important;box-shadow:0 0 0 1px #43c4ad33}#mwi-credit-optimizer .mwi-token-credit-plan-indicator{display:grid;place-items:center;width:24px;height:24px;border:2px solid #777aa4;border-radius:6px;background:#20213a;color:#10201f;font-size:16px;line-height:1}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] .mwi-token-credit-plan-indicator{border-color:#77f3d0;background:#77f3d0}#mwi-credit-optimizer .mwi-token-credit-plan-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-token-credit-plan-copy strong{font-size:12px}#mwi-credit-optimizer .mwi-token-credit-plan-copy small{color:#bfc2de;font-size:10px;font-weight:500;line-height:1.35}#mwi-credit-optimizer .mwi-token-credit-plan-toggle[data-active="true"] small{color:#bce8de}
         #mwi-credit-optimizer .mwi-material-list{display:grid;gap:var(--mwi-entry-gap);margin-top:12px}.mwi-material-row{position:relative;align-self:start;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:11px;border:1px solid #45486d;border-left:3px solid var(--mwi-material-accent);border-radius:8px;background:linear-gradient(135deg,#292b48,#23243d);box-shadow:0 4px 13px #13142544}.mwi-material-row-token{min-height:0;padding:9px 11px;background:linear-gradient(135deg,#2b2c49,#24253f)}.mwi-material-credit{display:flex;align-items:center;gap:8px;min-width:0}.mwi-material-copy{min-width:0;display:grid;gap:2px}.mwi-material-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f4f5ff;font-weight:700}.mwi-material-copy small{color:#aeb1d3;font-size:11px}.mwi-material-required{display:grid;justify-items:end;align-content:center;gap:1px;text-align:right}.mwi-material-required small{color:#aeb1d3;font-size:10px}.mwi-material-required strong{color:#77f3d0;font-size:18px;line-height:1.1}.mwi-material-plan{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;column-gap:10px;border:1px solid #356c63;border-radius:7px;background:linear-gradient(135deg,#1f3e3c,#1d3736);overflow:hidden}.mwi-material-plan-auto{border-color:#b17c32;background:linear-gradient(135deg,#493a22,#3d3325)}.mwi-material-plan-auto .mwi-material-plan-icon{border-color:#d7a64d;background:linear-gradient(135deg,#725425,#5c4525)}.mwi-material-plan-auto .mwi-material-plan-need strong{color:#ffd17c}.mwi-material-plan-item{grid-row:1/-1;display:flex;align-items:center;gap:10px;min-width:0;padding:8px 0 8px 8px}.mwi-material-plan-icon{display:grid!important;place-items:center;flex:0 0 52px!important;width:52px!important;height:52px!important;min-width:52px!important;padding:0!important;border:1px solid #4da496;border-radius:7px;background:linear-gradient(135deg,#306b62,#275a53);box-shadow:inset 0 1px #7bd8c822,0 2px 5px #10232166}.mwi-material-plan-icon .mwi-market-item-link{width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;border:0!important;border-radius:7px!important}.mwi-material-plan-icon .mwi-item-icon{width:50px!important;height:50px!important;flex:0 0 50px!important;max-width:50px;max-height:50px;object-fit:contain}.mwi-material-plan-item>span:last-child{min-width:0;display:grid;gap:3px}.mwi-material-plan-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e3fbf5;font-size:14px;line-height:1.15}.mwi-material-plan-item small{color:#afd4cd;font-size:12px;line-height:1.15}.mwi-material-plan-need{display:grid;justify-items:end;gap:1px;padding:8px 9px 0 0}.mwi-material-plan-need small{color:#afd4cd;font-size:10px}.mwi-material-plan-need strong{color:#77f3d0;font-size:17px;line-height:1}.mwi-material-plan-rate{grid-column:2;align-self:end;padding:0 9px 9px 0;color:#c5e3dd;font-size:10px;text-align:right;white-space:nowrap}.mwi-material-plan-unavailable{padding:9px;color:#ffd17c;font-size:11px}.mwi-plan-summary{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:12px 0 8px;color:#d7d9ed;font-size:12px}.mwi-plan-summary span:not(.mwi-plan-separator){padding:4px 7px;border:1px solid #45486d;border-radius:999px;background:#292a46}.mwi-plan-separator{display:none}.mwi-upgrade-cost-summary{display:grid;gap:7px;margin:8px 0 10px;padding:11px 12px;border:1px solid #3d8d80;border-radius:8px;background:linear-gradient(135deg,#1d3d3b,#203b3a);box-shadow:0 5px 14px #101d1c55}.mwi-upgrade-cost-title{color:#b7e6dc;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.mwi-upgrade-cost-summary>div:not(.mwi-upgrade-cost-note):not(.mwi-upgrade-cost-title){display:flex;justify-content:space-between;gap:8px;align-items:baseline}.mwi-upgrade-cost-summary span{color:#d7f6ef}.mwi-upgrade-cost-summary strong{color:#77f3d0;font-size:15px;text-align:right}.mwi-upgrade-cost-note{color:#ffd17c;font-size:11px}.mwi-upgrade-auto-token-note{color:#9bead8}.mwi-upgrade-cost-unavailable{color:#ffd17c;border-color:#80663f;background:#3b3323}.mwi-plugin-version .mwi-update-link,#mwi-credit-optimizer .mwi-plugin-footer a{color:#fff;text-decoration:underline;text-underline-offset:2px}.mwi-plugin-version .mwi-update-link:hover,#mwi-credit-optimizer .mwi-plugin-footer a:hover{color:#77f3d0}.mwi-plugin-footer{margin-top:16px;padding:10px 4px 2px;border-top:1px solid #474969;color:#aeb1d3;font-size:12px;line-height:1.6;text-align:center}#mwi-credit-optimizer .mwi-sort-dragging{border-color:#77f3d0!important;box-shadow:0 10px 24px #090a12aa;opacity:.92}#mwi-credit-optimizer .mwi-sort-drop-before:before,#mwi-credit-optimizer .mwi-sort-drop-after:after{position:absolute;right:0;left:0;z-index:9;height:2px;background:#77f3d0;content:""}#mwi-credit-optimizer .mwi-sort-drop-before:before{top:-4px}#mwi-credit-optimizer .mwi-sort-drop-after:after{bottom:-4px}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-before:before,#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-after:after{top:5px;bottom:5px;width:2px;height:auto}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-before:before{right:auto;left:-1px}#mwi-credit-optimizer .mwi-view-tab-item.mwi-sort-drop-after:after{right:-1px;left:auto}
+        #mwi-credit-optimizer .mwi-material-shortfall{color:#ff737d;font-weight:700}
         #mwi-credit-optimizer .mwi-field-error{color:#ff9ca3!important}
         #mwi-credit-optimizer .mwi-guild-point-history-actions{display:flex;flex-wrap:wrap;flex:0 0 auto;gap:6px}
         #mwi-credit-optimizer .mwi-guild-point-history-actions button{min-height:36px;padding:4px 8px;border:1px solid #535975;background:transparent;color:#cbd1e7;font-size:12px}
@@ -9847,6 +9937,52 @@ window.MwiGuildCreditVersion = "1.2.46";
         }
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group{transition:none}}
 
+        /* Shrine plan editor: effects and costs stay next to the chosen interval. */
+        #mwi-credit-optimizer .mwi-upgrade-planner{background:#24273b;border:1px solid #41465f;border-radius:6px;box-shadow:none;text-align:left}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan-list{gap:0}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan{display:block;min-width:0;padding:12px;border:0;border-top:1px solid #41465f;border-radius:0;background:transparent;box-shadow:none;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;color:#edf0fa}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:hover,#mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:focus-within{background:transparent}
+        #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-building-icon{display:block;width:32px;height:32px}
+        #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{align-self:center}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan label{display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan select{width:100%!important;min-height:36px;padding:5px 8px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,sans-serif}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan{grid-column:auto;grid-row:auto;display:grid;place-items:center;align-self:end;min-width:32px;width:32px;height:36px;min-height:36px;padding:4px!important;border:0;background:transparent!important;color:#b7bfd4!important;box-shadow:none}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan:hover{background:#503445!important;color:#ffa7b5!important}
+        #mwi-credit-optimizer .mwi-shrine-level-status{margin:8px 0 12px;color:#b7bfd4;font-size:12px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-level-controls{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) auto;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-upgrade-level-arrow{grid-column:auto;grid-row:auto;display:block;align-self:end;line-height:36px;color:#b7bfd4;font-size:14px}
+        #mwi-credit-optimizer .mwi-shrine-target-actions{display:flex;flex-wrap:wrap;gap:6px}
+        #mwi-credit-optimizer .mwi-shrine-target-actions button{min-height:36px;padding:5px 8px;font-size:12px;border:1px solid #41465f;border-radius:4px;background:#34394f;color:#edf0fa}
+        #mwi-credit-optimizer .mwi-shrine-target-actions button:hover{background:#454e68}
+        #mwi-credit-optimizer .mwi-shrine-target-actions button:disabled{opacity:.45;cursor:default}
+        #mwi-credit-optimizer .mwi-shrine-warning{margin:8px 0;color:#e9c487;font-size:12px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-plan-effects,#mwi-credit-optimizer .mwi-shrine-plan-cost{margin-top:12px}
+        #mwi-credit-optimizer .mwi-upgrade-plan h4{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin:0 0 6px;color:#b7bfd4;font-size:12px;font-weight:600;text-align:left}
+        #mwi-credit-optimizer .mwi-upgrade-plan h4 small{color:#b7bfd4;font-size:12px;font-weight:400}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison{margin:0}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison>div{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;padding:4px 0}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison dt{color:#edf0fa}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison dd{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;color:#b7bfd4}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison dd strong{color:#91dfcb;font-weight:600}
+        #mwi-credit-optimizer .mwi-shrine-effect-comparison dd small{color:#91dfcb;font-size:12px}
+        #mwi-credit-optimizer .mwi-shrine-materials{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;margin:0;padding:0}
+        #mwi-credit-optimizer .mwi-shrine-materials li{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;min-width:0;color:#edf0fa;font-size:12px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-materials .mwi-item-icon{width:20px;height:20px;flex:0 0 20px}
+        #mwi-credit-optimizer .mwi-shrine-materials strong{font-size:14px;font-weight:600}
+        #mwi-credit-optimizer .mwi-shrine-steps{margin-top:12px;border-top:1px solid #41465f;font-size:12px;color:#b7bfd4}
+        #mwi-credit-optimizer .mwi-shrine-steps summary{padding:8px 0;cursor:pointer;color:#91dfcb;min-height:32px;width:fit-content}
+        #mwi-credit-optimizer .mwi-shrine-steps summary:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-shrine-muted{margin:0 0 6px;color:#b7bfd4;font-size:12px;line-height:1.5}
+        #mwi-credit-optimizer .mwi-shrine-steps ol{list-style:none;padding:0;margin:0}
+        #mwi-credit-optimizer .mwi-shrine-steps ol>li{padding:10px 0;border-bottom:1px solid #41465f}
+        #mwi-credit-optimizer .mwi-shrine-steps ol>li:last-child{border-bottom:0;padding-bottom:0}
+        #mwi-credit-optimizer .mwi-shrine-step-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin-bottom:6px}
+        #mwi-credit-optimizer .mwi-shrine-step-heading strong{color:#edf0fa;font-weight:600}
+        #mwi-credit-optimizer .mwi-shrine-step-heading span{color:#91dfcb}
+        @container (max-width:520px){#mwi-credit-optimizer .mwi-shrine-level-controls{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr)}#mwi-credit-optimizer .mwi-shrine-target-actions{grid-column:1/-1}}
+
           /* Trial workspace inherits the construction page's compact visual system. */
         #mwi-credit-optimizer [data-role="trials-view"]{--trial-surface:#24273b;--trial-field:#191c2e;--trial-line:#41465f;--trial-text:#edf0fa;--trial-muted:#b7bfd4;--trial-accent:#91dfcb;--trial-warning:#e9c487;--trial-danger:#ffa7b5;container-type:inline-size;container-name:mwi-trials;color:var(--trial-text);font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-color:#66708b var(--trial-surface)}
         #mwi-credit-optimizer [data-role="trials-view"] :is(input,select){width:100%;min-width:0;max-width:100%;padding:4px 8px;border:1px solid #626b86;border-radius:5px;background:var(--trial-field);color:var(--trial-text);color-scheme:dark;font:14px system-ui,sans-serif;caret-color:var(--trial-accent)}
@@ -9950,7 +10086,7 @@ window.MwiGuildCreditVersion = "1.2.46";
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}
-        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="rankings"]{grid-template-columns:repeat(4,max-content)}
+        #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="rankings"]{grid-auto-flow:column;grid-auto-columns:max-content}
         #mwi-credit-optimizer .mwi-trial-rankings .mwi-trial-rail{position:relative}
         #mwi-credit-optimizer [data-trial-ranking-column]>h4{min-height:2.8em;text-align:center}
         #mwi-credit-optimizer .mwi-trial-ranking-table{min-width:100%}
@@ -11560,7 +11696,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const players = api.playerRankings(records);
       const columns =
         renderRankingColumn(players, "participations") +
-        ["skilling", "combat", "all"].map((scope) => renderRankingColumn(players, "average", scope)).join("");
+        ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken", "all"]
+          .map((scope) => renderRankingColumn(players, "average", scope))
+          .join("");
       return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
@@ -11773,9 +11911,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       for (const element of copy.querySelectorAll(".mwi-trial-columns")) {
         const columns = element.classList.contains("mwi-trial-timeline")
           ? Math.min(5, element.children.length)
-          : element.dataset.kind === "combat"
-            ? 2
-            : 4;
+          : element.dataset.kind === "rankings"
+            ? element.children.length
+            : element.dataset.kind === "combat"
+              ? 2
+              : 4;
         Object.assign(element.style, {
           gridTemplateColumns: `repeat(${Math.max(1, columns)}, max-content)`,
           gridAutoFlow: "row",
@@ -13034,12 +13174,101 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 });
 
 
-// SOURCE: src/ui/upgrade-view.js
+// SOURCE: src/ui/shrine-effects.js
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildCreditUpgradeView = api;
+  root.MwiGuildShrineEffects = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  function createFormatter({ core, t, ui }) {
+    const effectNameKeys = {
+      action_speed: "shrineEffectActionSpeed",
+      attack_speed: "shrineEffectAttackSpeed",
+      cast_speed: "shrineEffectCastSpeed",
+      efficiency: "shrineEffectEfficiency",
+      damage: "shrineEffectDamage",
+      essence_find: "shrineEffectEssenceFind",
+      max_hitpoints: "shrineEffectMaxHp",
+      max_manapoints: "shrineEffectMaxMp",
+      rare_find: "shrineEffectRareFind",
+      wisdom: "shrineEffectExperience",
+      skilling_experience: "shrineEffectExperience",
+      combat_experience: "shrineEffectExperience"
+    };
+    const flatPercentTypes = new Set([
+      "action_speed",
+      "cast_speed",
+      "efficiency",
+      "essence_find",
+      "rare_find",
+      "wisdom",
+      "skilling_experience",
+      "combat_experience",
+      "damage",
+      "critical_rate",
+      "critical_damage",
+      "physical_amplify",
+      "water_amplify",
+      "nature_amplify",
+      "fire_amplify",
+      "healing_amplify",
+      "life_steal",
+      "physical_thorns",
+      "elemental_thorns",
+      "retaliation",
+      "hp_regen",
+      "mp_regen",
+      "combat_drop_rate",
+      "combat_drop_quantity",
+      "gathering",
+      "task_action_speed",
+      "gourmet",
+      "processing",
+      "artisan",
+      "blessed"
+    ]);
+
+    function name(effect) {
+      const type = effect.typeHrid.split("/").pop();
+      return effectNameKeys[type] ? t(effectNameKeys[type]) : effect.typeHrid;
+    }
+    function value(effect, number) {
+      if (number === null || !Number.isFinite(number)) return "—";
+      const percent = effect.kind === "ratio" || flatPercentTypes.has(effect.typeHrid.split("/").pop());
+      return new Intl.NumberFormat(ui().locale, {
+        style: percent ? "percent" : "decimal",
+        maximumFractionDigits: 3,
+        signDisplay: "always"
+      }).format(number);
+    }
+    function perLevel(detail, separator = " · ") {
+      const effects = core.guildBuffLevelEffects(detail);
+      if (!effects.length) return t("shrineEffectsUnavailable");
+      return effects
+        .map((effect) =>
+          t(effect.first === effect.increment ? "shrineEffectPerLevel" : "shrineEffectFirstAndPerLevel", {
+            effect: name(effect),
+            value: value(effect, effect.increment),
+            first: value(effect, effect.first)
+          })
+        )
+        .join(separator);
+    }
+    return { name, value, perLevel };
+  }
+  return { createFormatter };
+});
+
+
+// SOURCE: src/ui/upgrade-view.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditUpgradeView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
   "use strict";
 
   function createUpgradeView(dependencies) {
@@ -13055,6 +13284,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       formatNumber,
       iconMarkup,
       marketItemIconMarkup,
+      guildBuildingSpriteBaseHref,
+      guildBuildingIconMarkup,
       itemQuantity,
       creditQuantity,
       snapshotOrderBook,
@@ -13077,6 +13308,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       scheduleGuildExchangeAdvisor,
       guildTokenBudgetRefreshTask
     } = dependencies;
+
+    const effects = effectApi.createFormatter({ core, t, ui });
 
     function guildBuffEntries() {
       hydrateBridgeData();
@@ -13450,34 +13683,83 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       }
     }
 
+    function renderPlanMaterials(result) {
+      if (result.status !== "ok")
+        return `<span class="mwi-shrine-warning">${escapeHtml(t(result.status === "missing_cost" ? "missingLevelCost" : "invalidLevels", { level: result.missingLevel }))}</span>`;
+      if (!result.totals.length) return escapeHtml(t("shrineNoMaterials"));
+      return `<ul class="mwi-shrine-materials">${result.totals
+        .slice()
+        .sort(materialOrder)
+        .map(
+          (item) =>
+            `<li>${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span>${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><strong>${escapeHtml(formatNumber(item.count))}</strong></li>`
+        )
+        .join("")}</ul>`;
+    }
+
+    function renderPlanEffects(preview) {
+      if (!preview.effects.length)
+        return `<p class="mwi-shrine-muted">${escapeHtml(t("shrineEffectsUnavailable"))}</p>`;
+      return `<dl class="mwi-shrine-effect-comparison">${preview.effects.map((effect) => `<div><dt>${escapeHtml(effects.name(effect))}</dt><dd><span>${escapeHtml(effects.value(effect, effect.start))}</span><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4"/></svg><strong>${escapeHtml(effects.value(effect, effect.target))}</strong><small>${escapeHtml(t("shrineGain", { value: effects.value(effect, effect.gain) }))}</small></dd></div>`).join("")}</dl>`;
+    }
+
     function renderGuildUpgradePlans(panel, entries) {
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
       const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
+      const openPlans = new Set(
+        [...list.querySelectorAll("details[data-shrine-steps][open]")].map(
+          (node) => node.closest("[data-plan-id]").dataset.planId
+        )
+      );
+      const active = list.ownerDocument.activeElement;
+      const focusedPlan = list.contains(active) ? active.closest("[data-plan-id]")?.dataset.planId : null;
+      const focusedRole = active?.dataset?.role;
+      const focusedSteps = active?.matches("summary[data-shrine-steps-summary]");
+      const sprite = guildBuildingSpriteBaseHref?.() || "";
       const plansMarkup = state.upgradePlans
         .map((plan) => {
           const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
           if (!entry) return "";
-          const buffOptions = entries
+          const buffOptions = [false, true]
             .map(
-              (candidate) =>
-                `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(guildBuffLabel(candidate.detail, candidate.hrid))}</option>`
+              (combat) =>
+                `<optgroup label="${escapeHtml(t(combat ? "domainCombat" : "domainLife"))}">${entries
+                  .filter((candidate) => isCombatGuildBuff(candidate) === combat)
+                  .map(
+                    (candidate) =>
+                      `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(GUILD_SHRINE_NAME_KEYS[candidate.detail.shrineHrid] ? t(GUILD_SHRINE_NAME_KEYS[candidate.detail.shrineHrid]) : guildBuffLabel(candidate.detail, candidate.hrid))}</option>`
+                  )
+                  .join("")}</optgroup>`
             )
             .join("");
-          const shrineHrid = (entry.detail && entry.detail.shrineHrid) || "";
-          const domain = isCombatGuildBuff(entry) ? "combat" : "life";
-          return `<div class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${domain}">
-          <label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label>
-          <label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label>
-          <span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span>
-          <label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label>
-          <button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("removePlan"))}">×</button>
-        </div>`;
+          const shrineHrid = entry.detail.shrineHrid || "";
+          const cap = guildShrineLevelByHrid(shrineHrid);
+          const preview = core.guildBuffUpgradePreview(entry.detail, plan.startLevel, plan.targetLevel);
+          const knownLevel = state.guildBuffLevels != null;
+          const current = knownLevel ? formatNumber(currentGuildBuffLevel(entry)) : t("notRead");
+          const aboveCap = cap !== null && plan.targetLevel > cap;
+          const icon = guildBuildingIconMarkup?.({ hrid: shrineHrid }, sprite) || "";
+          const title = guildBuffLabel(entry.detail, entry.hrid);
+          return `<article class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${isCombatGuildBuff(entry) ? "combat" : "life"}" aria-label="${escapeHtml(title)}">
+          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap), max: formatNumber(entry.maxLevel) }))}</p>
+          <div class="mwi-shrine-level-controls"><label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
+          ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
+          ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}
+          <section class="mwi-shrine-plan-effects" aria-label="${escapeHtml(t("shrineEffectComparison"))}"><h4>${escapeHtml(t("shrineEffectComparison"))}<small>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</small></h4>${renderPlanEffects(preview)}</section>
+          <section class="mwi-shrine-plan-cost" aria-label="${escapeHtml(t("shrineRangeCost"))}"><h4>${escapeHtml(t("shrineRangeCost"))}</h4>${renderPlanMaterials(preview)}</section>
+          <details class="mwi-shrine-steps" data-shrine-steps${openPlans.has(plan.id) ? " open" : ""}><summary data-shrine-steps-summary>${escapeHtml(t("shrineSteps", { count: preview.steps.length }))}</summary><p class="mwi-shrine-muted">${escapeHtml(t("shrineStepsHint"))}</p><ol>${preview.steps.map((step) => `<li data-shrine-step="${step.level}"><div class="mwi-shrine-step-heading"><strong>${escapeHtml(t("shrineStepLevel", { start: step.level - 1, target: step.level }))}</strong><span>${step.effects.length ? step.effects.map((effect) => escapeHtml(`${effects.name(effect)} ${effects.value(effect, effect.value)}`)).join(" · ") : escapeHtml(t("shrineEffectsUnavailable"))}</span></div>${renderPlanMaterials({ status: "ok", totals: step.totals })}</li>`).join("")}</ol>${preview.status !== "ok" ? renderPlanMaterials(preview) : ""}</details>
+        </article>`;
         })
         .join("");
-      const columnHeaders = state.upgradePlans.length
-        ? `<div class="mwi-upgrade-plan-columns" aria-hidden="true"><span>${escapeHtml(t("shrine"))}</span><span>${escapeHtml(t("startLevel"))}</span><span></span><span>${escapeHtml(t("targetLevel"))}</span><span></span></div>`
-        : "";
-      updateRenderedMarkup(list, columnHeaders + plansMarkup);
+      updateRenderedMarkup(list, plansMarkup);
+      if (focusedPlan && (focusedRole || focusedSteps)) {
+        const row = [...list.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === focusedPlan);
+        const control = focusedSteps
+          ? row?.querySelector("summary[data-shrine-steps-summary]")
+          : [...(row?.querySelectorAll("[data-role]") || [])].find((node) => node.dataset.role === focusedRole);
+        control?.focus({ preventScroll: true });
+      }
       const count = panel.querySelector('[data-role="upgrade-plan-count"]');
       if (count) count.textContent = t("selectedUpgradePlanCount", { count: formatNumber(state.upgradePlans.length) });
       updateGuildShrineTargetActions(panel, entries);
@@ -13643,8 +13925,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         .map((item) => {
           const row = estimateRows[item.itemHrid];
           const inventoryText = row
-            ? t("inventoryAndMissing", { owned: formatNumber(row.owned), missing: formatNumber(row.missing) })
-            : t("inventoryNotRead");
+            ? `${escapeHtml(t("inventory", { count: formatNumber(row.owned) }))} · ${item.itemHrid === "/items/guild_token" && row.missing > 0 ? `<span class="mwi-material-shortfall">${escapeHtml(t("missingCount", { count: formatNumber(row.missing) }))}</span>` : escapeHtml(t("missingCount", { count: formatNumber(row.missing) }))}`
+            : escapeHtml(t("inventoryNotRead"));
           const credit = CREDIT_TYPES.find(([creditItemHrid]) => creditItemHrid === item.itemHrid);
           const isGuildCredit = Boolean(credit);
           const useGuildTokens = isGuildCredit && state.guildTokenCreditHrids.has(item.itemHrid);
@@ -13683,7 +13965,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))
               : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
           const guideMissing = row ? Math.max(0, Number(row.remainingMissing ?? row.missing) || 0) : 0;
-          return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
+          return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : escapeHtml(t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
         })
         .join("");
       return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;
@@ -13877,10 +14159,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 // SOURCE: src/ui/settings-view.js
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditSettingsView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
   "use strict";
 
   function createSettingsView(dependencies) {
@@ -13896,54 +14180,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       guildBuildingIconMarkup,
       updateRenderedMarkup
     } = dependencies;
-    const effectNameKeys = {
-      action_speed: "shrineEffectActionSpeed",
-      attack_speed: "shrineEffectAttackSpeed",
-      cast_speed: "shrineEffectCastSpeed",
-      efficiency: "shrineEffectEfficiency",
-      damage: "shrineEffectDamage",
-      essence_find: "shrineEffectEssenceFind",
-      max_hitpoints: "shrineEffectMaxHp",
-      max_manapoints: "shrineEffectMaxMp",
-      rare_find: "shrineEffectRareFind",
-      wisdom: "shrineEffectExperience",
-      skilling_experience: "shrineEffectExperience",
-      combat_experience: "shrineEffectExperience"
-    };
-    const flatPercentTypes = new Set([
-      "action_speed",
-      "cast_speed",
-      "efficiency",
-      "essence_find",
-      "rare_find",
-      "wisdom",
-      "skilling_experience",
-      "combat_experience"
-    ]);
-
+    const effects = effectApi.createFormatter({ core, t, ui });
     function renderGuildBuffEffects(detail) {
-      const effects = core.guildBuffLevelEffects(detail);
-      if (!effects.length) return escapeHtml(t("shrineEffectsUnavailable"));
-      return effects
-        .map((effect) => {
-          const type = effect.typeHrid.split("/").pop();
-          const name = effectNameKeys[type] ? t(effectNameKeys[type]) : effect.typeHrid;
-          const percent = effect.kind === "ratio" || flatPercentTypes.has(type);
-          const format = (value) =>
-            new Intl.NumberFormat(ui().locale, {
-              style: percent ? "percent" : "decimal",
-              maximumFractionDigits: 3,
-              signDisplay: "always"
-            }).format(value);
-          return escapeHtml(
-            t(effect.first === effect.increment ? "shrineEffectPerLevel" : "shrineEffectFirstAndPerLevel", {
-              effect: name,
-              value: format(effect.increment),
-              first: format(effect.first)
-            })
-          );
-        })
-        .join("<br>");
+      return effects.perLevel(detail, "\n").split("\n").map(escapeHtml).join("<br>");
     }
 
     function currentExcludedGuildBuffHrids() {
@@ -16222,6 +16461,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         refreshGuildUpgrade(panel);
       });
       panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
+        const targetButton = event.target.closest('[data-role="shrine-target-next"],[data-role="shrine-target-cap"]');
+        if (targetButton && !targetButton.disabled) {
+          const row = targetButton.closest("[data-plan-id]");
+          const select = row.querySelector('[data-role="plan-target"]');
+          const start = Number(row.querySelector('[data-role="plan-start"]').value);
+          const entry = guildBuffEntries().find((candidate) => candidate.hrid === row.dataset.guildBuffHrid);
+          const cap =
+            targetButton.dataset.role === "shrine-target-cap" ? Number(targetButton.dataset.targetLevel) : start + 1;
+          if (entry && Number.isSafeInteger(cap) && cap > start && cap <= entry.maxLevel) {
+            select.value = String(cap);
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            row.isConnected && targetButton.focus({ preventScroll: true });
+          }
+          return;
+        }
         const button = event.target.closest('[data-role="remove-plan"]');
         const row = button && button.closest("[data-plan-id]");
         if (!row) return;
@@ -16907,6 +17161,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         )
           refreshGuildConstruction(state.panel);
         if (state.panel?.isConnected && state.settingsOpen) refreshSettings(state.panel);
+        if (state.panel?.isConnected && state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
         return guildBuildingSpriteHref;
       })
       .catch(() => "");
@@ -17018,6 +17273,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     formatNumber,
     iconMarkup,
     marketItemIconMarkup,
+    guildBuildingSpriteBaseHref,
+    guildBuildingIconMarkup,
     itemQuantity,
     creditQuantity,
     snapshotOrderBook,

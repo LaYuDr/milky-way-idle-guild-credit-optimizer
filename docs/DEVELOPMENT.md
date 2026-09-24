@@ -101,7 +101,7 @@ npm run test:browser -- --suite layout,credit,construction,settings
 npm run test:browser -- --suite trials --widths 320,900 --locales zh,en
 ```
 
-Suites: `layout`, `credit`, `construction`, `settings`, `trials`,
+Suites: `layout`, `credit`, `construction`, `settings`, `trials`, `shrine-upgrade`,
 `upgrade-empty`, `market-filter`, `locale-race`, `sidebar-resize`,
 `sidebar-startup`, `sidebar-integration`, `construction-snapshot`, `token-guide`. `--suite all` runs
 all supported suites; it is not the default for a small feature change.
@@ -304,6 +304,32 @@ http://127.0.0.1:4173/test-harness.html?layoutAudit=1&resetState=1&auditPlans=4&
 Run the full contract at sidebar widths `320`, `360`, `420`, `460`, `480`,
 `520`, `560`, `610`, `720`, `900`, and `1200`, then inspect
 `#layout-audit-output` for overflow, boundary overflow, and control overlap.
+
+### Shrine upgrade plan editor
+
+The shrine selector uses native, keyboard-accessible life/combat option groups. Each plan
+keeps its starting/target levels, purchased level, guild cap, effect comparison and total
+materials visible. One level and To guild cap are local planning shortcuts. A target above
+the guild cap remains a future plan with a warning; an unread cap is not treated as zero.
+The per-level disclosure lists only the selected interval, with effects at each destination
+level and materials for that step. It preserves expansion and control focus across refreshes.
+
+Effect rules were checked against the public official client
+`https://www.milkywayidle.com/static/js/main.bdda2571.chunk.js` on 2026-09-25:
+`renderGuildBuffTexts` passes the live definition's `buffs` to the shared buff renderer;
+level 0 is zero, and level N >= 1 is base + (N - 1) * level bonus. Ratio boosts are
+percentages; known percentage-valued flat types use the same unit as the official renderer.
+`core.guildBuffUpgradePreview` combines this with existing `levelCosts` aggregation,
+without changing snapshots or sending upgrade requests. Missing effects remain unavailable,
+and a missing cost level invalidates the range total. The preview describes personal buff
+levels, not guild-building upgrade costs or a character's fully combined stats.
+
+Run `npm run test:browser -- --suite shrine-upgrade,layout,settings,upgrade-empty --channel chrome`.
+The new shrine-upgrade suite covers all eleven Chinese widths and English 320/610/900,
+including zero-to-first effects, start/target changes, exact total and per-step costs,
+independent combat effects, disclosure and focus retention, shortcuts, duplicate selection,
+future-cap warnings and overflow. Plan height follows the visible content rather than the
+previous single-line row limit. Preserve the existing empty-plan and guide regressions.
 
 For the credit comparison card layout, open:
 

@@ -67,9 +67,11 @@
       for (const element of copy.querySelectorAll(".mwi-trial-columns")) {
         const columns = element.classList.contains("mwi-trial-timeline")
           ? Math.min(5, element.children.length)
-          : element.dataset.kind === "combat"
-            ? 2
-            : 4;
+          : element.dataset.kind === "rankings"
+            ? element.children.length
+            : element.dataset.kind === "combat"
+              ? 2
+              : 4;
         Object.assign(element.style, {
           gridTemplateColumns: `repeat(${Math.max(1, columns)}, max-content)`,
           gridAutoFlow: "row",

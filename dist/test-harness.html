@@ -831,8 +831,7 @@
       breakpoints: { compactMax: 400, intermediateMax: 520, summaryMax: 650 },
       budgetSnapPercentages: [20, 40, 50, 60, 80, 100],
       maximumHorizontalOverflow: 0,
-      maximumInlinePlanHeight: 48,
-      maximumCompactPlanHeight: 122,
+      // Shrine plans include an always-visible effect/cost summary; height follows content.
       targetPlans: 4
     };
 
@@ -998,12 +997,86 @@
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
       const report = window.__mwiCollectLayoutAudit();
-      document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+      if (!searchParams.has("shrineUpgradeAudit"))
+        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
       document.body.dataset.layoutAuditReady = "true";
       return report;
     };
 
     window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
+
+    async function runShrineUpgradeAudit() {
+      await prepareLayoutAudit();
+      const panel = document.getElementById("mwi-credit-optimizer");
+      const list = panel.querySelector('[data-role="upgrade-plan-list"]');
+      const checks = {};
+      const row = () => list.querySelector('[data-guild-buff-hrid="/guild_buffs/tempo_combat"]');
+      const change = async (role, value) => {
+        const input = row().querySelector(`[data-role="${role}"]`);
+        input.focus();
+        input.value = String(value);
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      };
+      checks.groupedChoices = row().querySelectorAll('[data-role="plan-buff"] optgroup').length === 2;
+      checks.shrineGameIcon = Boolean(row().querySelector('[data-icon-source="game"] use'));
+      checks.effectsAvailable = row().querySelectorAll(".mwi-shrine-effect-comparison>div").length === 2;
+      checks.detailsCollapsed = !row().querySelector("details[data-shrine-steps]").open;
+      await change("plan-start", 0);
+      await change("plan-target", 2);
+      checks.effectTarget = [...row().querySelectorAll(".mwi-shrine-effect-comparison dd strong")].every(
+        (el) => el.textContent === "+0.8%"
+      );
+      checks.effectStart = [...row().querySelectorAll(".mwi-shrine-effect-comparison dd>span")].every(
+        (el) => el.textContent === "+0%"
+      );
+      checks.costTotal = row().querySelector(".mwi-shrine-plan-cost").textContent.includes("2,400");
+      checks.focusRetained = document.activeElement === row().querySelector('[data-role="plan-target"]');
+      row().querySelector("summary[data-shrine-steps-summary]").click();
+      checks.twoSteps = row().querySelectorAll("[data-shrine-step]").length === 2;
+      checks.firstStepCost = row().querySelector('[data-shrine-step="1"]').textContent.includes("900");
+      checks.secondStepEffect = row().querySelector('[data-shrine-step="2"]').textContent.includes("+0.8%");
+      await change("plan-start", 1);
+      checks.stepsRemainOpen = row().querySelector("details[data-shrine-steps]").open;
+      checks.onlySelectedSteps =
+        row().querySelectorAll("[data-shrine-step]").length === 1 &&
+        row().querySelector('[data-shrine-step="2"]') !== null;
+      checks.noStartCost =
+        row().querySelector(".mwi-shrine-plan-cost").textContent.includes("1,500") &&
+        !row().querySelector(".mwi-shrine-plan-cost").textContent.includes("2,400");
+      await change("plan-start", 0);
+      row().querySelector('[data-role="shrine-target-next"]').click();
+      checks.nextLevel = row().querySelector('[data-role="plan-target"]').value === "1";
+      row().querySelector('[data-role="shrine-target-cap"]').click();
+      checks.guildCap = row().querySelector('[data-role="plan-target"]').value === "2";
+      checks.duplicateChoicesDisabled = [...row().querySelectorAll('[data-role="plan-buff"] option')]
+        .filter((el) => !el.selected)
+        .every((el) => el.disabled);
+      const savedBefore = JSON.stringify(window.__mwiGuildCreditBridge.guildBuffLevels);
+      row().querySelector("summary[data-shrine-steps-summary]").click();
+      row().querySelector("summary[data-shrine-steps-summary]").click();
+      checks.onlyLocalPlanning = JSON.stringify(window.__mwiGuildCreditBridge.guildBuffLevels) === savedBefore;
+      // A captured lower guild cap affects the warning, never erases the future plan.
+      const bridge = window.__mwiGuildCreditBridge;
+      const previousShrines = bridge.guildShrineLevels;
+      bridge.guildShrineLevels = { "/guild_shrines/tempo": { level: 1 }, "/guild_shrines/spirit": { level: 2 } };
+      bridge.onCharacterItemsUpdated?.();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await change("plan-target", 2);
+      checks.aboveCapWarning = Boolean(row().querySelector("[data-shrine-cap-warning]"));
+      checks.futureTargetPreserved = row().querySelector('[data-role="plan-target"]').value === "2";
+      bridge.guildShrineLevels = previousShrines;
+      bridge.onCharacterItemsUpdated?.();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { checks, layout: window.__mwiCollectLayoutAudit() };
+    }
+    if (searchParams.has("shrineUpgradeAudit")) {
+      window.__mwiShrineUpgradeAuditReady = runShrineUpgradeAudit().then((report) => {
+        document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
+        document.body.dataset.shrineUpgradeAuditReady = "true";
+        return report;
+      });
+    }
 
     const prepareUpgradeEmptyAudit = async () => {
       document.getElementById("test-exchange-modal")?.remove();
@@ -3599,8 +3672,11 @@
       const rankingStoredBefore = JSON.stringify(saved());
       const rankingColumns = [...host.querySelectorAll("[data-trial-ranking-column]")];
       checks.rankingsAllParallel =
-        rankingColumns.length === 4 &&
+        rankingColumns.length === 7 &&
         new Set(rankingColumns.map((el) => Math.round(el.getBoundingClientRect().top))).size === 1;
+      checks.combatMetricRankingsPresent = ["combat", "damageDealt", "healingDone", "premitigatedDamageTaken"].every(
+        (scope) => host.querySelector(`[data-trial-ranking-column="${scope}"] tbody`)
+      );
       checks.rankingSwitchesAbsent = !host.querySelector("[data-trial-ranking-metric], [data-trial-ranking-scope]");
       checks.rankingSampleHeaders = rankingColumns
         .slice(1)
@@ -3634,7 +3710,7 @@
         .find((row) => row.dataset.trialRankingRow !== rankingName.dataset.trialRankingPlayer)
         .querySelector("[data-trial-ranking-player]");
       const highlightsPlayer = (button) =>
-        rankingHighlights().length === 4 &&
+        rankingHighlights().length === 7 &&
         rankingHighlights().every((row) => row.dataset.trialRankingRow === button.dataset.trialRankingPlayer);
       rankingName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       checks.rankingHoverAcrossColumns = highlightsPlayer(rankingName);
@@ -4310,7 +4386,7 @@
       setPlayerSearch("");
       anonymousButton.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       checks.screenshotHighlightIdentity =
-        [...host.querySelectorAll(".mwi-trial-member-highlight")].length === 4 &&
+        [...host.querySelectorAll(".mwi-trial-member-highlight")].length === 7 &&
         [...host.querySelectorAll(".mwi-trial-member-highlight")].every(
           (el) => el.dataset.trialRankingRow === rankingKey
         );
@@ -4336,9 +4412,11 @@
         checks[`imageGridColumns_${view}`] = [...parsed.querySelectorAll(".mwi-trial-columns")].every((grid) => {
           const expected = grid.classList.contains("mwi-trial-timeline")
             ? Math.min(5, grid.children.length)
-            : grid.dataset.kind === "combat"
-              ? 2
-              : 4;
+            : grid.dataset.kind === "rankings"
+              ? grid.children.length
+              : grid.dataset.kind === "combat"
+                ? 2
+                : 4;
           return grid.style.gridTemplateColumns.trim().split(/\s+/).length === expected;
         });
         checks[`imageAnonymous_${view}`] = !Object.values(members).some((member) =>

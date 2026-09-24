@@ -1,8 +1,10 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./shrine-effects.js") : root.MwiGuildShrineEffects
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditUpgradeView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
   "use strict";
 
   function createUpgradeView(dependencies) {
@@ -18,6 +20,8 @@
       formatNumber,
       iconMarkup,
       marketItemIconMarkup,
+      guildBuildingSpriteBaseHref,
+      guildBuildingIconMarkup,
       itemQuantity,
       creditQuantity,
       snapshotOrderBook,
@@ -40,6 +44,8 @@
       scheduleGuildExchangeAdvisor,
       guildTokenBudgetRefreshTask
     } = dependencies;
+
+    const effects = effectApi.createFormatter({ core, t, ui });
 
     function guildBuffEntries() {
       hydrateBridgeData();
@@ -413,34 +419,83 @@
       }
     }
 
+    function renderPlanMaterials(result) {
+      if (result.status !== "ok")
+        return `<span class="mwi-shrine-warning">${escapeHtml(t(result.status === "missing_cost" ? "missingLevelCost" : "invalidLevels", { level: result.missingLevel }))}</span>`;
+      if (!result.totals.length) return escapeHtml(t("shrineNoMaterials"));
+      return `<ul class="mwi-shrine-materials">${result.totals
+        .slice()
+        .sort(materialOrder)
+        .map(
+          (item) =>
+            `<li>${iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))}<span>${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><strong>${escapeHtml(formatNumber(item.count))}</strong></li>`
+        )
+        .join("")}</ul>`;
+    }
+
+    function renderPlanEffects(preview) {
+      if (!preview.effects.length)
+        return `<p class="mwi-shrine-muted">${escapeHtml(t("shrineEffectsUnavailable"))}</p>`;
+      return `<dl class="mwi-shrine-effect-comparison">${preview.effects.map((effect) => `<div><dt>${escapeHtml(effects.name(effect))}</dt><dd><span>${escapeHtml(effects.value(effect, effect.start))}</span><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4"/></svg><strong>${escapeHtml(effects.value(effect, effect.target))}</strong><small>${escapeHtml(t("shrineGain", { value: effects.value(effect, effect.gain) }))}</small></dd></div>`).join("")}</dl>`;
+    }
+
     function renderGuildUpgradePlans(panel, entries) {
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
       const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
+      const openPlans = new Set(
+        [...list.querySelectorAll("details[data-shrine-steps][open]")].map(
+          (node) => node.closest("[data-plan-id]").dataset.planId
+        )
+      );
+      const active = list.ownerDocument.activeElement;
+      const focusedPlan = list.contains(active) ? active.closest("[data-plan-id]")?.dataset.planId : null;
+      const focusedRole = active?.dataset?.role;
+      const focusedSteps = active?.matches("summary[data-shrine-steps-summary]");
+      const sprite = guildBuildingSpriteBaseHref?.() || "";
       const plansMarkup = state.upgradePlans
         .map((plan) => {
           const entry = entries.find((candidate) => candidate.hrid === plan.guildBuffHrid);
           if (!entry) return "";
-          const buffOptions = entries
+          const buffOptions = [false, true]
             .map(
-              (candidate) =>
-                `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(guildBuffLabel(candidate.detail, candidate.hrid))}</option>`
+              (combat) =>
+                `<optgroup label="${escapeHtml(t(combat ? "domainCombat" : "domainLife"))}">${entries
+                  .filter((candidate) => isCombatGuildBuff(candidate) === combat)
+                  .map(
+                    (candidate) =>
+                      `<option value="${escapeHtml(candidate.hrid)}" ${candidate.hrid === plan.guildBuffHrid ? "selected" : ""} ${candidate.hrid !== plan.guildBuffHrid && (plannedHrids.has(candidate.hrid) || currentGuildBuffLevel(candidate) >= candidate.maxLevel) ? "disabled" : ""}>${escapeHtml(GUILD_SHRINE_NAME_KEYS[candidate.detail.shrineHrid] ? t(GUILD_SHRINE_NAME_KEYS[candidate.detail.shrineHrid]) : guildBuffLabel(candidate.detail, candidate.hrid))}</option>`
+                  )
+                  .join("")}</optgroup>`
             )
             .join("");
-          const shrineHrid = (entry.detail && entry.detail.shrineHrid) || "";
-          const domain = isCombatGuildBuff(entry) ? "combat" : "life";
-          return `<div class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${domain}">
-          <label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label>
-          <label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label>
-          <span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span>
-          <label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label>
-          <button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("removePlan"))}">×</button>
-        </div>`;
+          const shrineHrid = entry.detail.shrineHrid || "";
+          const cap = guildShrineLevelByHrid(shrineHrid);
+          const preview = core.guildBuffUpgradePreview(entry.detail, plan.startLevel, plan.targetLevel);
+          const knownLevel = state.guildBuffLevels != null;
+          const current = knownLevel ? formatNumber(currentGuildBuffLevel(entry)) : t("notRead");
+          const aboveCap = cap !== null && plan.targetLevel > cap;
+          const icon = guildBuildingIconMarkup?.({ hrid: shrineHrid }, sprite) || "";
+          const title = guildBuffLabel(entry.detail, entry.hrid);
+          return `<article class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${isCombatGuildBuff(entry) ? "combat" : "life"}" aria-label="${escapeHtml(title)}">
+          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><label class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></label><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
+          <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap), max: formatNumber(entry.maxLevel) }))}</p>
+          <div class="mwi-shrine-level-controls"><label class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></label><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><label class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></label><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
+          ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
+          ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}
+          <section class="mwi-shrine-plan-effects" aria-label="${escapeHtml(t("shrineEffectComparison"))}"><h4>${escapeHtml(t("shrineEffectComparison"))}<small>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</small></h4>${renderPlanEffects(preview)}</section>
+          <section class="mwi-shrine-plan-cost" aria-label="${escapeHtml(t("shrineRangeCost"))}"><h4>${escapeHtml(t("shrineRangeCost"))}</h4>${renderPlanMaterials(preview)}</section>
+          <details class="mwi-shrine-steps" data-shrine-steps${openPlans.has(plan.id) ? " open" : ""}><summary data-shrine-steps-summary>${escapeHtml(t("shrineSteps", { count: preview.steps.length }))}</summary><p class="mwi-shrine-muted">${escapeHtml(t("shrineStepsHint"))}</p><ol>${preview.steps.map((step) => `<li data-shrine-step="${step.level}"><div class="mwi-shrine-step-heading"><strong>${escapeHtml(t("shrineStepLevel", { start: step.level - 1, target: step.level }))}</strong><span>${step.effects.length ? step.effects.map((effect) => escapeHtml(`${effects.name(effect)} ${effects.value(effect, effect.value)}`)).join(" · ") : escapeHtml(t("shrineEffectsUnavailable"))}</span></div>${renderPlanMaterials({ status: "ok", totals: step.totals })}</li>`).join("")}</ol>${preview.status !== "ok" ? renderPlanMaterials(preview) : ""}</details>
+        </article>`;
         })
         .join("");
-      const columnHeaders = state.upgradePlans.length
-        ? `<div class="mwi-upgrade-plan-columns" aria-hidden="true"><span>${escapeHtml(t("shrine"))}</span><span>${escapeHtml(t("startLevel"))}</span><span></span><span>${escapeHtml(t("targetLevel"))}</span><span></span></div>`
-        : "";
-      updateRenderedMarkup(list, columnHeaders + plansMarkup);
+      updateRenderedMarkup(list, plansMarkup);
+      if (focusedPlan && (focusedRole || focusedSteps)) {
+        const row = [...list.querySelectorAll("[data-plan-id]")].find((node) => node.dataset.planId === focusedPlan);
+        const control = focusedSteps
+          ? row?.querySelector("summary[data-shrine-steps-summary]")
+          : [...(row?.querySelectorAll("[data-role]") || [])].find((node) => node.dataset.role === focusedRole);
+        control?.focus({ preventScroll: true });
+      }
       const count = panel.querySelector('[data-role="upgrade-plan-count"]');
       if (count) count.textContent = t("selectedUpgradePlanCount", { count: formatNumber(state.upgradePlans.length) });
       updateGuildShrineTargetActions(panel, entries);
@@ -606,8 +661,8 @@
         .map((item) => {
           const row = estimateRows[item.itemHrid];
           const inventoryText = row
-            ? t("inventoryAndMissing", { owned: formatNumber(row.owned), missing: formatNumber(row.missing) })
-            : t("inventoryNotRead");
+            ? `${escapeHtml(t("inventory", { count: formatNumber(row.owned) }))} · ${item.itemHrid === "/items/guild_token" && row.missing > 0 ? `<span class="mwi-material-shortfall">${escapeHtml(t("missingCount", { count: formatNumber(row.missing) }))}</span>` : escapeHtml(t("missingCount", { count: formatNumber(row.missing) }))}`
+            : escapeHtml(t("inventoryNotRead"));
           const credit = CREDIT_TYPES.find(([creditItemHrid]) => creditItemHrid === item.itemHrid);
           const isGuildCredit = Boolean(credit);
           const useGuildTokens = isGuildCredit && state.guildTokenCreditHrids.has(item.itemHrid);
@@ -646,7 +701,7 @@
               ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))
               : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
           const guideMissing = row ? Math.max(0, Number(row.remainingMissing ?? row.missing) || 0) : 0;
-          return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${escapeHtml(hasInventory ? inventoryText : t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
+          return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : escapeHtml(t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
         })
         .join("");
       return `<div class="mwi-plan-summary">${planSummary}</div>${renderUpgradeCostSummary(estimate, hasInventory)}<div class="mwi-material-list">${materials}</div>`;

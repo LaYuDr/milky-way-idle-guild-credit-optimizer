@@ -53,6 +53,9 @@ function writeReleaseManifest() {
 const version = process.env.MWI_VERSION || require(path.join(root, "package.json")).version;
 const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
 if (!versionMatch) throw new Error(`Invalid package version: ${version}`);
+// Follow the published release channel, including installations from local files or GitHub.
+const downloadUrl = "https://update.greasyfork.org/scripts/586873/%E5%85%AC%E4%BC%9A%E5%8A%A9%E6%89%8B.user.js";
+const updateUrl = downloadUrl.replace(/\.user\.js$/, ".meta.js");
 const header = `// ==UserScript==
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
@@ -61,6 +64,8 @@ const header = `// ==UserScript==
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
+// @updateURL    ${updateUrl}
+// @downloadURL  ${downloadUrl}
 // @description  银河奶牛公会助手：比较信用点兑换成本、规划神龛升级与公会建设、保存历史试炼统计；不会自动交易、兑换或升级，不会上传账号数据。
 // @description:en Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history; does not automate buying, selling, exchanging, or upgrading, and does not upload account data.
 // @match        https://www.milkywayidle.com/*
@@ -101,6 +106,7 @@ const SOURCE_FILES = [
   "src/ui/profile-tooltip.js",
   "src/ui/trial-screenshot.js",
   "src/ui/trial-history-view.js",
+  "src/ui/shrine-effects.js",
   "src/ui/upgrade-view.js",
   "src/ui/settings-view.js",
   "src/ui/shrine-guide-ui.js",

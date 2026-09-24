@@ -664,13 +664,20 @@
             ...identity,
             participations: 0,
             skilling: bucket(),
-            combat: bucket()
+            combat: bucket(),
+            damageDealt: bucket(),
+            healingDone: bucket(),
+            premitigatedDamageTaken: bucket()
           });
         const player = players.get(key);
         if (!player.name && identity.name) player.name = identity.name;
         player.participations += 1;
         const multiples = fields
-          .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
+          .map((field, index) => {
+            const value = metricAverageMultiple(record, row, field, summaries[index]);
+            if (record.kind === "combat" && value !== null) add(player[field], value);
+            return value;
+          })
           .filter((value) => value !== null);
         if (!multiples.length) continue;
         const multiple = multiples.reduce((sum, value) => sum + value, 0);
@@ -733,6 +740,7 @@
     for (const player of players.values()) {
       player.skilling = bucket();
       player.combat = bucket();
+      for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) player[field] = bucket();
     }
     for (const week of weeks.values()) {
       const attendees = new Map(participationRankings(week.records).map((player) => [player.key, player]));
@@ -745,12 +753,13 @@
           attendance || evidence.some((entry) => entry.joinedAt < week.at && entry.observedAt >= week.at);
         // Exclude weeks before the earliest documented joining, unless actual attendance proves otherwise.
         if (!eligible && evidence.length && evidence.every((entry) => entry.joinedAt >= week.at)) continue;
-        for (const kind of ["skilling", "combat"]) {
+        for (const scope of ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+          const kind = scope === "skilling" ? "skilling" : "combat";
           const category = week.records.filter((record) => record.kind === kind);
           const expected = [...new Set(week.records.flatMap((record) => record.weekTrials?.[kind] || []))];
           if (!category.length && !expected.length) continue;
-          const result = player[kind];
-          const actual = attendance?.[kind];
+          const result = player[scope];
+          const actual = attendance?.[scope];
           const appeared = category.some((record) =>
             record.rows.some((row) => {
               const identity = memberIdentity(record, row);
@@ -778,7 +787,8 @@
       const guildWeeks = [...weeks.values()].filter((week) => week.guild === guild && Number.isFinite(week.at));
       for (const [key, evidence] of guild.evidence) {
         const player = players.get(key);
-        for (const kind of ["skilling", "combat"]) {
+        for (const scope of ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+          const kind = scope === "skilling" ? "skilling" : "combat";
           const dates = [
             ...new Set(
               guildWeeks.filter((week) => week.records.some((record) => record.kind === kind)).map((week) => week.at)
@@ -794,7 +804,7 @@
             );
             const last = Math.min(latest, entry.observedAt);
             const expected = Math.max(0, Math.floor((last - first) / WEEK_MS) + 1);
-            if (dates.filter((at) => at >= first && at <= last).length < expected) player[kind].incomplete = true;
+            if (dates.filter((at) => at >= first && at <= last).length < expected) player[scope].incomplete = true;
           }
         }
       }

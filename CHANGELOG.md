@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.47] - 2026-09-25
+
+### Changed
+
+- 重做神龛升级计划：生活与战斗分组选择、起始与目标等级快捷调整，常驻效果对比及总材料，展开查看逐级效果与花费，并提示已购等级、公会上限和未来规划；新增伤害、治疗、减伤前承伤独立排行榜并保留原有榜单；公会代币缺口标红；为正式脚本配置 Greasy Fork 更新与下载地址，补充 Tampermonkey 自动更新说明。
+
 ## [1.2.46] - 2026-09-25
 
 ### Changed

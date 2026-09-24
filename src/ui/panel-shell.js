@@ -1015,6 +1015,21 @@
         refreshGuildUpgrade(panel);
       });
       panel.querySelector('[data-role="upgrade-plan-list"]').addEventListener("click", (event) => {
+        const targetButton = event.target.closest('[data-role="shrine-target-next"],[data-role="shrine-target-cap"]');
+        if (targetButton && !targetButton.disabled) {
+          const row = targetButton.closest("[data-plan-id]");
+          const select = row.querySelector('[data-role="plan-target"]');
+          const start = Number(row.querySelector('[data-role="plan-start"]').value);
+          const entry = guildBuffEntries().find((candidate) => candidate.hrid === row.dataset.guildBuffHrid);
+          const cap =
+            targetButton.dataset.role === "shrine-target-cap" ? Number(targetButton.dataset.targetLevel) : start + 1;
+          if (entry && Number.isSafeInteger(cap) && cap > start && cap <= entry.maxLevel) {
+            select.value = String(cap);
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            row.isConnected && targetButton.focus({ preventScroll: true });
+          }
+          return;
+        }
         const button = event.target.closest('[data-role="remove-plan"]');
         const row = button && button.closest("[data-plan-id]");
         if (!row) return;

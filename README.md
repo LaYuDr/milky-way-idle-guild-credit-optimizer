@@ -73,7 +73,11 @@
 - 安装脚本：[`dist/milky-way-idle-guild-credit-optimizer.user.js`](dist/milky-way-idle-guild-credit-optimizer.user.js)
 - 建议使用 Tampermonkey 安装。脚本匹配 `www.milkywayidle.com` 和 `www.milkywayidlecn.com` 的 HTTPS 页面。
 
-发布包不依赖本机开发服务。插件内会优先检查 GitHub 上的最新正式版本；主更新源不可用时，会改用上述 Tampermonkey 备用分发链接中的代理脚本源检查版本，并在发现新版本时通过 Tampermonkey 安装页更新。两个更新源均不可用时只显示“暂时无法读取”，不会阻塞页面使用。
+发布包不依赖本机开发服务。正式脚本显式配置了 Greasy Fork 官方的 `@updateURL`（版本元信息）和 `@downloadURL`（完整脚本）：在 Tampermonkey 中启用脚本更新检查及自动更新后，管理器会按设定频率检查版本，并下载安装较新的已发布版本；更新后刷新游戏页面生效。检查频率与更新开关由 Tampermonkey 管理，公会助手不会更改这些设置。官方更新源不可达时无法完成自动更新，可使用上面的备用链接手动更新。开发加载器不配置正式版更新地址。
+
+旧版本若没有有效更新地址，需要先手动覆盖安装一次包含上述配置的新版，后续即可由管理器自动更新。使用相同名称和命名空间覆盖原脚本即可，不必卸载或清除本地数据；若曾手动覆盖 Tampermonkey 中的更新地址，还需核对该脚本的更新设置。
+
+插件内的版本提示与管理器自动更新独立：提示会优先检查 GitHub 上的最新正式版本；主更新源不可用时，会改用上述 Tampermonkey 备用分发链接中的代理脚本源检查版本，并在发现新版本时提供手动安装链接。两个更新源均不可用时只显示“暂时无法读取”，不会阻塞页面使用。
 
 ## 数据来源与边界
 

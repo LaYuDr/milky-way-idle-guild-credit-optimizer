@@ -1268,6 +1268,43 @@
     });
   }
 
+  function guildBuffEffectAtLevel(effect, level) {
+    if (
+      !Number.isSafeInteger(level) ||
+      level < 0 ||
+      !effect ||
+      !Number.isFinite(effect.first) ||
+      !Number.isFinite(effect.increment)
+    )
+      return null;
+    const value = level === 0 ? 0 : effect.first + (level - 1) * effect.increment;
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function guildBuffUpgradePreview(detail, startLevel, targetLevel) {
+    const cost = aggregateGuildBuffLevelCosts(detail?.levelCosts, startLevel, targetLevel);
+    if (cost.status !== "ok") return { ...cost, effects: [], steps: [] };
+    const effects = guildBuffLevelEffects(detail);
+    const comparison = effects.map((effect) => {
+      const start = guildBuffEffectAtLevel(effect, cost.startLevel);
+      const target = guildBuffEffectAtLevel(effect, cost.targetLevel);
+      const difference = start !== null && target !== null ? target - start : null;
+      return { ...effect, start, target, gain: Number.isFinite(difference) ? difference : null };
+    });
+    return {
+      ...cost,
+      effects: comparison,
+      steps: Array.from({ length: cost.targetLevel - cost.startLevel }, (_, index) => {
+        const level = cost.startLevel + index + 1;
+        return {
+          level,
+          effects: effects.map((effect) => ({ ...effect, value: guildBuffEffectAtLevel(effect, level) })),
+          totals: aggregateGuildBuffLevelCosts(detail.levelCosts, level - 1, level).totals
+        };
+      })
+    };
+  }
+
   function isUnitPriceWithinLimit(unitPrice, maxUnitPrice) {
     const limit = Number(maxUnitPrice);
     if (!Number.isSafeInteger(limit) || limit <= 0) return true;
@@ -1277,6 +1314,8 @@
 
   return {
     guildBuffLevelEffects,
+    guildBuffEffectAtLevel,
+    guildBuffUpgradePreview,
     normalizeAsks,
     quoteAsks,
     evaluateConversion,

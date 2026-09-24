@@ -442,6 +442,7 @@
         )
           refreshGuildConstruction(state.panel);
         if (state.panel?.isConnected && state.settingsOpen) refreshSettings(state.panel);
+        if (state.panel?.isConnected && state.panel.dataset.activeView === "upgrade") refreshGuildUpgrade(state.panel);
         return guildBuildingSpriteHref;
       })
       .catch(() => "");
@@ -553,6 +554,8 @@
     formatNumber,
     iconMarkup,
     marketItemIconMarkup,
+    guildBuildingSpriteBaseHref,
+    guildBuildingIconMarkup,
     itemQuantity,
     creditQuantity,
     snapshotOrderBook,

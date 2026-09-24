@@ -40,6 +40,19 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
     "utf8"
   );
   assert.match(currentBundle, /^\/\/ @name:en\s+Milky Way Idle Guild Assistant$/m);
+  const metadata = currentBundle.split("// ==/UserScript==", 1)[0];
+  const releaseUrl = "https://update.greasyfork.org/scripts/586873/%E5%85%AC%E4%BC%9A%E5%8A%A9%E6%89%8B.user.js";
+  assert.match(metadata, /^\/\/ @version\s+9\.9\.9$/m);
+  assert.deepEqual(
+    [...metadata.matchAll(/^\/\/ @updateURL\s+(\S+)$/gm)].map((match) => match[1]),
+    [releaseUrl.replace(/\.user\.js$/, ".meta.js")]
+  );
+  assert.deepEqual(
+    [...metadata.matchAll(/^\/\/ @downloadURL\s+(\S+)$/gm)].map((match) => match[1]),
+    [releaseUrl]
+  );
+  const loader = fs.readFileSync(path.join(root, "dist", "milky-way-idle-guild-credit-dev-loader.user.js"), "utf8");
+  assert.doesNotMatch(loader, /^\/\/ @(?:updateURL|downloadURL)\s+/m);
   assert.match(
     currentBundle,
     /^\/\/ @description:en\s+Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history;/m
@@ -49,6 +62,7 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   assert.equal(firstReleaseBuild.status, 0, firstReleaseBuild.stderr);
   const archive = path.join(root, "releases", "v9.9", "银河奶牛公会信用点性价比-v9.9.9.user.js");
   assert.equal(fs.existsSync(archive), true);
+  assert.equal(fs.readFileSync(archive, "utf8"), currentBundle);
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "releases", "manifest.json"), "utf8"));
   assert.equal(manifest.policy, "append-only");
   assert.deepEqual(
