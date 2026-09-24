@@ -509,6 +509,8 @@ test("试炼显示设置校验布尔值，独立持久化并在存储故障时�
     workDone: true,
     workShare: false,
     workMultiple: false,
+    combatShare: false,
+    combatMultiple: false,
     levelSummary: true,
     workSummary: true
   };
@@ -530,6 +532,8 @@ test("试炼显示设置校验布尔值，独立持久化并在存储故障时�
     workDone: false,
     workShare: true,
     workMultiple: true,
+    combatShare: true,
+    combatMultiple: true,
     levelSummary: false,
     workSummary: false
   };

@@ -992,3 +992,35 @@ test("重复采集缺失进度不抹掉同层进度，显式零更新有效，�
   assert.equal(api.withSavedProgress({ ...record, key: "other" }, known).party.nextTierProgress, undefined);
   assert.equal(record.party.nextTierProgress, undefined);
 });
+
+test("战斗占比与相对人均分别按各指标的已知成员计算，零值有效", () => {
+  for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+    const record = {
+      schemaVersion: 2,
+      kind: "combat",
+      rows: [
+        { characterId: 1, [field]: 30 },
+        { characterId: 2, [field]: 10 },
+        { characterId: 3, [field]: 0 },
+        { characterId: 4, [field]: null }
+      ]
+    };
+    assert.equal(api.metricShare(record, record.rows[0], field), 75);
+    assert.equal(api.metricAverageMultiple(record, record.rows[0], field), 2.25);
+    assert.equal(api.metricShare(record, record.rows[2], field), 0);
+    assert.equal(api.metricAverageMultiple(record, record.rows[3], field), null);
+    for (const suffix of ["Share", "Multiple"]) {
+      assert.deepEqual(
+        api.displayRows(record, { field: field + suffix, direction: "desc" }).map((row) => row.characterId),
+        [1, 2, 3, 4]
+      );
+      assert.deepEqual(
+        api.displayRows(record, { field: field + suffix, direction: "asc" }).map((row) => row.characterId),
+        [3, 2, 1, 4]
+      );
+    }
+    const zero = { ...record, rows: [{ [field]: 0 }] };
+    assert.equal(api.metricShare(zero, zero.rows[0], field), null);
+    assert.equal(api.metricAverageMultiple(zero, zero.rows[0], field), null);
+  }
+});

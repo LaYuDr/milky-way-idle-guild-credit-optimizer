@@ -673,7 +673,7 @@
           .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
           .filter((value) => value !== null);
         if (!multiples.length) continue;
-        const multiple = multiples.reduce((sum, value) => sum + value / multiples.length, 0);
+        const multiple = multiples.reduce((sum, value) => sum + value, 0);
         add(player[record.kind], multiple);
       }
     }
@@ -900,16 +900,32 @@
         "workMultiple",
         "damageDealt",
         "healingDone",
-        "premitigatedDamageTaken"
+        "premitigatedDamageTaken",
+        ...["damageDealt", "healingDone", "premitigatedDamageTaken"].flatMap((field) => [
+          field + "Share",
+          field + "Multiple"
+        ])
       ].includes(sort.field)
     )
       return result;
+    const combatDerived = /^(damageDealt|healingDone|premitigatedDamageTaken)(Share|Multiple)$/.exec(sort.field);
+    const summaries = new Map();
+    if (combatDerived)
+      for (const { record } of result)
+        if (!summaries.has(record)) summaries.set(record, summarizeMetric(record, combatDerived[1]));
     const value = ({ record, row }) =>
-      sort.field === "member"
-        ? memberIdentity(record, row).name || null
-        : sort.field === "level"
-          ? memberLevel(record, row)
-          : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
+      combatDerived
+        ? (combatDerived[2] === "Share" ? metricShare : metricAverageMultiple)(
+            record,
+            row,
+            combatDerived[1],
+            summaries.get(record)
+          )
+        : sort.field === "member"
+          ? memberIdentity(record, row).name || null
+          : sort.field === "level"
+            ? memberLevel(record, row)
+            : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),

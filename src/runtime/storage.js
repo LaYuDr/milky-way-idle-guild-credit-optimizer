@@ -204,6 +204,8 @@
         workDone: true,
         workShare: false,
         workMultiple: false,
+        combatShare: false,
+        combatMultiple: false,
         levelSummary: true,
         workSummary: true
       }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])

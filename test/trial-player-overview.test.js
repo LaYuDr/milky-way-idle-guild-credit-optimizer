@@ -43,7 +43,7 @@ test("各项目等权平均与排行榜一致，去重并排除手动记录，�
   assert.equal(project(records, "foraging").total, 0);
   assert.equal(JSON.stringify(records), before);
 });
-test("战斗项目使用伤害、治疗和承伤的有效倍数均值，不混入其他项目", () => {
+test("战斗项目相加伤害、治疗和承伤的有效倍数，不混入其他项目", () => {
   const combat = record("combat", "hedgehog", [], {
     kind: "combat",
     trialHrid: "/guild_combat/hedgehog",
@@ -54,8 +54,8 @@ test("战斗项目使用伤害、治疗和承伤的有效倍数均值，不混�
   });
   const row = project([combat, record("life", "milking", [9, 1])], "hedgehog");
   assert.equal(row.participations, 1);
-  assert.equal(row.average, 2 / 3);
-  assert.equal(row.total, 2 / 3);
+  assert.equal(row.average, 2);
+  assert.equal(row.total, 2);
 });
 
 test("项目合计按有效样本加权平均，次数含未知贡献但未知贡献不进入倍数分母", () => {

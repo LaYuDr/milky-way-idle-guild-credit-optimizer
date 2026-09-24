@@ -7,7 +7,7 @@ function record(key, kind, rows, extra = {}) {
   return { key, kind, schemaVersion: 1, rows, members: { 1: { name: "Alpha" }, 2: { name: "Beta" } }, ...extra };
 }
 
-test("排行榜逐项目计次，倍数先在项目内归一化再等权平均", () => {
+test("排行榜逐项目计次，战斗三项倍数项目内相加并按周平均", () => {
   const records = [
     record("life1", "skilling", [
       { characterId: 1, workDone: 30 },
@@ -27,9 +27,9 @@ test("排行榜逐项目计次，倍数先在项目内归一化再等权平均",
   assert.equal(alpha.participations, 3);
   assert.equal(alpha.skilling.count, 2);
   assert.equal(alpha.skilling.average, 1);
-  assert.equal(alpha.combat.average, 2 / 3);
-  assert.equal(beta.combat.average, 4 / 3);
-  assert.ok(Math.abs(alpha.all.total - 5 / 3) < 1e-12);
+  assert.equal(alpha.combat.average, 2);
+  assert.equal(beta.combat.average, 4);
+  assert.equal(alpha.all.total, 3);
   assert.equal(alpha.all.count, 3);
   assert.equal(JSON.stringify(records), before);
 });

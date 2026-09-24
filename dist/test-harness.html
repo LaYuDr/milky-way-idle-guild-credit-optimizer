@@ -3560,7 +3560,7 @@
         officialOmittedZero: [...host.querySelectorAll('[data-trial-group="combat"] tbody tr:last-child')].every(
           (row) => [...row.querySelectorAll('td:not([data-trial-field="level"])')].every((td) => td.textContent === "0")
         ),
-        fullRawRecords: host.querySelectorAll(".mwi-trial-raw pre").length === 6,
+        recordRawDisclosuresRemoved: !host.querySelector("[data-trial-record] [data-trial-raw]"),
         lifeAboveCombat:
           host.querySelector('[data-trial-group="skilling"]').getBoundingClientRect().top <
           host.querySelector('[data-trial-group="combat"]').getBoundingClientRect().top,
@@ -3624,7 +3624,8 @@
         checks[`ranking${scope}Averages`] =
           rankedRows(scope)
             .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
-            .join(",") === (scope === "all" ? "4.00×,0.00×" : "2.00×,0.00×") &&
+            .join(",") ===
+            (scope === "skilling" ? "2.00×,0.00×" : scope === "combat" ? "6.00×,0.00×" : "8.00×,0.00×") &&
           rankedRows(scope).every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === count);
       }
       const rankingHighlights = () => [...host.querySelectorAll(".mwi-trial-member-highlight")];
@@ -3729,7 +3730,8 @@
         overviewRows().filter((row) => row.dataset.trialOverviewProject.startsWith("/guild_skilling/")).length === 10;
       checks.playerOverviewCountsAndAverages =
         overviewCounts().filter((value) => value === "1").length === 6 &&
-        overviewValues().filter((value) => value === "2.00×").length === 6 &&
+        overviewValues().filter((value) => value === "2.00×").length === 4 &&
+        overviewValues().filter((value) => value === "6.00×").length === 2 &&
         overviewCounts().filter((value) => value === "0").length === 9 &&
         overviewValues().filter((value) => value === "—").length === 9;
       checks.playerOverviewTotals = overviewRows().every(
@@ -3743,8 +3745,9 @@
           row &&
           row.parentElement.tagName === "TFOOT" &&
           row.querySelector("[data-trial-overview-count]").textContent === (kind === "skilling" ? "4" : "2") &&
-          row.querySelector("[data-trial-overview-average]").textContent === "2.00×" &&
-          row.querySelector("[data-trial-overview-total]").textContent === (kind === "skilling" ? "8.00×" : "4.00×")
+          row.querySelector("[data-trial-overview-average]").textContent ===
+            (kind === "skilling" ? "2.00×" : "6.00×") &&
+          row.querySelector("[data-trial-overview-total]").textContent === (kind === "skilling" ? "8.00×" : "12.00×")
         );
       });
       checks.playerOverviewTitlesAboveHeaders = [...host.querySelectorAll(".mwi-trial-player-overview")].every(
@@ -4550,12 +4553,60 @@
             (summaryMask !== 0 || !record.querySelector('[data-role="trial-overview"]'));
         }
       }
-      const rawRecord = displayTable().closest("[data-trial-record]").querySelector(".mwi-trial-raw");
-      const rawColumn = rawRecord.closest(".mwi-trial-column");
-      const widthBeforeRaw = rawColumn.getBoundingClientRect().width;
-      rawRecord.open = true;
-      checks.rawDoesNotWidenColumns = Math.abs(rawColumn.getBoundingClientRect().width - widthBeforeRaw) < 1;
-      rawRecord.open = false;
+      for (const view of ["week", "project", "player"]) {
+        host.querySelector('[data-trial-mode="week"]').click();
+        if (view === "project") host.querySelector('[data-trial-group="combat"] [data-trial-jump-project]').click();
+        if (view === "player") host.querySelector('[data-trial-group="combat"] [data-trial-profile]').click();
+        const combatTable = () =>
+          [...host.querySelectorAll('[data-role="trial-stats-table"]')].find((table) =>
+            table.querySelector('[data-trial-sort="damageDealt"]')
+          );
+        for (let mask = 0; mask < 4; mask++) {
+          setDisplay("combatShare", Boolean(mask & 1));
+          setDisplay("combatMultiple", Boolean(mask & 2));
+          const table = combatTable();
+          checks[`combatColumns_${view}_${mask}`] = ["damageDealt", "healingDone", "premitigatedDamageTaken"].every(
+            (field) =>
+              Boolean(table.querySelector(`[data-trial-sort="${field}Share"]`)) === Boolean(mask & 1) &&
+              Boolean(table.querySelector(`[data-trial-sort="${field}Multiple"]`)) === Boolean(mask & 2)
+          );
+          if (mask === 3) {
+            const rows = [...table.querySelectorAll("tbody tr")];
+            checks[`combatRatios_${view}`] = ["damageDealt", "healingDone", "premitigatedDamageTaken"].every(
+              (field) => {
+                const values = rows.map((row) =>
+                  Number(row.querySelector(`[data-trial-field="${field}"]`).textContent)
+                );
+                const total = values.reduce((a, b) => a + b, 0);
+                return rows.every(
+                  (row, index) =>
+                    row.querySelector(`[data-trial-field="${field}Share"]`).textContent ===
+                      (total ? `${((values[index] / total) * 100).toFixed(2)}%` : "—") &&
+                    row.querySelector(`[data-trial-field="${field}Multiple"]`).textContent ===
+                      (total ? `${(values[index] / (total / rows.length)).toFixed(2)}×` : "—")
+                );
+              }
+            );
+            table.querySelector('[data-trial-sort="damageDealtShare"]').click();
+            checks[`combatSort_${view}`] = combatTable()
+              .querySelector('[data-trial-sort="damageDealtShare"]')
+              .closest("th")
+              .hasAttribute("aria-sort");
+            const image = window.MwiGuildTrialScreenshot.snapshot(host, document, window);
+            checks[`combatImage_${view}`] =
+              image.svg.includes('data-trial-field="damageDealtShare"') &&
+              image.svg.includes('data-trial-field="healingDoneMultiple"') &&
+              image.svg.includes('data-trial-field="premitigatedDamageTakenMultiple"');
+          }
+        }
+      }
+      setDisplay("combatShare", false);
+      setDisplay("combatMultiple", false);
+      host.querySelector('[data-trial-mode="player"]').click();
+      choose("trial-player", JSON.stringify(["id", "101"]));
+      checks.recordRawDisclosureRemoved = !displayTable()
+        .closest("[data-trial-record]")
+        .querySelector("[data-trial-raw]");
       checks.displaySettingsRemainOpen = host.querySelector(".mwi-trial-display-settings").open;
       checks.displayNoProfileQueries = profileFrames.length === displayFrames;
       const savedDisplay = JSON.parse(

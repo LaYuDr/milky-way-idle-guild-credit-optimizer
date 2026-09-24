@@ -394,13 +394,20 @@
     function visibleFields(kind) {
       return (
         kind === "combat"
-          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          ? [
+              "level",
+              ...["damageDealt", "healingDone", "premitigatedDamageTaken"].flatMap((field) => [
+                field,
+                ...(displaySettings.combatShare ? [field + "Share"] : []),
+                ...(displaySettings.combatMultiple ? [field + "Multiple"] : [])
+              ])
+            ]
           : ["level", "workDone", "workShare", "workMultiple"]
       ).filter((field) => displaySettings[field] !== false);
     }
 
     function renderDisplaySettings() {
-      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "combatShare", "combatMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
     }
 
     function summaryNumber(value) {
@@ -409,18 +416,24 @@
 
     function renderOverview(record, summaries) {
       const items = Object.entries(summaries)
-        .filter(([field]) => displaySettings[field === "level" ? "levelSummary" : "workSummary"])
+        .filter(
+          ([field]) =>
+            (field === "level" || record.kind === "skilling") &&
+            displaySettings[field === "level" ? "levelSummary" : "workSummary"]
+        )
         .map(
           ([field, stats]) =>
             `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
         )
         .join("");
-      const partial =
-        (displaySettings.workShare || displaySettings.workMultiple) &&
-        record.kind === "skilling" &&
-        summaries.workDone.missing
-          ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
-          : "";
+      const partial = (
+        record.kind === "combat"
+          ? (displaySettings.combatShare || displaySettings.combatMultiple) &&
+            Object.entries(summaries).some(([field, summary]) => field !== "level" && summary.missing)
+          : (displaySettings.workShare || displaySettings.workMultiple) && summaries.workDone.missing
+      )
+        ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
+        : "";
       if (!items && !partial) return "";
       return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${items}${partial}</div>`;
     }
@@ -428,12 +441,22 @@
     function renderRecord(record, showIdentity) {
       const fields = visibleFields(record.kind);
       const summaries = Object.fromEntries(
-        (record.kind === "combat" ? ["level"] : ["level", "workDone"]).map((field) => [
-          field,
-          trialHistoryApi.summarizeMetric(record, field)
-        ])
+        (record.kind === "combat"
+          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          : ["level", "workDone"]
+        ).map((field) => [field, trialHistoryApi.summarizeMetric(record, field)])
       );
       const cellValue = (row, field) => {
+        const derived = /^(damageDealt|healingDone|premitigatedDamageTaken)(Share|Multiple)$/.exec(field);
+        if (derived) {
+          const value = (derived[2] === "Share" ? trialHistoryApi.metricShare : trialHistoryApi.metricAverageMultiple)(
+            record,
+            row,
+            derived[1],
+            summaries[derived[1]]
+          );
+          return value === null ? "—" : `${value.toFixed(2)}${derived[2] === "Share" ? "%" : "×"}`;
+        }
         if (field === "workMultiple") {
           const multiple = trialHistoryApi.metricAverageMultiple(record, row, "workDone", summaries.workDone);
           return multiple === null ? "—" : `${multiple.toFixed(2)}×`;
@@ -450,7 +473,7 @@
       const sort = getSort(record.key, record.kind);
       const progress = trialHistoryApi.nextTierProgress(record);
       const progressLabel = progress === null ? "—" : `${Math.floor(progress * 100)}%`;
-      // Sort only the displayed rows; stored records and raw JSON retain source order.
+      // Sort only the displayed rows; stored records retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier), progress: progressLabel }))}</p>
@@ -462,7 +485,7 @@
               `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
-        ${screenshotMode ? "" : `<details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details>`}</section>`;
+        </section>`;
     }
 
     function renderColumn(title, items, attributes = "", jump = "", icon = "") {
@@ -550,9 +573,6 @@
           [el.scrollLeft, el.scrollTop]
         ])
       );
-      const openRecords = new Set(
-        [...host.querySelectorAll("[data-trial-raw][open]")].map((el) => el.dataset.trialRaw)
-      );
       const weeks = trialHistoryApi.historyWeeks(records);
       const details = getBridge()?.trialHistoryContext?.details || {};
       const projects = trialHistoryApi.historyProjects(records, details);
@@ -599,7 +619,6 @@
             [el.scrollLeft, el.scrollTop] = position;
         }
         if (resetScroll) revealChoice(host.querySelector('[data-trial-choice="player"][aria-pressed="true"]'));
-        for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
         resetScroll = false;
         updateScrollButtons(host);
         if (searchSelection) {
@@ -676,7 +695,6 @@
         );
       }
       host.innerHTML = markup;
-      for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
       for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
         const position = scroll.get(el.dataset.trialScrollId);
         if (position && (!resetScroll || el.dataset.trialScrollId.startsWith("choice-")))
@@ -760,7 +778,18 @@
       );
       host.addEventListener("change", (event) => {
         const field = event.target.dataset.trialDisplay;
-        if (["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].includes(field)) {
+        if (
+          [
+            "level",
+            "workDone",
+            "workShare",
+            "workMultiple",
+            "combatShare",
+            "combatMultiple",
+            "levelSummary",
+            "workSummary"
+          ].includes(field)
+        ) {
           displaySettings = { ...displaySettings, [field]: event.target.checked };
           displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
           displaySettingsOpen = true;

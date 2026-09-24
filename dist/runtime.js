@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.44";
+window.MwiGuildCreditVersion = "1.2.45";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -1454,7 +1454,7 @@ window.MwiGuildCreditVersion = "1.2.44";
           .map((field, index) => metricAverageMultiple(record, row, field, summaries[index]))
           .filter((value) => value !== null);
         if (!multiples.length) continue;
-        const multiple = multiples.reduce((sum, value) => sum + value / multiples.length, 0);
+        const multiple = multiples.reduce((sum, value) => sum + value, 0);
         add(player[record.kind], multiple);
       }
     }
@@ -1681,16 +1681,32 @@ window.MwiGuildCreditVersion = "1.2.44";
         "workMultiple",
         "damageDealt",
         "healingDone",
-        "premitigatedDamageTaken"
+        "premitigatedDamageTaken",
+        ...["damageDealt", "healingDone", "premitigatedDamageTaken"].flatMap((field) => [
+          field + "Share",
+          field + "Multiple"
+        ])
       ].includes(sort.field)
     )
       return result;
+    const combatDerived = /^(damageDealt|healingDone|premitigatedDamageTaken)(Share|Multiple)$/.exec(sort.field);
+    const summaries = new Map();
+    if (combatDerived)
+      for (const { record } of result)
+        if (!summaries.has(record)) summaries.set(record, summarizeMetric(record, combatDerived[1]));
     const value = ({ record, row }) =>
-      sort.field === "member"
-        ? memberIdentity(record, row).name || null
-        : sort.field === "level"
-          ? memberLevel(record, row)
-          : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
+      combatDerived
+        ? (combatDerived[2] === "Share" ? metricShare : metricAverageMultiple)(
+            record,
+            row,
+            combatDerived[1],
+            summaries.get(record)
+          )
+        : sort.field === "member"
+          ? memberIdentity(record, row).name || null
+          : sort.field === "level"
+            ? memberLevel(record, row)
+            : metricValue(record, row, ["workShare", "workMultiple"].includes(sort.field) ? "workDone" : sort.field);
     const direction = sort.direction === "asc" ? 1 : -1;
     return result.sort((a, b) => {
       const left = value(a),
@@ -3979,21 +3995,21 @@ window.MwiGuildCreditVersion = "1.2.44";
       noSellPrice: "当前物品暂无公开收购价，无法估算卖出后回购。",
       noAffordableReplacement: "售出当前数量后税后可得 {gold}，不足以回购其他可兑换物品。",
       trialHistory: "历史试炼数据",
-      trialScreenshotGuide: "长图截图帮助",
-      trialScreenshotCopy: "复制长图",
-      trialScreenshotDownload: "下载 PNG",
+      trialScreenshotGuide: "快速截图帮助",
+      trialScreenshotCopy: "快速截图",
+      trialScreenshotDownload: "下载截图",
       trialScreenshotHelp:
         "截取当前所选视图的完整表格。按周：上排四个生活项目，下排两个战斗项目；按项目：仅最新五个周期横排；玩家排行：四个列表横排。图片按内容宽度生成，保留原版图标，省略操作区和原始数据；保留当前显示字段与匿名设置。",
-      trialScreenshotReady: "分享前可开启隐藏玩家名模式。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
-      trialScreenshotWorking: "正在生成完整长图…",
-      trialScreenshotCopied: "长图已复制，可直接粘贴。",
+      trialScreenshotReady: "分享前可开启隐藏玩家名。复制不可用时将自动下载；保存位置由浏览器下载设置决定。",
+      trialScreenshotWorking: "正在生成完整截图…",
+      trialScreenshotCopied: "截图已复制，可直接粘贴。",
       trialScreenshotDownloaded: "已发起 PNG 下载，请查看浏览器下载列表。",
       trialScreenshotFallback: "无法写入剪贴板，已改为下载 PNG，请查看浏览器下载列表。",
-      trialScreenshotTooLarge: "当前视图过大，无法生成清晰长图。请切换到单周或单个玩家后重试。",
+      trialScreenshotTooLarge: "当前视图过大，无法生成清晰截图。请切换到单周或单个玩家后重试。",
       trialScreenshotIconFailed: "原版图标加载失败，请检查网络后重试截图。",
-      trialScreenshotFailed: "长图生成失败。请重试或切换到单周视图后下载 PNG。",
-      trialScreenshotMode: "隐藏玩家名模式",
-      trialScreenshotExit: "退出隐藏玩家名模式",
+      trialScreenshotFailed: "截图成失败。请重试或切换到单周视图后下载 PNG。",
+      trialScreenshotMode: "隐藏玩家名",
+      trialScreenshotExit: "退出隐藏玩家名",
       trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
       trialAnonymousPlayer: "玩家 {number}",
       trialGuide: "说明",
@@ -4004,11 +4020,19 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialDisplaySettings: "显示设置",
       trialMemberColumns: "成员列表显示项",
       trialDisplaySettingsHint:
-        "生活试炼中，相对人均 = 个人工作量 ÷ 人均工作量（1× 表示达到平均水平）；总量占比 = 个人工作量 ÷ 总工作量，以百分比显示。两项均按该次项目记录中工作量已知的成员计算，包含零值；个人工作量缺失或分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
+        "战斗总量占比、战斗相对人均开关分别控制伤害、治疗、减伤前承伤三项指标的对应列，按每项指标已知成员独立计算。生活试炼中，相对人均 = 个人工作量 ÷ 人均工作量（1× 表示达到平均水平）；总量占比 = 个人工作量 ÷ 总工作量，以百分比显示。两项均按该次项目记录中工作量已知的成员计算，包含零值；个人工作量缺失或分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
       trialDisplaySaveFailed: "设置未能保存，当前页面已生效；重新打开页面后可能恢复默认。",
       trialOverview: "项目总体概览",
       trialKnownCoverage: "{field}：已知 {count}/{total} 人，汇总仅含已知值。",
-      trialPartialShare: "工作量不完整，总量占比和相对人均仅按该次项目记录中工作量已知的成员计算。",
+      trialPartialShare: "部分指标不完整，总量占比和相对人均分别仅按该次项目记录中对应指标已知的成员计算。",
+      trialField_combatShare: "战斗总量占比",
+      trialField_combatMultiple: "战斗相对人均",
+      trialField_damageDealtShare: "伤害占比",
+      trialField_damageDealtMultiple: "伤害相对人均",
+      trialField_healingDoneShare: "治疗占比",
+      trialField_healingDoneMultiple: "治疗相对人均",
+      trialField_premitigatedDamageTakenShare: "承伤占比",
+      trialField_premitigatedDamageTakenMultiple: "承伤相对人均",
       trialField_workShare: "总量占比",
       trialField_workMultiple: "相对人均",
       trialField_levelSummary: "等级汇总",
@@ -4031,7 +4055,7 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialOverviewAllProjects: "全部项目",
       trialOverviewMethod: "统计口径",
       trialOverviewHelp:
-        "仅统计本地保存的游戏采集记录，不含手动整理记录。每参与一个项目计 1 次，含零贡献；0 次表示没有采集到参试记录。生活按工作量除以该场人均；战斗先平均伤害、治疗、承伤的有效人均倍数，再对同项目各场倍数等权平均。总相对人均为有效场次倍数之和；全部项目行汇总次数和倍数，平均值按有效场次加权。1× 为人均水平；缺失值和零分母跳过，无有效倍数显示 —。",
+        "仅统计本地保存的游戏采集记录，不含手动整理记录。每参与一个项目计 1 次，含零贡献；0 次表示没有采集到参试记录。生活按工作量除以该场人均；战斗将伤害、治疗、承伤的有效人均倍数直接相加，再对同项目各场倍数等权平均。总相对人均为有效场次倍数之和；全部项目行汇总次数和倍数，平均值按有效场次加权。1× 为人均水平；缺失值和零分母跳过，无有效倍数显示 —。",
       trialRankingParticipations: "参与次数",
       trialRankingAverageTitle: "{scope} · 平均相对人均",
       trialRankingTotalTitle: "生活＋战斗 · 相对人均合计",
@@ -4047,7 +4071,7 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗先平均伤害、治疗、承伤的有效人均倍数，再对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。生活使用工作量人均倍数；战斗每个项目将伤害、治疗、承伤的有效人均倍数直接相加，再对当周有效项目取平均，最后对各周等权平均。缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4167,7 +4191,6 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialMemberAbsent: "已退出工会",
       trialOpenProfile: "查看 {name} 的参试历史",
       trialProfileUnavailable: "暂时无法打开玩家资料，请确认游戏已连接并刷新页面后重试。",
-      trialRaw: "原始记录",
       trialSortAscending: "按{field}升序排列",
       trialSortDescending: "按{field}降序排列",
       trialField_level: "等级",
@@ -4678,11 +4701,20 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialDisplaySettings: "Display settings",
       trialMemberColumns: "Member table columns",
       trialDisplaySettingsHint:
-        "For skilling trials, average multiple = work ÷ known average (1× is average); share = work ÷ known total. Zero denominators show —. Each summary toggle controls its total, average and median. Settings stay on this device.",
+        "Combat share and average multiple switches control damage, healing and pre-mitigation damage taken columns, each calculated independently from known values including zero. For skilling trials, average multiple = work ÷ known average (1× is average); share = work ÷ known total. Zero denominators show —. Each summary toggle controls its total, average and median. Settings stay on this device.",
       trialDisplaySaveFailed: "Settings apply to this page but could not be saved. Reopening may restore defaults.",
       trialOverview: "Trial overview",
       trialKnownCoverage: "{field}: known for {count}/{total} members; summary uses known values only.",
-      trialPartialShare: "Work data is incomplete; shares and average multiples use known work only.",
+      trialPartialShare:
+        "Some metrics are incomplete; each share and average multiple uses only members with known values for that metric.",
+      trialField_combatShare: "Combat share of total",
+      trialField_combatMultiple: "Combat average multiple",
+      trialField_damageDealtShare: "Damage share",
+      trialField_damageDealtMultiple: "Damage average multiple",
+      trialField_healingDoneShare: "Healing share",
+      trialField_healingDoneMultiple: "Healing average multiple",
+      trialField_premitigatedDamageTakenShare: "Damage taken share",
+      trialField_premitigatedDamageTakenMultiple: "Damage taken average multiple",
       trialField_workShare: "Share of total",
       trialField_workMultiple: "Average multiple",
       trialField_levelSummary: "Level summary",
@@ -4721,7 +4753,7 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat first averages valid damage, healing and damage-taken multiples. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Samples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
+        "Skilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Skilling uses work; combat sums the valid damage, healing and damage-taken multiples for each project, averages the valid projects within each week, then averages across weeks. Absence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded. Combined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average. Samples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -4849,7 +4881,6 @@ window.MwiGuildCreditVersion = "1.2.44";
       trialOpenProfile: "View {name}'s trial history",
       trialProfileUnavailable:
         "Cannot open the player profile. Check the game connection and refresh the page before trying again.",
-      trialRaw: "Raw record",
       trialSortAscending: "Sort {field} ascending",
       trialSortDescending: "Sort {field} descending",
       trialField_level: "Level",
@@ -6681,6 +6712,8 @@ window.MwiGuildCreditVersion = "1.2.44";
         workDone: true,
         workShare: false,
         workMultiple: false,
+        combatShare: false,
+        combatMultiple: false,
         levelSummary: true,
         workSummary: true
       }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])
@@ -12219,13 +12252,20 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function visibleFields(kind) {
       return (
         kind === "combat"
-          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          ? [
+              "level",
+              ...["damageDealt", "healingDone", "premitigatedDamageTaken"].flatMap((field) => [
+                field,
+                ...(displaySettings.combatShare ? [field + "Share"] : []),
+                ...(displaySettings.combatMultiple ? [field + "Multiple"] : [])
+              ])
+            ]
           : ["level", "workDone", "workShare", "workMultiple"]
       ).filter((field) => displaySettings[field] !== false);
     }
 
     function renderDisplaySettings() {
-      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "combatShare", "combatMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
     }
 
     function summaryNumber(value) {
@@ -12234,18 +12274,24 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function renderOverview(record, summaries) {
       const items = Object.entries(summaries)
-        .filter(([field]) => displaySettings[field === "level" ? "levelSummary" : "workSummary"])
+        .filter(
+          ([field]) =>
+            (field === "level" || record.kind === "skilling") &&
+            displaySettings[field === "level" ? "levelSummary" : "workSummary"]
+        )
         .map(
           ([field, stats]) =>
             `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
         )
         .join("");
-      const partial =
-        (displaySettings.workShare || displaySettings.workMultiple) &&
-        record.kind === "skilling" &&
-        summaries.workDone.missing
-          ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
-          : "";
+      const partial = (
+        record.kind === "combat"
+          ? (displaySettings.combatShare || displaySettings.combatMultiple) &&
+            Object.entries(summaries).some(([field, summary]) => field !== "level" && summary.missing)
+          : (displaySettings.workShare || displaySettings.workMultiple) && summaries.workDone.missing
+      )
+        ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
+        : "";
       if (!items && !partial) return "";
       return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${items}${partial}</div>`;
     }
@@ -12253,12 +12299,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function renderRecord(record, showIdentity) {
       const fields = visibleFields(record.kind);
       const summaries = Object.fromEntries(
-        (record.kind === "combat" ? ["level"] : ["level", "workDone"]).map((field) => [
-          field,
-          trialHistoryApi.summarizeMetric(record, field)
-        ])
+        (record.kind === "combat"
+          ? ["level", "damageDealt", "healingDone", "premitigatedDamageTaken"]
+          : ["level", "workDone"]
+        ).map((field) => [field, trialHistoryApi.summarizeMetric(record, field)])
       );
       const cellValue = (row, field) => {
+        const derived = /^(damageDealt|healingDone|premitigatedDamageTaken)(Share|Multiple)$/.exec(field);
+        if (derived) {
+          const value = (derived[2] === "Share" ? trialHistoryApi.metricShare : trialHistoryApi.metricAverageMultiple)(
+            record,
+            row,
+            derived[1],
+            summaries[derived[1]]
+          );
+          return value === null ? "—" : `${value.toFixed(2)}${derived[2] === "Share" ? "%" : "×"}`;
+        }
         if (field === "workMultiple") {
           const multiple = trialHistoryApi.metricAverageMultiple(record, row, "workDone", summaries.workDone);
           return multiple === null ? "—" : `${multiple.toFixed(2)}×`;
@@ -12275,7 +12331,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const sort = getSort(record.key, record.kind);
       const progress = trialHistoryApi.nextTierProgress(record);
       const progressLabel = progress === null ? "—" : `${Math.floor(progress * 100)}%`;
-      // Sort only the displayed rows; stored records and raw JSON retain source order.
+      // Sort only the displayed rows; stored records retain source order.
       return `<section class="mwi-trial-record" data-trial-record="${escapeHtml(record.key)}">
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier), progress: progressLabel }))}</p>
@@ -12287,7 +12343,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
           )
           .join("")}</tbody></table></div>
-        ${screenshotMode ? "" : `<details class="mwi-trial-raw" data-trial-raw="${escapeHtml(record.key)}"><summary>${escapeHtml(t("trialRaw"))}</summary><pre>${escapeHtml(JSON.stringify(record, null, 2))}</pre></details>`}</section>`;
+        </section>`;
     }
 
     function renderColumn(title, items, attributes = "", jump = "", icon = "") {
@@ -12375,9 +12431,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           [el.scrollLeft, el.scrollTop]
         ])
       );
-      const openRecords = new Set(
-        [...host.querySelectorAll("[data-trial-raw][open]")].map((el) => el.dataset.trialRaw)
-      );
       const weeks = trialHistoryApi.historyWeeks(records);
       const details = getBridge()?.trialHistoryContext?.details || {};
       const projects = trialHistoryApi.historyProjects(records, details);
@@ -12424,7 +12477,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             [el.scrollLeft, el.scrollTop] = position;
         }
         if (resetScroll) revealChoice(host.querySelector('[data-trial-choice="player"][aria-pressed="true"]'));
-        for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
         resetScroll = false;
         updateScrollButtons(host);
         if (searchSelection) {
@@ -12501,7 +12553,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         );
       }
       host.innerHTML = markup;
-      for (const el of host.querySelectorAll("[data-trial-raw]")) el.open = openRecords.has(el.dataset.trialRaw);
       for (const el of host.querySelectorAll("[data-trial-scroll-id]")) {
         const position = scroll.get(el.dataset.trialScrollId);
         if (position && (!resetScroll || el.dataset.trialScrollId.startsWith("choice-")))
@@ -12585,7 +12636,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
       host.addEventListener("change", (event) => {
         const field = event.target.dataset.trialDisplay;
-        if (["level", "workDone", "workShare", "workMultiple", "levelSummary", "workSummary"].includes(field)) {
+        if (
+          [
+            "level",
+            "workDone",
+            "workShare",
+            "workMultiple",
+            "combatShare",
+            "combatMultiple",
+            "levelSummary",
+            "workSummary"
+          ].includes(field)
+        ) {
           displaySettings = { ...displaySettings, [field]: event.target.checked };
           displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
           displaySettingsOpen = true;

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.45] - 2026-09-24
+
+### Changed
+
+- Trial history: sum valid combat metric multiples; add optional combat share and average columns; remove per-record raw disclosures and update labels.
+
 ## [1.2.44] - 2026-09-23
 
 ### Changed
