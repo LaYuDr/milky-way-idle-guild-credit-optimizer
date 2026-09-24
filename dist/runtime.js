@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.49";
+window.MwiGuildCreditVersion = "1.2.50";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3591,7 +3591,7 @@ window.MwiGuildCreditVersion = "1.2.49";
       shrineMaxed: "已达最高等级",
       shrineGain: "增量 {value}",
       shrineRemoveNamed: "移除{shrine}计划",
-      shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级 · 规则上限 {max} 级",
+      shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级",
       shrineNextLevel: "升一级",
       shrineToGuildCap: "到公会上限",
       shrineStartAssumed: "个人等级尚未读取。起始等级仅用于估算，请按实际等级调整。",
@@ -4288,7 +4288,7 @@ window.MwiGuildCreditVersion = "1.2.49";
       shrineMaxed: "Maximum level reached",
       shrineGain: "Gain {value}",
       shrineRemoveNamed: "Remove {shrine} plan",
-      shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap} · Rule cap {max}",
+      shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap}",
       shrineNextLevel: "One level",
       shrineToGuildCap: "To guild cap",
       shrineStartAssumed:
@@ -14080,7 +14080,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><div class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></div><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
           <div class="mwi-shrine-collapse-bar"><span>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</span><button type="button" data-role="toggle-plan" aria-expanded="${!collapsed}" aria-controls="${escapeHtml(bodyId)}" aria-label="${escapeHtml(t(collapsed ? "shrineExpandNamed" : "shrineCollapseNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>${escapeHtml(t(collapsed ? "shrineExpand" : "shrineCollapse"))}</button></div>
           <div class="mwi-shrine-plan-body" id="${escapeHtml(bodyId)}"${collapsed ? " hidden" : ""}>
-          <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap), max: formatNumber(entry.maxLevel) }))}</p>
+          <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap) }))}</p>
           <div class="mwi-shrine-level-controls"><div class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></div><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><div class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></div><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
           ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
           ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}

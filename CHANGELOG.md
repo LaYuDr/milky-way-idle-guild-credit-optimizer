@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.50] - 2026-09-25
+
+### Changed
+
+- Released the current verified source changes and regenerated userscript bundles.
+
 ## [1.2.49] - 2026-09-25
 
 ### Changed

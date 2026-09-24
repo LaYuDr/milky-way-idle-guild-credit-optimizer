@@ -27,7 +27,7 @@
       shrineMaxed: "已达最高等级",
       shrineGain: "增量 {value}",
       shrineRemoveNamed: "移除{shrine}计划",
-      shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级 · 规则上限 {max} 级",
+      shrineLevelStatus: "个人已购 {current} 级 · 公会上限 {cap} 级",
       shrineNextLevel: "升一级",
       shrineToGuildCap: "到公会上限",
       shrineStartAssumed: "个人等级尚未读取。起始等级仅用于估算，请按实际等级调整。",
@@ -724,7 +724,7 @@
       shrineMaxed: "Maximum level reached",
       shrineGain: "Gain {value}",
       shrineRemoveNamed: "Remove {shrine} plan",
-      shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap} · Rule cap {max}",
+      shrineLevelStatus: "Purchased Lv. {current} · Guild cap {cap}",
       shrineNextLevel: "One level",
       shrineToGuildCap: "To guild cap",
       shrineStartAssumed:
