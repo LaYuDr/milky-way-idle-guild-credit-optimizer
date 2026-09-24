@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.48] - 2026-09-25
+
+### Changed
+
+- 仅将版本号从 1.2.47 升至 1.2.48，用于测试 Tampermonkey 自动更新；功能代码不变。
+
 ## [1.2.47] - 2026-09-25
 
 ### Changed
