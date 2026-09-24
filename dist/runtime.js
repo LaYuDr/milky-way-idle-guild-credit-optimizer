@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.45";
+window.MwiGuildCreditVersion = "1.2.46";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -4018,9 +4018,24 @@ window.MwiGuildCreditVersion = "1.2.45";
       trialFeedbackNotice:
         "也欢迎加入 QQ 群 437320340，分享你与 AI 的分析对话或结果，帮助我了解大家的实际需求，为后续开发提供参考。感谢你的支持！",
       trialDisplaySettings: "显示设置",
-      trialMemberColumns: "成员列表显示项",
+      trialMemberColumns: "成员列表 · 列管理",
+      trialColumnsCount: "生活 {skilling}/5 列 · 战斗 {combat}/11 列",
+      trialColumnsHint: "逐项切换，即时生效。所有历史成员表共用，仅保存在本机。",
+      trialColumnsPresets: "列显示预设",
+      trialColumnsPreset_compact: "精简",
+      trialColumnsPreset_all: "完整",
+      trialColumnsPreset_default: "恢复默认",
+      trialColumnsGroup_basic: "基础信息 · 通用",
+      trialColumnsGroup_skilling: "生活试炼",
+      trialColumnsGroup_damageDealt: "战斗 · 伤害",
+      trialColumnsGroup_healingDone: "战斗 · 治疗",
+      trialColumnsGroup_premitigatedDamageTaken: "战斗 · 承伤",
+      trialColumnsGroup_levelSummary: "等级汇总 · 表格上方",
+      trialColumnsGroup_workDoneSummary: "工作量汇总 · 表格上方",
+      trialColumnsCalculations: "统计口径与缺失值说明",
+      trialColumnsEmpty: "当前成员表的列已全部隐藏，可在上方列管理中重新打开。",
       trialDisplaySettingsHint:
-        "战斗总量占比、战斗相对人均开关分别控制伤害、治疗、减伤前承伤三项指标的对应列，按每项指标已知成员独立计算。生活试炼中，相对人均 = 个人工作量 ÷ 人均工作量（1× 表示达到平均水平）；总量占比 = 个人工作量 ÷ 总工作量，以百分比显示。两项均按该次项目记录中工作量已知的成员计算，包含零值；个人工作量缺失或分母为 0 时显示 —。等级汇总、工作量汇总各控制总计、平均值和中位数。设置仅保存在本地。",
+        "总量占比 = 个人数值 ÷ 已知成员总量；相对人均 = 个人数值 ÷ 已知成员平均值（1× 表示平均水平）。工作量、伤害、治疗和减伤前承伤分别计算，包含明确的零值；缺失值或分母为 0 时显示 —。汇总仅包含已知值。开关只影响显示，不改变历史记录或导出数据。",
       trialDisplaySaveFailed: "设置未能保存，当前页面已生效；重新打开页面后可能恢复默认。",
       trialOverview: "项目总体概览",
       trialKnownCoverage: "{field}：已知 {count}/{total} 人，汇总仅含已知值。",
@@ -4699,9 +4714,24 @@ window.MwiGuildCreditVersion = "1.2.45";
       trialFeedbackNotice:
         "You are also welcome to join QQ group 437320340 and share your AI conversations or results. This helps me understand what you need and plan future development. Thank you for your support!",
       trialDisplaySettings: "Display settings",
-      trialMemberColumns: "Member table columns",
+      trialMemberColumns: "Member table · Columns",
+      trialColumnsCount: "Skilling {skilling}/5 · Combat {combat}/11",
+      trialColumnsHint: "Changes apply instantly to all historical member tables. Saved on this device.",
+      trialColumnsPresets: "Column presets",
+      trialColumnsPreset_compact: "Compact",
+      trialColumnsPreset_all: "All",
+      trialColumnsPreset_default: "Reset defaults",
+      trialColumnsGroup_basic: "Basics · All trials",
+      trialColumnsGroup_skilling: "Skilling trials",
+      trialColumnsGroup_damageDealt: "Combat · Damage",
+      trialColumnsGroup_healingDone: "Combat · Healing",
+      trialColumnsGroup_premitigatedDamageTaken: "Combat · Damage taken",
+      trialColumnsGroup_levelSummary: "Level summary · Above table",
+      trialColumnsGroup_workDoneSummary: "Work summary · Above table",
+      trialColumnsCalculations: "Calculations and missing values",
+      trialColumnsEmpty: "All columns are hidden. Turn columns back on using the column manager above.",
       trialDisplaySettingsHint:
-        "Combat share and average multiple switches control damage, healing and pre-mitigation damage taken columns, each calculated independently from known values including zero. For skilling trials, average multiple = work ÷ known average (1× is average); share = work ÷ known total. Zero denominators show —. Each summary toggle controls its total, average and median. Settings stay on this device.",
+        "Share = member value ÷ known total. Average multiple = member value ÷ known average (1× is average). Work, damage, healing and pre-mitigation damage taken are calculated separately, including explicit zero. Missing values and zero denominators show —. Summaries include known values only. Display settings do not change records or exported data.",
       trialDisplaySaveFailed: "Settings apply to this page but could not be saved. Reopening may restore defaults.",
       trialOverview: "Trial overview",
       trialKnownCoverage: "{field}: known for {count}/{total} members; summary uses known values only.",
@@ -6505,12 +6535,82 @@ window.MwiGuildCreditVersion = "1.2.45";
 });
 
 
-// SOURCE: src/runtime/storage.js
+// SOURCE: src/trial-display.js
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildCreditStorage = api;
+  root.MwiGuildTrialDisplay = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const combatMetrics = ["damageDealt", "healingDone", "premitigatedDamageTaken"];
+  const aggregates = ["total", "average", "median"];
+  const groups = [
+    { key: "basic", fields: ["member", "level"] },
+    { key: "skilling", fields: ["workDone", "workShare", "workMultiple"] },
+    ...combatMetrics.map((key) => ({ key, fields: [key, `${key}Share`, `${key}Multiple`] })),
+    ...["level", "workDone"].map((key) => ({
+      key: `${key}Summary`,
+      fields: aggregates.map((aggregate) => `${key}_${aggregate}`)
+    }))
+  ];
+  const defaults = Object.fromEntries(
+    groups.flatMap(({ fields }) => fields.map((field) => [field, !/(Share|Multiple)$/.test(field)]))
+  );
+
+  function normalize(value) {
+    return Object.fromEntries(
+      Object.entries(defaults).map(([field, fallback]) => {
+        let legacy;
+        if (combatMetrics.some((metric) => field === `${metric}Share`)) legacy = "combatShare";
+        if (combatMetrics.some((metric) => field === `${metric}Multiple`)) legacy = "combatMultiple";
+        if (field.startsWith("level_")) legacy = "levelSummary";
+        if (field.startsWith("workDone_")) legacy = "workSummary";
+        return [
+          field,
+          typeof value?.[field] === "boolean"
+            ? value[field]
+            : legacy && typeof value?.[legacy] === "boolean"
+              ? value[legacy]
+              : fallback
+        ];
+      })
+    );
+  }
+
+  function fields(kind, settings) {
+    const all = [
+      "member",
+      "level",
+      ...(kind === "combat"
+        ? combatMetrics.flatMap((field) => [field, `${field}Share`, `${field}Multiple`])
+        : ["workDone", "workShare", "workMultiple"])
+    ];
+    return all.filter((field) => settings[field] !== false);
+  }
+
+  function preset(name) {
+    if (name === "default") return { ...defaults };
+    if (name === "all") return Object.fromEntries(Object.keys(defaults).map((field) => [field, true]));
+    if (name === "compact")
+      return Object.fromEntries(
+        Object.keys(defaults).map((field) => [field, ["member", "level", "workDone", ...combatMetrics].includes(field)])
+      );
+    return null;
+  }
+
+  return { groups, defaults, normalize, fields, preset };
+});
+
+
+// SOURCE: src/runtime/storage.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditStorage = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
   "use strict";
 
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
@@ -6706,18 +6806,7 @@ window.MwiGuildCreditVersion = "1.2.45";
   }
 
   function normalizeTrialDisplay(value) {
-    return Object.fromEntries(
-      Object.entries({
-        level: true,
-        workDone: true,
-        workShare: false,
-        workMultiple: false,
-        combatShare: false,
-        combatMultiple: false,
-        levelSummary: true,
-        workSummary: true
-      }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])
-    );
+    return displayApi.normalize(value);
   }
 
   function createPluginStorage(options) {
@@ -9808,20 +9897,49 @@ window.MwiGuildCreditVersion = "1.2.45";
         #mwi-credit-optimizer .mwi-trial-table{width:max-content;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px;line-height:1.35}
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
-        #mwi-credit-optimizer .mwi-trial-table th:first-child{text-align:left;white-space:nowrap;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-table th:has([data-trial-sort="member"]),#mwi-credit-optimizer .mwi-trial-table th[scope="row"]{text-align:left;white-space:nowrap;min-width:0}
         #mwi-credit-optimizer .mwi-trial-member-absent{display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:help;line-height:1}
         #mwi-credit-optimizer .mwi-trial-member-absent:focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
         #mwi-credit-optimizer .mwi-trial-raw{margin:6px 0;min-width:0}
         #mwi-credit-optimizer .mwi-trial-raw summary{cursor:pointer;padding:4px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.5;max-height:360px;overflow:auto}
-        #mwi-credit-optimizer .mwi-trial-display-settings{margin:8px 0 12px;font-size:12px;color:var(--trial-muted)}
-        #mwi-credit-optimizer .mwi-trial-display-settings summary{cursor:pointer;width:fit-content;color:var(--trial-accent);padding:4px 0}
-        #mwi-credit-optimizer .mwi-trial-display-settings fieldset{margin:6px 0 0;padding:8px 10px;border:1px solid var(--trial-line);min-width:0}
-        #mwi-credit-optimizer .mwi-trial-display-settings p{margin:6px 0 0;line-height:1.5}
-        #mwi-credit-optimizer .mwi-trial-display-options{display:flex;flex-wrap:wrap;gap:6px 20px}
-        #mwi-credit-optimizer .mwi-trial-display-options label{display:flex;align-items:center;gap:6px;min-height:28px;cursor:pointer;color:var(--trial-text)}
-        #mwi-credit-optimizer .mwi-trial-display-options input{accent-color:var(--trial-accent);width:16px;height:16px;margin:0}
+        #mwi-credit-optimizer .mwi-trial-display-settings{margin:8px 0 12px;border:1px solid var(--trial-line);border-radius:6px;background:var(--trial-surface);font-size:12px;color:var(--trial-muted);text-align:left}
+        #mwi-credit-optimizer .mwi-trial-display-settings>summary{display:flex;align-items:center;gap:12px;min-height:40px;padding:8px 12px;cursor:pointer;list-style:none;color:var(--trial-text);font-size:14px;font-weight:600}
+        #mwi-credit-optimizer .mwi-trial-display-settings>summary::-webkit-details-marker{display:none}
+        #mwi-credit-optimizer .mwi-trial-display-settings>summary small{margin-left:auto;color:var(--trial-muted);font-size:12px;font-weight:400}
+        #mwi-credit-optimizer .mwi-trial-display-settings>summary svg{flex-shrink:0;transition:transform .16s ease-out}
+        #mwi-credit-optimizer .mwi-trial-display-settings[open]>summary svg{transform:rotate(180deg)}
+        #mwi-credit-optimizer .mwi-trial-display-settings>summary:hover{background:#30364b}
+        #mwi-credit-optimizer .mwi-trial-display-body{padding:0 12px 12px;border-top:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-display-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;padding:10px 0}
+        #mwi-credit-optimizer .mwi-trial-display-settings p{margin:0;line-height:1.5;max-width:75ch}
+        #mwi-credit-optimizer .mwi-trial-display-presets{display:flex;flex-wrap:wrap;gap:6px}
+        #mwi-credit-optimizer .mwi-trial-display-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px 24px}
+        #mwi-credit-optimizer .mwi-trial-display-settings fieldset{margin:0;padding:0;border:0;min-width:0}
+        #mwi-credit-optimizer .mwi-trial-display-settings legend{display:flex;align-items:center;gap:8px;width:100%;padding:0 0 6px;border-bottom:1px solid var(--trial-line);font-size:12px;font-weight:600;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-display-settings legend span{margin-left:auto;font-weight:400;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-trial-display-options{display:grid;padding-top:4px}
+        #mwi-credit-optimizer .mwi-trial-display-options label{position:relative;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;padding:4px 6px;cursor:pointer;color:var(--trial-text);font-size:14px;border-radius:4px}
+        #mwi-credit-optimizer .mwi-trial-display-options label:hover{background:#30364b}
+        #mwi-credit-optimizer [data-role="trials-view"] .mwi-trial-display-options input{position:absolute;opacity:0;width:1px;height:1px;padding:0;margin:0}
+        #mwi-credit-optimizer .mwi-trial-display-options label:has(input:focus-visible){outline:2px solid var(--trial-accent);outline-offset:2px}
+        #mwi-credit-optimizer .mwi-trial-switch{position:relative;flex:0 0 30px;height:18px;border:1px solid #77819b;border-radius:10px;background:var(--trial-field)}
+        #mwi-credit-optimizer .mwi-trial-switch:after{content:"";position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:#b7bfd4;transition:transform .16s ease-out}
+        #mwi-credit-optimizer .mwi-trial-display-options input:checked~.mwi-trial-switch{background:var(--trial-accent);border-color:var(--trial-accent)}
+        #mwi-credit-optimizer .mwi-trial-display-options input:checked~.mwi-trial-switch:after{transform:translateX(12px);background:#191c2e}
+        #mwi-credit-optimizer .mwi-trial-display-help{margin-top:12px;border-top:1px solid var(--trial-line)}
+        #mwi-credit-optimizer .mwi-trial-display-help summary{width:fit-content;padding:8px 0;cursor:pointer;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-columns-empty{max-width:28ch;padding:16px 8px;white-space:normal;color:var(--trial-muted);font-size:12px}
+        #mwi-credit-optimizer .mwi-trial-table th[aria-sort="none"] .mwi-trial-sort svg{opacity:.3}
+        #mwi-credit-optimizer .mwi-trial-table th[aria-sort="none"] .mwi-trial-sort:is(:hover,:focus-visible) svg{opacity:1}
+        #mwi-credit-optimizer .mwi-trial-table td[data-trial-field="healingDone"],#mwi-credit-optimizer .mwi-trial-table td[data-trial-field="premitigatedDamageTaken"]{border-left:1px solid var(--trial-line);padding-left:10px}
+        @container mwi-trials (max-width:460px){
+          #mwi-credit-optimizer .mwi-trial-display-settings>summary{flex-wrap:wrap;gap:4px 8px}
+          #mwi-credit-optimizer .mwi-trial-display-settings>summary small{order:3;flex-basis:100%;margin:0}
+          #mwi-credit-optimizer .mwi-trial-display-settings>summary svg{margin-left:auto}
+        }
+        @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-trial-switch:after,#mwi-credit-optimizer .mwi-trial-display-settings>summary svg{transition:none}}
         #mwi-credit-optimizer .mwi-trial-overview{margin:6px 0 8px;font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-trial-overview dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px;margin:0;padding:4px 0}
         #mwi-credit-optimizer .mwi-trial-overview dt{color:var(--trial-muted);font-weight:normal;overflow-wrap:anywhere}
@@ -11857,10 +11975,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 // SOURCE: src/ui/trial-history-view.js
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildTrialHistoryView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
   "use strict";
 
   function projectIconSpec(record, detail = record.trialDetail) {
@@ -11926,8 +12046,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let importRevision = 0;
     let guideOpen = false;
     let displaySettingsOpen = false;
+    let displayHelpOpen = false;
     let displaySaveFailed = false;
-    let displaySettings = pluginStorage.loadTrialDisplay();
+    let displaySettings = displayApi.normalize(pluginStorage.loadTrialDisplay());
     const unsaved = new Map();
     const spriteBases = {};
     let spriteLoadPromise = null;
@@ -12145,10 +12266,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function getSort(key, kind) {
       const fields = visibleFields(kind);
       const saved = tableSorts.get(key);
-      if (saved && (saved.field === "member" || fields.includes(saved.field))) return saved;
+      if (saved && fields.includes(saved.field)) return saved;
       if (kind === "combat") return null;
-      const field = ["workDone", "workShare", "workMultiple"].find((value) => fields.includes(value)) || "member";
-      return { field, direction: field === "member" ? "asc" : "desc" };
+      const field = ["workDone", "workShare", "workMultiple"].find((value) => fields.includes(value)) || fields[0];
+      return field ? { field, direction: field === "member" ? "asc" : "desc" } : null;
     }
     function renderSortHeader(key, field, sort) {
       const label = t(field === "member" ? "trialMember" : `trialField_${field}`);
@@ -12250,22 +12371,36 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function visibleFields(kind) {
-      return (
-        kind === "combat"
-          ? [
-              "level",
-              ...["damageDealt", "healingDone", "premitigatedDamageTaken"].flatMap((field) => [
-                field,
-                ...(displaySettings.combatShare ? [field + "Share"] : []),
-                ...(displaySettings.combatMultiple ? [field + "Multiple"] : [])
-              ])
-            ]
-          : ["level", "workDone", "workShare", "workMultiple"]
-      ).filter((field) => displaySettings[field] !== false);
+      return displayApi.fields(kind, displaySettings);
+    }
+
+    function displayLabel(field) {
+      return t(
+        field === "member" ? "trialMember" : field.includes("_") ? `trialAggregate_${field}` : `trialField_${field}`
+      );
     }
 
     function renderDisplaySettings() {
-      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}><summary>${escapeHtml(t("trialDisplaySettings"))}</summary><fieldset><legend>${escapeHtml(t("trialMemberColumns"))}</legend><div class="mwi-trial-display-options">${["level", "workDone", "workShare", "workMultiple", "combatShare", "combatMultiple", "levelSummary", "workSummary"].map((field) => `<label><input type="checkbox" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}>${escapeHtml(t(`trialField_${field}`))}</label>`).join("")}</div><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></fieldset>${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+      const counts = t("trialColumnsCount", {
+        skilling: visibleFields("skilling").length,
+        combat: visibleFields("combat").length
+      });
+      return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}>
+        <summary><span>${escapeHtml(t("trialMemberColumns"))}</span><small>${escapeHtml(counts)}</small><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
+        <div class="mwi-trial-display-body"><div class="mwi-trial-display-toolbar"><p>${escapeHtml(t("trialColumnsHint"))}</p><div class="mwi-trial-display-presets" role="group" aria-label="${escapeHtml(t("trialColumnsPresets"))}">${["compact", "all", "default"].map((preset) => `<button type="button" data-trial-display-preset="${preset}">${escapeHtml(t(`trialColumnsPreset_${preset}`))}</button>`).join("")}</div></div>
+        <div class="mwi-trial-display-groups">${displayApi.groups.map(({ key, fields }) => `<fieldset><legend>${escapeHtml(t(`trialColumnsGroup_${key}`))}<span>${fields.filter((field) => displaySettings[field]).length}/${fields.length}</span></legend><div class="mwi-trial-display-options">${fields.map((field) => `<label><input type="checkbox" role="switch" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}><span>${escapeHtml(displayLabel(field))}</span><span class="mwi-trial-switch" aria-hidden="true"></span></label>`).join("")}</div></fieldset>`).join("")}</div>
+        <details class="mwi-trial-display-help"${displayHelpOpen ? " open" : ""}><summary>${escapeHtml(t("trialColumnsCalculations"))}</summary><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></details></div>
+        ${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
+    }
+
+    function applyDisplaySettings(panel, next, focusSelector) {
+      displaySettings = next;
+      displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
+      displaySettingsOpen = true;
+      // Once hidden, an old sort must not silently reappear when a column is restored.
+      for (const [key, sort] of tableSorts) if (!displaySettings[sort.field]) tableSorts.delete(key);
+      refresh(panel);
+      panel.querySelector(focusSelector)?.focus({ preventScroll: true });
     }
 
     function summaryNumber(value) {
@@ -12274,22 +12409,19 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function renderOverview(record, summaries) {
       const items = Object.entries(summaries)
-        .filter(
-          ([field]) =>
-            (field === "level" || record.kind === "skilling") &&
-            displaySettings[field === "level" ? "levelSummary" : "workSummary"]
-        )
-        .map(
-          ([field, stats]) =>
-            `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${["total", "average", "median"].map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`
-        )
+        .filter(([field]) => field === "level" || record.kind === "skilling")
+        .map(([field, stats]) => {
+          const aggregates = ["total", "average", "median"].filter(
+            (aggregate) => displaySettings[`${field}_${aggregate}`]
+          );
+          if (!aggregates.length) return "";
+          return `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${aggregates.map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`;
+        })
         .join("");
-      const partial = (
-        record.kind === "combat"
-          ? (displaySettings.combatShare || displaySettings.combatMultiple) &&
-            Object.entries(summaries).some(([field, summary]) => field !== "level" && summary.missing)
-          : (displaySettings.workShare || displaySettings.workMultiple) && summaries.workDone.missing
-      )
+      const partial = Object.entries(summaries).some(([field, stats]) => {
+        const prefix = field === "workDone" ? "work" : field;
+        return stats.missing && (displaySettings[`${prefix}Share`] || displaySettings[`${prefix}Multiple`]);
+      })
         ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
         : "";
       if (!items && !partial) return "";
@@ -12336,13 +12468,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         ${showIdentity ? `<p class="mwi-trial-meta">${escapeHtml(record.guildName || t("trialUnknownGuild"))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</p>` : ""}
         <p class="mwi-trial-meta">${escapeHtml(t("trialSummary", { count: record.rows.length, points: number(record.points), tier: number(record.party.highestTier), progress: progressLabel }))}</p>
         ${renderOverview(record, summaries)}
-        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}"><table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${["member", ...fields].map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
-          .displayRows(record, sort)
-          .map(
-            (row) =>
-              `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}><th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>${fields.map((field) => `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`).join("")}</tr>`
-          )
-          .join("")}</tbody></table></div>
+        <div class="mwi-trial-table-scroll" data-trial-scroll-id="${escapeHtml(record.key)}" role="region" tabindex="0" aria-label="${escapeHtml(caption)}">${
+          fields.length
+            ? `<table class="mwi-trial-table" data-role="trial-stats-table"><caption>${escapeHtml(caption)}</caption><thead><tr>${fields.map((field) => renderSortHeader(record.key, field, sort)).join("")}</tr></thead><tbody>${trialHistoryApi
+                .displayRows(record, sort)
+                .map(
+                  (row) =>
+                    `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}>${fields.map((field) => (field === "member" ? `<th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>` : `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`)).join("")}</tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="mwi-trial-columns-empty">${escapeHtml(t("trialColumnsEmpty"))}</p>`
+        }</div>
         </section>`;
     }
 
@@ -12629,6 +12765,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           if (event.target.matches("[data-trial-image-help]")) screenshotHelpOpen = event.target.open;
           else if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
           if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
+          if (event.target.matches(".mwi-trial-display-help")) displayHelpOpen = event.target.open;
           if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
             playerPickerOpen = event.target.open;
         },
@@ -12636,23 +12773,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
       host.addEventListener("change", (event) => {
         const field = event.target.dataset.trialDisplay;
-        if (
-          [
-            "level",
-            "workDone",
-            "workShare",
-            "workMultiple",
-            "combatShare",
-            "combatMultiple",
-            "levelSummary",
-            "workSummary"
-          ].includes(field)
-        ) {
-          displaySettings = { ...displaySettings, [field]: event.target.checked };
-          displaySaveFailed = !pluginStorage.saveTrialDisplay(displaySettings);
-          displaySettingsOpen = true;
-          refresh(panel);
-          host.querySelector(`[data-trial-display="${field}"]`)?.focus({ preventScroll: true });
+        if (Object.hasOwn(displayApi.defaults, field)) {
+          applyDisplaySettings(
+            panel,
+            { ...displaySettings, [field]: event.target.checked },
+            `[data-trial-display="${field}"]`
+          );
           return;
         }
         if (event.target.dataset.role === "trial-import-file") {
@@ -12695,6 +12821,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const presetButton = event.target.closest("[data-trial-display-preset]");
+        if (presetButton) {
+          const preset = presetButton.dataset.trialDisplayPreset;
+          const next = displayApi.preset(preset);
+          if (next) applyDisplaySettings(panel, next, `[data-trial-display-preset="${preset}"]`);
+          return;
+        }
         const imageButton = event.target.closest("[data-trial-image]");
         if (imageButton) {
           void exportScreenshot(host, imageButton.dataset.trialImage);

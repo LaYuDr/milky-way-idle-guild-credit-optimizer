@@ -504,16 +504,7 @@ test("403 退避状态只保留已配置快照源和合法时间", () => {
 });
 
 test("试炼显示设置校验布尔值，独立持久化并在存储故障时回退", () => {
-  const defaults = {
-    level: true,
-    workDone: true,
-    workShare: false,
-    workMultiple: false,
-    combatShare: false,
-    combatMultiple: false,
-    levelSummary: true,
-    workSummary: true
-  };
+  const defaults = require("../src/trial-display.js").defaults;
   assert.deepEqual(storageApi.normalizeTrialDisplay({ level: "false", workDone: null, workShare: true, extra: true }), {
     ...defaults,
     workShare: true
@@ -532,10 +523,10 @@ test("试炼显示设置校验布尔值，独立持久化并在存储故障时�
     workDone: false,
     workShare: true,
     workMultiple: true,
-    combatShare: true,
-    combatMultiple: true,
-    levelSummary: false,
-    workSummary: false
+    damageDealtShare: true,
+    healingDoneMultiple: true,
+    level_total: false,
+    workDone_median: false
   };
   assert.equal(plugin.saveTrialDisplay(hidden), true);
   assert.deepEqual(createStorage(storage).loadTrialDisplay(), hidden);

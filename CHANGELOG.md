@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.46] - 2026-09-25
+
+### Changed
+
+- Redesigned trial member column settings as an inline grouped manager with independent column and summary switches, compact/all/default presets, legacy preference migration, and keyboard-safe sorting and empty-state recovery.
+
 ## [1.2.45] - 2026-09-24
 
 ### Changed

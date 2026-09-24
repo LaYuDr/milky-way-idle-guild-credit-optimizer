@@ -4543,8 +4543,10 @@
           }
         }
         for (let summaryMask = 0; summaryMask < 4; summaryMask++) {
-          setDisplay("levelSummary", Boolean(summaryMask & 1));
-          setDisplay("workSummary", Boolean(summaryMask & 2));
+          for (const aggregate of ["total", "average", "median"]) {
+            setDisplay(`level_${aggregate}`, Boolean(summaryMask & 1));
+            setDisplay(`workDone_${aggregate}`, Boolean(summaryMask & 2));
+          }
           const record = displayTable().closest("[data-trial-record]");
           checks[`summaryToggle_${view}_${summaryMask}`] =
             Boolean(record.querySelector('[data-trial-overview="level"]')) === Boolean(summaryMask & 1) &&
@@ -4562,8 +4564,10 @@
             table.querySelector('[data-trial-sort="damageDealt"]')
           );
         for (let mask = 0; mask < 4; mask++) {
-          setDisplay("combatShare", Boolean(mask & 1));
-          setDisplay("combatMultiple", Boolean(mask & 2));
+          for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+            setDisplay(`${field}Share`, Boolean(mask & 1));
+            setDisplay(`${field}Multiple`, Boolean(mask & 2));
+          }
           const table = combatTable();
           checks[`combatColumns_${view}_${mask}`] = ["damageDealt", "healingDone", "premitigatedDamageTaken"].every(
             (field) =>
@@ -4600,8 +4604,10 @@
           }
         }
       }
-      setDisplay("combatShare", false);
-      setDisplay("combatMultiple", false);
+      for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) {
+        setDisplay(`${field}Share`, false);
+        setDisplay(`${field}Multiple`, false);
+      }
       host.querySelector('[data-trial-mode="player"]').click();
       choose("trial-player", JSON.stringify(["id", "101"]));
       checks.recordRawDisclosureRemoved = !displayTable()
@@ -4617,10 +4623,54 @@
         savedDisplay.workDone === true &&
         savedDisplay.workShare === true &&
         savedDisplay.workMultiple === true &&
-        savedDisplay.levelSummary === true &&
-        savedDisplay.workSummary === true;
-      setDisplay("workShare", false);
-      setDisplay("workMultiple", false);
+        ["level", "workDone"].every((field) =>
+          ["total", "average", "median"].every((aggregate) => savedDisplay[`${field}_${aggregate}`] === true)
+        );
+      // Every column and aggregate is independently configurable in each view.
+      for (const view of ["week", "project", "player"]) {
+        host.querySelector('[data-trial-mode="week"]').click();
+        if (view === "project") host.querySelector('[data-trial-group="combat"] [data-trial-jump-project]').click();
+        if (view === "player") host.querySelector('[data-trial-group="combat"] [data-trial-profile]').click();
+        host.querySelector('[data-trial-display-preset="all"]').click();
+        const table = () =>
+          host.querySelector('.mwi-trial-columns[data-kind="combat"] [data-role="trial-stats-table"]');
+        const fields = [...table().querySelectorAll("thead [data-trial-sort]")].map((el) => el.dataset.trialSort);
+        const rowCount = table().querySelectorAll("tbody tr").length;
+        for (const field of fields) {
+          setDisplay(field, false);
+          const current = table();
+          checks[`independentColumn_${view}_${field}`] =
+            !current.querySelector(`[data-trial-sort="${field}"]`) &&
+            current.querySelectorAll("thead th").length === fields.length - 1 &&
+            current.querySelectorAll("tbody tr").length === rowCount;
+          checks[`columnFocus_${view}_${field}`] =
+            document.activeElement === host.querySelector(`[data-trial-display="${field}"]`);
+          setDisplay(field, true);
+        }
+        for (const aggregate of ["total", "average", "median"]) {
+          setDisplay(`level_${aggregate}`, false);
+          const overview = table().closest("[data-trial-record]").querySelector('[data-trial-overview="level"]');
+          checks[`independentAggregate_${view}_${aggregate}`] =
+            !overview.querySelector(`[data-trial-aggregate="${aggregate}"]`) &&
+            overview.querySelectorAll("dd").length === 2;
+          setDisplay(`level_${aggregate}`, true);
+        }
+        table().querySelector('[data-trial-sort="healingDone"]').click();
+        setDisplay("healingDone", false);
+        checks[`hiddenSortCleared_${view}`] = !table().querySelector(
+          'th[aria-sort="ascending"],th[aria-sort="descending"]'
+        );
+        setDisplay("healingDone", true);
+        checks[`restoredSortCleared_${view}`] = !table().querySelector(
+          'th[aria-sort="ascending"],th[aria-sort="descending"]'
+        );
+        for (const field of fields) setDisplay(field, false);
+        checks[`allColumnsHidden_${view}`] = !table() && Boolean(host.querySelector(".mwi-trial-columns-empty"));
+        host.querySelector('[data-trial-display-preset="default"]').click();
+        checks[`restoreColumnPreset_${view}`] =
+          table().querySelectorAll("thead th").length === 5 &&
+          document.activeElement.dataset.trialDisplayPreset === "default";
+      }
       host.querySelector('[data-trial-mode="week"]').click();
       checks.viewReadOnly = JSON.stringify(saved()) === before;
       // Late native roster data must enrich existing captures, never manual imports.

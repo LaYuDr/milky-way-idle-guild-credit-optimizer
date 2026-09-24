@@ -1,8 +1,10 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditStorage = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
   "use strict";
 
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
@@ -198,18 +200,7 @@
   }
 
   function normalizeTrialDisplay(value) {
-    return Object.fromEntries(
-      Object.entries({
-        level: true,
-        workDone: true,
-        workShare: false,
-        workMultiple: false,
-        combatShare: false,
-        combatMultiple: false,
-        levelSummary: true,
-        workSummary: true
-      }).map(([key, fallback]) => [key, typeof value?.[key] === "boolean" ? value[key] : fallback])
-    );
+    return displayApi.normalize(value);
   }
 
   function createPluginStorage(options) {

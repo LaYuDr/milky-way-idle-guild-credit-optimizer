@@ -87,6 +87,7 @@ const SOURCE_FILES = [
   "src/localization.js",
   "src/core.js",
   "src/shrine-guide.js",
+  "src/trial-display.js",
   "src/runtime/storage.js",
   "src/runtime/scheduler.js",
   "src/runtime/game-state.js",

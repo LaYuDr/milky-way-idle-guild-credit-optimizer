@@ -695,12 +695,17 @@ complete rows, and no extra profile requests or stored-record changes.
 ### Trial display settings and summaries
 
 The trial history audit exercises all sixteen combinations of level, work, share and average-multiple
-columns in week, project and player views, including percentage sorting, adaptive
-column widths, full row retention, local preference persistence and no extra
-profile requests. Four summary-toggle combinations are checked in all three views. Overviews
-remain above the member table and use known values only; unit tests cover missing values, explicit zero, odd/even medians, empty
-records, zero denominators and overflowing totals. Display preferences use their
-own per-region/character key and are not part of trial exports.
+columns in week, project and player views. It also checks every combat column independently (including
+member identity and raw metrics), individual total/average/median switches, focus retention, hidden-sort
+reset, all-hidden recovery, presets, full row retention, persistence and no extra profile requests.
+The inline column manager groups basics, skilling, damage, healing, damage taken and summaries;
+its switches apply immediately to all historical member tables. Compact hides ratios and summaries,
+All enables every setting, and Reset defaults restores the original visible columns and summaries.
+Each column, including member name, can be hidden; an empty-state message replaces all-hidden tables.
+`src/trial-display.js` owns the field registry, presets and migration of the legacy combat/summary
+switches. Explicit individual booleans take precedence over legacy groups. Display preferences use
+the existing per-region/character key and are not part of trial exports. Overviews remain above the
+member table and use known values only; missing values are never converted to zero.
 
 Screenshot mode is a session-only trial-history view toggle. Player names use stable
 anonymous numbers keyed by character ID (or exact name when no ID exists), shared
