@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.50";
+window.MwiGuildCreditVersion = "1.2.51";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -867,6 +867,22 @@ window.MwiGuildCreditVersion = "1.2.50";
 
   function timestamp(value) {
     return typeof value === "number" ? value : Date.parse(value);
+  }
+
+  // Historical joins may belong to a previous membership period. Only use the
+  // current guild roster's evidence when displaying a member's joining time.
+  function currentMemberJoinedAt(context = {}, identity = {}) {
+    if (context.guild?.id == null || identity.id == null || !Object.hasOwn(context.roster || {}, identity.id))
+      return null;
+    const entry = context.membershipEvidence?.find((entry) => entry.characterId === String(identity.id));
+    return entry &&
+      Number.isSafeInteger(entry.joinedAt) &&
+      entry.joinedAt > 0 &&
+      entry.joinedAt <= 8640000000000000 &&
+      Number.isSafeInteger(entry.observedAt) &&
+      entry.joinedAt <= entry.observedAt
+      ? entry.joinedAt
+      : null;
   }
 
   function memberLevel(record, row) {
@@ -1782,6 +1798,7 @@ window.MwiGuildCreditVersion = "1.2.50";
     searchHistoryMembers,
     sameMember,
     memberLevel,
+    currentMemberJoinedAt,
     withMemberLevels,
     withMembershipEvidence,
     mergeMembershipEvidence,
@@ -3533,6 +3550,72 @@ window.MwiGuildCreditVersion = "1.2.50";
     { hrid: "/guild_shrines/scholar", nameKey: "shrineScholar", category: "shrine", costMultiplier: 1 }
   ]);
 
+  // Official client getSortedBuildingDetails uses sortIndex. This fallback matches
+  // the native catalog when initialization details have not arrived yet (2026-09-25).
+  const CATALOG_BUILDING_ORDER = Object.freeze(
+    [
+      "guild_hall",
+      "builders_hall",
+      "treasury",
+      "archives",
+      "skilling_encampment",
+      "combat_encampment",
+      "dairy_barn",
+      "garden",
+      "log_shed",
+      "forge",
+      "workshop",
+      "sewing_parlor",
+      "kitchen",
+      "brewery",
+      "laboratory",
+      "observatory",
+      "dining_room",
+      "library",
+      "dojo",
+      "armory",
+      "gym",
+      "archery_range",
+      "mystical_study"
+    ].map((name) => `/guild_buildings/${name}`)
+  );
+
+  function sortCatalogDefinitions(definitions, buildingDetails, shrineDetails) {
+    const fallback = new Map(
+      [
+        ...CATALOG_BUILDING_ORDER,
+        ...BUILDINGS.filter((entry) => entry.category === "shrine").map((entry) => entry.hrid)
+      ].map((hrid, index) => [hrid, index])
+    );
+    function orderedGroup(entries, details) {
+      const indices = new Map(
+        Object.entries(details || {}).flatMap(([key, detail]) => {
+          if (!detail || !Number.isFinite(detail.sortIndex)) return [];
+          return [[detail.hrid || detail.guildBuildingHrid || detail.guildShrineHrid || key, detail.sortIndex]];
+        })
+      );
+      // Do not mix official indices with fallback positions on different numeric scales.
+      const complete = entries.every((entry) => indices.has(entry.hrid));
+      return entries
+        .slice()
+        .sort(
+          (a, b) =>
+            (complete ? indices.get(a.hrid) - indices.get(b.hrid) : 0) ||
+            (fallback.get(a.hrid) ?? fallback.size) - (fallback.get(b.hrid) ?? fallback.size)
+        );
+    }
+    return [
+      ...orderedGroup(
+        definitions.filter((entry) => entry.category !== "shrine"),
+        buildingDetails
+      ),
+      ...orderedGroup(
+        definitions.filter((entry) => entry.category === "shrine"),
+        shrineDetails
+      )
+    ];
+  }
+
   function iconSymbolId(buildingHrid) {
     const building = BUILDINGS.find((entry) => entry.hrid === buildingHrid);
     if (!building) return "";
@@ -3557,7 +3640,17 @@ window.MwiGuildCreditVersion = "1.2.50";
     }));
   }
 
-  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, iconSymbolId, levelCostsForMultiplier, definitions };
+  return {
+    RULES_VERSION,
+    MAX_LEVEL,
+    BASE_LEVEL_COSTS,
+    BUILDINGS,
+    CATALOG_BUILDING_ORDER,
+    sortCatalogDefinitions,
+    iconSymbolId,
+    levelCostsForMultiplier,
+    definitions
+  };
 });
 
 
@@ -4197,6 +4290,9 @@ window.MwiGuildCreditVersion = "1.2.50";
       trialProfileGuild: "公会",
       trialProfileTotalLevel: "总等级",
       trialProfileCombatLevel: "战斗等级",
+      trialProfileJoinedAt: "入会时间",
+      trialProfileJoinedAtUnknown: "未知",
+      trialProfileJoinedAtHelp: "加入当前公会的时间，按本地时区显示。未取得当前名册中的有效时间时显示未知。",
       trialProfileSkills: "技能等级",
       trialProfileEquipment: "装备",
       trialSlot_back: "背部",
@@ -4930,6 +5026,10 @@ window.MwiGuildCreditVersion = "1.2.50";
       trialProfileGuild: "Guild",
       trialProfileTotalLevel: "Total level",
       trialProfileCombatLevel: "Combat level",
+      trialProfileJoinedAt: "Joined guild",
+      trialProfileJoinedAtUnknown: "Unknown",
+      trialProfileJoinedAtHelp:
+        "Time of joining the current guild, shown in your local time zone. Unknown if the current roster has no valid joining time.",
       trialProfileSkills: "Skill levels",
       trialProfileEquipment: "Equipment",
       trialSlot_back: "Back",
@@ -8623,11 +8723,11 @@ window.MwiGuildCreditVersion = "1.2.50";
 });
 
 
-// SOURCE: src/ui/sidebar-integration.js
+// SOURCE: src/ui/sidebar-dom.js
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
-  root.MwiGuildCreditSidebarIntegration = api;
+  root.MwiGuildCreditSidebarDom = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
@@ -8636,105 +8736,46 @@ window.MwiGuildCreditVersion = "1.2.50";
     en: ["Inventory", "Equipment", "Skills", "House", "Loadout", "Loadouts", "Harvest", "Gathering"]
   };
   const EXPECTED_LABELS = new Set(Object.values(SIDEBAR_LABELS).flat());
-  const SIDEBAR_ACTIVATION_EVENT = "mwi:sidebar-plugin-activated";
-  const SIDEBAR_WHEEL_SCROLL_ATTRIBUTE = "data-mwi-sidebar-wheel-scroll";
+  const TAB_BAR_SELECTOR =
+    '[role="tablist"],.MuiTabs-flexContainer,[class*="TabsComponent_tabsContainer"],[class*="TabsComponent_tabList"]';
+  const MAX_SIDEBAR_ANCESTORS = 12;
 
-  function enableSidebarTabWheelScrolling(tabBar) {
-    if (!tabBar || typeof tabBar.addEventListener !== "function") return false;
-    if (tabBar.getAttribute?.(SIDEBAR_WHEEL_SCROLL_ATTRIBUTE) === "true") return true;
+  function labelForTab(tab) {
+    return String(tab.innerText || tab.textContent || "")
+      .replaceAll("\n", "")
+      .trim();
+  }
 
-    tabBar.setAttribute?.(SIDEBAR_WHEEL_SCROLL_ATTRIBUTE, "true");
-    if (tabBar.style) {
-      tabBar.style.maxWidth = "100%";
-      tabBar.style.minWidth = "0";
-      tabBar.style.overflowX = "auto";
-      tabBar.style.overflowY = "hidden";
-      tabBar.style.overscrollBehaviorInline = "contain";
-      tabBar.style.scrollbarWidth = "none";
-    }
+  function isPanelHost(node) {
+    return /tabPanelsContainer/.test(String(node?.className || ""));
+  }
 
-    tabBar.addEventListener(
-      "wheel",
-      (event) => {
-        if (event.ctrlKey) return;
-        const maxScrollLeft = Math.max(0, Number(tabBar.scrollWidth) - Number(tabBar.clientWidth));
-        if (maxScrollLeft <= 0) return;
-
-        let delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-        if (!Number.isFinite(delta) || delta === 0) return;
-        if (event.deltaMode === 1) delta *= 16;
-        else if (event.deltaMode === 2) delta *= Math.max(1, Number(tabBar.clientWidth));
-
-        const currentScrollLeft = Number(tabBar.scrollLeft) || 0;
-        const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, currentScrollLeft + delta));
-        if (nextScrollLeft === currentScrollLeft) return;
-        event.preventDefault();
-        tabBar.scrollLeft = nextScrollLeft;
-      },
-      { passive: false }
+  function containsNativeTabBar(node) {
+    if (nativeTabs(node).length >= 4) return true;
+    return Array.from(node.querySelectorAll?.(`${TAB_BAR_SELECTOR},nav`) || []).some(
+      (candidate) => nativeTabs(candidate).length >= 4
     );
-    return true;
   }
 
-  function createActivationCoordinator(options = {}) {
-    const eventTarget = options.eventTarget;
-    const CustomEventConstructor = options.CustomEvent;
-    const owner = String(options.owner || "").trim();
-    const onDeactivate = typeof options.onDeactivate === "function" ? options.onDeactivate : () => {};
-    let started = false;
-
-    function handleActivation(event) {
-      const activeOwner = typeof event?.detail === "string" ? event.detail : "";
-      if (activeOwner && activeOwner !== owner) onDeactivate(activeOwner);
+  function findPanelHost(tabBar) {
+    let branch = tabBar;
+    // Resolve the nearest shared container instead of assuming a fixed number
+    // of Material UI wrappers. Never escape a panel into an unrelated sidebar.
+    for (let depth = 0; depth < MAX_SIDEBAR_ANCESTORS; depth += 1) {
+      const parent = branch?.parentElement;
+      if (!parent || /^(BODY|HTML|MAIN)$/.test(parent.tagName || "") || isPanelHost(parent)) return null;
+      const siblings = Array.from(parent.children || []).filter((node) => node !== branch);
+      const panelHosts = siblings.filter(isPanelHost);
+      if (siblings.some((node) => !isPanelHost(node) && containsNativeTabBar(node))) return null;
+      if (panelHosts.length) return panelHosts.length === 1 ? panelHosts[0] : null;
+      branch = parent;
     }
-
-    function start() {
-      if (started) return true;
-      if (!owner || typeof eventTarget?.addEventListener !== "function") return false;
-      eventTarget.addEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
-      started = true;
-      return true;
-    }
-
-    function announce() {
-      if (!started) start();
-      if (
-        !started ||
-        typeof eventTarget?.dispatchEvent !== "function" ||
-        typeof CustomEventConstructor !== "function"
-      ) {
-        return false;
-      }
-      eventTarget.dispatchEvent(new CustomEventConstructor(SIDEBAR_ACTIVATION_EVENT, { detail: owner }));
-      return true;
-    }
-
-    function destroy() {
-      if (!started) return;
-      eventTarget.removeEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
-      started = false;
-    }
-
-    return Object.freeze({ start, announce, destroy });
-  }
-
-  function createDocumentActivationCoordinator(windowRef, owner, onDeactivate) {
-    const coordinator = createActivationCoordinator({
-      eventTarget: windowRef?.document,
-      CustomEvent: windowRef?.CustomEvent,
-      owner,
-      onDeactivate
-    });
-    coordinator.start();
-    return coordinator;
+    return null;
   }
 
   function integrationForCustomTab(tab) {
     const tabBar = tab?.parentElement;
-    const tabsRoot = tabBar?.parentElement?.parentElement?.parentElement;
-    const sidebar = tabsRoot?.parentElement;
-    const panelHost =
-      sidebar && Array.from(sidebar.children || []).find((node) => /tabPanelsContainer/.test(String(node.className)));
+    const panelHost = findPanelHost(tabBar);
     return tabBar && panelHost ? { tabBar, panelHost } : null;
   }
 
@@ -8748,45 +8789,46 @@ window.MwiGuildCreditVersion = "1.2.50";
     return counts["zh-CN"] > counts.en ? "zh-CN" : "en";
   }
 
+  function nativeTabs(tabBar) {
+    return Array.from(tabBar.children || [], (element) => ({ element, label: labelForTab(element) })).filter((tab) =>
+      EXPECTED_LABELS.has(tab.label)
+    );
+  }
+
+  function visibleTabBar(tabBar) {
+    const rect = tabBar?.getBoundingClientRect?.();
+    return Boolean(tabBar?.isConnected && rect?.width > 0 && rect?.height > 0);
+  }
+
   function findSidebarIntegration(documentRef, preferredLocale) {
-    if (!documentRef || typeof documentRef.getElementsByTagName !== "function") return null;
-    const elements = documentRef.getElementsByTagName("*");
+    if (!documentRef) return null;
     let bestIntegration = null;
-    for (let index = 0; index < elements.length; index += 1) {
-      const candidate = elements[index];
-      const children = Array.from(candidate.children || []);
-      if (children.length < 4) continue;
-      const tabs = children.map((element) => ({
-        element,
-        label: String(element.innerText || element.textContent || "")
-          .replaceAll("\n", "")
-          .trim()
-      }));
-      const recognized = tabs.filter((tab) => EXPECTED_LABELS.has(tab.label));
-      if (recognized.length < 4) continue;
+    const visited = new Set();
+    function inspect(candidate) {
+      if (visited.has(candidate)) return;
+      visited.add(candidate);
+      const recognized = nativeTabs(candidate);
+      if (recognized.length < 4) return;
+      const panelHost = findPanelHost(candidate);
+      if (!panelHost) return;
       const detectedLocale = sidebarLocale(recognized.map((tab) => tab.label));
       const prototypeLabels =
         (detectedLocale || preferredLocale) === "zh-CN" ? ["库存", "Inventory"] : ["Inventory", "库存"];
       const prototype = recognized.find((tab) => prototypeLabels.includes(tab.label)) || recognized[0];
-      const tabsRoot = candidate.parentElement?.parentElement?.parentElement;
-      const sidebar = tabsRoot && tabsRoot.parentElement;
-      const panelHost =
-        sidebar &&
-        Array.from(sidebar.children || []).find(
-          (node) => node !== tabsRoot && /tabPanelsContainer/.test(String(node.className))
-        );
-      if (!panelHost) continue;
-      const rect = candidate.getBoundingClientRect();
-      const visible = candidate.isConnected && rect.width > 0 && rect.height > 0;
       const integration = {
         tabBar: candidate,
         tabPrototype: prototype.element,
         panelHost,
         detectedLocale,
-        score: (visible ? 1000 : 0) + recognized.length
+        score: (visibleTabBar(candidate) ? 1000 : 0) + recognized.length
       };
       if (!bestIntegration || integration.score > bestIntegration.score) bestIntegration = integration;
     }
+    for (const candidate of documentRef.querySelectorAll?.(TAB_BAR_SELECTOR) || []) inspect(candidate);
+    if (bestIntegration?.score >= 1000) return bestIntegration;
+    // Older layouts and startup fixtures may not expose tab roles or MUI
+    // classes. Keep a recovery scan, including when targeted layouts are hidden.
+    for (const candidate of documentRef.getElementsByTagName?.("*") || []) inspect(candidate);
     return bestIntegration;
   }
 
@@ -8796,28 +8838,35 @@ window.MwiGuildCreditVersion = "1.2.50";
     return function locate(locale) {
       const tabBar = cached?.tabBar;
       const current = tabBar && integrationForCustomTab(cached.tabPrototype);
-      const rect = tabBar?.getBoundingClientRect();
       const valid =
-        tabBar?.isConnected &&
+        visibleTabBar(tabBar) &&
         cached.panelHost.isConnected &&
         cached.tabPrototype.parentElement === tabBar &&
-        current?.panelHost === cached.panelHost &&
-        rect.width > 0 &&
-        rect.height > 0;
-      if (!valid || now() - scannedAt >= 30000) {
+        current?.panelHost === cached.panelHost;
+      const timestamp = now();
+      if (!valid || timestamp - scannedAt >= 30000) {
         cached = find(documentRef, locale);
-        scannedAt = now();
+        scannedAt = timestamp;
       } else {
-        cached.detectedLocale = sidebarLocale(
-          Array.from(tabBar.children, (tab) =>
-            String(tab.textContent || "")
-              .replaceAll("\n", "")
-              .trim()
-          )
-        );
+        cached.detectedLocale = sidebarLocale(Array.from(tabBar.children, labelForTab));
       }
       return cached;
     };
+  }
+
+  function hasForeignIdentity(node) {
+    return (
+      node?.dataset?.mwitoolsCharacterTab === "true" ||
+      node?.dataset?.mwiGitTab === "true" ||
+      node?.hasAttribute?.("data-mooncake-enhancement-tab-button")
+    );
+  }
+
+  function isOwnedSidebarTab(node) {
+    if (node?.dataset?.mwiCreditTab !== "true" || hasForeignIdentity(node)) return false;
+    // External plugins can clone all data attributes. Their own ID or marker
+    // takes precedence over inherited ownership and stale-node markers.
+    return node.id === "mwi-credit-sidebar-tab" || (!node.id && node.dataset.mwiCreditSuperseded === "true");
   }
 
   function suppressStaleMounts(integration, tab, panel) {
@@ -8828,7 +8877,10 @@ window.MwiGuildCreditVersion = "1.2.50";
         (node) => node !== tab && isOwnedSidebarTab(node)
       ),
       ...Array.from(documentRef.querySelectorAll("#mwi-credit-optimizer,[data-mwi-credit-stale-panel]")).filter(
-        (node) => node !== panel
+        (node) =>
+          node !== panel &&
+          !hasForeignIdentity(node) &&
+          (node.id === "mwi-credit-optimizer" || (!node.id && node.hasAttribute("data-mwi-credit-stale-panel")))
       )
     ];
     for (const node of stale) {
@@ -8848,19 +8900,6 @@ window.MwiGuildCreditVersion = "1.2.50";
     return selected;
   }
 
-  function isOwnedSidebarTab(node) {
-    if (node?.dataset?.mwiCreditTab !== "true") return false;
-    // cloneNode copies data-* too. MWITools can clone our tab (and then clone
-    // that clone for Planning); its own identity must take precedence.
-    if (
-      node.dataset.mwitoolsCharacterTab === "true" ||
-      node.dataset.mwiGitTab === "true" ||
-      node.hasAttribute("data-mooncake-enhancement-tab-button")
-    )
-      return false;
-    return node.id === "mwi-credit-sidebar-tab" || (!node.id && node.dataset.mwiCreditSuperseded === "true");
-  }
-
   function prepareTab(tab, panel) {
     tab.id = "mwi-credit-sidebar-tab";
     tab.hidden = false;
@@ -8877,49 +8916,201 @@ window.MwiGuildCreditVersion = "1.2.50";
     panel.tabIndex = 0;
   }
 
+  function createTab(tabPrototype, panel, label) {
+    const tab = tabPrototype.ownerDocument.createElement("button");
+    tab.type = "button";
+    tab.className = String(tabPrototype.className || "")
+      .split(/\s+/)
+      .filter((className) => className && className !== "Mui-selected")
+      .join(" ");
+    tab.dataset.mwiCreditTab = "true";
+    tab.textContent = String(label ?? "");
+    prepareTab(tab, panel);
+    return tab;
+  }
+
+  return Object.freeze({
+    SIDEBAR_LABELS,
+    sidebarLocale,
+    findSidebarIntegration,
+    integrationForCustomTab,
+    createIntegrationLocator,
+    suppressStaleMounts,
+    isOwnedSidebarTab,
+    prepareTab,
+    createTab
+  });
+});
+
+
+// SOURCE: src/ui/sidebar-interaction.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildCreditSidebarInteraction = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  const SIDEBAR_ACTIVATION_EVENT = "mwi:sidebar-plugin-activated";
+  const WHEEL_ATTRIBUTE = "data-mwi-sidebar-wheel-scroll";
+  // DOM attributes survive cloneNode(); event listeners do not.
+  const wheelBindings = new WeakMap();
+  const WHEEL_STYLES = {
+    "max-width": "100%",
+    "min-width": "0",
+    "overflow-x": "auto",
+    "overflow-y": "hidden",
+    "overscroll-behavior-inline": "contain",
+    "scrollbar-width": "none"
+  };
+
+  function styleProperty(name) {
+    return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+  }
+
+  function readStyle(style, name) {
+    return {
+      value: style.getPropertyValue?.(name) ?? style[styleProperty(name)] ?? "",
+      priority: style.getPropertyPriority?.(name) || ""
+    };
+  }
+
+  function writeStyle(style, name, value, priority = "") {
+    if (typeof style.setProperty === "function") {
+      if (value === "") style.removeProperty(name);
+      else style.setProperty(name, value, priority);
+    } else style[styleProperty(name)] = value;
+  }
+
+  function claimStyle(node, name, value, priority = "") {
+    const previous = readStyle(node.style, name);
+    writeStyle(node.style, name, value, priority);
+    return { previous, written: readStyle(node.style, name) };
+  }
+
+  function restoreStyle(node, name, record) {
+    const current = readStyle(node.style, name);
+    if (current.value === record.written.value && current.priority === record.written.priority)
+      writeStyle(node.style, name, record.previous.value, record.previous.priority);
+  }
+
+  function enableSidebarTabWheelScrolling(tabBar) {
+    if (!tabBar || typeof tabBar.addEventListener !== "function") return false;
+    if (wheelBindings.has(tabBar)) return true;
+    const styles = new Map();
+    if (tabBar.style) {
+      for (const [name, value] of Object.entries(WHEEL_STYLES)) styles.set(name, claimStyle(tabBar, name, value));
+    }
+    const listener = (event) => {
+      if (event.ctrlKey || event.defaultPrevented || event.cancelable === false) return;
+      const width = Number(tabBar.clientWidth);
+      const max = Number(tabBar.scrollWidth) - width;
+      if (!Number.isFinite(max) || max <= 0) return;
+      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      let delta = horizontal ? event.deltaX : event.deltaY;
+      if (!Number.isFinite(delta) || delta === 0) return;
+      if (event.deltaMode === 1) delta *= 16;
+      else if (event.deltaMode === 2) delta *= Math.max(1, width);
+      const raw = Number(tabBar.scrollLeft) || 0;
+      const view = tabBar.ownerDocument?.defaultView;
+      const direction = view?.getComputedStyle?.(tabBar)?.direction || tabBar.style?.direction;
+      const rtl = direction === "rtl" || (direction !== "ltr" && raw < 0);
+      // Horizontal gestures retain physical direction; vertical gestures advance
+      // toward inline-end, including negative scrollLeft in modern RTL layouts.
+      if (rtl && !horizontal) delta = -delta;
+      const min = rtl ? -max : 0;
+      const limit = rtl ? 0 : max;
+      const current = Math.min(limit, Math.max(min, raw));
+      const next = Math.min(limit, Math.max(min, current + delta));
+      if (next === current) return;
+      tabBar.scrollLeft = next;
+      if (Number(tabBar.scrollLeft) !== raw) event.preventDefault();
+    };
+    tabBar.addEventListener("wheel", listener, { passive: false });
+    tabBar.setAttribute?.(WHEEL_ATTRIBUTE, "true");
+    wheelBindings.set(tabBar, { listener, styles });
+    return true;
+  }
+
+  function disableSidebarTabWheelScrolling(tabBar) {
+    const binding = tabBar && wheelBindings.get(tabBar);
+    if (!binding) return false;
+    tabBar.removeEventListener?.("wheel", binding.listener);
+    for (const [name, record] of binding.styles) restoreStyle(tabBar, name, record);
+    if (tabBar.getAttribute?.(WHEEL_ATTRIBUTE) === "true") tabBar.removeAttribute?.(WHEEL_ATTRIBUTE);
+    wheelBindings.delete(tabBar);
+    return true;
+  }
+
+  function createActivationCoordinator(options = {}) {
+    const eventTarget = options.eventTarget;
+    const CustomEventConstructor = options.CustomEvent;
+    const owner = String(options.owner || "").trim();
+    const onDeactivate = typeof options.onDeactivate === "function" ? options.onDeactivate : () => {};
+    let started = false;
+    function handleActivation(event) {
+      const activeOwner = typeof event?.detail === "string" ? event.detail : "";
+      if (activeOwner && activeOwner !== owner) onDeactivate(activeOwner);
+    }
+    function start() {
+      if (started) return true;
+      if (!owner || typeof eventTarget?.addEventListener !== "function") return false;
+      eventTarget.addEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = true;
+      return true;
+    }
+    function announce() {
+      if (!started) start();
+      if (!started || typeof eventTarget?.dispatchEvent !== "function" || typeof CustomEventConstructor !== "function")
+        return false;
+      eventTarget.dispatchEvent(new CustomEventConstructor(SIDEBAR_ACTIVATION_EVENT, { detail: owner }));
+      return true;
+    }
+    function destroy() {
+      if (!started) return;
+      eventTarget.removeEventListener(SIDEBAR_ACTIVATION_EVENT, handleActivation);
+      started = false;
+    }
+    return Object.freeze({ start, announce, destroy });
+  }
+
+  function createDocumentActivationCoordinator(windowRef, owner, onDeactivate) {
+    const coordinator = createActivationCoordinator({
+      eventTarget: windowRef?.document,
+      CustomEvent: windowRef?.CustomEvent,
+      owner,
+      onDeactivate
+    });
+    coordinator.start();
+    return coordinator;
+  }
+
+  function selected(tab) {
+    return tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected");
+  }
+
+  function restoreAttribute(node, name, previous, written) {
+    if (node.getAttribute(name) !== written) return;
+    if (previous === null) node.removeAttribute(name);
+    else node.setAttribute(name, previous);
+  }
+
   function createSelectionController(state) {
     const hiddenNodes = new Map();
     const tabStates = new Map();
-    function hide() {
-      if (state.panel) state.panel.hidden = true;
-      const creditTab = state.creditTab;
-      if (creditTab) {
-        creditTab.classList.remove("Mui-selected");
-        creditTab.setAttribute("aria-selected", "false");
-        creditTab.tabIndex = -1;
-      }
-      for (const [node, display] of hiddenNodes) {
-        // A different plugin may have already changed display. Only undo our own write.
-        if (node.isConnected && node.style.display === "none") node.style.display = display;
-      }
-      hiddenNodes.clear();
-      const otherSelected = Array.from(creditTab?.parentElement?.children || []).some(
-        (tab) =>
-          tab !== creditTab && (tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected"))
-      );
-      for (const [tab, previous] of tabStates) {
-        if (!tab.isConnected) continue;
-        if (tab.tabIndex === -1) {
-          if (previous.tabindex === null) tab.removeAttribute("tabindex");
-          else tab.setAttribute("tabindex", previous.tabindex);
-        }
-        if (!otherSelected) {
-          tab.classList.toggle("Mui-selected", previous.selected);
-          if (previous.aria === null) tab.removeAttribute("aria-selected");
-          else tab.setAttribute("aria-selected", previous.aria);
-        }
-      }
-      tabStates.clear();
+    let active = null;
+
+    function otherSelected(tabBar = active?.tabBar) {
+      return Array.from(tabBar?.children || []).some((tab) => tab !== active?.tab && !tab.hidden && selected(tab));
     }
-    function show(panelHost, tabBar) {
-      hide();
+
+    function captureSiblings(panelHost, tabBar) {
       for (const node of panelHost.children) {
-        if (node === state.panel) continue;
-        hiddenNodes.set(node, node.style.display);
-        node.style.display = "none";
+        if (node === active.panel || hiddenNodes.has(node) || !node.style) continue;
+        hiddenNodes.set(node, claimStyle(node, "display", "none", "important"));
       }
       for (const tab of tabBar.children) {
-        if (tab === state.creditTab || tab.hidden) continue;
+        if (tab === active.tab || tab.hidden || tabStates.has(tab)) continue;
         tabStates.set(tab, {
           tabindex: tab.getAttribute("tabindex"),
           aria: tab.getAttribute("aria-selected"),
@@ -8929,58 +9120,159 @@ window.MwiGuildCreditVersion = "1.2.50";
         tab.setAttribute("aria-selected", "false");
         tab.tabIndex = -1;
       }
-      state.panel.hidden = false;
-      state.creditTab.classList.add("Mui-selected");
-      state.creditTab.setAttribute("aria-selected", "true");
-      state.creditTab.tabIndex = 0;
     }
-    return { hide, show };
+
+    function sync(panelHost, tabBar) {
+      if (
+        !active ||
+        !panelHost ||
+        !tabBar ||
+        active.panel.hidden ||
+        active.tab.getAttribute("aria-selected") !== "true" ||
+        !active.tab.classList.contains("Mui-selected") ||
+        otherSelected(tabBar)
+      )
+        return false;
+      active.panelHost = panelHost;
+      active.tabBar = tabBar;
+      captureSiblings(panelHost, tabBar);
+      return true;
+    }
+
+    function show(panelHost, tabBar) {
+      if (!state.panel || !state.creditTab || !panelHost || !tabBar) return false;
+      if (active) {
+        if (active.panel === state.panel && active.tab === state.creditTab && sync(panelHost, tabBar)) return true;
+        // Explicit activation may reclaim a sidebar after an external change;
+        // passive sync never does. Release the previous ownership first.
+        hide();
+      }
+      active = { panel: state.panel, tab: state.creditTab, panelHost, tabBar };
+      captureSiblings(panelHost, tabBar);
+      active.panel.hidden = false;
+      active.tab.classList.add("Mui-selected");
+      active.tab.setAttribute("aria-selected", "true");
+      active.tab.tabIndex = 0;
+      return true;
+    }
+
+    function hide() {
+      if (!active) return;
+      const { panel, tab: creditTab } = active;
+      panel.hidden = true;
+      creditTab.classList.remove("Mui-selected");
+      restoreAttribute(creditTab, "aria-selected", "false", "true");
+      restoreAttribute(creditTab, "tabindex", "-1", "0");
+      for (const [node, record] of hiddenNodes) restoreStyle(node, "display", record);
+      hiddenNodes.clear();
+      const anotherSelected = otherSelected();
+      for (const [tab, previous] of tabStates) {
+        // Selection may have moved without a click. Do not restore a previously
+        // selected native tab on top of another plugin's current selection.
+        if (selected(tab)) continue;
+        if (!anotherSelected || previous.tabindex !== "0") restoreAttribute(tab, "tabindex", previous.tabindex, "-1");
+        if (!anotherSelected) {
+          if (tab.getAttribute("aria-selected") === "false") {
+            if (previous.selected) tab.classList.add("Mui-selected");
+            restoreAttribute(tab, "aria-selected", previous.aria, "false");
+          }
+        }
+      }
+      tabStates.clear();
+      active = null;
+    }
+
+    return { show, hide, sync, isActive: () => active !== null };
   }
 
+  return {
+    SIDEBAR_ACTIVATION_EVENT,
+    enableSidebarTabWheelScrolling,
+    disableSidebarTabWheelScrolling,
+    createActivationCoordinator,
+    createDocumentActivationCoordinator,
+    createSelectionController
+  };
+});
+
+
+// SOURCE: src/ui/sidebar-integration.js
+(function (root, factory) {
+  const commonjs = typeof module !== "undefined" && module.exports;
+  const dom = commonjs ? require("./sidebar-dom.js") : root.MwiGuildCreditSidebarDom;
+  const interaction = commonjs ? require("./sidebar-interaction.js") : root.MwiGuildCreditSidebarInteraction;
+  const api = factory(dom, interaction);
+  if (commonjs) module.exports = api;
+  root.MwiGuildCreditSidebarIntegration = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (dom, interaction) {
+  "use strict";
+
+  const SIDEBAR_REPLACEMENT_EVENT = "mwi:guild-sidebar-replacing";
+  const OWNER = "mwi-guild-credit-optimizer";
+  const isSelected = (tab) => tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected");
+  const ownsSelection = (tab) => tab.getAttribute("aria-selected") === "true" && tab.classList.contains("Mui-selected");
+  const isAvailable = (tab) =>
+    tab.matches('button,[role="tab"]') &&
+    !tab.closest('[hidden],[inert],[aria-hidden="true"]') &&
+    !tab.disabled &&
+    tab.getAttribute("aria-disabled") !== "true" &&
+    tab.getClientRects().length > 0;
+  const isPrimaryAction = (event) =>
+    !(event.button > 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey);
+
+  // Own only the listeners for the current mount. Never reorder native or foreign tabs.
   function createLifecycle(options) {
     const { window: windowRef, state, onActivate, onDeactivate, onChange } = options;
     const documentRef = windowRef.document;
-    const locate = createIntegrationLocator(documentRef);
+    const locate = dom.createIntegrationLocator(documentRef);
+    const focusWrites = new Map();
     let integration = null;
     let observer = null;
     let observedRoot = null;
     let destroyed = false;
-    const elementTarget = (event) => (event.target?.nodeType === 1 ? event.target : event.target?.parentElement);
-    const eligibleTabs = () =>
-      Array.from(integration?.tabBar.children || []).filter(
-        (tab) =>
-          tab.matches('button,[role="tab"]') &&
-          !tab.hidden &&
-          !tab.disabled &&
-          tab.getAttribute("aria-disabled") !== "true" &&
-          tab.getClientRects().length
-      );
+
     function clickedTab(event) {
-      const target = elementTarget(event);
+      const target = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
       return Array.from(integration?.tabBar.children || []).find((tab) => tab.contains(target));
     }
-    function leave(event) {
-      const tab = clickedTab(event);
-      if (tab && tab !== state.creditTab && !tab.hidden && event.button !== 2) onDeactivate();
+
+    function restoreFocusWrites() {
+      for (const [tab, { previous, written }] of focusWrites) {
+        if (tab.getAttribute("tabindex") !== written) continue;
+        if (previous === null) tab.removeAttribute("tabindex");
+        else tab.setAttribute("tabindex", previous);
+      }
+      focusWrites.clear();
     }
+
+    function leave(event) {
+      if (!isPrimaryAction(event)) return;
+      const tab = clickedTab(event);
+      if (tab && tab !== state.creditTab && isAvailable(tab)) {
+        restoreFocusWrites();
+        onDeactivate();
+      }
+    }
+
     function activate(event) {
       const tab = clickedTab(event);
-      if (tab !== state.creditTab || !tab || tab.hidden || tab.dataset.mwiCreditSuperseded === "true") return;
-      if (event.button > 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (tab !== state.creditTab || !tab || !isAvailable(tab) || !isPrimaryAction(event)) return;
+      if (tab.dataset.mwiCreditSuperseded === "true") return;
       event.preventDefault();
       event.stopImmediatePropagation();
       tab.focus({ preventScroll: true });
-      if (state.panel.hidden || tab.getAttribute("aria-selected") !== "true")
-        onActivate(integration.panelHost, integration.tabBar);
+      tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (state.panel.hidden || !ownsSelection(tab)) onActivate(integration.panelHost, integration.tabBar);
     }
+
     function keydown(event) {
       const tab = clickedTab(event);
-      if (!tab || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const tabs = eligibleTabs();
+      if (!tab || !isPrimaryAction(event)) return;
+      const tabs = Array.from(integration.tabBar.children).filter(isAvailable);
       const index = tabs.indexOf(tab);
       if (index < 0) return;
-      let next;
       const rtl = windowRef.getComputedStyle(integration.tabBar).direction === "rtl";
+      let next;
       if (event.key === "ArrowRight") next = tabs[(index + (rtl ? tabs.length - 1 : 1)) % tabs.length];
       else if (event.key === "ArrowLeft") next = tabs[(index + (rtl ? 1 : tabs.length - 1)) % tabs.length];
       else if (event.key === "Home") next = tabs[0];
@@ -8989,49 +9281,64 @@ window.MwiGuildCreditVersion = "1.2.50";
       else return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      // Manual activation: moving focus must not invoke another plugin's action.
-      for (const candidate of tabs) candidate.tabIndex = candidate === next ? 0 : -1;
+      for (const candidate of tabs) {
+        const previous = focusWrites.has(candidate)
+          ? focusWrites.get(candidate).previous
+          : candidate.getAttribute("tabindex");
+        const written = candidate === next ? "0" : "-1";
+        focusWrites.set(candidate, { previous, written });
+        if (candidate.getAttribute("tabindex") !== written) candidate.setAttribute("tabindex", written);
+      }
       next.focus({ preventScroll: true });
       next.scrollIntoView({ block: "nearest", inline: "nearest" });
+      // Focus moves without invoking another plugin's action (APG manual activation).
       if (event.key === "Enter" || event.key === " ") next.click();
     }
+
+    function detachBar() {
+      if (!integration) return;
+      integration.tabBar.removeEventListener("click", activate, true);
+      integration.tabBar.removeEventListener("keydown", keydown, true);
+      interaction.disableSidebarTabWheelScrolling(integration.tabBar);
+      restoreFocusWrites();
+    }
+
+    function mutations(records) {
+      if (destroyed) return;
+      if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return onChange();
+      if (!integration || !state.creditTab?.isConnected || !state.panel?.isConnected) return onChange();
+      const relevant = records.some(({ target }) => {
+        const element = target.nodeType === 1 ? target : target.parentElement;
+        return (
+          element === integration.panelHost ||
+          element === integration.tabBar ||
+          element === state.creditTab ||
+          (integration.tabBar.contains(element) && !state.creditTab.contains(element)) ||
+          element?.contains(integration.tabBar)
+        );
+      });
+      if (!relevant) return;
+      const others = Array.from(integration.tabBar.children).some(
+        (tab) => tab !== state.creditTab && !tab.hidden && isSelected(tab)
+      );
+      if (!state.panel.hidden && (others || !ownsSelection(state.creditTab))) onDeactivate();
+      onChange();
+    }
+
     function watch(found) {
       if (destroyed) return;
       if (integration?.tabBar !== found?.tabBar) {
-        for (const type of ["pointerdown", "click"]) integration?.tabBar.removeEventListener(type, activate, true);
-        integration?.tabBar.removeEventListener("keydown", keydown, true);
-        for (const type of ["pointerdown", "click"]) found?.tabBar.addEventListener(type, activate, true);
+        detachBar();
+        found?.tabBar.addEventListener("click", activate, true);
         found?.tabBar.addEventListener("keydown", keydown, true);
+        if (found) interaction.enableSidebarTabWheelScrolling(found.tabBar);
       }
       integration = found;
       const root = found?.panelHost.parentElement?.parentElement || documentRef.documentElement;
       if (observedRoot === root) return;
       observer?.disconnect();
       observedRoot = root;
-      observer = new windowRef.MutationObserver((records) => {
-        if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return;
-        if (!integration || !state.creditTab?.isConnected || !state.panel?.isConnected) return onChange();
-        const relevant = records.some(({ target }) => {
-          const element = target.nodeType === 1 ? target : target.parentElement;
-          return (
-            element === integration.panelHost ||
-            element === integration.tabBar ||
-            (integration.tabBar.contains(element) &&
-              element !== state.creditTab &&
-              !state.creditTab?.contains(element)) ||
-            element?.contains(integration.tabBar)
-          );
-        });
-        if (!relevant) return;
-        const others = Array.from(integration.tabBar.children).some(
-          (tab) =>
-            tab !== state.creditTab &&
-            !tab.hidden &&
-            (tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected"))
-        );
-        if (!state.panel.hidden && (others || state.creditTab.getAttribute("aria-selected") !== "true")) onDeactivate();
-        onChange();
-      });
+      observer = new windowRef.MutationObserver(mutations);
       observer.observe(root, {
         childList: true,
         subtree: true,
@@ -9040,38 +9347,145 @@ window.MwiGuildCreditVersion = "1.2.50";
         attributeFilter: ["class", "style", "hidden", "aria-selected"]
       });
     }
-    // Run before document/target handlers, even when they stop bubbling.
-    windowRef.addEventListener("pointerdown", leave, true);
+
+    // Leave before document/target capture handlers can stop event propagation.
     windowRef.addEventListener("click", leave, true);
     function destroy() {
+      if (destroyed) return;
       destroyed = true;
       observer?.disconnect();
-      for (const type of ["pointerdown", "click"]) {
-        windowRef.removeEventListener(type, leave, true);
-        integration?.tabBar.removeEventListener(type, activate, true);
-      }
-      integration?.tabBar.removeEventListener("keydown", keydown, true);
+      detachBar();
+      windowRef.removeEventListener("click", leave, true);
       onDeactivate();
+      integration = null;
+      observedRoot = null;
     }
     return { locate, watch, destroy };
   }
 
-  return {
-    SIDEBAR_LABELS,
-    SIDEBAR_ACTIVATION_EVENT,
-    sidebarLocale,
-    findSidebarIntegration,
-    enableSidebarTabWheelScrolling,
-    createActivationCoordinator,
-    createDocumentActivationCoordinator,
-    integrationForCustomTab,
-    createIntegrationLocator,
-    suppressStaleMounts,
-    isOwnedSidebarTab,
-    prepareTab,
-    createSelectionController,
-    createLifecycle
-  };
+  // One owner for mounting, selection, scheduling and teardown. Feature views are callbacks.
+  function createController(options) {
+    const { window: windowRef, state, getLocale, getLabel, createPanel, recreatePanel } = options;
+    const selection = interaction.createSelectionController(state);
+    const coordinator = interaction.createDocumentActivationCoordinator(windowRef, OWNER, selection.hide);
+    const lifecycle = createLifecycle({
+      window: windowRef,
+      state,
+      onActivate: show,
+      onDeactivate: selection.hide,
+      onChange: schedule
+    });
+    let pending = null;
+    let interval = null;
+    let started = false;
+    let destroyed = false;
+    let resumeOpen = false;
+
+    function replacementRequested(event) {
+      if (event.detail === OWNER) destroy();
+    }
+
+    function show(panelHost, tabBar) {
+      if (destroyed || !state.panel?.isConnected) return;
+      coordinator.announce();
+      selection.show(panelHost, tabBar);
+      options.onActivate?.(state.panel);
+    }
+
+    function refresh() {
+      if (destroyed) return false;
+      if (state.creditTab?.dataset.mwiCreditSuperseded === "true") {
+        destroy();
+        return false;
+      }
+      const contentChanged = options.beforeRefresh?.();
+      const found = lifecycle.locate(getLocale());
+      lifecycle.watch(found);
+      if (!found) return false;
+      const { tabBar, tabPrototype, panelHost, detectedLocale } = found;
+      if (detectedLocale) options.onLocale?.(detectedLocale);
+      const locale = getLocale();
+      const staleSelected = dom.suppressStaleMounts(found, state.creditTab, state.panel) || resumeOpen;
+      resumeOpen = false;
+      const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
+      const currentIntegrationMatches = Boolean(
+        state.panel?.isConnected &&
+        state.panel.parentElement === panelHost &&
+        state.creditTab?.isConnected &&
+        state.creditTab.parentElement === tabBar
+      );
+      if (currentIntegrationMatches && !localeChanged) {
+        const label = getLabel();
+        if (state.creditTab.textContent !== label) state.creditTab.textContent = label;
+        if (staleSelected) show(panelHost, tabBar);
+        else if (selection.isActive() && !selection.sync(panelHost, tabBar)) selection.hide();
+        if (contentChanged && !state.panel.hidden) options.onRefresh?.(state.panel);
+        return true;
+      }
+
+      const keepPanelOpen =
+        staleSelected || Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab));
+      const tabHadFocus = state.creditTab === windowRef.document.activeElement;
+      // Recreate before hide so the panel shell can snapshot its focus and scroll position.
+      const replacement = localeChanged && state.panel ? recreatePanel(state.panel) : null;
+      selection.hide();
+      state.creditTab?.remove();
+      const panel = replacement || state.panel || createPanel();
+      panel.hidden = true;
+      const tab = dom.createTab(tabPrototype, panel, getLabel());
+      panelHost.append(panel);
+      tabBar.append(tab);
+      state.panel = panel;
+      state.creditTab = tab;
+      state.panelLocale = locale;
+      options.onMount?.(panel);
+      if (keepPanelOpen) show(panelHost, tabBar);
+      if (tabHadFocus) tab.focus({ preventScroll: true });
+      return true;
+    }
+
+    function schedule() {
+      if (destroyed || pending !== null) return;
+      pending = windowRef.setTimeout(() => {
+        pending = null;
+        refresh();
+      }, 75);
+    }
+
+    function start() {
+      if (started || destroyed) return;
+      started = true;
+      // Release an older controller synchronously, before acquiring any shared
+      // styles. Equal inline values cannot prove ownership across instances.
+      const documentRef = windowRef.document;
+      resumeOpen = Array.from(documentRef.querySelectorAll('[data-mwi-credit-tab="true"]')).some(
+        (tab) => dom.isOwnedSidebarTab(tab) && !tab.hidden && isSelected(tab)
+      );
+      documentRef.dispatchEvent(new windowRef.CustomEvent(SIDEBAR_REPLACEMENT_EVENT, { detail: OWNER }));
+      documentRef.addEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
+      interval = windowRef.setInterval(refresh, 3000);
+      windowRef.addEventListener("resize", schedule, { passive: true });
+      windowRef.addEventListener("orientationchange", schedule, { passive: true });
+      refresh();
+    }
+
+    function destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      windowRef.clearTimeout(pending);
+      windowRef.clearInterval(interval);
+      lifecycle.destroy();
+      coordinator.destroy();
+      windowRef.document.removeEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
+      windowRef.removeEventListener("resize", schedule);
+      windowRef.removeEventListener("orientationchange", schedule);
+      pending = null;
+      interval = null;
+    }
+    return { start, refresh, destroy };
+  }
+
+  return { ...dom, ...interaction, SIDEBAR_REPLACEMENT_EVENT, createLifecycle, createController };
 });
 
 
@@ -11023,7 +11437,8 @@ window.MwiGuildCreditVersion = "1.2.50";
             `<button data-role="building-category" data-category="${category}" data-active="${String(category === state.buildingCategory)}" aria-pressed="${String(category === state.buildingCategory)}" type="button">${escapeHtml(constructionCategoryLabel(category))}</button>`
         )
         .join("");
-      const tiles = definitions
+      const tiles = buildingDataApi
+        .sortCatalogDefinitions(definitions, state.guildBuildingDetails, state.guildShrineDetails)
         .map((definition) =>
           renderGuildBuildingTile(
             definition,
@@ -11659,14 +12074,26 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         sectionOpen
       );
     }
-    function profileMarkup(state, sectionOpen, projects) {
+    function joinedAtMarkup(member) {
+      const joinedAt = api.currentMemberJoinedAt(getBridge()?.trialHistoryContext, member);
+      let value = e(t("trialProfileJoinedAtUnknown"));
+      if (joinedAt !== null) {
+        const date = new Date(joinedAt);
+        const pad = (number) => String(number).padStart(2, "0");
+        const local = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        value = `<time datetime="${e(date.toISOString())}">${e(local)}</time>`;
+      }
+      return `<div data-trial-profile-joined-at title="${e(t("trialProfileJoinedAtHelp"))}"><dt><span>${e(t("trialProfileJoinedAt"))}</span></dt><dd>${value}</dd></div>`;
+    }
+    function profileMarkup(state, sectionOpen, projects, member) {
       const overview = overviewMarkup(projects, sectionOpen);
+      const joinedAt = joinedAtMarkup(member);
       if (state.status !== "ready")
-        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p>${overview}`;
+        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p><dl class="mwi-trial-profile-facts">${joinedAt}</dl>${overview}`;
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
-      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}</dl>`;
+      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}${joinedAt}</dl>`;
       html += overview;
       html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
       html += profileSection(
@@ -11758,7 +12185,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
       tooltipRecords.clear();
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(formatMemberName(member))} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(formatMemberName(member))} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects, member)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
@@ -17237,7 +17664,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     refreshTimer: null,
     refreshInFlight: false,
     refreshQueued: false,
-    panelSearchTimer: null,
     collapsedCreditSections: new Set(savedUiState.collapsedCreditSections),
     guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed,
     upgradeRefreshId: 0,
@@ -17332,12 +17758,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (state.panel && state.panel.isConnected && state.settingsOpen) refreshSettings(state.panel);
     },
     delay: 120,
-    setTimer: window.setTimeout.bind(window),
-    clearTimer: window.clearTimeout.bind(window)
-  });
-  const sidebarIntegrationTask = schedulerApi.createDebouncedTask({
-    task: () => ensureSidebarIntegration(),
-    delay: 75,
     setTimer: window.setTimeout.bind(window),
     clearTimer: window.clearTimeout.bind(window)
   });
@@ -17904,30 +18324,33 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     startGuildExchangeAdvisor
   } = exchangeAdvisor;
 
-  const sidebarSelection = sidebarIntegrationApi.createSelectionController(state);
-  const hideCreditPanel = sidebarSelection.hide;
-  const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
-    window,
-    "mwi-guild-credit-optimizer",
-    hideCreditPanel
-  );
-  const sidebarLifecycle = sidebarIntegrationApi.createLifecycle({
+  const sidebarController = sidebarIntegrationApi.createController({
     window,
     state,
-    onActivate: showCreditPanel,
-    onDeactivate: hideCreditPanel,
-    onChange: scheduleSidebarIntegration
+    getLocale: currentGameLocale,
+    getLabel: () => state.sidebarDisplayName || t("sidebarCredit"),
+    onLocale: (locale) => {
+      state.detectedGameLocale = locale;
+    },
+    createPanel,
+    recreatePanel,
+    beforeRefresh: refreshOfficialItemNameCatalog,
+    onRefresh: refreshActivePanel,
+    onActivate: (panel) => {
+      hydrateBridgeData();
+      extractItemDetailsFromReact();
+      hydrateLocalInitData();
+      refreshActivePanel(panel);
+    },
+    onMount: (panel) => {
+      if (state.shrineGuideEnabled) {
+        startShrineGuideObserver();
+        refreshGuildUpgrade(panel);
+      } else {
+        scheduleShrineGuide();
+      }
+    }
   });
-
-  function showCreditPanel(panelHost, tabBar) {
-    if (!state.panel || !state.panel.isConnected) return;
-    sidebarActivationCoordinator.announce();
-    sidebarSelection.show(panelHost, tabBar);
-    hydrateBridgeData();
-    extractItemDetailsFromReact();
-    hydrateLocalInitData();
-    refreshActivePanel(state.panel);
-  }
 
   function refreshActivePanel(panel) {
     if (state.settingsOpen) refreshSettings(panel);
@@ -17935,80 +18358,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
     else if (panel.dataset.activeView === "trials") refreshTrialHistory(panel);
     else refreshPanel(panel);
-  }
-
-  function ensureSidebarIntegration() {
-    if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return false;
-    const itemNamesChanged = refreshOfficialItemNameCatalog();
-    const integration = sidebarLifecycle.locate(currentGameLocale());
-    sidebarLifecycle.watch(integration);
-    if (!integration || !integration.panelHost) return false;
-    const { tabBar, tabPrototype, panelHost } = integration;
-    if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
-    const staleSelected = sidebarIntegrationApi.suppressStaleMounts(integration, state.creditTab, state.panel);
-    const locale = currentGameLocale();
-    const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
-    const currentIntegrationMatches = Boolean(
-      state.panel &&
-      state.panel.isConnected &&
-      state.panel.parentElement === panelHost &&
-      state.creditTab &&
-      state.creditTab.isConnected &&
-      state.creditTab.parentElement === tabBar
-    );
-    if (currentIntegrationMatches && !localeChanged) {
-      sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
-      if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
-      if (staleSelected) showCreditPanel(panelHost, tabBar);
-      return true;
-    }
-
-    const keepPanelOpen =
-      staleSelected ||
-      Boolean(
-        state.panel &&
-        !state.panel.hidden &&
-        state.creditTab &&
-        state.creditTab.getAttribute("aria-selected") === "true"
-      );
-    const replacementPanel =
-      localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
-    hideCreditPanel();
-    if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
-
-    if (replacementPanel) state.panel = replacementPanel;
-    else if (state.panel && !state.panel.isConnected) state.panel = null;
-    state.creditTab = null;
-
-    const creditTab = tabPrototype.cloneNode(true);
-    creditTab.dataset.mwiCreditTab = "true";
-    creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
-    tabBar.append(creditTab);
-    sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
-
-    const panel = state.panel || createPanel();
-    panel.hidden = true;
-    panelHost.append(panel);
-    sidebarIntegrationApi.prepareTab(creditTab, panel);
-    state.panel = panel;
-    state.panelLocale = locale;
-    state.creditTab = creditTab;
-    if (state.shrineGuideEnabled) {
-      startShrineGuideObserver();
-      refreshGuildUpgrade(panel);
-    } else {
-      scheduleShrineGuide();
-    }
-    if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
-    return true;
-  }
-
-  function scheduleSidebarIntegration() {
-    if (!sidebarIntegrationTask.pending()) sidebarIntegrationTask.schedule();
-  }
-
-  function bootstrapSidebarIntegration() {
-    ensureSidebarIntegration();
   }
 
   function exchangeModalInteractionHandler(event) {
@@ -18025,12 +18374,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     marketDataRefreshTask.dispose();
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
-    sidebarIntegrationTask.dispose();
-    sidebarActivationCoordinator.destroy();
+    sidebarController.destroy();
     exchangeAdvisorFrameTask.dispose();
-    sidebarLifecycle.destroy();
     window.clearTimeout(state.refreshTimer);
-    window.clearInterval(state.panelSearchTimer);
     stopShrineGuideObserver();
     if (state.exchangeAdvisorRootObserver) state.exchangeAdvisorRootObserver.disconnect();
     if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
@@ -18042,8 +18388,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     document.removeEventListener("input", exchangeModalInteractionHandler, true);
     document.removeEventListener("click", exchangeModalInteractionHandler, true);
-    window.removeEventListener("resize", scheduleSidebarIntegration);
-    window.removeEventListener("orientationchange", scheduleSidebarIntegration);
   }
 
   trialHistoryView.start();
@@ -18052,11 +18396,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   hydrateLocalInitData();
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
-  state.panelSearchTimer = window.setInterval(bootstrapSidebarIntegration, 3000);
-  window.addEventListener("resize", scheduleSidebarIntegration, { passive: true });
-  window.addEventListener("orientationchange", scheduleSidebarIntegration, { passive: true });
   window.addEventListener("pagehide", disposeRuntime, { once: true });
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
-  bootstrapSidebarIntegration();
+  sidebarController.start();
 })();

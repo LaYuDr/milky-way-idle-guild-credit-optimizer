@@ -91,3 +91,48 @@ test("截图编号按角色身份稳定分配，同名不同 ID 与无 ID 记录
   assert.equal(format(member), "玩家 1");
   assert.deepEqual(member, { id: "1", name: "Original" });
 });
+
+test("入会时间在资料就绪及加载失败时均可显示，未知时不产生虚假日期", () => {
+  const { createRenderer } = require("../src/ui/trial-player-view.js");
+  const api = require("../src/trial-history.js");
+  const { createLocalizer } = require("../src/localization.js");
+  const joinedAt = "2026-08-01T12:34:00.000Z";
+  let context = api.updateContext(
+    {},
+    {
+      guild: { id: "7" },
+      guildCharacterMap: { 1: { joinTime: joinedAt } }
+    },
+    Date.parse("2026-09-01T00:00:00Z")
+  );
+  for (const locale of ["zh-CN", "en"]) {
+    const { t } = createLocalizer(locale);
+    const renderer = createRenderer({
+      t,
+      escapeHtml: (value) => String(value).replaceAll('"', "&quot;"),
+      trialHistoryApi: api,
+      getBridge: () => ({ trialHistoryContext: context }),
+      isScreenshotMode: () => true,
+      formatMemberName: (member) => member.name,
+      profileIcon: () => "",
+      resolveItemName: (hrid) => hrid
+    });
+    const render = (status, member = { id: "1", name: "Alpha" }) =>
+      renderer.render({
+        member,
+        weeks: [],
+        profileState: { status, profile: { totalLevel: 1800, combatLevel: 112.8 } }
+      });
+    for (const status of ["ready", "loading", "timeout", "unavailable", "mismatch"]) {
+      const html = render(status);
+      assert.match(html, /<time datetime="2026-08-01T12:34:00.000Z">\d{4}-\d{2}-\d{2} \d{2}:\d{2}<\/time>/);
+      assert.ok(html.includes(t("trialProfileJoinedAt")));
+      assert.ok(html.indexOf("data-trial-profile-joined-at") < html.indexOf('data-trial-profile-section="overview"'));
+      if (status === "ready") assert.ok(html.indexOf("112.8") < html.indexOf("data-trial-profile-joined-at"));
+    }
+    const unknown = render("ready", { id: "2", name: "Alpha" });
+    assert.ok(unknown.includes(`<dd>${t("trialProfileJoinedAtUnknown")}</dd>`));
+    assert.ok(!unknown.includes("<time"));
+  }
+  context = {};
+});

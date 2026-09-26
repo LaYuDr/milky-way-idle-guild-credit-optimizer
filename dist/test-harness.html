@@ -1900,6 +1900,15 @@
       panel.querySelector(`[data-role="remove-building-plan"][data-building-hrid="${unknownBuildingHrid}"]`).click();
       await waitForOrder(expectedOrder);
 
+      const catalogOrder = () =>
+        [...panel.querySelectorAll(".mwi-building-tile:not([hidden])")].map((tile) =>
+          tile.dataset.buildingHrid.split("/").pop()
+        );
+      const originalCatalogOrder = catalogOrder();
+      panel.querySelector('[data-role="building-category"][data-category="combat"]').click();
+      audit.catalogCombatOrder =
+        catalogOrder().join(",") === "combat_encampment,dining_room,dojo,armory,gym,archery_range";
+      panel.querySelector('[data-role="building-category"][data-category="all"]').click();
       let searchInput = panel.querySelector('[data-role="building-search"]');
       searchInput.focus();
       searchInput.value = "gym";
@@ -2063,6 +2072,11 @@
         (plan) => plan.buildingHrid === unknownBuildingHrid
       );
       audit.checks = {
+        catalogNativeOrder:
+          catalogOrder().slice(0, 23).join(",") ===
+          "guild_hall,builders_hall,treasury,archives,skilling_encampment,combat_encampment,dairy_barn,garden,log_shed,forge,workshop,sewing_parlor,kitchen,brewery,laboratory,observatory,dining_room,library,dojo,armory,gym,archery_range,mystical_study",
+        catalogCategoryOrder: audit.catalogCombatOrder,
+        catalogOrderAfterSearchAndQueueChanges: catalogOrder().join(",") === originalCatalogOrder.join(","),
         forecastLookbackIsOptional:
           audit.forecastInitiallyHidden &&
           audit.planningAlwaysVisible &&
@@ -2097,7 +2111,8 @@
           compactNumber(panel.querySelector('[data-role="latest-weekly-guild-points"]')?.textContent) === "9648" &&
           normalizedText(panel.querySelector('[data-role="weekly-guild-point-growth"]')) === "0%" &&
           compactNumber(panel.querySelector('[data-role="next-week-guild-point-forecast"]')?.textContent) ===
-            String(Math.floor(62400 / expectedEstimatedCount)) &&
+            // Remainder points are allocated to the newest estimated weeks.
+            String(Math.ceil(62400 / expectedEstimatedCount)) &&
           compactNumber(panel.querySelector('[data-role="construction-eta"]')?.textContent).includes("2") &&
           !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
           !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
@@ -3199,9 +3214,9 @@
     const prepareSidebarIntegrationAudit = async () => {
       const checks = {};
       let tab = await waitFor(() => document.querySelector('#test-tabs [data-mwi-credit-tab="true"]'));
-      const bar = tab.parentElement;
+      let bar = tab.parentElement;
       const panel = document.getElementById("mwi-credit-optimizer");
-      const host = panel.parentElement;
+      let host = panel.parentElement;
       const native = bar.querySelector("button");
       const nativePanel = Array.from(host.children).find((node) => node !== panel);
       nativePanel.style.display = "block";
@@ -3210,9 +3225,16 @@
       native.tabIndex = 0;
       checks.ownedAriaLinks =
         tab.getAttribute("aria-controls") === panel.id && panel.getAttribute("aria-labelledby") === tab.id;
+      tab.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+      checks.pointerDownDoesNotActivate = panel.hidden;
       tab.click();
       checks.openHidesNative =
         !panel.hidden && nativePanel.style.display === "none" && tab.tabIndex === 0 && native.tabIndex === -1;
+      const latePanel = document.createElement("section");
+      latePanel.style.setProperty("display", "grid", "important");
+      host.append(latePanel);
+      await waitFor(() => latePanel.style.display === "none", 1000);
+      checks.newSiblingPanelIsHidden = !panel.hidden && latePanel.style.display === "none";
       const foreign = document.createElement("button");
       foreign.textContent = "Foreign";
       foreign.setAttribute("role", "tab");
@@ -3239,6 +3261,13 @@
         foreignPanel.hidden = false;
         foreign.setAttribute("aria-selected", "true");
       };
+      foreign.disabled = true;
+      foreign.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      checks.disabledForeignDoesNotCloseGuild = !panel.hidden;
+      foreign.disabled = false;
+      // Modified clicks remain the owning plugin/browser's decision.
+      native.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }));
+      checks.modifiedNativeDoesNotCloseGuild = !panel.hidden;
       document.addEventListener("click", openForeign, true);
       foreign.click();
       checks.captureStoppedForeignClosesGuild =
@@ -3259,6 +3288,9 @@
       checks.targetStoppedReturnToGuild = !panel.hidden && !host.hidden && foreignPanel.hidden;
       native.click();
       checks.originalDisplayRestored = panel.hidden && nativePanel.style.display === "block";
+      checks.importantDisplayRestored =
+        latePanel.style.display === "grid" && latePanel.style.getPropertyPriority("display") === "important";
+      latePanel.remove();
       tab.focus();
       const key = (value) =>
         document.activeElement.dispatchEvent(
@@ -3278,6 +3310,10 @@
       checks.externalSelectionClosesGuild = panel.hidden;
       foreign.setAttribute("aria-selected", "false");
       tab.click();
+      tab.setAttribute("aria-selected", "false");
+      await waitFor(() => panel.hidden, 1000);
+      tab.click();
+      checks.partialOwnedSelectionRecovers = !panel.hidden && tab.getAttribute("aria-selected") === "true";
       // MWITools may use Guild as its template, inheriting our data marker.
       const clonedAsset = tab.cloneNode(true);
       clonedAsset.id = "mwitools-asset-history-tab";
@@ -3341,10 +3377,79 @@
       foreign.removeEventListener("click", openForeign);
       foreign.remove();
       foreignPanel.remove();
+      // React may replace only the tab bar (including copied data markers), or
+      // discard the panel container. Reuse the owned panel and release old listeners.
+      const oldBar = bar;
+      const newBar = oldBar.cloneNode(false);
+      oldBar.replaceWith(newBar);
+      for (const child of Array.from(oldBar.children)) {
+        if (child !== tab && !child.hidden) newBar.append(child);
+      }
+      bar = newBar;
+      tab = await waitFor(() => bar.querySelector("#mwi-credit-sidebar-tab"), 1000);
+      checks.replacedBarRecovers = !panel.hidden && tab.isConnected;
+      checks.oldBarWheelReleased =
+        !oldBar.hasAttribute("data-mwi-sidebar-wheel-scroll") && oldBar.style.overflowX === "";
+      const priorHost = host;
+      host = priorHost.cloneNode(false);
+      priorHost.replaceWith(host);
+      host.append(nativePanel);
+      await waitFor(() => panel.parentElement === host, 1000);
+      tab = bar.querySelector("#mwi-credit-sidebar-tab");
+      checks.replacedHostReusesPanel = !panel.hidden && panel.parentElement === host;
+      const originalButtonWidths = Array.from(bar.children, (button) => button.style.flex);
+      for (const button of bar.children) button.style.flex = "0 0 220px";
+      bar.scrollLeft = 0;
+      const wheel = new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
+      bar.dispatchEvent(wheel);
+      checks.clonedBarWheelWorks = bar.scrollLeft > 0 && wheel.defaultPrevented;
+      bar.scrollLeft = bar.scrollWidth;
+      const boundaryWheel = new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
+      bar.dispatchEvent(boundaryWheel);
+      checks.wheelBoundaryFallsThrough = !boundaryWheel.defaultPrevented;
+      Array.from(bar.children).forEach((button, index) => {
+        button.style.flex = originalButtonWidths[index];
+      });
+      const replacementState = {};
+      let replacementMounts = 0;
+      const replacementController = window.MwiGuildCreditSidebarIntegration.createController({
+        window,
+        state: replacementState,
+        getLocale: () => "zh-CN",
+        getLabel: () => "Guild replacement",
+        createPanel: () => {
+          const replacementPanel = document.createElement("section");
+          replacementPanel.id = "mwi-credit-optimizer";
+          return replacementPanel;
+        },
+        recreatePanel: () => {
+          throw new Error("unexpected locale recreation");
+        },
+        onMount: () => replacementMounts++
+      });
+      replacementController.start();
+      replacementController.start();
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      checks.replacementRetiresPreviousController =
+        panel.hidden &&
+        tab.hidden &&
+        !replacementState.panel.hidden &&
+        nativePanel.style.display === "none" &&
+        replacementMounts === 1 &&
+        document.querySelectorAll("#mwi-credit-sidebar-tab").length === 1;
+      checks.replacementKeepsWheel = bar.style.overflowX === "auto";
+      replacementController.destroy();
+      replacementController.destroy();
+      replacementController.start();
+      checks.replacementDisposesOnce = replacementState.panel.hidden && nativePanel.style.display === "block";
       window.dispatchEvent(new Event("pagehide"));
       checks.disposeRestoresNative = panel.hidden && nativePanel.style.display === "block";
       tab.click();
       checks.disposedListenersDoNotReopen = panel.hidden;
+      checks.disposedWheelReleased = !bar.hasAttribute("data-mwi-sidebar-wheel-scroll");
+      const closedWheel = new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
+      bar.dispatchEvent(closedWheel);
+      checks.disposedWheelFallsThrough = !closedWheel.defaultPrevented;
       const report = { checks };
       document.getElementById("layout-audit-output").textContent = JSON.stringify(report);
       return report;
@@ -4084,9 +4189,16 @@
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       checks.profileTooltipsReadOnly =
         profileFrames.length === tooltipRequestsBefore && JSON.stringify(saved()) === tooltipSavedBefore;
-      checks.profileOnlyLevelFacts =
-        profileFacts.children.length === 2 &&
-        [...profileFacts.querySelectorAll("dd")].map((el) => el.textContent).join(",") === "1800,112.8";
+      checks.profileLevelAndMembershipFacts =
+        profileFacts.children.length === 3 &&
+        [...profileFacts.querySelectorAll("dd")]
+          .slice(0, 2)
+          .map((el) => el.textContent)
+          .join(",") === "1800,112.8" &&
+        profileFacts.lastElementChild.matches("[data-trial-profile-joined-at]");
+      checks.profileUnknownJoiningTime =
+        profileFacts.lastElementChild.querySelector("dd").textContent === (english ? "Unknown" : "未知") &&
+        !profileFacts.lastElementChild.querySelector("time");
       const profileStoredBefore = JSON.stringify(saved());
       const profileRequestsBefore = profileFrames.length;
       const profileSection = (key) => host.querySelector(`[data-trial-profile-section="${key}"]`);
@@ -4318,6 +4430,7 @@
       host.querySelector("[data-trial-profile-refresh]").click();
       host.querySelector("[data-trial-player-back]").click();
       host.querySelectorAll("[data-trial-profile]")[1].click();
+      checks.profileJoiningTimeAvailableWhileLoading = Boolean(host.querySelector("[data-trial-profile-joined-at]"));
       checks.playerOverviewAvailableWhileLoading =
         overviewRows().length === 15 &&
         overviewCounts().some((value) => Number(value) > 0) &&
@@ -4922,6 +5035,17 @@
       [...host.querySelectorAll("[data-trial-profile]")]
         .find((button) => JSON.parse(button.dataset.trialIdentity).id === "101")
         .click();
+      const joinedFact = host.querySelector("[data-trial-profile-joined-at]");
+      checks.profileKnownJoiningTime = joinedFact?.querySelector("time")?.dateTime === "2026-08-01T00:00:00.000Z";
+      checks.profileJoiningTimeContained =
+        joinedFact &&
+        [...joinedFact.querySelectorAll("dt, dd")].every((cell) => {
+          const bounds = cell.getBoundingClientRect();
+          const profile = host.querySelector(".mwi-trial-player-profile").getBoundingClientRect();
+          return (
+            bounds.left >= profile.left && bounds.right <= profile.right && cell.scrollWidth <= cell.clientWidth + 1
+          );
+        });
       const longTables = [...host.querySelectorAll('[data-role="trial-stats-table"]')].filter(
         (table) => table.querySelectorAll("tbody tr").length === 60
       );

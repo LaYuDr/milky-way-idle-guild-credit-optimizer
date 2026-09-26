@@ -47,6 +47,8 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/runtime/game-data.js",
     "src/ui/dom.js",
     "src/ui/sortable.js",
+    "src/ui/sidebar-dom.js",
+    "src/ui/sidebar-interaction.js",
     "src/ui/sidebar-integration.js",
     "src/ui/styles.js",
     "src/ui/upgrade-view.js",
@@ -63,6 +65,9 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.ok(files.indexOf("src/runtime/config.js") < files.indexOf("src/trial-history.js"));
   assert.ok(files.indexOf("src/ui/upgrade-view.js") < files.indexOf("src/ui/settings-view.js"));
   assert.ok(files.indexOf("src/ui/settings-view.js") < files.indexOf("src/ui/panel-shell.js"));
+  for (const file of ["src/ui/sidebar-dom.js", "src/ui/sidebar-interaction.js"]) {
+    assert.ok(files.indexOf(file) < files.indexOf("src/ui/sidebar-integration.js"));
+  }
   for (const file of files) assert.equal(fs.existsSync(path.join(root, file)), true, `missing ${file}`);
 });
 

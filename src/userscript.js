@@ -153,7 +153,6 @@
     refreshTimer: null,
     refreshInFlight: false,
     refreshQueued: false,
-    panelSearchTimer: null,
     collapsedCreditSections: new Set(savedUiState.collapsedCreditSections),
     guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed,
     upgradeRefreshId: 0,
@@ -248,12 +247,6 @@
       if (state.panel && state.panel.isConnected && state.settingsOpen) refreshSettings(state.panel);
     },
     delay: 120,
-    setTimer: window.setTimeout.bind(window),
-    clearTimer: window.clearTimeout.bind(window)
-  });
-  const sidebarIntegrationTask = schedulerApi.createDebouncedTask({
-    task: () => ensureSidebarIntegration(),
-    delay: 75,
     setTimer: window.setTimeout.bind(window),
     clearTimer: window.clearTimeout.bind(window)
   });
@@ -820,30 +813,33 @@
     startGuildExchangeAdvisor
   } = exchangeAdvisor;
 
-  const sidebarSelection = sidebarIntegrationApi.createSelectionController(state);
-  const hideCreditPanel = sidebarSelection.hide;
-  const sidebarActivationCoordinator = sidebarIntegrationApi.createDocumentActivationCoordinator(
-    window,
-    "mwi-guild-credit-optimizer",
-    hideCreditPanel
-  );
-  const sidebarLifecycle = sidebarIntegrationApi.createLifecycle({
+  const sidebarController = sidebarIntegrationApi.createController({
     window,
     state,
-    onActivate: showCreditPanel,
-    onDeactivate: hideCreditPanel,
-    onChange: scheduleSidebarIntegration
+    getLocale: currentGameLocale,
+    getLabel: () => state.sidebarDisplayName || t("sidebarCredit"),
+    onLocale: (locale) => {
+      state.detectedGameLocale = locale;
+    },
+    createPanel,
+    recreatePanel,
+    beforeRefresh: refreshOfficialItemNameCatalog,
+    onRefresh: refreshActivePanel,
+    onActivate: (panel) => {
+      hydrateBridgeData();
+      extractItemDetailsFromReact();
+      hydrateLocalInitData();
+      refreshActivePanel(panel);
+    },
+    onMount: (panel) => {
+      if (state.shrineGuideEnabled) {
+        startShrineGuideObserver();
+        refreshGuildUpgrade(panel);
+      } else {
+        scheduleShrineGuide();
+      }
+    }
   });
-
-  function showCreditPanel(panelHost, tabBar) {
-    if (!state.panel || !state.panel.isConnected) return;
-    sidebarActivationCoordinator.announce();
-    sidebarSelection.show(panelHost, tabBar);
-    hydrateBridgeData();
-    extractItemDetailsFromReact();
-    hydrateLocalInitData();
-    refreshActivePanel(state.panel);
-  }
 
   function refreshActivePanel(panel) {
     if (state.settingsOpen) refreshSettings(panel);
@@ -851,80 +847,6 @@
     else if (panel.dataset.activeView === "construction") refreshGuildConstruction(panel);
     else if (panel.dataset.activeView === "trials") refreshTrialHistory(panel);
     else refreshPanel(panel);
-  }
-
-  function ensureSidebarIntegration() {
-    if (state.creditTab?.dataset.mwiCreditSuperseded === "true") return false;
-    const itemNamesChanged = refreshOfficialItemNameCatalog();
-    const integration = sidebarLifecycle.locate(currentGameLocale());
-    sidebarLifecycle.watch(integration);
-    if (!integration || !integration.panelHost) return false;
-    const { tabBar, tabPrototype, panelHost } = integration;
-    if (integration.detectedLocale) state.detectedGameLocale = integration.detectedLocale;
-    const staleSelected = sidebarIntegrationApi.suppressStaleMounts(integration, state.creditTab, state.panel);
-    const locale = currentGameLocale();
-    const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
-    const currentIntegrationMatches = Boolean(
-      state.panel &&
-      state.panel.isConnected &&
-      state.panel.parentElement === panelHost &&
-      state.creditTab &&
-      state.creditTab.isConnected &&
-      state.creditTab.parentElement === tabBar
-    );
-    if (currentIntegrationMatches && !localeChanged) {
-      sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
-      if (itemNamesChanged && !state.panel.hidden) refreshActivePanel(state.panel);
-      if (staleSelected) showCreditPanel(panelHost, tabBar);
-      return true;
-    }
-
-    const keepPanelOpen =
-      staleSelected ||
-      Boolean(
-        state.panel &&
-        !state.panel.hidden &&
-        state.creditTab &&
-        state.creditTab.getAttribute("aria-selected") === "true"
-      );
-    const replacementPanel =
-      localeChanged && state.panel && state.panel.isConnected ? recreatePanel(state.panel) : null;
-    hideCreditPanel();
-    if (state.creditTab && state.creditTab.isConnected) state.creditTab.remove();
-
-    if (replacementPanel) state.panel = replacementPanel;
-    else if (state.panel && !state.panel.isConnected) state.panel = null;
-    state.creditTab = null;
-
-    const creditTab = tabPrototype.cloneNode(true);
-    creditTab.dataset.mwiCreditTab = "true";
-    creditTab.replaceChildren(document.createTextNode(state.sidebarDisplayName || t("sidebarCredit")));
-    tabBar.append(creditTab);
-    sidebarIntegrationApi.enableSidebarTabWheelScrolling(tabBar);
-
-    const panel = state.panel || createPanel();
-    panel.hidden = true;
-    panelHost.append(panel);
-    sidebarIntegrationApi.prepareTab(creditTab, panel);
-    state.panel = panel;
-    state.panelLocale = locale;
-    state.creditTab = creditTab;
-    if (state.shrineGuideEnabled) {
-      startShrineGuideObserver();
-      refreshGuildUpgrade(panel);
-    } else {
-      scheduleShrineGuide();
-    }
-    if (keepPanelOpen) showCreditPanel(panelHost, tabBar);
-    return true;
-  }
-
-  function scheduleSidebarIntegration() {
-    if (!sidebarIntegrationTask.pending()) sidebarIntegrationTask.schedule();
-  }
-
-  function bootstrapSidebarIntegration() {
-    ensureSidebarIntegration();
   }
 
   function exchangeModalInteractionHandler(event) {
@@ -941,12 +863,9 @@
     marketDataRefreshTask.dispose();
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
-    sidebarIntegrationTask.dispose();
-    sidebarActivationCoordinator.destroy();
+    sidebarController.destroy();
     exchangeAdvisorFrameTask.dispose();
-    sidebarLifecycle.destroy();
     window.clearTimeout(state.refreshTimer);
-    window.clearInterval(state.panelSearchTimer);
     stopShrineGuideObserver();
     if (state.exchangeAdvisorRootObserver) state.exchangeAdvisorRootObserver.disconnect();
     if (state.exchangeAdvisorModalObserver) state.exchangeAdvisorModalObserver.disconnect();
@@ -958,8 +877,6 @@
     }
     document.removeEventListener("input", exchangeModalInteractionHandler, true);
     document.removeEventListener("click", exchangeModalInteractionHandler, true);
-    window.removeEventListener("resize", scheduleSidebarIntegration);
-    window.removeEventListener("orientationchange", scheduleSidebarIntegration);
   }
 
   trialHistoryView.start();
@@ -968,11 +885,8 @@
   hydrateLocalInitData();
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
-  state.panelSearchTimer = window.setInterval(bootstrapSidebarIntegration, 3000);
-  window.addEventListener("resize", scheduleSidebarIntegration, { passive: true });
-  window.addEventListener("orientationchange", scheduleSidebarIntegration, { passive: true });
   window.addEventListener("pagehide", disposeRuntime, { once: true });
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
-  bootstrapSidebarIntegration();
+  sidebarController.start();
 })();

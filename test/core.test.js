@@ -2169,10 +2169,12 @@ test("侧栏语言稳定后会重建静态文案，且插件根层不遮挡原�
   const userscriptSource = fs.readFileSync(path.join(__dirname, "..", "src", "userscript.js"), "utf8");
   const stylesSource = fs.readFileSync(path.join(__dirname, "..", "src", "ui", "styles.js"), "utf8");
   const harnessSource = fs.readFileSync(path.join(__dirname, "..", "tools", "test-harness.html"), "utf8");
-  assert.match(userscriptSource, /integration\.detectedLocale/);
-  assert.match(userscriptSource, /state\.panelLocale\s*!==\s*locale/);
-  assert.match(userscriptSource, /localeChanged[\s\S]{0,400}recreatePanel/);
-  assert.match(userscriptSource, /state\.panelLocale\s*=\s*locale/);
+  const sidebarSource = fs.readFileSync(path.join(__dirname, "..", "src", "ui", "sidebar-integration.js"), "utf8");
+  assert.match(userscriptSource, /getLocale: currentGameLocale/);
+  assert.match(userscriptSource, /state\.detectedGameLocale = locale/);
+  assert.match(sidebarSource, /state\.panelLocale\s*!==\s*locale/);
+  assert.match(sidebarSource, /localeChanged && state\.panel \? recreatePanel/);
+  assert.match(sidebarSource, /state\.panelLocale\s*=\s*locale/);
   assert.doesNotMatch(userscriptSource, /itemNameCatalogRetryCount\s*>=\s*5/);
   assert.match(stylesSource, /#mwi-credit-optimizer\{[^}]*z-index:0/);
   assert.match(harnessSource, /searchParams\.get\("localeRaceAudit"\)/);
@@ -2282,7 +2284,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /item-name-catalog-status|updateItemNameCoverage/);
   assert.match(source, /items_sprite/);
   assert.match(source, /tabPanelsContainer/);
-  assert.match(source, /score: \(visible \? 1000 : 0\) \+ recognized\.length/);
   assert.match(source, /const currentIntegrationMatches = Boolean/);
   assert.match(source, /state\.panel\.parentElement === panelHost/);
   assert.match(source, /state\.creditTab\.parentElement === tabBar/);
@@ -2290,12 +2291,10 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
     source,
     /state\.panel && state\.panel\.isConnected && state\.creditTab && state\.creditTab\.isConnected\) return;/
   );
-  assert.match(source, /window\.addEventListener\("resize", scheduleSidebarIntegration/);
-  assert.match(source, /window\.addEventListener\("orientationchange", scheduleSidebarIntegration/);
-  assert.match(source, /function bootstrapSidebarIntegration\(\)/);
-  assert.match(source, /window\.setInterval\(bootstrapSidebarIntegration, 3000\)/);
-  assert.match(source, /\n\s*bootstrapSidebarIntegration\(\);\s*\n\}\)\(\);/);
-  assert.doesNotMatch(source, /window\.setTimeout\(ensureSidebarIntegration, 1000\)/);
+  assert.match(source, /sidebarIntegrationApi\.createController\(/);
+  assert.match(source, /sidebarController\.destroy\(\)/);
+  assert.match(source, /sidebarController\.start\(\)/);
+  assert.doesNotMatch(source, /function ensureSidebarIntegration\(\)/);
   assert.match(harnessSource, /searchParams\.get\("sidebarStartupAudit"\)/);
   assert.match(harnessSource, /creditTabMountsWithinHalfSecond/);
   assert.match(source, /MwiGuildCreditSidebarIntegration/);

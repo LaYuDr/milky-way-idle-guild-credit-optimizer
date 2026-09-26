@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.51] - 2026-09-26
+
+### Changed
+
+- Show current guild joining time in trial player profiles, preserve unknown membership states, refactor sidebar ownership and interaction lifecycle, follow native guild building catalog order, and update development and CI workflow guidance.
+
 ## [1.2.50] - 2026-09-25
 
 ### Changed

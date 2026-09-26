@@ -746,7 +746,8 @@
             `<button data-role="building-category" data-category="${category}" data-active="${String(category === state.buildingCategory)}" aria-pressed="${String(category === state.buildingCategory)}" type="button">${escapeHtml(constructionCategoryLabel(category))}</button>`
         )
         .join("");
-      const tiles = definitions
+      const tiles = buildingDataApi
+        .sortCatalogDefinitions(definitions, state.guildBuildingDetails, state.guildShrineDetails)
         .map((definition) =>
           renderGuildBuildingTile(
             definition,

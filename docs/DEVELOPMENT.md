@@ -40,7 +40,7 @@ complete diagnostic. Successful logs are also retained.
 # Development iteration: explicit affected tests, plus full formatting and lint.
 npm run check:quick -- test/trial-history.test.js test/runtime-storage.test.js
 
-# Handoff: full check, git diff --check and release:dry-run, each once.
+# Behavioral code/tooling handoff: full check, diff check and release dry run.
 npm run check:handoff
 
 # CI: full check and git diff --exit-code, as before.
@@ -49,17 +49,52 @@ npm run check:ci
 
 Quick mode requires at least one existing `test/*.test.js` file; it does not
 infer dependencies, build artifacts or run repository verification. Use all
-tests when impact is uncertain. It never substitutes for the final full gate.
+tests when behavioral impact is uncertain. It never substitutes for a required
+full gate; copy-only and documentation-only handoffs use the lighter path below.
 Do not run `check`, `check:handoff` and `check:ci` consecutively on unchanged
 files: they share the same five-stage gate. CI's clean-diff check is for a
 committed checkout, not a mixed working tree. Individual npm commands remain
 available for detailed diagnostics.
 
-For small documentation changes, inspect the diff and formatting during
-iteration. For business rules, storage or protocol changes, choose affected
+### Copy-only and documentation-only handoff
+
+Do not run a full functional suite just because visible wording is stored in a
+JavaScript file. Review the actual diff first: the light path covers wording
+only, with unchanged translation keys, interpolation expressions, markup,
+selectors, logic, data semantics and action meaning. Verify Chinese/English
+consistency, placeholders and escaping. A mixed diff follows the higher-risk
+change's checks; the filename alone never establishes copy-only scope.
+
+For example, when only literal wording in `src/localization.js` changes:
+
+```bash
+git diff -- src/localization.js
+./node_modules/.bin/prettier --check src/localization.js
+./node_modules/.bin/eslint src/localization.js
+git diff --check -- src/localization.js
+```
+
+Use the actual changed-file list. For documentation, check formatting, the diff
+and referenced paths/commands; ESLint is unnecessary. These are sufficient for
+ordinary copy/documentation handoff: do not additionally run `check:quick`,
+`check:handoff`, full Node tests, browser matrices or `release:dry-run`.
+If an existing test asserts the changed copy, update its expected wording and
+run that test only. Do not create a test just to duplicate a label.
+If wording length could clip a control, inspect that control at a representative
+narrow width; add wider coverage only when an actual layout risk warrants it.
+Run `npm run build` when handing off an updated installable script, not merely
+to edit documentation. State which limited checks ran without claiming full
+regression coverage.
+
+Formal release and CI commands still run their built-in full gates. For a
+copy-only release, do not run another local full gate before the release's own
+check. This distinction does not authorize a release or skip its verification.
+
+For business rules, storage or protocol changes, choose affected
 Node tests and add browser/game verification at the affected boundary. For
 layout changes, run the affected feature's full browser matrix. For shared
-styles, localization or shell changes, expand to every affected feature.
+styles, localization logic or shell changes, expand to every affected feature.
+Literal translation edits follow the copy-only path above.
 Once the required checks pass, repeat them only after relevant changes,
 failures or newly discovered risks.
 
@@ -246,6 +281,27 @@ These are synthetic compatibility contracts, not proof of an installed plugin
 version working in the live game; also verify the real Guild/Invite/Enhance/
 P&L/Planning/Profit tabs in both directions before release.
 
+The native-sidebar implementation has three responsibilities: `src/ui/sidebar-dom.js`
+locates native containers and validates node ownership; `src/ui/sidebar-interaction.js`
+owns reversible selection/style writes, wheel bindings and the activation protocol;
+`src/ui/sidebar-integration.js` owns the controller lifecycle. `src/userscript.js`
+provides feature callbacks only. Internal feature tabs are a separate surface.
+
+Create the Guild button directly, borrowing only native CSS classes; never copy
+arbitrary native/plugin attributes. Keep `mwi-credit-sidebar-tab`,
+`mwi-credit-optimizer`, `data-mwi-credit-tab` and the document-level
+`mwi:sidebar-plugin-activated` string-owner protocol stable. A new controller
+synchronously retires a previous controller using `mwi:guild-sidebar-replacing`
+before acquiring shared DOM styles. Selection and scroll state belong to the live
+nodes; no native tab ordering or new storage key is introduced.
+
+The integration audit also covers disabled/modified clicks, click-only activation,
+new sibling panels, `display` priority restoration, tab-bar and panel-host
+replacement, cloned wheel markers, wheel boundaries, listener disposal and
+same-version controller takeover. Node tests cover locator boundaries, clean
+button creation, RTL scrolling and restoration after foreign writes. Reference
+sources and licensing boundaries are recorded in `references/README.md`.
+
 The runtime checks cached node ownership/visibility every three seconds and
 performs a full sidebar search at most every thirty seconds while the cache is
 valid. Missing/disconnected/hidden layouts invalidate it immediately. A local
@@ -367,6 +423,12 @@ For the construction view, use:
 ```text
 http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebarWidth=420
 ```
+
+The catalog follows the official client's `sortIndex` (public
+`main.bdda2571.chunk.js`, verified 2026-09-25), separately for buildings and shrines.
+`sortCatalogDefinitions` uses a screenshot-verified native fallback order when a group's
+indices are incomplete or invalid; it never mixes the two numbering scales. Category and
+search filters retain that order. Sorting the catalog does not reorder the user's queue.
 
 Repeat the construction audit at the same eleven widths. It also verifies the
 queue-first planning flow against a deterministic `3 / 28` partial-level

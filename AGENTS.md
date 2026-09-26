@@ -1,75 +1,74 @@
 # Project agent guide
 
-## Product boundary
+## Product and data boundaries
 
-This is a read-only planning helper for Milky Way Idle. Changes must not add
-automatic buying, selling, exchanging, upgrading, credential access, or account
-data uploads.
+This is a read-only planning helper for Milky Way Idle. Do not add automatic
+buying, selling, exchanging, upgrading, credential access, or account-data uploads.
+Reuse the existing bridge and market-data event path instead of adding a second
+WebSocket arbitration path.
 
-## Module ownership
+## Where to work
 
-- src/core.js: pure calculations and reusable business rules.
-- src/market-data.js: market snapshot and live-cache consistency.
-- src/market-dom.js: read-only parsing of the game's market UI.
-- src/bridge.js: passive capture of official game messages and page APIs.
-- src/runtime/config.js: stable constants, URLs, storage keys, and feature flags.
-- src/runtime/storage.js: validation and persistence for local plugin state.
-- src/runtime/game-state.js: normalization of game-state field aliases.
-- src/runtime/game-data.js: initialization hydration and market reconciliation.
-- src/runtime/scheduler.js: coalesced refresh tasks and lifecycle cancellation.
-- src/ui/: feature views, panel shell, shared DOM helpers, and styles.
-- src/userscript.js: composition root, sidebar integration, and lifecycle wiring.
-- src/localization.js: all user-facing Chinese and English copy.
-- tools/build.js: deterministic current build and opt-in release archival.
-- tools/release-current-version.mjs: guarded release workflow.
+- `src/core.js`: pure calculations and business rules; test changed behavior.
+- `src/market-data.js`, `src/market-dom.js`, `src/bridge.js`: market consistency,
+  read-only DOM parsing and passive official-message capture.
+- `src/runtime/`: configuration, validated persistence, game-state normalization,
+  hydration and refresh scheduling.
+- `src/ui/`: feature rendering; `src/localization.js`: Chinese and English copy.
+- `src/userscript.js`: composition, sidebar integration and lifecycle only.
+- `tools/build.js`: deterministic build. Add new runtime modules to `SOURCE_FILES`
+  before `src/userscript.js` and update the module-order test.
+- `dist/`: generated current artifacts. `releases/vMAJOR.MINOR/`: immutable history.
+  Generate through the build/release scripts; do not edit outputs by hand.
+- `references/`: documented third-party sources. `references/local-plugins/` and
+  `.workbench/` are local-only, never build or release inputs.
 
-Business rules should be implemented as pure functions with tests before UI
-integration. Do not add a second WebSocket arbitration path when the bridge and
-market-data modules already cover the event.
+Read the relevant section of [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the
+affected module, browser matrix or integration contract, not every audit recipe.
 
-Keep feature-specific rendering in src/ui/ rather than growing userscript.js.
-New runtime modules must be added explicitly to SOURCE_FILES in tools/build.js
-before src/userscript.js.
+## Verification and completion
 
-## Repository layout
+| Change                           | Required evidence                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Documentation only               | Diff, referenced paths/commands and formatting; no runtime rebuild solely for prose            |
+| Display copy only                | Diff, changed-file formatting/lint, placeholders and Chinese/English consistency; no full gate |
+| Code behavior/build/test tooling | `npm run check:handoff` once before handoff                                                    |
+| CI configuration                 | YAML and affected workflow contracts; preserve existing CI stages                              |
+| Layout/UI behavior               | Code gate plus the affected documented browser matrices                                        |
+| Bridge/game integration          | Code gate plus affected browser and real-game boundary checks                                  |
 
-- dist/ contains only the current installable and development artifacts.
-- releases/vMAJOR.MINOR/ contains immutable historical userscript releases.
-- references/ contains documented third-party source references.
-- references/local-plugins/ contains visible but Git-ignored local reference
-  plugins; it is never a build or release input.
-- .workbench/ is ignored local storage for unfinished patches, screenshots,
-  and exploratory files. It must never be published.
+Classify by the actual diff, not by file extension or a change to `localization.js`.
+Display-copy-only changes modify visible wording without changing translation
+keys, interpolation expressions, markup, selectors, control flow, data semantics
+or action meaning. They do not require `check`, `check:quick`, `check:handoff`,
+the full Node suite, browser matrices or release dry runs for ordinary handoff.
+Run an existing focused test only if its text contract is affected. If longer
+copy may wrap or clip, inspect the affected control at a representative narrow
+width; expand checks only on evidence of a layout issue. Build only when an
+updated installable artifact is needed. Do not add tests that merely repeat copy.
+Mixed behavioral changes still require their higher-risk checks; narrow the
+diff before deciding that a change is copy-only.
 
-Generated files must be changed through npm run build or the release script;
-do not hand-edit dist/ or releases/.
+During behavioral code iteration, use `npm run check:quick -- test/<affected>.test.js` with
+explicit tests; run the full suite when impact is unclear. Quick mode is not the
+handoff gate. `check:handoff` includes `check`, `git diff --check` and
+`release:dry-run`; do not run those again on unchanged inputs.
 
-## Required verification
+For browser checks use `npm run test:browser -- --suite <affected-suite>`;
+shared styles, localization logic or shell changes require every affected suite.
+Plain translated wording follows the display-copy row above.
+Width/locale subsets are smoke checks, and fixtures are not live-game evidence.
+Read summaries first and full logs on failure. Finish authorized implementation
+and required verification; report blocked checks accurately.
 
-Run these before handing off code changes:
+## Git and release
 
-```bash
-npm run check
-git diff --check
-npm run release:dry-run
-```
+Commit, push, publish, user-data deletion and broader automation require explicit
+authorization. Existing authorization for the same action and scope need not be
+requested again. Stage explicit files, never `git add .`.
 
-Prefer `npm run check:handoff` to run the same three commands' checks once,
-with compact output and full logs under `.workbench/`. `npm run check` still
-runs all five stages; never treat `check:quick` as a full gate.
-
-During implementation, use `npm run check:quick -- test/<affected>.test.js`
-with an explicit list of affected tests. When impact is unclear, run the full
-suite. After a successful gate, do not repeat its individual stages unless
-files changed, a check failed, or new evidence warrants another run.
-
-For layout changes, also run the documented width-matrix audit in
-docs/DEVELOPMENT.md. Use `npm run test:browser -- --suite <affected-suite>`
-to batch the existing contracts; shared styles or panel-shell changes require
-all affected suites. Width/locale overrides are smoke checks, not full matrices.
-Read compact summaries first and inspect full logs/reports on failure. Browser
-fixtures do not replace real-game verification of bridge or integration changes.
-
-Do not commit, push, publish, delete user data, or broaden automation behavior
-without explicit authorization. Always stage an explicit file list; never run
-the command “git add .”.
+For an authorized release, use `tools/release-current-version.mjs` and a fresh
+`npm run release:dry-run` after all included work is settled. A concurrent task's
+unfinished changes are not release inputs merely because they share this checkout.
+Formal releases and CI retain their built-in full checks, including copy-only
+releases; do not add a separate local full gate merely to hand off wording.

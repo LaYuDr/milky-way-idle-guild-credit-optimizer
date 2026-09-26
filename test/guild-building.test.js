@@ -1150,3 +1150,70 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     );
   }
 });
+
+test("建筑目录兜底采用游戏顺序，保留分类筛选相对顺序且不改输入", () => {
+  const definitions = data.definitions();
+  const before = JSON.stringify(definitions);
+  const sorted = data.sortCatalogDefinitions(definitions);
+  assert.deepEqual(
+    sorted.slice(0, 23).map((entry) => entry.hrid.split("/").pop()),
+    [
+      "guild_hall",
+      "builders_hall",
+      "treasury",
+      "archives",
+      "skilling_encampment",
+      "combat_encampment",
+      "dairy_barn",
+      "garden",
+      "log_shed",
+      "forge",
+      "workshop",
+      "sewing_parlor",
+      "kitchen",
+      "brewery",
+      "laboratory",
+      "observatory",
+      "dining_room",
+      "library",
+      "dojo",
+      "armory",
+      "gym",
+      "archery_range",
+      "mystical_study"
+    ]
+  );
+  assert.deepEqual(
+    sorted.filter((entry) => entry.category === "combat").map((entry) => entry.hrid.split("/").pop()),
+    ["combat_encampment", "dining_room", "dojo", "armory", "gym", "archery_range"]
+  );
+  assert.equal(sorted.length, 28);
+  assert.equal(new Set(sorted.map((entry) => entry.hrid)).size, 28);
+  assert.equal(JSON.stringify(definitions), before);
+});
+
+test("建筑与神龛分别采用完整官方 sortIndex，缺失和非法值安全回退", () => {
+  const definitions = data.definitions();
+  const fallback = data.sortCatalogDefinitions(definitions);
+  const buildings = Object.fromEntries(
+    definitions
+      .filter((entry) => entry.category !== "shrine")
+      .map((entry, index) => [entry.hrid, { sortIndex: 1000 - index * 10 }])
+  );
+  const shrines = definitions
+    .filter((entry) => entry.category === "shrine")
+    .map((entry, index) => ({ hrid: entry.hrid, sortIndex: 100 - index * 10 }));
+  const sorted = data.sortCatalogDefinitions(definitions, buildings, shrines);
+  assert.equal(sorted[0].hrid, "/guild_buildings/observatory");
+  assert.equal(sorted[23].hrid, "/guild_shrines/scholar");
+  buildings["/guild_buildings/guild_hall"].sortIndex = 0;
+  assert.equal(data.sortCatalogDefinitions(definitions, buildings)[0].hrid, "/guild_buildings/guild_hall");
+  for (const invalid of [null, "0", undefined, NaN]) {
+    buildings["/guild_buildings/guild_hall"].sortIndex = invalid;
+    assert.deepEqual(data.sortCatalogDefinitions(definitions, buildings).slice(0, 23), fallback.slice(0, 23));
+  }
+  assert.deepEqual(
+    data.sortCatalogDefinitions(definitions, { "/guild_buildings/treasury": { sortIndex: 0 } }),
+    fallback
+  );
+});

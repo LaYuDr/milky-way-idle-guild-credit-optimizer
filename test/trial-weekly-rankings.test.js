@@ -276,3 +276,57 @@ test("战斗单项榜保留确认缺席零值，手工记录不参与", () => {
     assert.equal(result[field].absentWeeks, 1);
   }
 });
+
+test("资料入会时间只取当前公会名册、按角色 ID 匹配并保留重新入会时间", () => {
+  const firstJoin = "2026-08-01T00:00:00Z";
+  const secondJoin = "2026-08-20T12:34:00Z";
+  const member = { id: "1", name: "Renamed" };
+  const initial = api.updateContext(
+    {},
+    {
+      guild: { id: "7" },
+      guildCharacterMap: { 1: { name: "Old", joinTime: firstJoin }, 2: { name: "Renamed" } }
+    },
+    start
+  );
+  const before = JSON.stringify(initial);
+  assert.equal(api.currentMemberJoinedAt(initial, member), Date.parse(firstJoin));
+  assert.equal(api.currentMemberJoinedAt(initial, { id: 1 }), Date.parse(firstJoin));
+  assert.equal(api.currentMemberJoinedAt(initial, { id: "2", name: "Renamed" }), null);
+  assert.equal(api.currentMemberJoinedAt(initial, { id: null, name: "Old" }), null);
+  assert.equal(api.currentMemberJoinedAt(), null);
+  assert.equal(JSON.stringify(initial), before);
+  const left = api.updateContext(
+    initial,
+    {
+      type: "guild_characters_updated",
+      guildSharableCharacterMap: { 2: { name: "Renamed" } }
+    },
+    start
+  );
+  assert.equal(api.currentMemberJoinedAt(left, member), null);
+  const rejoined = api.updateContext(
+    left,
+    {
+      guildCharacterMap: { 1: { joinTime: secondJoin } }
+    },
+    start
+  );
+  assert.equal(api.currentMemberJoinedAt(rejoined, member), Date.parse(secondJoin));
+  const changedGuild = api.updateContext(initial, { guild: { id: "8" } }, start);
+  assert.equal(api.currentMemberJoinedAt(changedGuild, member), null);
+});
+
+test("资料入会时间缺失、无效或超出采集时间时保持未知", () => {
+  for (const joinTime of [undefined, null, "invalid", 0, -1, start + week, 8640000000000001]) {
+    const context = api.updateContext(
+      {},
+      {
+        guild: { id: "7" },
+        guildCharacterMap: { 1: { joinTime } }
+      },
+      start
+    );
+    assert.equal(api.currentMemberJoinedAt(context, { id: "1" }), null);
+  }
+});

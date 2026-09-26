@@ -82,6 +82,72 @@
     { hrid: "/guild_shrines/scholar", nameKey: "shrineScholar", category: "shrine", costMultiplier: 1 }
   ]);
 
+  // Official client getSortedBuildingDetails uses sortIndex. This fallback matches
+  // the native catalog when initialization details have not arrived yet (2026-09-25).
+  const CATALOG_BUILDING_ORDER = Object.freeze(
+    [
+      "guild_hall",
+      "builders_hall",
+      "treasury",
+      "archives",
+      "skilling_encampment",
+      "combat_encampment",
+      "dairy_barn",
+      "garden",
+      "log_shed",
+      "forge",
+      "workshop",
+      "sewing_parlor",
+      "kitchen",
+      "brewery",
+      "laboratory",
+      "observatory",
+      "dining_room",
+      "library",
+      "dojo",
+      "armory",
+      "gym",
+      "archery_range",
+      "mystical_study"
+    ].map((name) => `/guild_buildings/${name}`)
+  );
+
+  function sortCatalogDefinitions(definitions, buildingDetails, shrineDetails) {
+    const fallback = new Map(
+      [
+        ...CATALOG_BUILDING_ORDER,
+        ...BUILDINGS.filter((entry) => entry.category === "shrine").map((entry) => entry.hrid)
+      ].map((hrid, index) => [hrid, index])
+    );
+    function orderedGroup(entries, details) {
+      const indices = new Map(
+        Object.entries(details || {}).flatMap(([key, detail]) => {
+          if (!detail || !Number.isFinite(detail.sortIndex)) return [];
+          return [[detail.hrid || detail.guildBuildingHrid || detail.guildShrineHrid || key, detail.sortIndex]];
+        })
+      );
+      // Do not mix official indices with fallback positions on different numeric scales.
+      const complete = entries.every((entry) => indices.has(entry.hrid));
+      return entries
+        .slice()
+        .sort(
+          (a, b) =>
+            (complete ? indices.get(a.hrid) - indices.get(b.hrid) : 0) ||
+            (fallback.get(a.hrid) ?? fallback.size) - (fallback.get(b.hrid) ?? fallback.size)
+        );
+    }
+    return [
+      ...orderedGroup(
+        definitions.filter((entry) => entry.category !== "shrine"),
+        buildingDetails
+      ),
+      ...orderedGroup(
+        definitions.filter((entry) => entry.category === "shrine"),
+        shrineDetails
+      )
+    ];
+  }
+
   function iconSymbolId(buildingHrid) {
     const building = BUILDINGS.find((entry) => entry.hrid === buildingHrid);
     if (!building) return "";
@@ -106,5 +172,15 @@
     }));
   }
 
-  return { RULES_VERSION, MAX_LEVEL, BASE_LEVEL_COSTS, BUILDINGS, iconSymbolId, levelCostsForMultiplier, definitions };
+  return {
+    RULES_VERSION,
+    MAX_LEVEL,
+    BASE_LEVEL_COSTS,
+    BUILDINGS,
+    CATALOG_BUILDING_ORDER,
+    sortCatalogDefinitions,
+    iconSymbolId,
+    levelCostsForMultiplier,
+    definitions
+  };
 });

@@ -88,6 +88,22 @@
     return typeof value === "number" ? value : Date.parse(value);
   }
 
+  // Historical joins may belong to a previous membership period. Only use the
+  // current guild roster's evidence when displaying a member's joining time.
+  function currentMemberJoinedAt(context = {}, identity = {}) {
+    if (context.guild?.id == null || identity.id == null || !Object.hasOwn(context.roster || {}, identity.id))
+      return null;
+    const entry = context.membershipEvidence?.find((entry) => entry.characterId === String(identity.id));
+    return entry &&
+      Number.isSafeInteger(entry.joinedAt) &&
+      entry.joinedAt > 0 &&
+      entry.joinedAt <= 8640000000000000 &&
+      Number.isSafeInteger(entry.observedAt) &&
+      entry.joinedAt <= entry.observedAt
+      ? entry.joinedAt
+      : null;
+  }
+
   function memberLevel(record, row) {
     const level = record.memberLevels?.[row.memberKey ?? row.characterId];
     return isMetric(level) ? level : null;
@@ -1001,6 +1017,7 @@
     searchHistoryMembers,
     sameMember,
     memberLevel,
+    currentMemberJoinedAt,
     withMemberLevels,
     withMembershipEvidence,
     mergeMembershipEvidence,
