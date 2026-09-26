@@ -3884,14 +3884,14 @@
       const rankingStoredBefore = JSON.stringify(saved());
       const rankingColumns = [...host.querySelectorAll("[data-trial-ranking-column]")];
       checks.rankingsAllParallel =
-        rankingColumns.length === 7 &&
+        rankingColumns.length === 8 &&
         new Set(rankingColumns.map((el) => Math.round(el.getBoundingClientRect().top))).size === 1;
       checks.combatMetricRankingsPresent = ["combat", "damageDealt", "healingDone", "premitigatedDamageTaken"].every(
         (scope) => host.querySelector(`[data-trial-ranking-column="${scope}"] tbody`)
       );
       checks.rankingSwitchesAbsent = !host.querySelector("[data-trial-ranking-metric], [data-trial-ranking-scope]");
       checks.rankingSampleHeaders = rankingColumns
-        .slice(1)
+        .filter((column) => !["participations", "joinedAt"].includes(column.dataset.trialRankingColumn))
         .every(
           (column) =>
             column.querySelector("thead th:last-child").textContent ===
@@ -3922,7 +3922,8 @@
         .find((row) => row.dataset.trialRankingRow !== rankingName.dataset.trialRankingPlayer)
         .querySelector("[data-trial-ranking-player]");
       const highlightsPlayer = (button) =>
-        rankingHighlights().length === 7 &&
+        rankingHighlights().length ===
+          host.querySelectorAll(`[data-trial-ranking-row="${CSS.escape(button.dataset.trialRankingPlayer)}"]`).length &&
         rankingHighlights().every((row) => row.dataset.trialRankingRow === button.dataset.trialRankingPlayer);
       rankingName.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       checks.rankingHoverAcrossColumns = highlightsPlayer(rankingName);
@@ -3960,6 +3961,57 @@
       host.querySelector("[data-trial-ranking-help]").open = false;
       checks.rankingNamesEscaped = !host.querySelector(".mwi-trial-ranking-table b");
       checks.rankingNoQueriesOrWrites = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
+      const rankingOrder = () =>
+        [...host.querySelectorAll("[data-trial-ranking-column]")].map((el) => el.dataset.trialRankingColumn);
+      const originalRankingOrder = rankingOrder();
+      host.querySelector('[data-trial-ranking-move="joinedAt"][data-direction="-1"]').click();
+      checks.rankingOrderButtons =
+        rankingOrder().at(-2) === "joinedAt" && document.activeElement.dataset.trialRankingDrag === "joinedAt";
+      host
+        .querySelector('[data-trial-ranking-drag="joinedAt"]')
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true, cancelable: true })
+        );
+      checks.rankingOrderKeyboard = rankingOrder().join() === originalRankingOrder.join();
+      const dragRanking = (cancel = false) => {
+        const handle = host.querySelector('[data-trial-ranking-drag="participations"]');
+        const target = host.querySelector('[data-trial-ranking-column="skilling"]');
+        const start = handle.getBoundingClientRect(),
+          end = target.getBoundingClientRect();
+        handle.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            pointerId: 42,
+            isPrimary: true,
+            button: 0,
+            clientX: start.left + 8,
+            clientY: start.top + 8
+          })
+        );
+        handle.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 42,
+            clientX: end.right - 1,
+            clientY: start.top + 8
+          })
+        );
+        handle.dispatchEvent(
+          new PointerEvent(cancel ? "pointercancel" : "pointerup", { bubbles: true, pointerId: 42 })
+        );
+      };
+      dragRanking(true);
+      checks.rankingDragCancel = rankingOrder().join() === originalRankingOrder.join();
+      dragRanking();
+      checks.rankingPointerDrag = rankingOrder()[1] === "participations";
+      const orderKey = Object.keys(localStorage).find((key) => key.endsWith(":ranking-order"));
+      checks.rankingOrderPersisted = JSON.parse(localStorage.getItem(orderKey)).join() === rankingOrder().join();
+      host.querySelector('[data-trial-mode="week"]').click();
+      host.querySelector('[data-trial-mode="player"]').click();
+      checks.rankingOrderAfterRefresh = rankingOrder()[1] === "participations";
+      host.querySelector('[data-trial-ranking-move="participations"][data-direction="-1"]').click();
+      checks.rankingReorderReadOnly = profileFrames.length === 0 && JSON.stringify(saved()) === rankingStoredBefore;
       const searchInput = () => host.querySelector("[data-trial-player-search]");
       const searchResults = () => [...host.querySelectorAll('[data-trial-choice="player"]')];
       const setPlayerSearch = (query) => {
@@ -4606,7 +4658,8 @@
       setPlayerSearch("");
       anonymousButton.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       checks.screenshotHighlightIdentity =
-        [...host.querySelectorAll(".mwi-trial-member-highlight")].length === 7 &&
+        [...host.querySelectorAll(".mwi-trial-member-highlight")].length ===
+          host.querySelectorAll(`[data-trial-ranking-row="${CSS.escape(rankingKey)}"]`).length &&
         [...host.querySelectorAll(".mwi-trial-member-highlight")].every(
           (el) => el.dataset.trialRankingRow === rankingKey
         );
@@ -5005,6 +5058,9 @@
       );
       checks.incompleteHistoryHidden =
         rankedRows("skilling").length > 0 && !host.querySelector("[data-trial-ranking-incomplete]");
+      checks.joiningRankingIncludesNonParticipant =
+        rankedRows("joinedAt").length === 3 &&
+        rankedRows("joinedAt").every((row) => row.querySelector("time")?.dateTime === "2026-08-01T00:00:00.000Z");
       checks.membershipPassiveNoProfileQuery = profileFrames.length === beforeRosterFrames;
       neverAttended?.querySelector("[data-trial-ranking-player]").click();
       checks.neverAttendedProfileReachable =

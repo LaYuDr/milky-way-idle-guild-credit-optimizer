@@ -211,16 +211,15 @@
         sectionOpen
       );
     }
+    function joiningTime(value) {
+      if (value === null) return e(t("trialProfileJoinedAtUnknown"));
+      const date = new Date(value);
+      const pad = (number) => String(number).padStart(2, "0");
+      const local = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      return `<time datetime="${e(date.toISOString())}">${e(local)}</time>`;
+    }
     function joinedAtMarkup(member) {
-      const joinedAt = api.currentMemberJoinedAt(getBridge()?.trialHistoryContext, member);
-      let value = e(t("trialProfileJoinedAtUnknown"));
-      if (joinedAt !== null) {
-        const date = new Date(joinedAt);
-        const pad = (number) => String(number).padStart(2, "0");
-        const local = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-        value = `<time datetime="${e(date.toISOString())}">${e(local)}</time>`;
-      }
-      return `<div data-trial-profile-joined-at title="${e(t("trialProfileJoinedAtHelp"))}"><dt><span>${e(t("trialProfileJoinedAt"))}</span></dt><dd>${value}</dd></div>`;
+      return `<div data-trial-profile-joined-at title="${e(t("trialProfileJoinedAtHelp"))}"><dt><span>${e(t("trialProfileJoinedAt"))}</span></dt><dd>${joiningTime(api.currentMemberJoinedAt(getBridge()?.trialHistoryContext, member))}</dd></div>`;
     }
     function profileMarkup(state, sectionOpen, projects, member) {
       const overview = overviewMarkup(projects, sectionOpen);
@@ -278,17 +277,27 @@
         .join("");
     }
 
-    function renderRankingColumn(players, metric, scope) {
+    function renderRankingColumn(players, metric, scope, index, count) {
       const entries = [...players];
       const score = (entry) =>
-        metric === "participations" ? entry.participations : scope === "all" ? entry.all.total : entry[scope].average;
+        metric === "joinedAt"
+          ? entry.joinedAt
+          : metric === "participations"
+            ? entry.participations
+            : scope === "all"
+              ? entry.all.total
+              : entry[scope].average;
       const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
       entries.sort((a, b) => {
         const left = score(a),
           right = score(b);
         if (left === null || right === null)
           return left === right ? collator.compare(a.name, b.name) : left === null ? 1 : -1;
-        return right - left || collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
+        return (
+          (metric === "joinedAt" ? left - right : right - left) ||
+          collator.compare(a.name, b.name) ||
+          a.key.localeCompare(b.key)
+        );
       });
       let previous = null,
         rank = 0;
@@ -298,26 +307,39 @@
           if (value !== previous) rank = index + 1;
           previous = value;
           const name = formatMemberName(entry);
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${metric === "joinedAt" ? joiningTime(value) : value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
-        metric === "participations"
-          ? t("trialRankingParticipations")
-          : scope === "all"
-            ? t("trialRankingTotalTitle")
-            : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
-      return `<article class="mwi-trial-column" data-trial-ranking-column="${metric === "participations" ? metric : scope}"><h4>${e(title)}</h4>${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t("trialPlayerEmpty"))}</p>`}</article>`;
+        metric === "joinedAt"
+          ? t("trialRankingJoinedAt")
+          : metric === "participations"
+            ? t("trialRankingParticipations")
+            : scope === "all"
+              ? t("trialRankingTotalTitle")
+              : t("trialRankingAverageTitle", { scope: t(`trialRankingScope_${scope}`) });
+      const key = metric === "average" ? scope : metric;
+      const icon = (path) =>
+        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="${path}"/></svg>`;
+      const controls = `<div class="mwi-trial-ranking-controls"><button type="button" data-trial-ranking-move="${key}" data-direction="-1" aria-label="${e(t("trialRankingMoveLeft", { name: title }))}" title="${e(t("trialRankingMoveLeft", { name: title }))}"${index === 0 ? " disabled" : ""}>${icon("m9 4-4 4 4 4")}</button><button type="button" data-trial-ranking-drag="${key}" aria-label="${e(t("trialRankingDrag", { name: title }))}" title="${e(t("trialRankingDrag", { name: title }))}" aria-describedby="mwi-trial-ranking-order-hint">${icon("M5 3v2m6-2v2M5 7v2m6-2v2M5 11v2m6-2v2")}</button><button type="button" data-trial-ranking-move="${key}" data-direction="1" aria-label="${e(t("trialRankingMoveRight", { name: title }))}" title="${e(t("trialRankingMoveRight", { name: title }))}"${index === count - 1 ? " disabled" : ""}>${icon("m7 4 4 4-4 4")}</button></div>`;
+      return `<article class="mwi-trial-column" data-sort-key="${key}" data-trial-ranking-column="${key}"><h4>${e(title)}</h4>${controls}${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "joinedAt" ? "trialProfileJoinedAt" : metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t(metric === "joinedAt" ? "trialRankingRosterEmpty" : "trialPlayerEmpty"))}</p>`}</article>`;
     }
 
-    function renderRankings({ records, helpOpen }) {
+    function renderRankings({ records, helpOpen, rankingOrder, orderSaveFailed }) {
       const players = api.playerRankings(records);
-      const columns =
-        renderRankingColumn(players, "participations") +
-        ["skilling", "combat", "damageDealt", "healingDone", "premitigatedDamageTaken", "all"]
-          .map((scope) => renderRankingColumn(players, "average", scope))
-          .join("");
-      return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p></details>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
+      const members = api.currentMembershipRankings(getBridge()?.trialHistoryContext);
+      const columns = rankingOrder
+        .map((key, index) =>
+          renderRankingColumn(
+            key === "joinedAt" ? members : players,
+            key === "participations" || key === "joinedAt" ? key : "average",
+            key,
+            index,
+            rankingOrder.length
+          )
+        )
+        .join("");
+      return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p><p>${e(t("trialRankingJoinedAtHelp"))}</p></details><p class="mwi-trial-help" id="mwi-trial-ranking-order-hint" data-trial-ranking-order-hint>${e(t("trialRankingOrderHint"))}</p><p class="mwi-trial-help" data-trial-ranking-order-status role="status">${orderSaveFailed ? e(t("trialRankingOrderSaveFailed")) : ""}</p>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {

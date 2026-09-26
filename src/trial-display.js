@@ -20,6 +20,25 @@
     groups.flatMap(({ fields }) => fields.map((field) => [field, !/(Share|Multiple)$/.test(field)]))
   );
 
+  const rankingColumns = [
+    "participations",
+    "skilling",
+    "combat",
+    "damageDealt",
+    "healingDone",
+    "premitigatedDamageTaken",
+    "all",
+    "joinedAt"
+  ];
+  function normalizeRankingOrder(value) {
+    return [
+      ...new Set([
+        ...(Array.isArray(value) ? value.filter((key) => rankingColumns.includes(key)) : []),
+        ...rankingColumns
+      ])
+    ];
+  }
+
   function normalize(value) {
     return Object.fromEntries(
       Object.entries(defaults).map(([field, fallback]) => {
@@ -61,5 +80,5 @@
     return null;
   }
 
-  return { groups, defaults, normalize, fields, preset };
+  return { groups, defaults, normalize, fields, preset, rankingColumns, normalizeRankingOrder };
 });

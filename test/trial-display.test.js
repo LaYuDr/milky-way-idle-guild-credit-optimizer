@@ -53,3 +53,12 @@ test("预设返回独立副本且默认显示兼容旧版", () => {
   assert.equal(display.defaults.member, true);
   assert.equal(display.preset("unknown"), null);
 });
+
+test("榜单顺序过滤损坏项、去重并追加新增榜单", () => {
+  assert.deepEqual(display.normalizeRankingOrder(null), display.rankingColumns);
+  assert.deepEqual(display.normalizeRankingOrder({ joinedAt: 1 }), display.rankingColumns);
+  const result = display.normalizeRankingOrder(["joinedAt", "combat", "combat", "unknown", null]);
+  assert.deepEqual(result.slice(0, 2), ["joinedAt", "combat"]);
+  assert.equal(result.length, display.rankingColumns.length);
+  assert.deepEqual(display.normalizeRankingOrder(result), result);
+});

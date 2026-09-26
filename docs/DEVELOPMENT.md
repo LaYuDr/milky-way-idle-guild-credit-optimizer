@@ -856,6 +856,16 @@ The pure weekly-ranking tests cover the 1.5/2.2/0.8 and absent/2.2/0.8 examples,
 join boundaries, never-participating members, partial captures, cross-guild and
 rejoin gaps, manual exclusion, evidence validation and recapture preservation.
 
+The player rankings also include a current-guild joining-time table. It uses only
+live roster membership evidence, sorts earliest first with ties, and leaves unknown
+dates unranked at the end. Members without trial records can open their profiles.
+Ranking columns can be reordered with pointer handles, arrow buttons, or Alt+Left/Right.
+Order is validated and stored separately from table-field presets per region/character;
+failed storage is reported without losing the current page order. Dragging is cancelled
+on refresh or disposal. Screenshot export retains order and removes sorting controls.
+The trials browser matrix covers pointer cancellation, commit, keyboard and button
+moves, persistence, refresh, and unchanged trial records/profile request counts.
+
 The trial overview places each category caption above its table even when the game
 styles captions at the bottom. Rows show participation count, average multiple and
 total multiple. Each category has an All trials footer: counts and valid multiples

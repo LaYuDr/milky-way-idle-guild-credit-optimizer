@@ -804,6 +804,13 @@
         #mwi-credit-optimizer .mwi-trial-week-grid[data-kind="rankings"]{grid-auto-flow:column;grid-auto-columns:max-content}
         #mwi-credit-optimizer .mwi-trial-rankings .mwi-trial-rail{position:relative}
         #mwi-credit-optimizer [data-trial-ranking-column]>h4{min-height:2.8em;text-align:center}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls{display:flex;justify-content:center;gap:4px;margin:0 0 8px}
+        #mwi-credit-optimizer .mwi-trial-ranking-controls button{display:grid;place-items:center;min-width:32px;min-height:32px;padding:4px}
+        #mwi-credit-optimizer [data-trial-ranking-drag]{cursor:grab;touch-action:none;user-select:none}
+        #mwi-credit-optimizer [data-trial-ranking-column].mwi-sort-dragging{opacity:.8;cursor:grabbing}
+        #mwi-credit-optimizer [data-trial-ranking-column].mwi-sort-drop-before{box-shadow:inset 2px 0 #91dfcb}
+        #mwi-credit-optimizer [data-trial-ranking-column].mwi-sort-drop-after{box-shadow:inset -2px 0 #91dfcb}
+        #mwi-credit-optimizer .mwi-trial-ranking-table time{white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-ranking-table{min-width:100%}
         #mwi-credit-optimizer .mwi-trial-ranking-table caption{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-ranking-table :is(th,td):first-child{text-align:center}

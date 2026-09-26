@@ -243,6 +243,23 @@
       }
     }
 
+    function loadTrialRankingOrder() {
+      try {
+        return displayApi.normalizeRankingOrder(JSON.parse(storage.getItem(`${trialDisplayKey()}:ranking-order`)));
+      } catch (_) {
+        return displayApi.normalizeRankingOrder(null);
+      }
+    }
+
+    function saveTrialRankingOrder(value) {
+      try {
+        storage.setItem(`${trialDisplayKey()}:ranking-order`, JSON.stringify(displayApi.normalizeRankingOrder(value)));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function loadTrialHistory() {
       const records = [];
       let failed = false;
@@ -746,6 +763,8 @@
       loadTrialHistory,
       loadTrialDisplay,
       saveTrialDisplay,
+      loadTrialRankingOrder,
+      saveTrialRankingOrder,
       saveTrialSnapshot,
       importTrialHistory,
       loadSavedPluginUiState,

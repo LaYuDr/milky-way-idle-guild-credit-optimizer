@@ -136,3 +136,54 @@ test("入会时间在资料就绪及加载失败时均可显示，未知时不�
   }
   context = {};
 });
+
+test("入会榜只列当前成员，按时间升序并列，未知排最后且无名次", () => {
+  const { createRenderer } = require("../src/ui/trial-player-view.js");
+  const api = require("../src/trial-history.js");
+  const { createLocalizer } = require("../src/localization.js");
+  const { rankingColumns } = require("../src/trial-display.js");
+  const context = api.updateContext(
+    {},
+    {
+      guild: { id: "g" },
+      guildCharacterMap: {
+        1: { name: "Later", joinTime: "2026-09-20T00:00:00Z" },
+        2: { name: "Earlier", joinTime: "2026-08-01T00:00:00Z" },
+        3: { name: "Unknown" },
+        4: { name: "Equal", joinTime: "2026-08-01T00:00:00Z" }
+      }
+    },
+    Date.parse("2026-09-26T00:00:00Z")
+  );
+  context.membershipEvidence.push({ characterId: "5", name: "Former", joinedAt: 1, observedAt: 2 });
+  const before = JSON.stringify(context);
+  assert.deepEqual(api.currentMembershipRankings({}), []);
+  assert.equal(api.currentMembershipRankings(context).length, 4);
+  for (const locale of ["zh-CN", "en"]) {
+    const { t } = createLocalizer(locale);
+    const renderer = createRenderer({
+      t,
+      escapeHtml: (s) => String(s).replaceAll('"', "&quot;"),
+      trialHistoryApi: api,
+      getBridge: () => ({ trialHistoryContext: context }),
+      formatMemberName: (entry) => entry.name,
+      memberIdentityAttributes: () => "",
+      renderRail: (id, title, columns) => columns
+    });
+    const html = renderer.renderRankings({
+      records: [],
+      rankingOrder: ["joinedAt", ...rankingColumns.filter((key) => key !== "joinedAt")]
+    });
+    assert.ok(
+      html.indexOf('data-trial-ranking-column="joinedAt"') < html.indexOf('data-trial-ranking-column="participations"')
+    );
+    assert.ok(html.indexOf(">Earlier</button>") < html.indexOf(">Later</button>"));
+    assert.ok(html.indexOf(">Later</button>") < html.indexOf(">Unknown</button>"));
+    const ranks = [...html.matchAll(/<tr data-trial-ranking-row="[^"]+"><td>(.*?)<\/td>/g)].map((match) => match[1]);
+    assert.deepEqual(ranks, ["1", "1", "3", "—"]);
+    assert.ok(html.includes(t("trialProfileJoinedAtUnknown")));
+    assert.ok(!html.includes("Former"));
+    assert.ok(html.includes('<time datetime="2026-09-20T00:00:00.000Z">'));
+  }
+  assert.equal(JSON.stringify(context), before);
+});

@@ -541,6 +541,16 @@
       trialOverviewMethod: "统计口径",
       trialOverviewHelp:
         "仅统计本地保存的游戏采集记录，不含手动整理记录。每参与一个项目计 1 次，含零贡献；0 次表示没有采集到参试记录。生活按工作量除以该场人均；战斗将伤害、治疗、承伤的有效人均倍数直接相加，再对同项目各场倍数等权平均。总相对人均为有效场次倍数之和；全部项目行汇总次数和倍数，平均值按有效场次加权。1× 为人均水平；缺失值和零分母跳过，无有效倍数显示 —。",
+      trialRankingJoinedAt: "入会时间排行",
+      trialRankingJoinedAtHelp:
+        "仅列出当前公会成员，按入会时间从早到晚排列，同一时间并列。未知时间置后且不排名；时间按本地时区显示。未参加试炼的成员也会列出。",
+      trialRankingRosterEmpty: "尚未读取到当前公会成员，请先打开游戏公会页面。",
+      trialRankingDrag: "拖动调整{name}的位置",
+      trialRankingMoveLeft: "将{name}左移",
+      trialRankingMoveRight: "将{name}右移",
+      trialRankingOrderHint:
+        "拖动榜单下方的手柄调整顺序，也可使用左右按钮或聚焦手柄后按 Alt＋左右方向键。顺序自动保存。",
+      trialRankingOrderSaveFailed: "顺序已调整，但保存失败；刷新页面后可能恢复。请检查浏览器存储空间后重试。",
       trialRankingParticipations: "参与次数",
       trialRankingAverageTitle: "{scope} · 平均相对人均",
       trialRankingTotalTitle: "生活＋战斗 · 相对人均合计",
@@ -1270,6 +1280,17 @@
       trialOverviewMethod: "Calculation",
       trialOverviewHelp:
         "Uses locally saved game captures, excluding manual records. Each project attended counts once, including zero contributions; 0 means no captured participation. Skilling uses work divided by that trial’s average. Combat averages the valid damage, healing and damage-taken multiples first. Multiples for each project are then averaged equally across trials. Total multiple sums valid trial multiples. The All trials row sums participation counts and multiples, averaging across valid samples rather than project averages. 1× is the per-person average. Missing values and zero denominators are skipped; no valid multiple shows —.",
+      trialRankingJoinedAt: "Guild joining order",
+      trialRankingJoinedAtHelp:
+        "Current guild members, earliest join first; equal times share a rank. Unknown dates come last without a rank. Dates use local time. Members without trial participation are included.",
+      trialRankingRosterEmpty: "Current guild members are not loaded. Open the guild page in the game first.",
+      trialRankingDrag: "Drag to reorder {name}",
+      trialRankingMoveLeft: "Move {name} left",
+      trialRankingMoveRight: "Move {name} right",
+      trialRankingOrderHint:
+        "Drag the handle below a heading to reorder rankings. You can also use the arrow buttons, or focus a handle and press Alt + Left/Right. Order saves automatically.",
+      trialRankingOrderSaveFailed:
+        "Order changed but could not be saved; it may reset on reload. Check browser storage and try again.",
       trialRankingParticipations: "Participation count",
       trialRankingAverageTitle: "{scope} · Average multiple",
       trialRankingTotalTitle: "Skilling + combat · Total multiple",

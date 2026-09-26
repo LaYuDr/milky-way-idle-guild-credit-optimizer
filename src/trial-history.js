@@ -104,6 +104,16 @@
       : null;
   }
 
+  function currentMembershipRankings(context = {}) {
+    if (context.guild?.id == null) return [];
+    return Object.entries(context.roster || {}).map(([id, member]) => ({
+      key: JSON.stringify(["id", id]),
+      id,
+      name: member?.name || context.members?.[id]?.name || "",
+      joinedAt: currentMemberJoinedAt(context, { id })
+    }));
+  }
+
   function memberLevel(record, row) {
     const level = record.memberLevels?.[row.memberKey ?? row.characterId];
     return isMetric(level) ? level : null;
@@ -1018,6 +1028,7 @@
     sameMember,
     memberLevel,
     currentMemberJoinedAt,
+    currentMembershipRankings,
     withMemberLevels,
     withMembershipEvidence,
     mergeMembershipEvidence,

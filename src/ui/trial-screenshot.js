@@ -46,7 +46,7 @@
         ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-guide,.mwi-trial-display-settings," +
           ".mwi-trial-scroll-buttons,.mwi-trial-player-picker,.mwi-trial-raw,.mwi-trial-import-preview," +
           "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
-          "[data-trial-player-back],[data-trial-profile-refresh]," +
+          "[data-trial-player-back],[data-trial-profile-refresh],.mwi-trial-ranking-controls,[data-trial-ranking-order-hint],[data-trial-ranking-order-status]," +
           "[data-trial-mode][aria-pressed='false'],[data-trial-choice][aria-pressed='false']," +
           "script,style,iframe,img"
       )

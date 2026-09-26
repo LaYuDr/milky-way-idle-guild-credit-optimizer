@@ -679,6 +679,7 @@
     pluginStorage,
     trialHistoryApi,
     playerViewApi: window.MwiGuildTrialPlayerView,
+    sortableApi,
     screenshotApi: window.MwiGuildTrialScreenshot,
     profileReaderApi: window.MwiGuildProfileReader,
     profileTooltipApi: window.MwiGuildProfileTooltip,

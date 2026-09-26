@@ -56,6 +56,7 @@
       handleSelector = itemSelector,
       axis = "y",
       threshold = 6,
+      scrollContainerSelector,
       onCommit
     } = options || {};
     if (!root || typeof root.addEventListener !== "function") return { destroy() {} };
@@ -127,7 +128,9 @@
       drag.item.style.transform = axis === "x" ? `translateX(${delta}px)` : `translateY(${delta}px)`;
       drag.item.style.zIndex = "8";
 
-      const scrollContainer = axis === "y" ? root : drag.container;
+      const scrollContainer =
+        (scrollContainerSelector && drag.container.closest(scrollContainerSelector)) ||
+        (axis === "y" ? root : drag.container);
       const rect = scrollContainer.getBoundingClientRect();
       const edge = 36;
       const scrollDelta =

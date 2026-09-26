@@ -602,3 +602,24 @@ test("神龛折叠状态仅接受显式 true，并与计划等级一起保存", 
   assert.equal(api.loadSavedPluginUiState().upgradePlans[0].collapsed, undefined);
   assert.equal(api.loadSavedPluginUiState().upgradePlans[0].targetLevel, 3);
 });
+
+test("榜单顺序独立持久化，列预设不覆盖顺序，存储失败可识别", () => {
+  const memory = memoryStorage();
+  const first = createStorage(memory);
+  assert.equal(first.saveTrialRankingOrder(["joinedAt", "combat", "joinedAt", "invalid"]), true);
+  first.saveTrialDisplay({ member: false });
+  const restored = createStorage(memory);
+  assert.deepEqual(restored.loadTrialRankingOrder().slice(0, 2), ["joinedAt", "combat"]);
+  assert.equal(restored.loadTrialRankingOrder().length, 8);
+  assert.equal(restored.loadTrialDisplay().member, false);
+  const broken = createStorage({
+    getItem() {
+      throw Error("unavailable");
+    },
+    setItem() {
+      throw Error("full");
+    }
+  });
+  assert.equal(broken.loadTrialRankingOrder().length, 8);
+  assert.equal(broken.saveTrialRankingOrder(["joinedAt"]), false);
+});

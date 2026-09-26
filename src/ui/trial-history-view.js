@@ -42,6 +42,7 @@
     pluginStorage,
     trialHistoryApi,
     playerViewApi,
+    sortableApi,
     screenshotApi,
     profileTooltipApi,
     profileReaderApi,
@@ -72,6 +73,10 @@
     let displaySettingsOpen = false;
     let displayHelpOpen = false;
     let displaySaveFailed = false;
+    let rankingOrder = displayApi.normalizeRankingOrder(pluginStorage.loadTrialRankingOrder());
+    let rankingOrderSaveFailed = false;
+    let rankingSortable = null;
+    let rankingSortableHost = null;
     let displaySettings = displayApi.normalize(pluginStorage.loadTrialDisplay());
     const unsaved = new Map();
     const spriteBases = {};
@@ -571,7 +576,34 @@
       else if (item.right > bounds.right - 4) rail.scrollLeft += item.right - bounds.right + 4;
     }
 
+    function moveRanking(panel, key, toIndex) {
+      const fromIndex = rankingOrder.indexOf(key);
+      if (fromIndex < 0 || fromIndex === toIndex || toIndex < 0 || toIndex >= rankingOrder.length) return;
+      rankingOrder = sortableApi.reorderByIndex(rankingOrder, fromIndex, toIndex);
+      rankingOrderSaveFailed = !pluginStorage.saveTrialRankingOrder(rankingOrder);
+      refresh(panel);
+      const handle = panel.querySelector(`[data-trial-ranking-drag="${key}"]`);
+      handle?.focus({ preventScroll: true });
+      handle?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+
+    function bindRankingSortable(panel) {
+      rankingSortable?.destroy();
+      if (!rankingSortableHost) return;
+      rankingSortable = sortableApi.createPointerSortable({
+        root: rankingSortableHost,
+        containerSelector: '[data-kind="rankings"]',
+        itemSelector: "[data-trial-ranking-column]",
+        handleSelector: "[data-trial-ranking-drag]",
+        axis: "x",
+        scrollContainerSelector: ".mwi-trial-rail",
+        onCommit: ({ key, toIndex }) => moveRanking(panel, key, toIndex)
+      });
+    }
+
     function refresh(panel) {
+      // Cancel detached drags before a native update replaces the view.
+      bindRankingSortable(panel);
       profileTooltip?.hide();
       capture();
       const host = panel?.querySelector('[data-role="trials-view"]');
@@ -613,7 +645,9 @@
         if (!selectedMember)
           markup += playerRenderer.renderRankings({
             records,
-            helpOpen: rankingHelpOpen
+            helpOpen: rankingHelpOpen,
+            rankingOrder,
+            orderSaveFailed: rankingOrderSaveFailed
           });
         markup += renderPlayerPicker(members, current) + (selectedMember ? renderDisplaySettings() : "");
         host.innerHTML =
@@ -764,6 +798,8 @@
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      rankingSortableHost = host;
+      bindRankingSortable(panel);
       profileTooltip?.dispose();
       profileTooltip = profileTooltipApi?.createTooltip({
         document,
@@ -845,6 +881,12 @@
       });
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        const moveButton = event.target.closest("[data-trial-ranking-move]");
+        if (moveButton) {
+          const key = moveButton.dataset.trialRankingMove;
+          moveRanking(panel, key, rankingOrder.indexOf(key) + Number(moveButton.dataset.direction));
+          return;
+        }
         const presetButton = event.target.closest("[data-trial-display-preset]");
         if (presetButton) {
           const preset = presetButton.dataset.trialDisplayPreset;
@@ -867,9 +909,11 @@
         }
         const rankingPlayer = event.target.closest("[data-trial-ranking-player]");
         if (rankingPlayer) {
-          const member = trialHistoryApi
-            .playerRankings(records)
-            .find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
+          const member = (
+            rankingPlayer.closest('[data-trial-ranking-column="joinedAt"]')
+              ? trialHistoryApi.currentMembershipRankings(getBridge()?.trialHistoryContext)
+              : trialHistoryApi.playerRankings(records)
+          ).find((entry) => entry.key === rankingPlayer.dataset.trialRankingPlayer);
           if (!member?.name) return;
           playerReturn = {
             mode: "player",
@@ -1043,6 +1087,8 @@
       capture();
     }
     function dispose() {
+      rankingSortable?.destroy();
+      rankingSortableHost = null;
       profileTooltip?.dispose();
       disposed = true;
       profileRevision += 1;

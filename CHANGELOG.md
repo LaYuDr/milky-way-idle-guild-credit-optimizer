@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.52] - 2026-09-26
+
+### Changed
+
+- Add current-guild joining-time rankings and persistent ranking-column reordering with drag, arrow-button and keyboard support; document Tampermonkey background update and installation settings.
+
 ## [1.2.51] - 2026-09-26
 
 ### Changed
