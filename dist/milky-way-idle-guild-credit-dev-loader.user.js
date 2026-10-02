@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         公会助手 开发加载器
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.52
+// @version      1.2.53
 // @author       柆雨
 // @description  从本机开发服务加载公会助手；仅用于开发和自动测试。
 // @match        https://www.milkywayidle.com/*
@@ -56,7 +56,7 @@
     ObservedWebSocket.__mwiGuildCreditBridge = true;
     page.WebSocket = ObservedWebSocket;
   }
-  const runtimeUrl = "http://127.0.0.1:4173/runtime.js?cacheBust=" + Date.now();
+  const runtimeUrl = "http://127.0.0.1:4174/runtime.js?cacheBust=" + Date.now();
   GM_xmlhttpRequest({
     method: "GET",
     url: runtimeUrl,

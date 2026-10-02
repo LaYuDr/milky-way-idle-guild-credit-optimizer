@@ -107,6 +107,7 @@ const SOURCE_FILES = [
   "src/ui/trial-player-view.js",
   "src/ui/profile-tooltip.js",
   "src/ui/trial-screenshot.js",
+  "src/ui/trial-signup-warning.js",
   "src/ui/trial-history-view.js",
   "src/ui/shrine-effects.js",
   "src/ui/shrine-picker.js",
@@ -196,7 +197,7 @@ const loader = `// ==UserScript==
     ObservedWebSocket.__mwiGuildCreditBridge = true;
     page.WebSocket = ObservedWebSocket;
   }
-  const runtimeUrl = "http://127.0.0.1:4173/runtime.js?cacheBust=" + Date.now();
+  const runtimeUrl = "http://127.0.0.1:4174/runtime.js?cacheBust=" + Date.now();
   GM_xmlhttpRequest({
     method: "GET",
     url: runtimeUrl,

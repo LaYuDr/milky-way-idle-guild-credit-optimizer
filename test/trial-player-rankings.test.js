@@ -28,7 +28,8 @@ test("排行榜逐项目计次，战斗三项倍数项目内相加并按周平�
   assert.equal(alpha.skilling.count, 2);
   assert.equal(alpha.skilling.average, 1);
   assert.equal(alpha.combat.average, 2);
-  assert.equal(beta.combat.average, 4);
+  assert.equal(beta.combat.average, 3);
+  assert.equal(beta.healingDone.average, 1);
   assert.equal(alpha.all.total, 3);
   assert.equal(alpha.all.count, 3);
   assert.equal(JSON.stringify(records), before);

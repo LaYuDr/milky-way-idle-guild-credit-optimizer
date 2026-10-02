@@ -151,6 +151,93 @@ export async function runAuditCase(browser, baseURL, entry, directory, timeout =
     );
     result.report = JSON.parse(await page.locator("#layout-audit-output").textContent());
     result.failures = reportFailures(entry.name, result.report);
+    // Open nested disclosures only for measurement, then restore their original states.
+    result.disclosures = await page.evaluate(() => {
+      const details = [...globalThis.document.querySelectorAll("#mwi-credit-optimizer details")];
+      const states = details.map((element) => element.open);
+      try {
+        details.forEach((element) => {
+          element.open = true;
+        });
+        return details.flatMap((element) => {
+          const summary = element.querySelector(":scope > summary");
+          if (!summary || !summary.checkVisibility()) return [];
+          const rect = summary.getBoundingClientRect();
+          const sectionBounds = element.getBoundingClientRect();
+          const style = globalThis.getComputedStyle(summary);
+          const parentStyle = globalThis.getComputedStyle(element);
+          const availableWidth =
+            element.clientWidth - parseFloat(parentStyle.paddingLeft) - parseFloat(parentStyle.paddingRight);
+          const isHelp = element.classList.contains("mwi-context-help");
+          let helpReadable = true;
+          if (isHelp) {
+            const preview = element.querySelector(".mwi-help-intro");
+            const paragraphs = [...element.querySelectorAll(".mwi-help-sections dd p")];
+            helpReadable =
+              Boolean(preview?.textContent.trim()) &&
+              paragraphs.length > 0 &&
+              paragraphs.every((paragraph) => {
+                const textStyle = globalThis.getComputedStyle(paragraph);
+                const bounds = paragraph.getBoundingClientRect();
+                return (
+                  parseFloat(textStyle.fontSize) >= 13 &&
+                  parseFloat(textStyle.lineHeight) >= 21 &&
+                  paragraph.scrollWidth <= paragraph.clientWidth &&
+                  bounds.left >= sectionBounds.left &&
+                  bounds.right <= sectionBounds.right
+                );
+              });
+            element.open = false;
+            helpReadable = helpReadable && !preview.checkVisibility() && !paragraphs[0]?.checkVisibility();
+            element.open = true;
+          }
+          return [
+            {
+              label: summary.textContent.trim(),
+              height: rect.height,
+              width: rect.width,
+              passed:
+                helpReadable &&
+                rect.height >= (isHelp ? 36 : 16) &&
+                rect.width <= availableWidth + 1 &&
+                parseFloat(style.fontSize) >= (isHelp ? 13 : 12) &&
+                ((style.display === "list-item" && style.listStyleType !== "none") ||
+                  Boolean(summary.querySelector("svg"))) &&
+                summary.scrollWidth <= summary.clientWidth
+            }
+          ];
+        });
+      } finally {
+        details.forEach((element, index) => {
+          element.open = states[index];
+        });
+      }
+    });
+    for (const disclosure of result.disclosures) {
+      if (!disclosure.passed) result.failures.push(`disclosure size/overflow: ${disclosure.label}`);
+    }
+    const help = page.locator("#mwi-credit-optimizer .mwi-context-help:visible").first();
+    if (await help.count()) {
+      const toggle = help.locator(":scope > summary");
+      const wasOpen = await help.evaluate((element) => element.open);
+      await toggle.press("Enter");
+      if ((await help.evaluate((element) => element.open)) === wasOpen)
+        result.failures.push("contextual help: Enter did not toggle");
+      await toggle.press("Space");
+      if ((await help.evaluate((element) => element.open)) !== wasOpen)
+        result.failures.push("contextual help: Space did not restore state");
+    }
+    if (entry.name === "construction" && !result.failures.length) {
+      const disclosure = page.locator(".mwi-guild-point-history");
+      const toggle = disclosure.locator(":scope > summary");
+      const wasOpen = await disclosure.evaluate((element) => element.open);
+      await toggle.press("Enter");
+      if ((await disclosure.evaluate((element) => element.open)) === wasOpen)
+        result.failures.push("history toggle: Enter did not change open state");
+      await toggle.press("Space");
+      if ((await disclosure.evaluate((element) => element.open)) !== wasOpen)
+        result.failures.push("history toggle: Space did not restore open state");
+    }
   } catch (error) {
     result.failures.push(error.message);
   } finally {

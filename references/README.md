@@ -36,12 +36,27 @@ arbitration path.
   [MDN MutationObserver.observe](https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver/observe)
   用于限定观察节点、属性与子树范围。
 - [MWITools](https://github.com/YangLeda/Userscripts-For-MilkyWayIdle)，许可证
-  `CC-BY-NC-SA-4.0`：作者仓库的
-  [盈亏模块](https://github.com/YangLeda/Userscripts-For-MilkyWayIdle/blob/main/src/features/asset-history/30-panel.js)
+  `CC-BY-NC-SA-4.0`：已核对用户指定的公开 **26.4.17**，作者仓库固定提交
+  `e77ddd3fc9ebbcf2f50b6f28521585f75c7fa2fc` 的构建正文与
+  [Greasy Fork 发布脚本](https://update.greasyfork.org/scripts/494467/MWITools.user.js) 相同
+  （仅更新地址元信息的空格、位置不同）。正文 SHA-256 为
+  `ff6c8000d206de254843fcb2f13de6ce0a5c4b00c046f25d9ad6282dc3e79a2f`。
+  [盈亏模块](https://github.com/YangLeda/Userscripts-For-MilkyWayIdle/blob/e77ddd3fc9ebbcf2f50b6f28521585f75c7fa2fc/src/features/asset-history/30-panel.js)
   `mountNative` 深克隆标签，`syncNativeVisibility` 隐藏侧栏的其他分支；
-  [规划模块](https://github.com/YangLeda/Userscripts-For-MilkyWayIdle/blob/main/src/features/planning.js)
+  [规划模块](https://github.com/YangLeda/Userscripts-For-MilkyWayIdle/blob/e77ddd3fc9ebbcf2f50b6f28521585f75c7fa2fc/src/features/planning.js)
   `mount` 又可克隆盈亏标签。两者使用 `data-mwitools-character-tab`，因此继承的本方
   `data-*` 不能证明节点归属；原生面板宿主也可能被整个隐藏。
+  `findCharacterManagementLoadoutTab` 在 CharacterManagement 内会把最后一个非 MWITools
+  `role=tab` 当作锚点，可能选中公会或邀请标签；`ensureMounted` 要求盈亏紧邻锚点，
+  否则销毁并重挂。因此本方语言更新及面板容器重挂需要原位复用仍有效的公会标签。
+  该版规划的 `ensureMounted` 在保持挂载且激活时只执行 `syncViewport`：若游戏替换了
+  原生面板容器，新容器可能与规划同时显示。盈亏会再次同步兄弟节点的隐藏状态，规划
+  没有等价处理。此边界需要在 MWITools 内补充可逆的可见性同步，不能由本方接管其状态。
+  固定版本的原始挂载、事件、帧调度和观察器代码已在隔离 Chrome 中对照：修复前
+  44/49，修复后 48/49；剩余项为上述规划容器替换问题，不加载公会助手也能复现。
+  此审计替换了业务面板、业务 API 与样式，使用合成游戏 DOM，禁止外部网络；并非
+  完整 MWITools 功能或浏览器已安装版本的实机验收。证据保存在本地
+  `.workbench/mwitools-compat/`，不作为构建或发布输入。
 - [学学中秋月饼](https://greasyfork.org/zh-CN/scripts/570078)，许可证 `MIT`：本次直接读取
   [发布脚本](https://update.greasyfork.org/scripts/570078/%E5%AD%A6%E5%AD%A6%E4%B8%AD%E7%A7%8B%E6%9C%88%E9%A5%BC.user.js)
   为 `1.6.231`。标签使用 `data-mooncake-enhancement-tab-button="1"`，深克隆首个按钮，
@@ -56,6 +71,10 @@ arbitration path.
   `../银河奶牛公会邀请助手/src/ui/sidebar-integration.js`，未验证公开仓库源码。
   它在捕获监听中调用 `stopImmediatePropagation()`，并通过同一 document 上的字符串 owner
   事件协调切换；这说明不能只依靠标签栏冒泡监听发现其他插件激活。
+  2026-09-26 兼容检查发现：本地邀请助手的旧标签清理只看 `mwiGitTab`，会把 MWITools
+  克隆的盈亏、规划标签隐藏并标记 `mwiGitSuperseded`。真实游戏两标签当时具有相同的
+  隐藏状态及标记，但未核对浏览器安装版邀请助手正文。此问题应在邀请助手的节点归属
+  判断中修复；公会助手不能通过反复解除外部 `hidden` 来争夺 DOM 控制权。
 
 本项目保留 `mwi-credit-sidebar-tab`、`mwi-credit-optimizer`、`data-mwi-credit-tab`
 及上述字符串 owner 事件。定位与归属、临时 DOM 修改、挂载生命周期分别放在

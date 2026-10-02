@@ -585,6 +585,8 @@
         weekStartAt,
         earnedPoints: previous ? previous.earnedPoints + earnedPoints : earnedPoints,
         complete: Boolean((previous && previous.complete) || (record && record.complete)),
+        coverage:
+          record?.coverage === "verified" && (!previous || previous.coverage === "verified") ? "verified" : "partial",
         ...(record && ["tracked", "manual", "estimated"].includes(record.source)
           ? { source: record.source }
           : previous && previous.source
@@ -695,7 +697,11 @@
         history: {
           guildId: observation.guildId || guildId,
           lastObservation: observation,
-          weeks,
+          weeks: weeks.map((record) =>
+            record.weekStartAt === lastObservation.weekStartAt
+              ? { ...record, complete: true, coverage: "partial" }
+              : record
+          ),
           manualWeeks
         }
       };
@@ -717,13 +723,21 @@
       observation.weekStartAt && lastObservation.weekStartAt && observation.weekStartAt > lastObservation.weekStartAt
         ? lastObservation.weekStartAt
         : observation.weekStartAt || lastObservation.weekStartAt || observation.observedAt;
+    const attributedPoints = weekChanged ? 0 : earnedPoints;
     const nextWeeks = normalizeGuildPointWeeks([
       ...weeks,
-      { weekStartAt: targetWeekStart, earnedPoints, complete: completedWeek, observedAt: observation.observedAt }
+      {
+        weekStartAt: targetWeekStart,
+        earnedPoints: attributedPoints,
+        complete: completedWeek,
+        coverage: "partial",
+        observedAt: observation.observedAt
+      }
     ]);
     return {
       changed: true,
-      recordedPoints: earnedPoints,
+      recordedPoints: attributedPoints,
+      skippedAmbiguousIncrease: weekChanged ? earnedPoints : 0,
       history: {
         guildId: observation.guildId || guildId,
         lastObservation: observation,
@@ -806,7 +820,9 @@
     if (coldStart.status !== "ok") return { status: coldStart.status, history: normalized, estimatedCount: 0 };
     const firstTrial = Number(firstTrialStartAt);
     const completeTracked = new Map(
-      normalized.weeks.filter((record) => record.complete).map((record) => [record.weekStartAt, record])
+      normalized.weeks
+        .filter((record) => record.complete && record.coverage === "verified" && record.source !== "estimated")
+        .map((record) => [record.weekStartAt, record])
     );
     const manual = new Map(normalized.manualWeeks.map((record) => [record.weekStartAt, record]));
     const records = [];
@@ -817,7 +833,7 @@
       const trackedRecord = completeTracked.get(weekStartAt);
       const manualRecord = manual.get(weekStartAt);
       const record = manualRecord
-        ? { ...manualRecord, complete: true, source: "manual" }
+        ? { ...manualRecord, complete: true, coverage: "verified", source: "manual" }
         : trackedRecord
           ? { ...trackedRecord, source: "tracked" }
           : null;
@@ -859,10 +875,15 @@
       });
     }
     records.sort((left, right) => left.weekStartAt - right.weekStartAt);
+    const currentWeekStartAt = firstTrial + coldStart.pastWeekCount * GUILD_POINT_WEEK_MS;
     const outsideRange = normalized.weeks.filter(
-      (record) => !record.complete || record.weekStartAt < firstTrial || record.weekStartAt >= Number(observedAt)
+      (record) => record.weekStartAt < firstTrial || record.weekStartAt >= currentWeekStartAt
     );
-    const forecast = summarizeGuildPointHistory({ weeks: records }, { forecastWeekCount: options.forecastWeekCount });
+    const forecast = summarizeGuildPointHistory(normalized, {
+      forecastWeekCount: options.forecastWeekCount,
+      currentWeekStartAt,
+      currentWeekPoints
+    });
     return {
       status: "ok",
       history: { ...normalized, weeks: [...records, ...outsideRange] },
@@ -872,38 +893,142 @@
       averageWeeklyChange: forecast.averageWeeklyChange,
       forecastPoints: forecast.forecastPoints,
       growthRate: forecast.growthRate,
-      forecastSampleCount: forecast.forecastSampleCount
+      forecastSampleCount: forecast.forecastSampleCount,
+      forecast,
+      currentWeekStartAt,
+      historicalAveragePoints: coldStart.historicalAveragePoints
     };
   }
 
+  function isReliableGuildPointWeek(record) {
+    return (
+      record.complete && record.source !== "estimated" && (record.source === "manual" || record.coverage === "verified")
+    );
+  }
+
+  function isGuildPointForecastSample(record) {
+    return (
+      record.complete && record.source !== "estimated" && (isReliableGuildPointWeek(record) || record.earnedPoints > 0)
+    );
+  }
+
+  function guildPointModelPrediction(samples, targetWeekStartAt, method = "mean") {
+    if (samples.length < 2) return null;
+    const origin = samples[0].weekStartAt;
+    const xs = samples.map((record) => (record.weekStartAt - origin) / GUILD_POINT_WEEK_MS);
+    const meanX = xs.reduce((sum, x) => sum + x, 0) / samples.length;
+    const meanY = samples.reduce((sum, record) => sum + record.earnedPoints, 0) / samples.length;
+    let prediction = meanY;
+    if (method === "linear") {
+      const variance = xs.reduce((sum, x) => sum + (x - meanX) ** 2, 0);
+      if (!variance) return null;
+      const slope =
+        samples.reduce((sum, record, i) => sum + (xs[i] - meanX) * (record.earnedPoints - meanY), 0) / variance;
+      prediction += slope * ((targetWeekStartAt - origin) / GUILD_POINT_WEEK_MS - meanX);
+    } else if (method === "legacy") {
+      prediction =
+        samples.at(-1).earnedPoints + (samples.at(-1).earnedPoints - samples[0].earnedPoints) / (samples.length - 1);
+    }
+    const rounded = Math.max(0, Math.round(prediction));
+    return Number.isSafeInteger(rounded) ? rounded : null;
+  }
+
+  // Rolling-origin evaluation: every training window ends before its target week.
+  // Estimates and unverified zeros are excluded; positive tracked values retain their coverage.
+  function backtestGuildPointForecast(history, options = {}) {
+    const lookback = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
+    const records = normalizeGuildPointWeeks(history?.weeks).filter(isGuildPointForecastSample);
+    const results = ["mean", "linear", "legacy"].map((method) => ({
+      method,
+      count: 0,
+      absoluteError: 0,
+      overestimate: 0,
+      overestimateCount: 0
+    }));
+    const predictions = [];
+    for (const target of records) {
+      if (Number.isFinite(options.beforeWeekStartAt) && target.weekStartAt >= options.beforeWeekStartAt) continue;
+      const samples = records.filter(
+        (record) =>
+          record.weekStartAt < target.weekStartAt &&
+          record.weekStartAt >= target.weekStartAt - lookback * GUILD_POINT_WEEK_MS
+      );
+      const row = { weekStartAt: target.weekStartAt, actual: target.earnedPoints };
+      const candidates = results.map((result) => guildPointModelPrediction(samples, target.weekStartAt, result.method));
+      if (candidates.some((value) => value === null)) continue;
+      for (let i = 0; i < results.length; i += 1) {
+        const result = results[i];
+        const predicted = candidates[i];
+        const error = predicted - target.earnedPoints;
+        result.count += 1;
+        result.absoluteError += Math.abs(error);
+        result.overestimate += Math.max(0, error);
+        result.overestimateCount += Number(error > 0);
+        row[result.method] = predicted;
+      }
+      predictions.push(row);
+    }
+    const metrics = results.map((result) => ({
+      ...result,
+      meanAbsoluteError: result.count ? result.absoluteError / result.count : null,
+      meanOverestimate: result.count ? result.overestimate / result.count : null
+    }));
+    return { lookback, metrics, predictions, recommendedMethod: "linear" };
+  }
+
   function summarizeGuildPointHistory(history, options = {}) {
-    const trackedWeeks = normalizeGuildPointWeeks(history && history.weeks);
-    const weeks = trackedWeeks.filter((record) => record.complete);
-    const latest = weeks.at(-1) || null;
-    const previous = weeks.at(-2) || null;
+    const manual = normalizeManualGuildPointWeeks(history?.manualWeeks);
+    const manualStarts = new Set(manual.map((record) => record.weekStartAt));
+    const trackedWeeks = normalizeGuildPointWeeks([
+      ...(history?.weeks || []).filter((record) => !manualStarts.has(record.weekStartAt)),
+      ...manual.map((record) => ({ ...record, complete: true, source: "manual", coverage: "verified" }))
+    ]);
+    const currentWeekStartAt = Number.isSafeInteger(options.currentWeekStartAt)
+      ? options.currentWeekStartAt
+      : (trackedWeeks.filter((record) => record.complete).at(-1)?.weekStartAt ?? 0) + GUILD_POINT_WEEK_MS;
+    const weeks = trackedWeeks.filter((record) => record.complete && record.weekStartAt < currentWeekStartAt);
+    const currentWeekComplete = Number.isSafeInteger(options.currentWeekPoints) && options.currentWeekPoints > 0;
+    const forecastEndAt = currentWeekStartAt + (currentWeekComplete ? GUILD_POINT_WEEK_MS : 0);
+    // This transient sample never enters trackedWeeks, saved history, or exports.
+    const completedWeeks = currentWeekComplete
+      ? [
+          ...weeks,
+          {
+            weekStartAt: currentWeekStartAt,
+            earnedPoints: options.currentWeekPoints,
+            complete: true,
+            source: "tracked",
+            coverage: "partial"
+          }
+        ]
+      : weeks;
+    const latest = completedWeeks.at(-1) || null;
+    const previous = completedWeeks.at(-2) || null;
     const growthRate =
-      previous && previous.earnedPoints > 0
+      latest &&
+      previous &&
+      isGuildPointForecastSample(latest) &&
+      isGuildPointForecastSample(previous) &&
+      latest.weekStartAt - previous.weekStartAt === GUILD_POINT_WEEK_MS &&
+      previous.earnedPoints > 0
         ? (latest.earnedPoints - previous.earnedPoints) / previous.earnedPoints
         : null;
     const forecastWeekCount = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
-    const consecutive = latest ? [latest] : [];
-    for (let index = weeks.length - 2; index >= 0 && consecutive.length < forecastWeekCount; index -= 1) {
-      const newer = consecutive[0];
-      const candidate = weeks[index];
-      const gap = newer.weekStartAt - candidate.weekStartAt;
-      if (gap < GUILD_POINT_WEEK_MS * 0.5 || gap > GUILD_POINT_WEEK_MS * 1.5) break;
-      consecutive.unshift(candidate);
-    }
-    let forecastPoints = null;
-    let averageWeeklyChange = null;
-    if (consecutive.length >= 2) {
-      averageWeeklyChange =
-        consecutive
-          .slice(1)
-          .reduce((total, record, index) => total + record.earnedPoints - consecutive[index].earnedPoints, 0) /
-        (consecutive.length - 1);
-      forecastPoints = Math.max(0, Math.round(consecutive.at(-1).earnedPoints + averageWeeklyChange));
-    }
+    const window = completedWeeks.filter(
+      (record) => record.weekStartAt >= forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS
+    );
+    const samples = window.filter(isGuildPointForecastSample);
+    const backtest = backtestGuildPointForecast(
+      { weeks: window },
+      { forecastWeekCount, beforeWeekStartAt: forecastEndAt }
+    );
+    const forecastMethod = "linear";
+    const forecastPoints = guildPointModelPrediction(samples, currentWeekStartAt, forecastMethod);
+    const nextWeekForecastPoints = guildPointModelPrediction(
+      samples,
+      currentWeekStartAt + GUILD_POINT_WEEK_MS,
+      forecastMethod
+    );
     return {
       trackedWeeks,
       weeks,
@@ -911,9 +1036,21 @@
       previous,
       growthRate,
       forecastPoints,
-      averageWeeklyChange,
-      forecastSampleCount: consecutive.length,
-      forecastWeekCount
+      nextWeekForecastPoints,
+      averageWeeklyChange: null,
+      forecastSampleCount: samples.length,
+      verifiedSampleCount: samples.filter(isReliableGuildPointWeek).length,
+      forecastSamples: samples,
+      currentWeekComplete,
+      forecastWeekCount,
+      estimatedSampleCount: window.filter((record) => record.source === "estimated").length,
+      partialSampleCount: window.filter((record) => record.source !== "estimated" && !isReliableGuildPointWeek(record))
+        .length,
+      forecastMethod,
+      backtest,
+      currentWeekStartAt,
+      forecastStartAt: forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS,
+      forecastEndAt
     };
   }
 
@@ -962,7 +1099,7 @@
     };
   }
 
-  function estimateGuildConstructionWeeks(totalCost, availablePoints, weeklyForecast) {
+  function estimateGuildConstructionWeeks(totalCost, availablePoints, weeklyForecast, options = {}) {
     const cost = Number(totalCost);
     if (!Number.isSafeInteger(cost) || cost <= 0)
       return { status: "no_plan", shortfall: 0, weeks: null, weeklyForecast: null };
@@ -974,6 +1111,19 @@
     const forecast = weeklyForecast === null || weeklyForecast === undefined ? NaN : Number(weeklyForecast);
     if (!Number.isSafeInteger(forecast) || forecast < 0)
       return { status: "missing_forecast", shortfall, weeks: null, weeklyForecast: null };
+    const remaining = options.currentWeekRemaining;
+    if (Object.hasOwn(options, "currentWeekRemaining")) {
+      if (!Number.isSafeInteger(remaining) || remaining < 0)
+        return { status: "missing_forecast", shortfall, weeks: null, weeklyForecast: forecast };
+      if (shortfall <= remaining) return { status: "ok", shortfall, weeks: 1, weeklyForecast: forecast };
+      if (forecast === 0) return { status: "no_growth", shortfall, weeks: null, weeklyForecast: forecast };
+      return {
+        status: "ok",
+        shortfall,
+        weeks: 1 + Math.ceil((shortfall - remaining) / forecast),
+        weeklyForecast: forecast
+      };
+    }
     if (forecast === 0) return { status: "no_growth", shortfall, weeks: null, weeklyForecast: forecast };
     return {
       status: "ok",
@@ -983,7 +1133,7 @@
     };
   }
 
-  function calculateGuildPointPlanningBudget(basePoints, weeklyForecast, planningWeeks) {
+  function calculateGuildPointPlanningBudget(basePoints, weeklyForecast, planningWeeks, options = {}) {
     const base = basePoints === null || basePoints === undefined ? NaN : Number(basePoints);
     const weeks = Number(planningWeeks);
     if (!Number.isSafeInteger(base) || base < 0)
@@ -994,12 +1144,20 @@
     const forecast = weeklyForecast === null || weeklyForecast === undefined ? NaN : Number(weeklyForecast);
     if (!Number.isSafeInteger(forecast) || forecast < 0)
       return { status: "missing_forecast", basePoints: base, weeks, forecastPoints: null, budget: base };
+    const includesCurrentWeek = Object.hasOwn(options, "currentWeekRemaining");
+    const remaining = options.currentWeekRemaining;
+    if (includesCurrentWeek && (!Number.isSafeInteger(remaining) || remaining < 0))
+      return { status: "missing_forecast", basePoints: base, weeks, forecastPoints: null, budget: base };
+    const addedPoints = includesCurrentWeek ? remaining + (weeks - 1) * forecast : weeks * forecast;
+    if (!Number.isSafeInteger(base + addedPoints))
+      return { status: "missing_forecast", basePoints: base, weeks, forecastPoints: null, budget: base };
     return {
       status: "ok",
       basePoints: base,
       weeks,
       forecastPoints: forecast,
-      budget: base + weeks * forecast
+      budget: base + addedPoints,
+      ...(includesCurrentWeek ? { currentWeekRemaining: remaining, futureWeeks: weeks - 1, addedPoints } : {})
     };
   }
 
@@ -1339,6 +1497,8 @@
     removeManualGuildPointWeek,
     supplementGuildPointHistory,
     summarizeGuildPointHistory,
+    backtestGuildPointForecast,
+    guildPointModelPrediction,
     estimateGuildPointColdStart,
     estimateGuildConstructionWeeks,
     calculateGuildPointPlanningBudget,

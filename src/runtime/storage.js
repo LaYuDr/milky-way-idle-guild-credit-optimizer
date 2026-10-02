@@ -10,7 +10,7 @@
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
   const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const LEGACY_GUILD_TRIAL_FIRST_START_AT = Date.parse("2026-07-13T00:00:00Z");
-  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 7;
+  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 8;
 
   function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
     const values =
@@ -90,6 +90,9 @@
         weekStartAt,
         earnedPoints: previous ? previous.earnedPoints + earnedPoints : earnedPoints,
         complete: Boolean((previous && previous.complete) || (record && record.complete)),
+        coverage:
+          record?.coverage === "verified" && (!previous || previous.coverage === "verified") ? "verified" : "partial",
+        ...(record && ["tracked", "manual", "estimated"].includes(record.source) ? { source: record.source } : {}),
         observedAt:
           Number.isSafeInteger(observedAt) && observedAt > 0
             ? Math.max(previous ? previous.observedAt : 0, observedAt)
@@ -121,7 +124,7 @@
       lastObservation: normalizeObservation(source.lastObservation),
       weeks: Array.from(byWeek.values())
         .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-12),
+        .slice(-104),
       manualWeeks: Array.from(manualByWeek.values())
         .sort((left, right) => left.weekStartAt - right.weekStartAt)
         .slice(-104)
@@ -130,7 +133,7 @@
 
   function migrateLegacyGuildPointManualWeeks(value, schemaVersion, firstTrialStartAt) {
     const normalized = normalizeGuildPointHistory(value);
-    if (Number(schemaVersion) >= GUILD_BUILDING_PLANNER_SCHEMA_VERSION) return normalized;
+    if (Number(schemaVersion) >= 7) return normalized;
     const firstTrial = Number(firstTrialStartAt);
     if (!Number.isSafeInteger(firstTrial) || firstTrial <= 0) return normalized;
     const currentWeekStarts = new Set(

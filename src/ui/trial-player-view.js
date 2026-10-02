@@ -10,6 +10,35 @@
     ["stamina", "intelligence", "attack", "defense"],
     ["melee", "ranged", "magic"]
   ];
+  // Official house room HRIDs, in the same skill order as the native profile.
+  const SKILL_ROOMS = {
+    milking: "dairy_barn",
+    foraging: "garden",
+    woodcutting: "log_shed",
+    cheesesmithing: "forge",
+    crafting: "workshop",
+    tailoring: "sewing_parlor",
+    cooking: "kitchen",
+    brewing: "brewery",
+    alchemy: "laboratory",
+    enhancing: "observatory",
+    stamina: "dining_room",
+    intelligence: "library",
+    attack: "dojo",
+    defense: "armory",
+    melee: "gym",
+    ranged: "archery_range",
+    magic: "mystical_study"
+  };
+  function skillHouseLevel(roomMap, skillKey) {
+    const room = SKILL_ROOMS[skillKey];
+    if (!room || !roomMap || typeof roomMap !== "object" || Array.isArray(roomMap)) return null;
+    const hrid = `/house_rooms/${room}`;
+    if (!Object.hasOwn(roomMap, hrid)) return null;
+    const level = roomMap[hrid]?.level;
+    return Number.isSafeInteger(level) && level >= 0 ? level : null;
+  }
+
   function skillLayout(skills) {
     const slots = SKILL_ROWS.flatMap((keys, row) =>
       keys.map((key, column) => ({
@@ -90,6 +119,62 @@
     };
   }
 
+  // Resolve CSS-module hashes from the loaded game stylesheet, so custom
+  // gradients, shadows and pseudo-elements keep the game's own implementation.
+  function nativeNameClasses(document) {
+    const classes = new Map();
+    const visit = (rules) => {
+      for (const rule of rules || []) {
+        for (const match of (rule.selectorText || "").matchAll(/\.(CharacterName_([A-Za-z0-9_]+?)__[A-Za-z0-9_-]+)/g))
+          classes.set(match[2], match[1]);
+        if (rule.cssRules) visit(rule.cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets || []) {
+      try {
+        visit(sheet.cssRules);
+      } catch (_) {
+        // Cross-origin stylesheets may be unreadable; names remain usable.
+      }
+    }
+    return classes;
+  }
+
+  function createMemberNameRenderer({ escapeHtml: e, formatMemberName, isPlain, gameIcon, document }) {
+    let classes = new Map();
+    let cosmetics = new Map();
+    const validHrid = (value, type) => typeof value === "string" && new RegExp(`^/${type}/[a-z0-9_]+$`).test(value);
+    const render = (member, saved) => {
+      const name = formatMemberName(member);
+      if (isPlain()) return `<span class="mwi-trial-member-name">${e(name)}</span>`;
+      const appearance = member.id == null ? saved : cosmetics.get(String(member.id)) || saved;
+      const icons = [appearance?.specialChatIconHrid, appearance?.chatIconHrid]
+        .filter((hrid) => validHrid(hrid, "chat_icons"))
+        .map((hrid) => gameIcon("chat_icons_sprite", hrid.split("/").pop(), "mwi-trial-name-icon"))
+        .join("");
+      const color = validHrid(appearance?.nameColorHrid, "name_colors")
+        ? classes.get(appearance.nameColorHrid.split("/").pop())
+        : null;
+      const native = color && classes.get("characterName") && classes.get("name");
+      return `<span class="mwi-trial-member-name${native ? ` ${e(classes.get("characterName"))}` : ""}" translate="no">${icons}<span class="mwi-trial-name-text${native ? ` ${e(classes.get("name"))} ${e(color)}` : ""}"${native ? ` data-name="${e(name)}"` : ""}><span>${e(name)}</span></span></span>`;
+    };
+    render.refresh = (records, context = {}) => {
+      classes = nativeNameClasses(document);
+      cosmetics = new Map();
+      // Most recently observed appearance wins; never match separate identities by name.
+      for (const record of [...records].sort((a, b) => (a.capturedAt || 0) - (b.capturedAt || 0))) {
+        for (const row of record.rows) {
+          if (row.characterId == null) continue;
+          const saved = record.members?.[row.memberKey ?? row.characterId];
+          if (saved) cosmetics.set(String(row.characterId), saved);
+        }
+      }
+      for (const [id, member] of Object.entries(context.members || {}))
+        cosmetics.set(id, { ...cosmetics.get(id), ...member });
+    };
+    return render;
+  }
+
   function createRenderer({
     t,
     escapeHtml: e,
@@ -104,6 +189,7 @@
     renderRail,
     memberIdentityAttributes,
     formatMemberName,
+    renderMemberName = (member) => e(formatMemberName(member)),
     isScreenshotMode
   }) {
     const tooltipRecords = new Map();
@@ -171,15 +257,18 @@
         })
         .join("")}</div>`;
     }
-    function skillsMarkup(skills) {
+    function skillsMarkup(skills, roomMap) {
       if (!skills.some((skill) => suffix(skill.skillHrid) !== "total_level")) return "";
       return `<div class="mwi-trial-skill-grid" aria-label="${e(t("trialProfileSkills"))}">${skillLayout(skills)
         .map(({ key, row, column, skill }) => {
           const hrid = skill?.skillHrid || `/skills/${key}`;
           const name = label(hrid);
           const level = `Lv.${number(skill?.level)}`;
-          const description = `${name} ${level}`;
-          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" ${tooltipAttribute("skill", skill)} style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span></div>`;
+          const houseLevel = skillHouseLevel(roomMap, key);
+          const houseLabel = t("trialProfileHouseLevel", { level: number(houseLevel) });
+          const description = `${name} ${level} · ${houseLabel}`;
+          const houseBadge = `<span class="mwi-trial-skill-house" data-house-level="${e(number(houseLevel))}"${houseLevel === null ? ' data-unknown="true"' : ""} aria-hidden="true"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m1.5 7 6.5-5.5L14.5 7M3.5 5.5v8h9v-8M6.5 13.5v-5h3v5"/></svg><span>${e(number(houseLevel))}</span></span>`;
+          return `<div class="mwi-trial-equipment-slot mwi-trial-skill-slot" data-profile-skill="${e(key)}" ${tooltipAttribute("skill", skill)} style="grid-row:${row};grid-column:${column}" tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon("skill", hrid) || `<span class="mwi-trial-slot-label">${e(name)}</span>`}<span class="mwi-trial-equipment-level">${e(level)}</span>${houseBadge}</div>`;
         })
         .join("")}</div>`;
     }
@@ -204,12 +293,7 @@
           return `<table class="mwi-trial-player-overview" data-trial-overview-kind="${kind}"><caption>${e(t(kind === "skilling" ? "trialSkilling" : "trialCombat"))}</caption><colgroup><col class="mwi-trial-overview-name"><col class="mwi-trial-overview-count"><col><col></colgroup><thead><tr><th scope="col">${e(t("trialOverviewProject"))}</th><th scope="col">${e(t("trialRankingCount"))}</th><th scope="col">${e(t("trialOverviewAverage"))}</th><th scope="col">${e(t("trialOverviewTotal"))}</th></tr></thead><tbody>${rows}</tbody><tfoot><tr data-trial-overview-summary="${kind}"><th scope="row">${e(t("trialOverviewAllProjects"))}</th>${cells(summary)}</tr></tfoot></table>`;
         })
         .join("");
-      return profileSection(
-        "overview",
-        "trialPlayerOverview",
-        `${tables}<details class="mwi-trial-overview-help"><summary>${e(t("trialOverviewMethod"))}</summary><p>${e(t("trialOverviewHelp"))}</p></details>`,
-        sectionOpen
-      );
+      return profileSection("overview", "trialPlayerOverview", tables, sectionOpen);
     }
     function joiningTime(value) {
       if (value === null) return e(t("trialProfileJoinedAtUnknown"));
@@ -219,19 +303,44 @@
       return `<time datetime="${e(date.toISOString())}">${e(local)}</time>`;
     }
     function joinedAtMarkup(member) {
-      return `<div data-trial-profile-joined-at title="${e(t("trialProfileJoinedAtHelp"))}"><dt><span>${e(t("trialProfileJoinedAt"))}</span></dt><dd>${joiningTime(api.currentMemberJoinedAt(getBridge()?.trialHistoryContext, member))}</dd></div>`;
+      return `<div data-trial-profile-joined-at><dt><span>${e(t("trialProfileJoinedAt"))}</span></dt><dd>${joiningTime(api.currentMemberJoinedAt(getBridge()?.trialHistoryContext, member))}</dd></div>`;
     }
+    function activityMarkup(profile) {
+      const character = profile?.sharableCharacter;
+      const action =
+        typeof character?.actionType === "string" && /^\/action_types\/([a-z_]+)$/.exec(character.actionType)?.[1];
+      const activity = SKILL_ROWS.slice(0, 2).flat().includes(action)
+        ? t(`trialName_${action}`)
+        : ["combat", "labyrinth", "special"].includes(action)
+          ? t(`trialActivity_${action}`)
+          : t("trialActivityUnknown");
+      const presence =
+        character?.hideOnlineStatus === true
+          ? "hidden"
+          : character?.isOnline === true
+            ? "online"
+            : character?.isOnline === false
+              ? "offline"
+              : "unknown";
+      return `<div data-trial-profile-activity><dt><span>${e(t("trialProfileActivity"))}</span></dt><dd>${e(activity)}</dd></div><div data-trial-profile-presence="${presence}"><dt><span>${e(t("trialProfilePresence"))}</span></dt><dd>${e(t(`trialPresence_${presence}`))}</dd></div>`;
+    }
+
     function profileMarkup(state, sectionOpen, projects, member) {
       const overview = overviewMarkup(projects, sectionOpen);
       const joinedAt = joinedAtMarkup(member);
       if (state.status !== "ready")
-        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p><dl class="mwi-trial-profile-facts">${joinedAt}</dl>${overview}`;
+        return `<p class="mwi-trial-meta" role="status">${e(t(state.status === "loading" ? "trialProfileLoading" : state.status === "timeout" ? "trialProfileTimeout" : state.status === "mismatch" ? "trialProfileMismatch" : "trialProfileUnavailable"))}</p><dl class="mwi-trial-profile-facts">${activityMarkup(null)}${joinedAt}</dl>${overview}`;
       const profile = state.profile;
       const skills = entries(profile.characterSkills).filter((item) => item && item.skillHrid);
       const total = skills.find((item) => suffix(item.skillHrid) === "total_level");
-      let html = `<dl class="mwi-trial-profile-facts">${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}${joinedAt}</dl>`;
+      let html = `<dl class="mwi-trial-profile-facts">${activityMarkup(profile)}${metric(t("trialProfileTotalLevel"), number(total?.level ?? profile.totalLevel))}${metric(t("trialProfileCombatLevel"), number(profile.combatLevel, 1))}${joinedAt}</dl>`;
       html += overview;
-      html += profileSection("skills", "trialProfileSkills", skillsMarkup(skills), sectionOpen);
+      html += profileSection(
+        "skills",
+        "trialProfileSkills",
+        skillsMarkup(skills, profile.characterHouseRoomMap),
+        sectionOpen
+      );
       html += profileSection(
         "equipment",
         "trialProfileEquipment",
@@ -306,8 +415,8 @@
           const value = score(entry);
           if (value !== previous) rank = index + 1;
           previous = value;
-          const name = formatMemberName(entry);
-          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${e(name)}</button>` : e(name)}</th><td><span data-trial-ranking-value>${metric === "joinedAt" ? joiningTime(value) : value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
+          const name = renderMemberName(entry);
+          return `<tr data-trial-ranking-row="${e(entry.key)}"><td>${value === null ? "—" : rank}</td><th scope="row"${memberIdentityAttributes(entry)}>${entry.name ? `<button type="button" class="mwi-trial-heading-link" data-trial-ranking-player="${e(entry.key)}">${name}</button>` : name}</th><td><span data-trial-ranking-value>${metric === "joinedAt" ? joiningTime(value) : value === null ? "—" : metric === "participations" ? value : `${value.toFixed(2)}×`}</span></td>${metric === "average" ? `<td data-trial-ranking-samples>${entry[scope].sampleCount}</td>` : ""}</tr>`;
         })
         .join("");
       const title =
@@ -321,11 +430,11 @@
       const key = metric === "average" ? scope : metric;
       const icon = (path) =>
         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="${path}"/></svg>`;
-      const controls = `<div class="mwi-trial-ranking-controls"><button type="button" data-trial-ranking-move="${key}" data-direction="-1" aria-label="${e(t("trialRankingMoveLeft", { name: title }))}" title="${e(t("trialRankingMoveLeft", { name: title }))}"${index === 0 ? " disabled" : ""}>${icon("m9 4-4 4 4 4")}</button><button type="button" data-trial-ranking-drag="${key}" aria-label="${e(t("trialRankingDrag", { name: title }))}" title="${e(t("trialRankingDrag", { name: title }))}" aria-describedby="mwi-trial-ranking-order-hint">${icon("M5 3v2m6-2v2M5 7v2m6-2v2M5 11v2m6-2v2")}</button><button type="button" data-trial-ranking-move="${key}" data-direction="1" aria-label="${e(t("trialRankingMoveRight", { name: title }))}" title="${e(t("trialRankingMoveRight", { name: title }))}"${index === count - 1 ? " disabled" : ""}>${icon("m7 4 4 4-4 4")}</button></div>`;
+      const controls = `<div class="mwi-trial-ranking-controls"><button type="button" data-trial-ranking-move="${key}" data-direction="-1" aria-label="${e(t("trialRankingMoveLeft", { name: title }))}" title="${e(t("trialRankingMoveLeft", { name: title }))}"${index === 0 ? " disabled" : ""}>${icon("m9 4-4 4 4 4")}</button><button type="button" data-trial-ranking-drag="${key}" aria-label="${e(t("trialRankingDrag", { name: title }))}" title="${e(t("trialRankingDrag", { name: title }))}">${icon("M5 3v2m6-2v2M5 7v2m6-2v2M5 11v2m6-2v2")}</button><button type="button" data-trial-ranking-move="${key}" data-direction="1" aria-label="${e(t("trialRankingMoveRight", { name: title }))}" title="${e(t("trialRankingMoveRight", { name: title }))}"${index === count - 1 ? " disabled" : ""}>${icon("m7 4 4 4-4 4")}</button></div>`;
       return `<article class="mwi-trial-column" data-sort-key="${key}" data-trial-ranking-column="${key}"><h4>${e(title)}</h4>${controls}${entries.length ? `<table class="mwi-trial-table mwi-trial-ranking-table"><caption>${e(title)}</caption><thead><tr><th scope="col">${e(t("trialRankingRank"))}</th><th scope="col">${e(t("trialMember"))}</th><th scope="col">${e(t(metric === "joinedAt" ? "trialProfileJoinedAt" : metric === "participations" ? "trialRankingCount" : scope === "all" ? "trialRankingTotalMultiple" : "trialRankingMultiple"))}</th>${metric === "average" ? `<th scope="col">${e(t("trialRankingSamples"))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="mwi-trial-empty">${e(t(metric === "joinedAt" ? "trialRankingRosterEmpty" : "trialPlayerEmpty"))}</p>`}</article>`;
     }
 
-    function renderRankings({ records, helpOpen, rankingOrder, orderSaveFailed }) {
+    function renderRankings({ records, rankingOrder, orderSaveFailed }) {
       const players = api.playerRankings(records);
       const members = api.currentMembershipRankings(getBridge()?.trialHistoryContext);
       const columns = rankingOrder
@@ -339,14 +448,22 @@
           )
         )
         .join("");
-      return `<div class="mwi-trial-rankings"><details class="mwi-trial-guide" data-trial-ranking-help ${helpOpen ? "open" : ""}><summary>${e(t("trialRankingMethod"))}</summary><p>${e(t("trialRankingCountHelp"))}</p><p>${e(t("trialRankingAverageHelp"))}</p><p>${e(t("trialRankingJoinedAtHelp"))}</p></details><p class="mwi-trial-help" id="mwi-trial-ranking-order-hint" data-trial-ranking-order-hint>${e(t("trialRankingOrderHint"))}</p><p class="mwi-trial-help" data-trial-ranking-order-status role="status">${orderSaveFailed ? e(t("trialRankingOrderSaveFailed")) : ""}</p>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
+      return `<div class="mwi-trial-rankings"><p class="mwi-trial-help" data-trial-ranking-order-status role="status">${orderSaveFailed ? e(t("trialRankingOrderSaveFailed")) : ""}</p>${renderRail("player-rankings", t("trialPlayerRankings"), columns, "rankings")}</div>`;
     }
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
       tooltipRecords.clear();
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${e(formatMemberName(member))} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects, member)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${renderMemberName(member)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects, member)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
-  return { createRenderer, createMemberNameFormatter, equipmentLayout, skillLayout };
+  return {
+    createRenderer,
+    createMemberNameFormatter,
+    createMemberNameRenderer,
+    nativeNameClasses,
+    equipmentLayout,
+    skillLayout,
+    skillHouseLevel
+  };
 });

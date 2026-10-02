@@ -205,23 +205,14 @@
       if (status) status.hidden = !hasGuildBuildingClearUndo();
     }
 
-    function setPanelView(panel, view) {
+    function setPanelView(panel, view, { preserveSettings = false } = {}) {
       const selectedView = normalizePanelView(view);
       if (!panelViewEnabled(selectedView)) return false;
-      for (const candidate of PANEL_VIEWS) {
-        const content = panel.querySelector(`[data-role="${candidate}-view"]`);
-        const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
-        const active = candidate === selectedView;
-        if (content) content.hidden = !active;
-        if (tab) {
-          tab.setAttribute("aria-selected", String(active));
-          tab.setAttribute("tabindex", active ? "0" : "-1");
-          tab.classList.toggle("mwi-view-tab-active", active);
-        }
-      }
+      if (!preserveSettings) state.settingsOpen = false;
       panel.dataset.activeView = selectedView;
       state.activeView = selectedView;
       const persisted = persistPluginUiState();
+      syncSettingsPage(panel);
       if (selectedView === "upgrade") refreshGuildUpgrade(panel);
       else if (selectedView === "construction") refreshGuildConstruction(panel);
       else if (selectedView === "trials") refreshTrialHistory(panel);
@@ -245,8 +236,8 @@
       }
     }
 
-    function setSettingsOpen(panel, open, { restoreFocus = false } = {}) {
-      state.settingsOpen = Boolean(open);
+    function syncSettingsPage(panel) {
+      panel.dataset.settingsOpen = String(state.settingsOpen);
       const trigger = panel.querySelector('[data-role="toggle-settings"]');
       const settings = panel.querySelector('[data-role="settings-panel"]');
       if (settings) settings.hidden = !state.settingsOpen;
@@ -256,6 +247,24 @@
         trigger.setAttribute("aria-label", label);
         trigger.setAttribute("title", label);
       }
+      trigger?.setAttribute("aria-current", state.settingsOpen ? "page" : "false");
+      for (const candidate of PANEL_VIEWS) {
+        const active = candidate === state.activeView && !state.settingsOpen;
+        const content = panel.querySelector(`[data-role="${candidate}-view"]`);
+        const tab = panel.querySelector(`[data-role="view-${candidate}"]`);
+        if (content) content.hidden = !active;
+        if (tab) {
+          tab.setAttribute("aria-selected", String(active));
+          tab.setAttribute("tabindex", candidate === state.activeView ? "0" : "-1");
+          tab.classList.toggle("mwi-view-tab-active", active);
+        }
+      }
+    }
+
+    function setSettingsOpen(panel, open, { restoreFocus = false } = {}) {
+      state.settingsOpen = Boolean(open);
+      syncSettingsPage(panel);
+      const trigger = panel.querySelector('[data-role="toggle-settings"]');
       if (state.settingsOpen) {
         const refreshedSettings = refreshSettings(panel);
         const firstControl =
@@ -282,7 +291,7 @@
       const statusPrefix = construction ? "constructionView" : "trialHistoryView";
       state[stateKey] = Boolean(visible);
       if (!state[stateKey] && state.activeView === view) {
-        setPanelView(panel, nearestVisiblePanelView(view));
+        setPanelView(panel, nearestVisiblePanelView(view), { preserveSettings: true });
       }
       syncPanelViewVisibility(panel);
       const persisted = persistPluginUiState();
@@ -490,10 +499,10 @@
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
           <div class="mwi-controls">
             <div class="mwi-number-field"><label for="mwi-target-credit">${escapeHtml(t("targetCredits"))}</label><span class="mwi-number-stepper mwi-target-credit-stepper"><input id="mwi-target-credit" data-role="target" type="number" min="1" step="100" inputmode="numeric" value="${state.targetCredit}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="target" data-direction="1" type="button" aria-label="${escapeHtml(t("increaseTargetCredits"))}" title="${escapeHtml(t("increaseTargetCredits"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="target" data-direction="-1" type="button" aria-label="${escapeHtml(t("decreaseTargetCredits"))}" title="${escapeHtml(t("decreaseTargetCredits"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span></div>
-            <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button" title="${escapeHtml(priceReference("a").title)}">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button" title="${escapeHtml(priceReference("b").title)}">${escapeHtml(priceReference("b").label)}</button></div>
+            <div class="mwi-price-reference" role="group" aria-label="${escapeHtml(t("marketReference"))}"><span class="mwi-price-reference-label">${escapeHtml(t("priceReference"))}</span><button data-role="price-reference" data-price-reference="a" type="button">${escapeHtml(priceReference("a").label)}</button><button data-role="price-reference" data-price-reference="b" type="button">${escapeHtml(priceReference("b").label)}</button></div>
             <button data-role="refresh" type="button">${escapeHtml(t("refreshEstimate"))}</button>
             <div class="mwi-price-limit-control">
-              <div class="mwi-price-limit" title="${escapeHtml(t("maxItemUnitPriceHint"))}"><span>${escapeHtml(t("maxItemUnitPricePrefix"))}</span><span class="mwi-number-stepper mwi-price-limit-stepper"><input data-role="max-item-unit-price-millions" type="number" min="10" step="10" inputmode="decimal" value="${escapeHtml(maxItemUnitPriceMillionsValue())}" placeholder="${escapeHtml(t("maxItemUnitPricePlaceholder"))}" aria-label="${escapeHtml(t("maxItemUnitPriceInput"))}" aria-describedby="mwi-max-item-unit-price-error" aria-invalid="false"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="max-item-unit-price-millions" data-direction="1" type="button" aria-label="${escapeHtml(t("increaseMaxItemUnitPrice"))}" title="${escapeHtml(t("increaseMaxItemUnitPrice"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="max-item-unit-price-millions" data-direction="-1" type="button" aria-label="${escapeHtml(t("decreaseMaxItemUnitPrice"))}" title="${escapeHtml(t("decreaseMaxItemUnitPrice"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span><span>${escapeHtml(t("maxItemUnitPriceSuffix"))}</span></div>
+              <div class="mwi-price-limit"><span>${escapeHtml(t("maxItemUnitPricePrefix"))}</span><span class="mwi-number-stepper mwi-price-limit-stepper"><input data-role="max-item-unit-price-millions" type="number" min="10" step="10" inputmode="decimal" value="${escapeHtml(maxItemUnitPriceMillionsValue())}" placeholder="${escapeHtml(t("maxItemUnitPricePlaceholder"))}" aria-label="${escapeHtml(t("maxItemUnitPriceInput"))}" aria-describedby="mwi-max-item-unit-price-error" aria-invalid="false"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="max-item-unit-price-millions" data-direction="1" type="button" aria-label="${escapeHtml(t("increaseMaxItemUnitPrice"))}" title="${escapeHtml(t("increaseMaxItemUnitPrice"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="max-item-unit-price-millions" data-direction="-1" type="button" aria-label="${escapeHtml(t("decreaseMaxItemUnitPrice"))}" title="${escapeHtml(t("decreaseMaxItemUnitPrice"))}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span><span>${escapeHtml(t("maxItemUnitPriceSuffix"))}</span></div>
               <small id="mwi-max-item-unit-price-error" class="mwi-price-limit-error" data-role="max-item-unit-price-error" role="status" aria-live="polite" hidden></small>
             </div>
           </div>
@@ -511,7 +520,7 @@
           </section>
           <section class="mwi-shrine-guide-route" data-role="shrine-guide-route" data-active="${String(state.shrineGuideEnabled)}" data-status="inactive" aria-live="polite">
             <button class="mwi-shrine-guide-toggle" data-role="toggle-shrine-guide" type="button" aria-pressed="${String(state.shrineGuideEnabled)}"><span class="mwi-shrine-guide-beacon" aria-hidden="true"></span><span>${escapeHtml(state.shrineGuideEnabled ? t("guideDisable") : t("guideEnable"))}</span></button>
-            <span class="mwi-shrine-guide-copy"><strong data-role="shrine-guide-title">${escapeHtml(t("guideReady"))}</strong><small data-role="shrine-guide-detail">${escapeHtml(t("guideReadyHint"))}</small></span>
+            <span class="mwi-shrine-guide-copy"><strong data-role="shrine-guide-title">${escapeHtml(t("guideReady"))}</strong><small data-role="shrine-guide-detail"></small></span>
           </section>
           ${renderGuildTokenBudgetControl()}
           ${renderGuildTokenCreditPlanToggle()}
@@ -751,12 +760,14 @@
         (event) => {
           if (event.target.matches(".mwi-guild-point-history"))
             constructionView.setGuildPointHistoryOpen(event.target.open);
-          if (event.target.matches(".mwi-guild-point-planning-options"))
-            constructionView.setGuildPointPlanningOptionsOpen(event.target.open);
         },
         true
       );
       constructionResults.addEventListener("click", (event) => {
+        // Native toggle is queued; preserve the intended state before a refresh can replace the node.
+        const disclosure = event.target.closest("summary")?.parentElement;
+        if (!event.defaultPrevented && disclosure?.matches(".mwi-guild-point-history"))
+          constructionView.setGuildPointHistoryOpen(!disclosure.open);
         const button = event.target.closest("button");
         if (!button) return;
         const definitions = guildBuildingDefinitions();
@@ -1071,6 +1082,7 @@
       panel.__mwiSortableControllers = [tabSortable, constructionSortable];
       sortableControllers.push(tabSortable, constructionSortable);
       if (state.activeView !== savedActiveView) persistPluginUiState();
+      syncSettingsPage(panel);
       checkPluginUpdate(panel);
       return panel;
     }

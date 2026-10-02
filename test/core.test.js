@@ -2326,7 +2326,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.doesNotMatch(source, /suppressUpgradePlanAutofill/);
   assert.doesNotMatch(source, /if \(!state\.upgradePlans\.length[^\n]+addGuildUpgradePlan/);
   assert.match(source, /hasAvailableUpgrade \? t\("noUpgradePlans"\) : t\("allBuffsMaxed"\)/);
-  assert.match(source, /hasAvailableUpgrade \? t\("noUpgradePlansHint"\) : t\("noUpgradeMaterials"\)/);
+  assert.match(source, /hasAvailableUpgrade \? "" : t\("noUpgradeMaterials"\)/);
   assert.match(source, /if \(!removeGuildUpgradePlan\(row\.dataset\.planId\)\) return/);
   assert.match(source, /data-role="plan-start"/);
   assert.match(source, /data-role="plan-target"/);

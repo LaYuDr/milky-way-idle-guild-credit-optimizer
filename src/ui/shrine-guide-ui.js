@@ -287,8 +287,8 @@
     }
 
     function shrineGuideStatusCopy(model) {
-      if (!model || model.status === "inactive") return { title: t("guideReady"), detail: t("guideReadyHint") };
-      if (model.status === "no_plans") return { title: t("guideNoPlans"), detail: t("guideNoPlansHint") };
+      if (!model || model.status === "inactive") return { title: t("guideReady"), detail: "" };
+      if (model.status === "no_plans") return { title: t("guideNoPlans"), detail: "" };
       if (model.status === "loading") return { title: t("guideLoading"), detail: t("guideLoadingHint") };
       if (model.status === "complete") return { title: t("guideComplete"), detail: t("guideCompleteHint") };
       if (model.status === "choose_credit") {

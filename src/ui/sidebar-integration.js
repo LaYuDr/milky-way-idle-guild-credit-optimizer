@@ -227,15 +227,27 @@
       const keepPanelOpen =
         staleSelected || Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab));
       const tabHadFocus = state.creditTab === windowRef.document.activeElement;
+      const reuseTab = Boolean(
+        state.creditTab?.isConnected &&
+        state.creditTab.parentElement === tabBar &&
+        dom.isOwnedSidebarTab(state.creditTab)
+      );
       // Recreate before hide so the panel shell can snapshot its focus and scroll position.
       const replacement = localeChanged && state.panel ? recreatePanel(state.panel) : null;
       selection.hide();
-      state.creditTab?.remove();
+      if (!reuseTab) state.creditTab?.remove();
       const panel = replacement || state.panel || createPanel();
       panel.hidden = true;
-      const tab = dom.createTab(tabPrototype, panel, getLabel());
+      const label = getLabel();
+      const tab = reuseTab ? state.creditTab : dom.createTab(tabPrototype, panel, label);
+      if (reuseTab) {
+        // Other plugins may anchor their buttons to this node. Updating only our
+        // panel/locale must retain its identity and position within the same bar.
+        dom.prepareTab(tab, panel);
+        if (tab.textContent !== label) tab.textContent = label;
+      }
       panelHost.append(panel);
-      tabBar.append(tab);
+      if (!reuseTab) tabBar.append(tab);
       state.panel = panel;
       state.creditTab = tab;
       state.panelLocale = locale;

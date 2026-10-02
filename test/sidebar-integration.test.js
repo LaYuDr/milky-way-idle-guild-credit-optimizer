@@ -2,6 +2,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const vm = require("node:vm");
 const sidebarIntegration = require("../src/ui/sidebar-integration.js");
 
 test("maps wheel movement to an overflowing native sidebar tab bar", () => {
@@ -236,4 +238,171 @@ test("stale cleanup preserves foreign tabs cloned from Guild, including already 
   stale.hidden = false;
   sidebarIntegration.suppressStaleMounts({ tabBar: { ownerDocument: doc } }, live, {});
   assert.equal(stale.hidden, true);
+});
+
+// Test controller decisions at its DOM/interaction module boundaries. The DOM
+// helpers and actual MWITools mutation behavior have separate browser coverage.
+function controllerFixture() {
+  const calls = { createdTabs: 0, preparedTabs: [], shown: 0, focused: 0, removedTabs: 0 };
+  const foreignTab = { id: "mwitools-asset-history-tab", selected: true };
+  const planningTab = { id: "mwitools-planning-tab" };
+  const foreignPanel = { hidden: false };
+  const tabBar = {
+    children: [],
+    addEventListener() {},
+    removeEventListener() {},
+    append(tab) {
+      this.children.push(tab);
+      tab.parentElement = this;
+      tab.isConnected = true;
+    }
+  };
+  const panelHost = {
+    append(panel) {
+      panel.parentElement = this;
+      panel.isConnected = true;
+    }
+  };
+  const tab = {
+    dataset: { mwiCreditTab: "true" },
+    parentElement: tabBar,
+    isConnected: true,
+    textContent: "公会助手",
+    selected: false,
+    getAttribute: (name) => (name === "aria-selected" ? String(tab.selected) : null),
+    classList: { contains: () => tab.selected },
+    remove() {
+      calls.removedTabs += 1;
+      this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+      this.parentElement = null;
+      this.isConnected = false;
+    },
+    focus() {
+      calls.focused += 1;
+      windowRef.document.activeElement = this;
+    }
+  };
+  tabBar.children = [{ id: "native-loadout" }, tab, foreignTab, planningTab];
+  const state = {
+    creditTab: tab,
+    panel: { parentElement: panelHost, isConnected: true, hidden: true },
+    panelLocale: "zh-CN"
+  };
+  const fixture = { locale: "en", found: { tabBar, panelHost, tabPrototype: {} } };
+  const windowRef = {
+    document: { activeElement: foreignTab },
+    addEventListener() {},
+    MutationObserver: class {
+      observe() {}
+      disconnect() {}
+    }
+  };
+  const context = {
+    MwiGuildCreditSidebarDom: {
+      createIntegrationLocator: () => () => fixture.found,
+      suppressStaleMounts: () => false,
+      isOwnedSidebarTab: (node) => node === tab,
+      prepareTab(node, panel) {
+        calls.preparedTabs.push({ node, panel });
+      },
+      createTab(_prototype, panel, label) {
+        calls.createdTabs += 1;
+        return { panel, textContent: label };
+      }
+    },
+    MwiGuildCreditSidebarInteraction: {
+      createSelectionController: () => ({
+        hide() {},
+        isActive: () => false,
+        show() {
+          calls.shown += 1;
+          state.panel.hidden = false;
+        }
+      }),
+      createDocumentActivationCoordinator: () => ({ announce() {} }),
+      enableSidebarTabWheelScrolling() {}
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve("../src/ui/sidebar-integration.js"), "utf8"), context);
+  const controller = context.MwiGuildCreditSidebarIntegration.createController({
+    window: windowRef,
+    state,
+    getLocale: () => fixture.locale,
+    getLabel: () => (fixture.locale === "en" ? "Guild" : "公会助手"),
+    recreatePanel: () => ({ isConnected: false, hidden: true })
+  });
+  return { fixture, controller, state, tab, tabBar, foreignTab, foreignPanel, windowRef, calls };
+}
+
+test("locale refresh retains Guild node and MWITools anchor order while a foreign panel has focus", () => {
+  const { controller, state, tab, tabBar, foreignTab, foreignPanel, windowRef, calls } = controllerFixture();
+  const originalOrder = [...tabBar.children];
+  const oldPanel = state.panel;
+  assert.equal(controller.refresh(), true);
+  assert.equal(state.creditTab, tab);
+  assert.deepEqual(tabBar.children, originalOrder);
+  assert.equal(tabBar.children[tabBar.children.indexOf(foreignTab) - 1], tab);
+  assert.equal(calls.removedTabs, 0);
+  assert.equal(calls.createdTabs, 0);
+  assert.deepEqual(calls.preparedTabs, [{ node: tab, panel: state.panel }]);
+  assert.notEqual(state.panel, oldPanel);
+  assert.equal(tab.textContent, "Guild");
+  assert.equal(windowRef.document.activeElement, foreignTab);
+  assert.equal(foreignTab.selected, true);
+  assert.equal(foreignPanel.hidden, false);
+  assert.equal(calls.shown, 0);
+  assert.equal(calls.focused, 0);
+});
+
+test("panel-host-only replacement retains the Guild anchor, panel object and current foreign selection", () => {
+  const { fixture, controller, state, tab, tabBar, foreignTab, calls } = controllerFixture();
+  fixture.locale = "zh-CN";
+  fixture.found.panelHost = {
+    append(panel) {
+      panel.parentElement = this;
+      panel.isConnected = true;
+    }
+  };
+  const oldPanel = state.panel;
+  const originalOrder = [...tabBar.children];
+  assert.equal(controller.refresh(), true);
+  assert.equal(state.creditTab, tab);
+  assert.equal(state.panel, oldPanel);
+  assert.equal(state.panel.parentElement, fixture.found.panelHost);
+  assert.deepEqual(tabBar.children, originalOrder);
+  assert.equal(foreignTab.selected, true);
+  assert.equal(calls.removedTabs, 0);
+  assert.equal(calls.createdTabs, 0);
+  assert.equal(calls.shown, 0);
+});
+
+test("locale refresh keeps the Guild panel open and returns focus to the same tab", () => {
+  const { controller, state, tab, windowRef, calls } = controllerFixture();
+  state.panel.hidden = false;
+  tab.selected = true;
+  windowRef.document.activeElement = tab;
+  assert.equal(controller.refresh(), true);
+  assert.equal(state.creditTab, tab);
+  assert.equal(state.panel.hidden, false);
+  assert.equal(windowRef.document.activeElement, tab);
+  assert.equal(calls.shown, 1);
+  assert.equal(calls.focused, 1);
+  assert.equal(calls.removedTabs, 0);
+  assert.equal(calls.createdTabs, 0);
+});
+
+test("a different native tab bar still receives a newly created Guild tab", () => {
+  const { fixture, controller, state, tab, tabBar, calls } = controllerFixture();
+  const newBar = {
+    ...tabBar,
+    children: []
+  };
+  fixture.found.tabBar = newBar;
+  assert.equal(controller.refresh(), true);
+  assert.notEqual(state.creditTab, tab);
+  assert.equal(state.creditTab.parentElement, newBar);
+  assert.equal(tabBar.children.includes(tab), false);
+  assert.equal(calls.removedTabs, 1);
+  assert.equal(calls.createdTabs, 1);
+  assert.equal(calls.preparedTabs.length, 0);
 });

@@ -1,10 +1,13 @@
 (function (root, factory) {
   const api = factory(
-    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay,
+    typeof module !== "undefined" && module.exports
+      ? require("./trial-signup-warning.js")
+      : root.MwiGuildTrialSignupWarning
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildTrialHistoryView = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi, signupWarningApi) {
   "use strict";
 
   function projectIconSpec(record, detail = record.trialDetail) {
@@ -52,11 +55,18 @@
   }) {
     let mode = "week";
     let screenshotMode = false;
+    let simpleNames = false;
     let screenshotBusy = false;
     let screenshotNotice = "";
-    let screenshotHelpOpen = false;
     const isScreenshotMode = () => screenshotMode;
     const formatMemberName = playerViewApi.createMemberNameFormatter({ t, isScreenshotMode });
+    const renderMemberName = playerViewApi.createMemberNameRenderer({
+      document,
+      escapeHtml,
+      formatMemberName,
+      isPlain: () => screenshotMode || simpleNames,
+      gameIcon
+    });
     let selectedWeek = "";
     let selectedProject = "";
     let resetScroll = false;
@@ -69,9 +79,7 @@
     let importNotice = null;
     let importBusy = false;
     let importRevision = 0;
-    let guideOpen = false;
     let displaySettingsOpen = false;
-    let displayHelpOpen = false;
     let displaySaveFailed = false;
     let rankingOrder = displayApi.normalizeRankingOrder(pluginStorage.loadTrialRankingOrder());
     let rankingOrderSaveFailed = false;
@@ -113,7 +121,11 @@
 
     function gameIcon(sprite, symbol, className) {
       if (!/^[a-z0-9_]+$/.test(symbol || "")) return "";
-      let base = spriteBases[sprite] || domApi.findSpriteBaseHref(document, sprite);
+      const nativeChatBase =
+        sprite === "chat_icons_sprite"
+          ? domApi.findSpriteBaseHref(document.querySelector('[class*="CharacterName_chatIcon__"]'), sprite)
+          : "";
+      let base = nativeChatBase || spriteBases[sprite] || domApi.findSpriteBaseHref(document, sprite);
       if (base) spriteBases[sprite] = base;
       else if (!spriteLoadPromise && pageWindow.fetch && pageWindow.location?.origin) {
         spriteLoadPromise = pageWindow
@@ -125,10 +137,14 @@
               "items_sprite",
               "abilities_sprite",
               "combat_monsters_sprite",
-              "misc_sprite"
+              "misc_sprite",
+              "chat_icons_sprite"
             ]) {
               const reference = domApi.spriteBaseFromAssetManifest(manifest, sprite);
-              if (reference) spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
+              // A cached manifest can predate the running game. Never replace a
+              // sprite URL already observed in the native DOM with that cache.
+              if (reference && !spriteBases[sprite])
+                spriteBases[sprite] = new URL(reference, pageWindow.location.origin).href;
             }
             const panel = getPanel();
             if (!disposed && panel?.isConnected && panel.dataset.activeView === "trials") refresh(panel);
@@ -148,12 +164,22 @@
     };
     const number = (value) => (typeof value === "number" && Number.isFinite(value) ? String(value) : "—");
 
+    const signupWarning = signupWarningApi.create({
+      document,
+      pageWindow,
+      trialHistoryApi,
+      t,
+      getRecords: () => records,
+      getContext: () => getBridge()?.trialHistoryContext
+    });
+
     function reload() {
       const loaded = pluginStorage.loadTrialHistory();
       loadFailed = loaded.failed;
       const merged = new Map(loaded.records.map((record) => [record.key, record]));
       for (const [key, record] of unsaved) merged.set(key, record);
       records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
+      signupWarning.refresh();
       multipleGuilds =
         new Set(
           records.map((record) => JSON.stringify([record.guildId, record.guildId == null ? record.guildName : null]))
@@ -199,12 +225,12 @@
         conflicts: count("conflict")
       };
       let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}" title="${escapeHtml(t("trialScreenshotHint"))}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
-        <details class="mwi-trial-guide" data-trial-image-help${screenshotHelpOpen ? " open" : ""}><summary>${escapeHtml(t("trialScreenshotGuide"))}</summary><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotHelp"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialScreenshotReady"))}</p></details>
+
         <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
-        <details class="mwi-trial-guide"${guideOpen ? " open" : ""}><summary>${escapeHtml(t("trialGuide"))}</summary><div class="mwi-trial-purpose" data-role="trial-purpose"><p>${escapeHtml(t("trialDisplayNotice"))}</p><p>${escapeHtml(t("trialFeedbackNotice"))}</p></div><p class="mwi-trial-help">${escapeHtml(t("trialHistoryHint"))}</p><p class="mwi-trial-help">${escapeHtml(t("trialImportHint"))}</p></details>
+
         <p data-role="trial-import-status" role="status" aria-live="polite" tabindex="-1">${escapeHtml(importBusy ? t("trialImportReading") : importNotice ? t(importNotice.key, importNotice.values) : "")}</p>`;
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
@@ -322,6 +348,7 @@
       renderRail,
       memberIdentityAttributes,
       formatMemberName,
+      renderMemberName,
       isScreenshotMode
     });
 
@@ -350,15 +377,22 @@
       playerPickerOpen = true;
     }
 
-    function renderMember(record, row) {
+    function renderMember(record, row, workSummary) {
       const rawName = record.members?.[row.memberKey ?? row.characterId]?.name;
-      const name = formatMemberName(trialHistoryApi.memberIdentity(record, row));
+      const identity = trialHistoryApi.memberIdentity(record, row);
+      const name = formatMemberName(identity);
+      const markup = renderMemberName(identity, record.members?.[row.memberKey ?? row.characterId]);
+      const share = trialHistoryApi.lowWorkShare(record, row, workSummary);
+      const warning = share === null ? "" : t("trialLowWork", { share: Math.floor(share * 10000) / 10000 });
+      const warningAttributes = warning
+        ? ` data-mwi-trial-low-work="true" title="${escapeHtml(warning)}" aria-description="${escapeHtml(warning)}"`
+        : "";
       const absent = trialHistoryApi.memberAbsent(record, row, getBridge()?.trialHistoryContext);
       const label = escapeHtml(t("trialMemberAbsent"));
       return (
         (rawName
-          ? `<button type="button" class="mwi-trial-profile-link" data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name }))}">${escapeHtml(name)}</button>`
-          : escapeHtml(name)) +
+          ? `<button type="button" class="mwi-trial-profile-link"${warningAttributes} data-trial-profile="${escapeHtml(rawName)}" data-trial-identity="${escapeHtml(JSON.stringify(trialHistoryApi.memberIdentity(record, row)))}" aria-label="${escapeHtml(t("trialOpenProfile", { name }))}">${markup}</button>`
+          : `<span${warningAttributes}>${markup}</span>`) +
         (absent
           ? ` <span class="mwi-trial-member-absent" role="img" tabindex="0" title="${label}" aria-label="${label}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 10.5v1"/></svg></span>`
           : "")
@@ -416,9 +450,9 @@
       });
       return `<details class="mwi-trial-display-settings" ${displaySettingsOpen ? "open" : ""}>
         <summary><span>${escapeHtml(t("trialMemberColumns"))}</span><small>${escapeHtml(counts)}</small><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary>
-        <div class="mwi-trial-display-body"><div class="mwi-trial-display-toolbar"><p>${escapeHtml(t("trialColumnsHint"))}</p><div class="mwi-trial-display-presets" role="group" aria-label="${escapeHtml(t("trialColumnsPresets"))}">${["compact", "all", "default"].map((preset) => `<button type="button" data-trial-display-preset="${preset}">${escapeHtml(t(`trialColumnsPreset_${preset}`))}</button>`).join("")}</div></div>
+        <div class="mwi-trial-display-body"><div class="mwi-trial-display-toolbar"><div class="mwi-trial-display-presets" role="group" aria-label="${escapeHtml(t("trialColumnsPresets"))}">${["compact", "all", "default"].map((preset) => `<button type="button" data-trial-display-preset="${preset}">${escapeHtml(t(`trialColumnsPreset_${preset}`))}</button>`).join("")}</div></div>
         <div class="mwi-trial-display-groups">${displayApi.groups.map(({ key, fields }) => `<fieldset><legend>${escapeHtml(t(`trialColumnsGroup_${key}`))}<span>${fields.filter((field) => displaySettings[field]).length}/${fields.length}</span></legend><div class="mwi-trial-display-options">${fields.map((field) => `<label><input type="checkbox" role="switch" data-trial-display="${field}" ${displaySettings[field] ? "checked" : ""}><span>${escapeHtml(displayLabel(field))}</span><span class="mwi-trial-switch" aria-hidden="true"></span></label>`).join("")}</div></fieldset>`).join("")}</div>
-        <details class="mwi-trial-display-help"${displayHelpOpen ? " open" : ""}><summary>${escapeHtml(t("trialColumnsCalculations"))}</summary><p>${escapeHtml(t("trialDisplaySettingsHint"))}</p></details></div>
+</div>
         ${displaySaveFailed ? `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>` : ""}</details>`;
     }
 
@@ -444,17 +478,11 @@
             (aggregate) => displaySettings[`${field}_${aggregate}`]
           );
           if (!aggregates.length) return "";
-          return `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${aggregates.map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl>${stats.missing ? `<p>${escapeHtml(t("trialKnownCoverage", { field: t(`trialField_${field}`), count: stats.count, total: record.rows.length }))}</p>` : ""}</div>`;
+          return `<div class="mwi-trial-overview-metric" data-trial-overview="${field}"><dl>${aggregates.map((aggregate) => `<div><dt>${escapeHtml(t(`trialAggregate_${field}_${aggregate}`))}</dt><dd data-trial-aggregate="${aggregate}">${escapeHtml(summaryNumber(stats[aggregate]))}</dd></div>`).join("")}</dl></div>`;
         })
         .join("");
-      const partial = Object.entries(summaries).some(([field, stats]) => {
-        const prefix = field === "workDone" ? "work" : field;
-        return stats.missing && (displaySettings[`${prefix}Share`] || displaySettings[`${prefix}Multiple`]);
-      })
-        ? `<p>${escapeHtml(t("trialPartialShare"))}</p>`
-        : "";
-      if (!items && !partial) return "";
-      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${items}${partial}</div>`;
+      if (!items) return "";
+      return `<div class="mwi-trial-overview" data-role="trial-overview" aria-label="${escapeHtml(t("trialOverview"))}">${items}</div>`;
     }
 
     function renderRecord(record, showIdentity) {
@@ -503,7 +531,7 @@
                 .displayRows(record, sort)
                 .map(
                   (row) =>
-                    `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}>${fields.map((field) => (field === "member" ? `<th scope="row"${memberAttributes(record, row)}>${renderMember(record, row)}</th>` : `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`)).join("")}</tr>`
+                    `<tr${mode === "player" && trialHistoryApi.sameMember(selectedMember, trialHistoryApi.memberIdentity(record, row)) ? ' class="mwi-trial-player-selected" data-trial-selected-member' : ""}>${fields.map((field) => (field === "member" ? `<th scope="row"${memberAttributes(record, row)}>${renderMember(record, row, summaries.workDone)}</th>` : `<td data-trial-field="${field}">${escapeHtml(cellValue(row, field))}</td>`)).join("")}</tr>`
                 )
                 .join("")}</tbody></table>`
             : `<p class="mwi-trial-columns-empty">${escapeHtml(t("trialColumnsEmpty"))}</p>`
@@ -547,7 +575,7 @@
         .map((result) => result.member);
       const names = new Map();
       for (const member of members) names.set(member.name, (names.get(member.name) || 0) + 1);
-      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}"><span>${escapeHtml(formatMemberName(member))}</span>${!screenshotMode && names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
+      return `<p class="mwi-trial-search-count" role="status">${escapeHtml(t("trialPlayerSearchCount", { count: results.length, total: members.length }))}</p><div class="mwi-trial-choices mwi-trial-player-results" data-role="trial-player" role="group" aria-label="${escapeHtml(t("trialChoosePlayer"))}">${results.map((member) => `<button type="button" data-trial-choice="player" value="${escapeHtml(member.key)}" aria-pressed="${member.key === current}">${renderMemberName(member)}${!screenshotMode && names.get(member.name) > 1 ? `<small>${escapeHtml(member.id === null ? t("trialManualSource") : `ID ${member.id}`)}</small>` : ""}</button>`).join("")}</div>${results.length ? "" : `<p class="mwi-trial-empty">${escapeHtml(t(members.length ? "trialPlayerSearchEmpty" : "trialNoNamedPlayers"))}</p>`}`;
     }
 
     function renderPlayerPicker(members, current) {
@@ -606,13 +634,13 @@
       bindRankingSortable(panel);
       profileTooltip?.hide();
       capture();
+      renderMemberName.refresh(records, getBridge()?.trialHistoryContext);
       const host = panel?.querySelector('[data-role="trials-view"]');
       if (!host) return;
       for (const section of host.querySelectorAll("[data-trial-profile-section]"))
         profileSectionsOpen[section.dataset.trialProfileSection] = section.open;
       const searchInput = document.activeElement?.matches("[data-trial-player-search]") ? document.activeElement : null;
       const searchSelection = searchInput ? [searchInput.selectionStart, searchInput.selectionEnd] : null;
-      const rankingHelpOpen = Boolean(host.querySelector("[data-trial-ranking-help]")?.open);
       displayedMembers = [];
       highlightedMember = null;
       hoveredMemberCell = null;
@@ -645,7 +673,6 @@
         if (!selectedMember)
           markup += playerRenderer.renderRankings({
             records,
-            helpOpen: rankingHelpOpen,
             rankingOrder,
             orderSaveFailed: rankingOrderSaveFailed
           });
@@ -822,10 +849,7 @@
       host.addEventListener(
         "toggle",
         (event) => {
-          if (event.target.matches("[data-trial-image-help]")) screenshotHelpOpen = event.target.open;
-          else if (event.target.matches(".mwi-trial-guide")) guideOpen = event.target.open;
           if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
-          if (event.target.matches(".mwi-trial-display-help")) displayHelpOpen = event.target.open;
           if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
             playerPickerOpen = event.target.open;
         },
@@ -897,6 +921,12 @@
         const imageButton = event.target.closest("[data-trial-image]");
         if (imageButton) {
           void exportScreenshot(host, imageButton.dataset.trialImage);
+          return;
+        }
+        if (event.target.closest("[data-trial-simple-names]")) {
+          simpleNames = !simpleNames;
+          refresh(panel);
+          host.querySelector("[data-trial-simple-names]")?.focus({ preventScroll: true });
           return;
         }
         if (event.target.closest("[data-trial-screenshot-mode]")) {
@@ -1085,8 +1115,10 @@
       const bridge = getBridge();
       if (bridge) bridge.onTrialStatsUpdated = onStats;
       capture();
+      signupWarning.start();
     }
     function dispose() {
+      signupWarning.dispose();
       rankingSortable?.destroy();
       rankingSortableHost = null;
       profileTooltip?.dispose();

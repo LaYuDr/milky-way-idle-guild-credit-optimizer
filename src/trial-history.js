@@ -636,13 +636,18 @@
       .filter((value) => value !== null)
       .sort((a, b) => a - b);
     const count = values.length;
+    // Zero remains known for totals, coverage and medians, but is not a
+    // contributor to this metric's per-member average.
+    const contributors = values.filter((value) => value > 0);
     const sum = values.reduce((total, value) => total + value, 0);
     const middle = Math.floor(count / 2);
     return {
       count,
       missing: record.rows.length - count,
       total: count && Number.isFinite(sum) ? sum : null,
-      average: count ? values.reduce((total, value) => total + value / count, 0) : null,
+      average: contributors.length
+        ? contributors.reduce((total, value) => total + value / contributors.length, 0)
+        : null,
       median: count ? (count % 2 ? values[middle] : values[middle - 1] / 2 + values[middle] / 2) : null
     };
   }
@@ -650,6 +655,56 @@
   function metricShare(record, row, field, summary = summarizeMetric(record, field)) {
     const value = metricValue(record, row, field);
     return value !== null && summary.total > 0 ? (value / summary.total) * 100 : null;
+  }
+
+  // A partial denominator cannot establish a low contribution. Compare the raw
+  // percentage, never the rounded display text; official omitted zero is valid.
+  function lowWorkShare(record, row, summary = summarizeMetric(record, "workDone")) {
+    if (record.kind !== "skilling" || record.party?.done !== true || summary.missing) return null;
+    const share = metricShare(record, row, "workDone", summary);
+    // Compare the fraction before multiplying by 100: 90 / 10000 * 100
+    // is 0.8999999999999999 in JavaScript, but must not be flagged.
+    return share !== null && metricValue(record, row, "workDone") / summary.total < 9 / 1000 ? share : null;
+  }
+
+  function signupWorkWarnings(records, context = {}, trialHrid) {
+    const warnings = new Map();
+    const week = timestamp(context.guild?.currentWeekStartAt);
+    if (context.guild?.id == null || !Number.isFinite(week) || !trialHrid) return warnings;
+    const latest = new Map();
+    for (const record of records) {
+      if (
+        record.schemaVersion !== 1 ||
+        record.source === "manual" ||
+        record.kind !== "skilling" ||
+        record.guildId !== String(context.guild.id) ||
+        record.trialHrid !== trialHrid ||
+        record.party?.done !== true ||
+        !Number.isFinite(record.weekStartAt) ||
+        record.weekStartAt >= week
+      )
+        continue;
+      for (const row of record.rows) {
+        if (row.characterId == null) continue;
+        const id = String(row.characterId);
+        const previous = latest.get(id);
+        if (
+          !previous ||
+          record.weekStartAt > previous.record.weekStartAt ||
+          (record.weekStartAt === previous.record.weekStartAt && record.capturedAt > previous.record.capturedAt)
+        )
+          latest.set(id, { record, row });
+      }
+    }
+    const summaries = new Map();
+    for (const [id, { record, row }] of latest) {
+      const signup = context.signups?.[id];
+      if (signup?.signedUpSkillingTrialHrid !== trialHrid || timestamp(signup.signupWeekStartAt) !== week) continue;
+      if (!summaries.has(record)) summaries.set(record, summarizeMetric(record, "workDone"));
+      const share = lowWorkShare(record, row, summaries.get(record));
+      if (share !== null) warnings.set(id, { share, weekStartAt: record.weekStartAt });
+    }
+    return warnings;
   }
 
   function metricAverageMultiple(record, row, field, summary = summarizeMetric(record, field)) {
@@ -1014,6 +1069,8 @@
     metricValue,
     summarizeMetric,
     metricShare,
+    lowWorkShare,
+    signupWorkWarnings,
     metricAverageMultiple,
     playerRankings,
     playerProjectOverview,

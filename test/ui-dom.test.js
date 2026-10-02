@@ -104,3 +104,12 @@ test("历史项目选择复用游戏技能、试炼怪物和虫群图标", () =>
   );
   assert.equal(projectIconSpec({ kind: "skilling", trialHrid: '<bad"' }), null);
 });
+
+test("说明组件转义标题和正文，保留明确的分段边界", () => {
+  const summary = domApi.renderHelpSummary('<img src=x onerror="run()">', "<em>preview</em>");
+  const body = domApi.renderHelpSections([["<b>Heading</b>", "First\n\n<script>run()</script>"]]);
+  assert.doesNotMatch(summary + body, /<(?:img|em|script|b)[ >]/);
+  assert.match(summary, /&lt;img/);
+  assert.match(body, /&lt;script&gt;/);
+  assert.equal((body.match(/<p>/g) || []).length, 2);
+});

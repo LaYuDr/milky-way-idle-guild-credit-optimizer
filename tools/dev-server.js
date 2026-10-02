@@ -3,12 +3,22 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist");
-const port = Number(process.env.PORT || 4173);
+const port = Number(process.env.PORT || 4174);
 
-function createDevServer() {
+function rebuild() {
+  execFileSync(process.execPath, [path.join(root, "tools/build.js")], {
+    cwd: root,
+    env: { ...process.env, MWI_ARCHIVE_RELEASE: "0" },
+    stdio: "pipe",
+    timeout: 30000
+  });
+}
+
+function createDevServer({ build = rebuild } = {}) {
   return http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const files = {
@@ -22,12 +32,23 @@ function createDevServer() {
       "/assets/skills_sprite.svg": "test-trial-sprite.svg",
       "/assets/combat_monsters_sprite.svg": "test-trial-sprite.svg",
       "/assets/abilities_sprite.svg": "test-trial-sprite.svg",
-      "/assets/items_sprite.svg": "test-trial-sprite.svg"
+      "/assets/items_sprite.svg": "test-trial-sprite.svg",
+      "/assets/chat_icons_sprite.svg": "test-trial-sprite.svg"
     };
     const filename = files[pathname];
     if (!filename) {
       response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       return response.end("Not found");
+    }
+    // Only generated entry points need a fresh build, not fixture assets.
+    if (["/runtime.js", "/test-harness.html"].includes(pathname) || pathname.endsWith(".user.js")) {
+      try {
+        build();
+      } catch (error) {
+        console.error("Development build failed:", error.message);
+        response.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+        return response.end("Build failed; see development server log");
+      }
     }
     const file =
       pathname.startsWith("/assets/") || ["/game_data/marketplace.json", "/asset-manifest.json"].includes(pathname)

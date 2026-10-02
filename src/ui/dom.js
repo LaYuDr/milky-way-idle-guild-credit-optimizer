@@ -19,6 +19,23 @@
     );
   }
 
+  function renderHelpSummary(title, preview) {
+    return `<summary class="mwi-help-toggle"><span class="mwi-help-heading">${escapeHtml(title)}</span></summary>${preview ? `<p class="mwi-help-intro">${escapeHtml(preview)}</p>` : ""}`;
+  }
+
+  function renderHelpSections(sections) {
+    return `<dl class="mwi-help-sections">${sections
+      .map(
+        ([heading, text]) =>
+          `<div><dt>${escapeHtml(heading)}</dt><dd>${String(text)
+            .split("\n")
+            .filter(Boolean)
+            .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+            .join("")}</dd></div>`
+      )
+      .join("")}</dl>`;
+  }
+
   function itemHridFromIcon(icon) {
     const use = icon && icon.querySelector("use");
     const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
@@ -75,6 +92,8 @@
   return {
     updateRenderedMarkup,
     escapeHtml,
+    renderHelpSummary,
+    renderHelpSections,
     itemHridFromIcon,
     enhancementLevelFromIcon,
     spriteBaseFromReference,

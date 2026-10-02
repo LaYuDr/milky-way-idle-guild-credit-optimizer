@@ -23,7 +23,9 @@
     "word-break overflow-wrap vertical-align overflow overflow-x overflow-y position top right bottom left z-index " +
     "flex-direction flex-wrap flex-grow flex-shrink flex-basis align-items align-self align-content justify-content " +
     "gap justify-items grid-template-columns grid-auto-flow grid-auto-columns grid-column grid-row " +
-    "list-style-type clip-path visibility fill stroke stroke-width"
+    "list-style-type clip-path visibility fill stroke stroke-width background-image background-size background-position " +
+    "background-repeat background-clip -webkit-background-clip -webkit-text-fill-color text-shadow filter transform " +
+    "grid-template-rows grid-area"
   ).split(" ");
 
   function snapshot(host, document, pageWindow) {
@@ -88,6 +90,40 @@
       copy.style.width = `${width}px`;
       imageSize(width, Math.max(copy.scrollHeight, copy.getBoundingClientRect().height));
       // Freeze computed styles while still under the real panel's CSS selectors.
+      // Native custom names can draw additional text layers with pseudo-elements.
+      // Materialize those layers before serializing the detached screenshot.
+      const pseudoLayers = [];
+      for (const element of copy.querySelectorAll(".mwi-trial-name-text[data-name]")) {
+        for (const pseudo of ["::before", "::after"]) {
+          const computed = pageWindow.getComputedStyle(element, pseudo);
+          const content = computed.content;
+          if (!content || content === "none" || content === "normal") continue;
+          let text;
+          if (/^attr\(data-name\)$/.test(content)) text = element.dataset.name;
+          else {
+            try {
+              text = JSON.parse(content);
+            } catch (_) {
+              continue;
+            }
+          }
+          if (typeof text !== "string") continue;
+          const layer = document.createElement("span");
+          layer.textContent = text;
+          layer.setAttribute("aria-hidden", "true");
+          layer.style.cssText = STYLE_PROPERTIES.map((name) => `${name}:${computed.getPropertyValue(name)};`).join("");
+          pseudoLayers.push({ element, layer, pseudo });
+        }
+      }
+      if (pseudoLayers.length) {
+        const style = document.createElement("style");
+        style.textContent =
+          ".mwi-trial-name-text[data-name]::before,.mwi-trial-name-text[data-name]::after{content:none!important}";
+        copy.append(style);
+        for (const { element, layer, pseudo } of pseudoLayers)
+          if (pseudo === "::before") element.prepend(layer);
+          else element.append(layer);
+      }
       const nodes = [copy, ...copy.querySelectorAll("*")];
       const styles = nodes.map((element) => {
         const computed = pageWindow.getComputedStyle(element);

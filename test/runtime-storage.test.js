@@ -246,11 +246,17 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     }
   });
   const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
-  assert.equal(raw.schemaVersion, 7);
+  assert.equal(raw.schemaVersion, 8);
   assert.equal(raw.guildPointForecastWeeks, 8);
   assert.equal(raw.guildPointPlanningWeeks, 4);
   assert.deepEqual(raw.guildPointHistory.weeks, [
-    { weekStartAt: week, earnedPoints: 250, complete: true, observedAt: week + 7 * 24 * 60 * 60 * 1000 }
+    {
+      weekStartAt: week,
+      earnedPoints: 250,
+      complete: true,
+      coverage: "partial",
+      observedAt: week + 7 * 24 * 60 * 60 * 1000
+    }
   ]);
   assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState().guildPointHistory, raw.guildPointHistory);
   assert.deepEqual(raw.guildPointHistory.manualWeeks, [
@@ -339,7 +345,10 @@ test("旧版本周点数缓存失效但余额、历史与施工计划保留", ()
   storage.setItem(key, JSON.stringify(stored));
   const loaded = pluginStorage.loadSavedGuildBuildingPlannerState();
   assert.deepEqual(loaded.guildPointSnapshot, { ...stored.guildPointSnapshot, currentWeekPoints: null });
-  assert.deepEqual(loaded.guildPointHistory, stored.guildPointHistory);
+  assert.deepEqual(loaded.guildPointHistory, {
+    ...stored.guildPointHistory,
+    weeks: stored.guildPointHistory.weeks.map((record) => ({ ...record, coverage: "partial" }))
+  });
   assert.deepEqual(loaded.plans, stored.plans);
   assert.equal(loaded.manualGuildPoints, 500);
   assert.deepEqual(JSON.parse(storage.value(key)), stored);

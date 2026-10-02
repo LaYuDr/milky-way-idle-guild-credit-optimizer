@@ -56,6 +56,9 @@ test("战斗项目相加伤害、治疗和承伤的有效倍数，不混入其�
   assert.equal(row.participations, 1);
   assert.equal(row.average, 2);
   assert.equal(row.total, 2);
+  const healer = project([combat], "hedgehog", { id: "2", name: "Beta" });
+  assert.equal(healer.average, 3); // 0.5 damage + 1 healing + 1.5 damage taken.
+  assert.equal(healer.total, 3);
 });
 
 test("项目合计按有效样本加权平均，次数含未知贡献但未知贡献不进入倍数分母", () => {

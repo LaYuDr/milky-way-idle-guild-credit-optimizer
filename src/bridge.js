@@ -4,9 +4,12 @@
   const page = typeof unsafeWindow === "undefined" ? window : unsafeWindow;
   const marketDataApi = page.MwiGuildCreditMarketData || window.MwiGuildCreditMarketData;
   const marketDomApi = page.MwiGuildCreditMarketDom || window.MwiGuildCreditMarketDom;
+  // The development loader starts in the page before this runtime is fetched.
+  // Reuse its buffer and sockets even when the userscript window is isolated.
+  const loaderBridge = Array.isArray(page.__mwiGuildCreditBridge?.sockets) ? page.__mwiGuildCreditBridge : null;
   const bridge =
     window.__mwiGuildCreditBridge ||
-    (window.__mwiGuildCreditBridge = {
+    (window.__mwiGuildCreditBridge = loaderBridge || {
       messages: [],
       itemDetails: null,
       guildBuffDetails: null,
@@ -75,6 +78,8 @@
         DIAGNOSTICS_ATTRIBUTE,
         JSON.stringify({
           ...diagnostics,
+          trialRosterCount: Object.keys(bridge.trialHistoryContext.roster || {}).length,
+          trialMembershipEvidenceCount: bridge.trialHistoryContext.membershipEvidence?.length || 0,
           characterItemsRevision: bridge.characterItemsRevision,
           guildBuffLevelsRevision: bridge.guildBuffLevelsRevision,
           guildPointSummaryRevision: bridge.guildPointSummaryRevision,
@@ -487,10 +492,12 @@
       publishGuildPointSummaryUpdate();
   }
 
-  function keepSocketMessage(rawMessage) {
+  function keepSocketMessage(rawMessage, bufferMessage = true) {
     if (typeof rawMessage !== "string") return;
-    bridge.messages.push(rawMessage);
-    if (bridge.messages.length > 80) bridge.messages.shift();
+    if (bufferMessage) {
+      bridge.messages.push(rawMessage);
+      if (bridge.messages.length > 80) bridge.messages.shift();
+    }
     diagnostics.messageCount = Math.min(Number.MAX_SAFE_INTEGER, diagnostics.messageCount + 1);
     diagnostics.lastMessageAt = Date.now();
     try {
@@ -684,7 +691,7 @@
       { once: true }
     );
   }
-  if (typeof GM_addElement === "function") {
+  if (typeof GM_addElement === "function" && !loaderBridge) {
     diagnostics.injectionAttempted = true;
     diagnostics.installMode = "gm_add_element_pending";
     publishBridgeDiagnostics();
@@ -707,7 +714,9 @@
   }
 
   const NativeWebSocket = page.WebSocket;
-  if (!NativeWebSocket || NativeWebSocket.__mwiGuildCreditBridge) {
+  const adoptLoader =
+    NativeWebSocket?.__mwiGuildCreditBridge && loaderBridge === bridge && !bridge.runtimeSocketObserverActive;
+  if (!NativeWebSocket || (NativeWebSocket.__mwiGuildCreditBridge && !adoptLoader)) {
     diagnostics.installMode = NativeWebSocket ? "existing_wrapper" : "websocket_unavailable";
     diagnostics.observerActive = Boolean(NativeWebSocket && NativeWebSocket.__mwiGuildCreditBridge);
     publishBridgeDiagnostics();
@@ -726,7 +735,8 @@
     }
     instrumentedSockets.add(socket);
     socket.addEventListener("message", (event) => {
-      keepSocketMessage(event.data);
+      // The loader's earlier listener already puts this frame in the buffer.
+      keepSocketMessage(event.data, !adoptLoader);
     });
     return socket;
   }
@@ -738,8 +748,17 @@
   Object.setPrototypeOf(ObservedWebSocket, NativeWebSocket);
   ObservedWebSocket.__mwiGuildCreditBridge = true;
   page.WebSocket = ObservedWebSocket;
+  bridge.runtimeSocketObserverActive = true;
+  if (adoptLoader) {
+    for (const socket of bridge.sockets) instrumentSocket(socket);
+    for (const message of bridge.messages.slice()) keepSocketMessage(message, false);
+  }
   bridge.marketObserverActive = true;
-  diagnostics.installMode = page === window ? "direct_main_world" : "unsafe_window_fallback";
+  diagnostics.installMode = adoptLoader
+    ? "development_loader_handoff"
+    : page === window
+      ? "direct_main_world"
+      : "unsafe_window_fallback";
   diagnostics.injectionReady = page.WebSocket === ObservedWebSocket;
   diagnostics.observerActive = true;
   publishBridgeDiagnostics();

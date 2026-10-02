@@ -147,8 +147,35 @@ blocks external requests and never connects to an existing game session.
 Reload-based fixtures retain their own session state within that case.
 It waits for the harness JSON report, rejects missing/empty checks, reports
 page errors and timeouts as failures, and exits nonzero if any case fails.
+Disclosure titles retain their feature-specific compact presentation and native
+`details`/`summary` interaction. Shrine steps and trial sections use native markers; trial display settings and Recent weeks retain their existing
+chevrons. Construction More actions uses its original compact icon control.
+There is no shared full-row, 48px-minimum disclosure style. The runner measures
+rendered disclosures, temporarily opening nested parents and restoring their
+original states, to check visible indicators, readable labels and title overflow.
+Changes across these controls require the construction, trials, shrine-upgrade,
+layout, settings and upgrade-empty browser matrices.
+
 Layout and construction reports additionally enforce their documented geometry
 and readability fields; they do not use the same report shape as other suites.
+
+Contextual help (forecast basis, trial collection/import/screenshot help, column
+calculations, player overview and ranking methods) uses `mwi-context-help` with
+shared escaped summary/section renderers from `ui/dom.js`. Explanations use a muted, content-width text trigger with a native triangle and a 36px hit target, without
+a filled button or border. The introduction and titled paragraphs appear only when
+expanded, at 13px with a 68ch maximum measure. Native Enter/Space behavior is retained. Settings,
+record tables and other working controls keep their existing presentation.
+Forecast explanations distinguish unavailable data, conflicts, historical-reference
+fallback, insufficient evaluations and an evaluated mean/trend. The UI reports
+model output; it does not select or modify the model.
+
+Design sources: [GOV.UK Details](https://design-system.service.gov.uk/components/details/)
+keeps necessary information visible and reveals secondary help on demand;
+[NN/g progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/)
+supports this layered structure; [Carbon tooltip guidance](https://carbondesignsystem.com/components/tooltip/usage/)
+limits hover help to brief supplementary text. For this side panel, detailed
+explanations stay inline and keyboard reachable. Verify construction and trials
+matrices, including nested help, collapsed content hiding, long text and both locales.
 
 Each case has one console status line. Full JSON reports and failure-only PNGs
 are kept under `.workbench/browser-*`, with `matrix.json` recording the exact
@@ -168,11 +195,34 @@ Start the development server:
 npm run serve
 ```
 
+This command runs in the foreground; keep its terminal open. In the local macOS
+workspace, double-click `启动开发服务.command` instead to install/check the three
+launchd services through `03_工具与自动化/银河奶牛本地开发服务`. These start at login
+and restart after exit, independently of the terminal or coding session. Its
+`source/control.mjs status` checks process state and both HTTP artifacts; `restart`
+reloads changed server code, and `uninstall` cancels background startup.
+Do not run foreground and background services on the same port simultaneously.
+Runtime, loader and harness requests rebuild from source; a failed build returns
+503 instead of serving stale artifacts. Invite and enhancement services use
+separate ports 4173 and 4175. Logs are in `~/Library/Logs/mwi-local-dev/`.
+
 Then install:
 
 ```text
-http://127.0.0.1:4173/milky-way-idle-guild-credit-dev-loader.user.js
+http://127.0.0.1:4174/milky-way-idle-guild-credit-dev-loader.user.js
 ```
+
+The development loader buffers messages before the runtime arrives. The runtime
+adopts that bridge across userscript/page windows, replays the buffer once and
+observes existing and future official sockets without opening a connection.
+The loader remains responsible for buffering subsequent frames. Regression tests
+in `test/bridge-loader.test.js` exercise the generated loader, initial roster,
+join times, later roster updates, reconnects and repeated runtime execution.
+The `data-mwi-credit-bridge-diagnostics` root attribute reports
+`development_loader_handoff`, `messageCount`, `trialRosterCount` and
+`trialMembershipEvidenceCount` for read-only live checks. Ensure port 4174 serves
+this project's runtime when using its loader; another project's server will fail
+the loader's runtime-header check.
 
 ### Sidebar cold-start regression audit
 
@@ -180,7 +230,7 @@ To verify that the credit tab mounts as soon as the game's sidebar appears,
 open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?sidebarStartupAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?sidebarStartupAudit=1&resetState=1&sidebarWidth=420
 ```
 
 The fixture removes both native sidebar variants before the runtime starts,
@@ -208,7 +258,7 @@ return `checks.auditCompleted: false`. Require every value in `checks` to be
 To reproduce a transient startup-locale mismatch, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?localeRaceAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?localeRaceAudit=1&resetState=1&sidebarWidth=420
 ```
 
 The fixture deliberately exposes Chinese native sidebar labels while
@@ -241,7 +291,7 @@ error with `checks.auditCompleted: false`. Require every value in `checks` to be
 To verify that the plugin does not cover the game's resize target, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?sidebarResizeAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?sidebarResizeAudit=1&resetState=1&sidebarWidth=420
 ```
 
 This fixture adds a native-style `10px` resize gutter with `z-index: 1` and
@@ -302,6 +352,16 @@ same-version controller takeover. Node tests cover locator boundaries, clean
 button creation, RTL scrolling and restoration after foreign writes. Reference
 sources and licensing boundaries are recorded in `references/README.md`.
 
+Locale refresh and panel-host replacement must retain an owned tab that is still
+connected to the same tab bar, including its position and focus. MWITools 26.4.17
+may anchor its P/L tab immediately after Guild, and Planning after P/L; moving
+Guild to the end causes it to tear down an open panel. The integration audit
+checks stable identity and adjacency with cloned foreign tabs, foreign selection
+and hidden host preservation during locale refresh, updated panel/ARIA links,
+and focus preservation when only the panel host is replaced. These committed
+fixtures model the contract independently, without redistributing third-party
+code. Public source verification does not prove the installed script is identical.
+
 The runtime checks cached node ownership/visibility every three seconds and
 performs a full sidebar search at most every thirty seconds while the cache is
 valid. Missing/disconnected/hidden layouts invalidate it immediately. A local
@@ -314,7 +374,7 @@ so unrelated startup mutations cannot indefinitely delay mounting.
 To simulate a narrow sidebar with more tabs than can fit, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?sidebarTabsAudit=1&resetState=1&sidebarWidth=320
+http://127.0.0.1:4174/test-harness.html?sidebarTabsAudit=1&resetState=1&sidebarWidth=320
 ```
 
 The native tabs use fixed test widths in this fixture. With the pointer over
@@ -328,7 +388,7 @@ To verify that an intentionally empty shrine plan remains empty after a real
 page reload, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?upgradeEmptyAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?upgradeEmptyAudit=1&resetState=1&sidebarWidth=420
 ```
 
 The audit seeds one plan, clears it through the live UI, confirms the empty
@@ -354,7 +414,7 @@ complete its two-stage contract.
 For responsive layout auditing, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?layoutAudit=1&resetState=1&auditPlans=4&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?layoutAudit=1&resetState=1&auditPlans=4&sidebarWidth=420
 ```
 
 Run the full contract at sidebar widths `320`, `360`, `420`, `460`, `480`,
@@ -404,7 +464,7 @@ previous single-line row limit. Preserve the existing empty-plan and guide regre
 For the credit comparison card layout, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?creditAudit=1&resetState=1&sidebarWidth=1200
+http://127.0.0.1:4174/test-harness.html?creditAudit=1&resetState=1&sidebarWidth=1200
 ```
 
 Repeat `creditAudit=1` at the same eleven widths and require every value in
@@ -421,7 +481,7 @@ cover longer labels.
 For the construction view, use:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?constructionAudit=1&resetState=1&sidebarWidth=420
 ```
 
 The catalog follows the official client's `sortIndex` (public
@@ -439,18 +499,27 @@ The audit adds three known-level buildings, directly
 adds one unread building as `0 -> 1` without a manual-level prompt, checks inline target editing, collapsed step
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
 search focus, focus visibility after rerenders, and the full weekly-point edit
-table: every completed week is visible at once, estimated weeks can be edited
-in place, and clearing a manual value restores its estimate. It also changes
+table: every completed week is visible at once. When current-week earned points are positive, a read-only next-week
+forecast row appears above the current week, using the same value as the forecast
+summary. Zero, unknown, or stale prior-week progress does not show this row;
+unavailable forecasts display a dash. The row never enters saved history or CSV.
+Estimated weeks can be edited in place, and clearing a manual value restores its estimate. It also changes
 the forecast lookback and planning horizon once, verifies the rerendered controls,
 then restores the current-points-only planning mode. It leaves a reusable final
 sample after verifying that custom starting points update the budget summary
 on input without changing the observed game balance, and clearing the input
-restores the game balance. The completed-week forecast expectation is derived
-from the fixture's completed week count instead of a date-sensitive constant.
-The forecast-lookback control is initially hidden under Forecast settings,
-while the planning horizon remains visible. The audit opens the settings,
-checks that they stay open while stepping values and rerendering, then closes
-them again. The final fixture contains 28 visible named
+restores the game balance. Auto-filled weeks are excluded from regression. The audit checks that insufficient
+samples leave the forecast unknown, then that a manual prior week of 10,000 plus
+the current completed week of 9,648 predicts 9,296 using linear regression.
+Clearing that manual sample restores the unknown forecast. Current-week positive
+points make its remaining earnings zero. Separate unit tests verify the 2-week
+window, raw tracked values, manual overrides, rollover, budget and ETA consistency.
+See [forecast rules](GUILD_POINT_FORECAST.md) for the sampling rules and local CSV/JSON analysis command.
+Forecast settings are always visible above Recent weeks, outside all disclosures;
+there is no Forecast settings toggle. The planning horizon stays in the top budget
+area. Recent weeks retains its full-width, 48px-minimum native disclosure.
+The audit verifies one lookback input, its visibility across rerenders and history
+collapse, and native Enter/Space history expansion without modifying records. The final fixture contains 28 visible named
 catalog entries, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
 planned spend, and a `1 / 9` budget cutoff.
@@ -489,14 +558,25 @@ catalog's numeric `data-current-level`, independently of translated level copy.
 Run additional English-locale passes at `320`, `610`, and `900` to catch long-label overflow:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
+http://127.0.0.1:4174/test-harness.html?constructionAudit=1&resetState=1&locale=en&sidebarWidth=320
 ```
 
 For the persistent settings and hidden-view interaction contract, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?settingsAudit=1&resetState=1&sidebarWidth=420
 ```
+
+Player-facing feature explanations live in Settings → Help, grouped into eight
+native, initially collapsed disclosures. Main views retain controls, values,
+operation feedback and actionable warnings, but no longer repeat usage or
+calculation help. Help reuses localized copy; live-value explanations use static
+rule descriptions so the settings page never shows placeholder values. Refreshing
+settings preserves expanded help topics and keyboard focus.
+
+The settings matrix opens every help topic, checks translated content, overflow,
+missing description targets, and expansion retention after a setting changes.
+The trials matrix requires the former ranking-help block to be absent.
 
 Guild construction and Trial history default to visible when no preference is saved.
 Explicit saved `false` values remain hidden. Feature audits exercise these defaults
@@ -508,8 +588,8 @@ Guild Hall construction plan, and the complete panel order
 
 - require the text Settings button immediately after the left-aligned tab group,
   without left/right move buttons; retain drag sorting and saved tab order;
-- open the inline settings region and inspect its accessible name, linked
-  trigger, labelled inputs, live status, focus entry, and Escape focus return;
+- open the standalone settings page, require every feature panel to be hidden, and inspect its accessible name, linked
+  trigger, labelled inputs, live status, focus entry, Back/Escape focus return, and retention of an unsubmitted name draft;
 - exclude only Spirit Shrine (life), fill life upgrades, and require the
   excluded existing plan to remain unchanged while Tempo Shrine (life) is
   filled;
@@ -518,7 +598,7 @@ Guild Hall construction plan, and the complete panel order
   existing plans unchanged while its visible live status explains why filling
   is unavailable;
 - hide the currently active construction view and require a safe fallback to
-  the adjacent visible view without changing the construction-plan storage or
+  the adjacent visible view as the return destination while keeping settings open, without changing the construction-plan storage or
   dropping construction from the complete persisted panel order;
 - require normal tab keyboard navigation and pointer sorting to operate on the
   two visible views only while merging their new order back around the hidden
@@ -550,7 +630,7 @@ overflow, and zero control overlap. Also run English-locale passes at `320`,
 `610`, and `900`:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?settingsAudit=1&resetState=1&locale=en&sidebarWidth=320
+http://127.0.0.1:4174/test-harness.html?settingsAudit=1&resetState=1&locale=en&sidebarWidth=320
 ```
 
 The browser audit verifies the values written through the live UI. Reload and
@@ -562,7 +642,7 @@ To verify the different semantics of a complete `initClientData` guild-building
 snapshot, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?constructionSnapshotAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?constructionSnapshotAudit=1&resetState=1&sidebarWidth=420
 ```
 
 This fixture stores a complete initialization snapshot whose
@@ -586,7 +666,7 @@ level `0` for every unread building.
 For the shrine guide's guild-token exchange path, open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?tokenGuideAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?tokenGuideAudit=1&resetState=1&sidebarWidth=420
 ```
 
 `tokenGuideAudit=1` enables the deterministic `surplusPlan` fixture. Its native
@@ -627,7 +707,7 @@ To verify highest-bid price-band validation and the persisted unit-price limit,
 open:
 
 ```text
-http://127.0.0.1:4173/test-harness.html?marketFilterAudit=1&resetState=1&sidebarWidth=420
+http://127.0.0.1:4174/test-harness.html?marketFilterAudit=1&resetState=1&sidebarWidth=420
 ```
 
 The fixture supplies Green Credit conversions at 50M, 55M, 60M, and 70M, plus
@@ -673,7 +753,7 @@ include provenance and license notes.
 
 ## Trial history audit
 
-Open `http://127.0.0.1:4173/test-harness.html?trialHistoryAudit=1&resetState=1&sidebarWidth=420`.
+Open `http://127.0.0.1:4174/test-harness.html?trialHistoryAudit=1&resetState=1&sidebarWidth=420`.
 Await `window.__mwiTrialHistoryAuditReady` and require every `checks` value
 to be true. Run the eleven-width matrix above and English passes at 320,
 610, and 900. The fixture sends the official bridge event with a guild snapshot,
@@ -769,6 +849,33 @@ fields remain unknown. The history audit also checks that analysis controls are 
 Removed feature details and source recovery steps are preserved in
 [Trial analytics restore guide](TRIAL_ANALYTICS_RESTORE.md).
 
+### Low work-share warnings
+
+Historical skilling member names are red with a dotted underline when that
+completed record's raw work share is strictly below 0.9%. The tooltip and
+accessible description explain the share. Exact 0.9% is not flagged; explicit
+zero (including official v1 omitted zero) is valid. Missing metrics, an incomplete
+known denominator, a zero total, and unfinished/combat trials are not flagged.
+The warning overrides personalized name colors, gradient text, shadows and text
+pseudo-elements in both history and native signup lists. Chat icons keep their
+appearance; removing the warning restores native name styling.
+
+`src/ui/trial-signup-warning.js` decorates only native `GuildPanel_signupModal__`
+member-name nodes, preserving native nodes and click handlers. It uses the most
+recent saved participation before the signup week in the same guild and skilling
+project, matches historical character IDs to the current roster, and requires a
+current-week signup. Ambiguous current names and manual records without reliable
+identity are skipped. Newer valid participation at or above the threshold clears
+the warning; unknown newer data does not fall back to an older warning. The module
+uses existing passive bridge context and history; it sends no requests and does
+not modify signups, saved records, or exports. Closing/reusing the modal, changing
+guild, and disposing the runtime remove owned decorations and restore tooltips.
+
+The `trials` browser matrix covers name color, threshold boundaries, native click
+preservation, reused nodes, project/guild changes, duplicate names, and teardown.
+These fixtures do not establish installed-game behavior; separately check a real
+signup list when the corresponding project and history are available.
+
 ### Historical trial member levels
 
 The native signup modal reads `guildTrialSignupLevelMap[characterId]` from
@@ -808,6 +915,21 @@ Each column, including member name, can be hidden; an empty-state message replac
 switches. Explicit individual booleans take precedence over legacy groups. Display preferences use
 the existing per-region/character key and are not part of trial exports. Overviews remain above the
 member table and use known values only; missing values are never converted to zero.
+All per-member averages exclude members whose corresponding metric is zero,
+independently for work, damage, healing, damage taken and level summaries.
+With no positive values the average and relative multiples are unavailable.
+Known zero remains zero in rows, totals, coverage counts and medians.
+Player rankings and overviews reuse these per-project baselines; their averaging
+across attended trials or eligible weeks still retains valid zero scores.
+
+Player names default to their captured chat icons and native name-color effects.
+The top-right Simple names toggle removes only name decorations for the page
+session; it preserves navigation, table columns and scores. Current cached
+member cosmetics take precedence over saved captures, matched by character ID.
+Missing cosmetics or unreadable game styles fall back to readable plain names.
+Native CSS-module classes are discovered from loaded stylesheets, without profile
+requests or copying arbitrary player HTML. Screenshot anonymity also removes all
+cosmetics. Exported images freeze gradients, shadows and native pseudo-text layers.
 
 Screenshot mode is a session-only trial-history view toggle. Player names use stable
 anonymous numbers keyed by character ID (or exact name when no ID exists), shared
@@ -834,7 +956,7 @@ manual transcripts (schema v2 or explicit manual source), including manual recor
 with character IDs. Exported/restored game captures remain eligible; stored manual
 records remain available to the existing history views. Each captured project counts
 once, including zero contributions.
-Skilling uses work / project mean work. Combat averages valid damage, healing
+Skilling uses work / project mean work. Combat sums valid damage, healing
 and premitigated-damage-taken multiples. Each category averages by guild week,
 with one denominator per eligible week. Confirmed eligible absences count as zero;
 membership must begin before the week starts. Native guildCharacterMap.joinTime
@@ -895,8 +1017,23 @@ overflow and that assigning an inner scroll offset cannot shift the table.
 Profile skills use five-column tiles matching equipment dimensions. The profile
 audit checks native icon order, the 5/5/4/3 row grouping, accessible names, preserved
 levels and unknown placeholders, and measures equal skill/equipment tile sizes
-across the width matrix.
-The profile facts show only total and combat levels. Skills and equipment use
+across the width matrix. Each skill tile also has a bottom-right house icon and
+level from that selected player's `characterHouseRoomMap`, keyed by the official
+`/house_rooms/*` HRID. The 17 skill-to-room mappings include all combat skills.
+Explicit zero remains 0; an absent map/entry or invalid level displays an em dash,
+never the active character's house or an inferred zero. Accessible tile names
+include the house level. The trials matrix checks mapping, placeholders, and
+bottom-right containment without overlapping the top-left skill level.
+The profile facts show current activity and online status above total and combat
+levels, followed by guild joining time. Both new rows use only the selected
+profile's `sharableCharacter`: `actionType`, strict boolean `isOnline`, and
+`hideOnlineStatus`. Hidden online status takes priority; absent/malformed activity
+or presence remains unknown, never idle/offline inferred from missing data. Known
+actions include all ten life skills, combat, labyrinth and special activities.
+A visible note says these values reflect the last profile read. No automatic
+refresh, additional request, or historical status inference is introduced.
+The trials matrix checks row order, translation, narrow-width containment and
+unchanged profile request counts. Skills and equipment use
 independent native disclosures, initially open, with their state retained during
 view refreshes. Equipment includes its following ability slots. The fixture checks
 collapse/reopen visibility, unchanged stored records and no extra profile requests.

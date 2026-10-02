@@ -253,11 +253,11 @@ test("战斗单项榜独立按周取平均，保留综合战斗榜和合计榜",
   const before = JSON.stringify(records);
   const result = player(records);
   assert.equal(result.damageDealt.average, 0.625); // (mean(1.5, 1) + 0) / 2
-  assert.equal(result.healingDone.average, 1); // (0 + 2) / 2; missing is not zero
+  assert.equal(result.healingDone.average, 0.5); // (0 + 1) / 2; missing is not zero
   assert.equal(result.premitigatedDamageTaken.average, 1);
   assert.equal(result.premitigatedDamageTaken.unknownWeeks, 1);
   assert.equal(result.damageDealt.sampleCount, 2);
-  assert.equal(result.combat.average, 1.875); // (mean(2.5, 1) + 2) / 2
+  assert.equal(result.combat.average, 1.375); // (mean(2.5, 1) + 1) / 2
   assert.equal(result.all.total, result.combat.average);
   assert.equal(JSON.stringify(records), before);
 });

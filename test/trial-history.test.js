@@ -855,7 +855,7 @@ test("项目汇总使用已知值，区分缺失与零，平均和中位数不�
     count: 3,
     missing: 1,
     total: 40,
-    average: 40 / 3,
+    average: 20,
     median: 10
   });
   assert.deepEqual(api.summarizeMetric(record, "level"), {
@@ -887,7 +887,13 @@ test("空记录、全部未知、全零和溢出总数不会生成虚假的汇�
     });
   }
   const record = { schemaVersion: 1, rows: [{}, { workDone: 0 }] };
-  assert.deepEqual(api.summarizeMetric(record, "workDone"), { count: 2, missing: 0, total: 0, average: 0, median: 0 });
+  assert.deepEqual(api.summarizeMetric(record, "workDone"), {
+    count: 2,
+    missing: 0,
+    total: 0,
+    average: null,
+    median: 0
+  });
   assert.equal(api.metricShare(record, record.rows[0], "workDone"), null);
   const huge = { schemaVersion: 2, rows: [{ workDone: Number.MAX_VALUE }, { workDone: Number.MAX_VALUE }] };
   const summary = api.summarizeMetric(huge, "workDone");
@@ -913,12 +919,12 @@ test("玩家搜索按姓名局部匹配，忽略大小写与首尾空白，不�
   assert.deepEqual(api.searchHistoryMembers(members, "   "), members);
 });
 
-test("工作量人均倍数以已知成员平均值为基准，零值参与平均且缺失保持未知", () => {
+test("工作量人均倍数以非零成员平均值为基准，零值不计入分母且缺失保持未知", () => {
   const record = { schemaVersion: 2, rows: [0, 30, 60, null].map((workDone, i) => ({ characterId: i + 1, workDone })) };
   const before = JSON.stringify(record);
   assert.deepEqual(
     record.rows.map((row) => api.metricAverageMultiple(record, row, "workDone")),
-    [0, 1, 2, null]
+    [0, 2 / 3, 4 / 3, null]
   );
   assert.deepEqual(
     api.displayRows(record, { field: "workMultiple", direction: "desc" }).map((row) => row.characterId),
@@ -933,9 +939,41 @@ test("工作量人均倍数以已知成员平均值为基准，零值参与平�
     assert.equal(api.metricAverageMultiple({ schemaVersion: 2, rows }, rows[0] || {}, "workDone"), null);
   }
   const official = { schemaVersion: 1, rows: [{}, { workDone: 10 }] };
-  assert.equal(api.metricAverageMultiple(official, official.rows[1], "workDone"), 2);
+  assert.equal(api.metricAverageMultiple(official, official.rows[1], "workDone"), 1);
   const huge = { schemaVersion: 2, rows: [{ workDone: Number.MAX_VALUE }, { workDone: Number.MAX_VALUE }] };
   assert.equal(api.metricAverageMultiple(huge, huge.rows[0], "workDone"), 1);
+});
+
+test("人均基准逐项排除零值，增加零贡献成员不稀释人均或改变原始数据", () => {
+  const record = {
+    schemaVersion: 1,
+    kind: "combat",
+    rows: [
+      { characterId: 1, workDone: 20, damageDealt: 30, healingDone: 0, premitigatedDamageTaken: 10 },
+      { characterId: 2, workDone: 0, damageDealt: 10, healingDone: 20, premitigatedDamageTaken: 0 },
+      { characterId: 3, workDone: null, damageDealt: null, healingDone: null, premitigatedDamageTaken: null }
+    ],
+    memberLevels: { 1: 0, 2: 100 }
+  };
+  const expanded = { ...record, rows: [...record.rows, { characterId: 4 }, { characterId: 5, healingDone: 0 }] };
+  const before = JSON.stringify(expanded);
+  for (const [field, average] of Object.entries({
+    workDone: 20,
+    damageDealt: 20,
+    healingDone: 20,
+    premitigatedDamageTaken: 10,
+    level: 100
+  })) {
+    assert.equal(api.summarizeMetric(record, field).average, average);
+    assert.equal(api.summarizeMetric(expanded, field).average, average);
+    if (field === "level") continue;
+    assert.equal(api.summarizeMetric(expanded, field).missing, 1);
+    for (const row of record.rows) {
+      assert.equal(api.metricAverageMultiple(expanded, row, field), api.metricAverageMultiple(record, row, field));
+    }
+    assert.equal(api.metricAverageMultiple(expanded, expanded.rows[3], field), 0);
+  }
+  assert.equal(JSON.stringify(expanded), before);
 });
 
 test("下一层进度保留原始比例和零值，缺失与非法值保持未知", () => {
@@ -993,7 +1031,7 @@ test("重复采集缺失进度不抹掉同层进度，显式零更新有效，�
   assert.equal(record.party.nextTierProgress, undefined);
 });
 
-test("战斗占比与相对人均分别按各指标的已知成员计算，零值有效", () => {
+test("战斗占比保留已知零值，各项相对人均独立排除零值成员", () => {
   for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) {
     const record = {
       schemaVersion: 2,
@@ -1006,7 +1044,7 @@ test("战斗占比与相对人均分别按各指标的已知成员计算，零�
       ]
     };
     assert.equal(api.metricShare(record, record.rows[0], field), 75);
-    assert.equal(api.metricAverageMultiple(record, record.rows[0], field), 2.25);
+    assert.equal(api.metricAverageMultiple(record, record.rows[0], field), 1.5);
     assert.equal(api.metricShare(record, record.rows[2], field), 0);
     assert.equal(api.metricAverageMultiple(record, record.rows[3], field), null);
     for (const suffix of ["Share", "Multiple"]) {
@@ -1023,4 +1061,94 @@ test("战斗占比与相对人均分别按各指标的已知成员计算，零�
     assert.equal(api.metricShare(zero, zero.rows[0], field), null);
     assert.equal(api.metricAverageMultiple(zero, zero.rows[0], field), null);
   }
+});
+
+test("低工作量提示使用本场原始占比，严格低于 0.9%，未知和未完成不标红", () => {
+  const record = { schemaVersion: 1, kind: "skilling", party: { done: true }, rows: [] };
+  for (const [work, expected] of [
+    [0, true],
+    [89.999, true],
+    [90, false],
+    [91, false]
+  ]) {
+    record.rows = [{ workDone: work }, { workDone: 10000 - work }];
+    assert.equal(api.lowWorkShare(record, record.rows[0]) !== null, expected);
+  }
+  record.rows = [{ workDone: 7777 }, { workDone: 1086535 - 7777 }];
+  assert.ok(Math.abs(api.lowWorkShare(record, record.rows[0]) - 0.7157615723377525) < 0.000001);
+  for (const rows of [
+    [{ workDone: 0 }],
+    [{ workDone: null }, { workDone: 10000 }],
+    [{ workDone: 1 }, { workDone: null }]
+  ]) {
+    record.rows = rows;
+    assert.equal(api.lowWorkShare(record, rows[0]), null);
+  }
+  record.rows = [{}, { workDone: 10000 }];
+  assert.equal(api.lowWorkShare(record, record.rows[0]), 0);
+  assert.equal(api.lowWorkShare({ ...record, schemaVersion: 2 }, record.rows[0]), null);
+  assert.equal(api.lowWorkShare({ ...record, kind: "combat" }, record.rows[0]), null);
+  assert.equal(api.lowWorkShare({ ...record, party: { done: false } }, record.rows[0]), null);
+});
+
+test("报名提醒按同公会、同项目、角色 ID 的最近一次参与判断，缺席不补零", () => {
+  const week = Date.parse("2026-09-25T00:00:00Z");
+  const prior = week - 7 * 86400000;
+  const project = "/guild_skilling/foraging";
+  const context = {
+    guild: { id: 7, currentWeekStartAt: week },
+    signups: Object.fromEntries(
+      [1, 2, 3].map((id) => [id, { signupWeekStartAt: week, signedUpSkillingTrialHrid: project }])
+    )
+  };
+  const record = {
+    schemaVersion: 1,
+    kind: "skilling",
+    guildId: "7",
+    trialHrid: project,
+    weekStartAt: prior,
+    capturedAt: prior + 1,
+    party: { done: true },
+    members: { 1: { name: "Same" }, 2: { name: "Same" } },
+    rows: [
+      { characterId: 1, workDone: 1 },
+      { characterId: 2, workDone: 9999 }
+    ]
+  };
+  const before = JSON.stringify({ record, context });
+  const warnings = api.signupWorkWarnings([record], context, project);
+  assert.deepEqual([...warnings.keys()], ["1"]);
+  assert.equal(warnings.get("1").share, 0.01);
+  assert.equal(JSON.stringify({ record, context }), before);
+  for (const patch of [
+    { guildId: "8" },
+    { kind: "combat" },
+    { schemaVersion: 2 },
+    { source: "manual" },
+    { trialHrid: "other" },
+    { weekStartAt: null },
+    { weekStartAt: week },
+    { weekStartAt: week + 1 },
+    { party: { done: false } }
+  ])
+    assert.equal(api.signupWorkWarnings([{ ...record, ...patch }], context, project).size, 0);
+  const older = { ...record, weekStartAt: prior - 7 * 86400000 };
+  for (const value of [90, null]) {
+    const latest = {
+      ...record,
+      rows: [
+        { characterId: 1, workDone: value },
+        { characterId: 2, workDone: 9910 }
+      ]
+    };
+    assert.equal(api.signupWorkWarnings([older, latest], context, project).size, 0);
+    assert.equal(api.signupWorkWarnings([latest, older], context, project).size, 0);
+  }
+  assert.equal(api.signupWorkWarnings([record], { ...context, guild: null }, project).size, 0);
+  for (const signup of [
+    { signupWeekStartAt: prior, signedUpSkillingTrialHrid: project },
+    { signupWeekStartAt: week, signedUpSkillingTrialHrid: "other" },
+    {}
+  ])
+    assert.equal(api.signupWorkWarnings([record], { ...context, signups: { 1: signup } }, project).size, 0);
 });

@@ -7,6 +7,94 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (effectApi) {
   "use strict";
 
+  const HELP_SECTIONS = [
+    [
+      "guildPointOverview",
+      [
+        ["guildPointStartingBalance", ["guildPointStartingBalanceHint"]],
+        ["guildPointPlanningWeeks", ["guildPointPlanningWeeksHint"]],
+        ["guildPointForecastWeeks", ["guildPointForecastWeeksHint"]],
+        ["guildPointStatisticsHeading", ["guildPointTrendHint", "helpForecastEvidence", "helpForecastBacktest"]],
+        ["guildPointHelpDataTitle", ["guildPointHelpData"]],
+        ["guildPointHelpMethodTitle", ["guildPointHelpMethod"]],
+        ["guildPointHelpResultTitle", ["guildPointHelpResult"]],
+        ["recentGuildPointHistory", ["manualGuildPointHint"]]
+      ]
+    ],
+    [
+      "constructionQueue",
+      [
+        ["buildingCatalog", ["buildingCatalogHint", "constructionQueueEmpty"]],
+        ["constructionQueue", ["constructionQueueDragHint"]],
+        ["guildPointPlanningHeading", ["constructionBudgetEmptySummary"]],
+        ["constructionEta", ["constructionEtaNoPlanHint", "constructionEtaCoveredHint", "helpConstructionEta"]]
+      ]
+    ],
+    [
+      "trialScreenshotGuide",
+      [
+        ["trialHelpScreenshotScope", ["trialHelpScreenshotPreview", "trialScreenshotHelp"]],
+        ["trialHelpSharing", ["trialScreenshotReady"]],
+        ["trialSimpleNames", ["trialSimpleNamesHint"]],
+        ["trialScreenshotMode", ["trialScreenshotHint"]]
+      ]
+    ],
+    [
+      "trialHistory",
+      [
+        ["trialHelpCollection", ["trialHelpHistoryPreview", "trialHistoryHint"]],
+        ["trialHelpImport", ["trialImportHint"]],
+        ["trialHelpPurpose", ["trialDisplayNotice"]],
+        ["trialHelpFeedback", ["trialFeedbackNotice"]]
+      ]
+    ],
+    [
+      "trialColumnsCalculations",
+      [
+        ["trialMemberColumns", ["trialColumnsHint"]],
+        ["trialColumnsCalculations", ["trialHelpColumnsPreview"]],
+        ["trialHelpShare", ["trialHelpShareBody"]],
+        ["trialHelpAverage", ["trialHelpAverageBody"]],
+        ["trialHelpMissing", ["trialHelpMissingBody", "helpTrialCoverage", "trialPartialShare"]]
+      ]
+    ],
+    [
+      "trialPlayerRankings",
+      [
+        ["trialPlayerOverview", ["trialHelpOverviewPreview", "trialOverviewHelp"]],
+        ["trialRankingMethod", ["trialHelpRankingPreview"]],
+        ["trialHelpCounts", ["trialRankingCountHelp"]],
+        ["trialHelpRankingAverage", ["trialRankingAverageHelp"]],
+        ["trialRankingJoinedAt", ["trialRankingJoinedAtHelp"]],
+        ["helpRankingOrder", ["trialRankingOrderHint"]],
+        ["trialProfileJoinedAt", ["trialProfileJoinedAtHelp"]],
+        ["trialPlayerProfile", ["trialProfileObservation"]]
+      ]
+    ],
+    [
+      "shrineUpgrade",
+      [
+        ["shrineUpgrade", ["noUpgradePlansHint", "targetButtonReady"]],
+        ["shrineEffectComparison", ["shrineStepsHint"]],
+        ["useGuildTokensForMissingCredits", ["useGuildTokensForMissingCreditsHint", "helpCreditExchangeMode"]],
+        ["autoGuildTokenBudget", ["autoGuildTokenBudgetHint"]],
+        ["guideEnable", ["guideReadyHint", "guideNoPlansHint"]]
+      ]
+    ],
+    [
+      "helpSettingsAndMarket",
+      [
+        ["interfaceSettings", ["interfaceSettingsHint"]],
+        ["shrineAutofillRange", ["shrineAutofillRangeHint"]],
+        ["sidebarDisplayName", ["sidebarDisplayNameHint"]],
+        ["showConstructionView", ["showConstructionViewHint"]],
+        ["showTrialHistoryView", ["showTrialHistoryViewHint"]],
+        ["priceReference", ["priceReferenceATitle", "priceReferenceBTitle"]],
+        ["maxItemUnitPriceInput", ["maxItemUnitPriceHint"]]
+      ]
+    ]
+  ];
+
   function createSettingsView(dependencies) {
     const {
       state,
@@ -79,22 +167,29 @@
       )}${renderGuildBuffDomain("combat", snapshot.entries, spriteBaseHref)}</div>`;
     }
 
+    function renderHelp() {
+      const sections = HELP_SECTIONS.map(([title, topics]) => {
+        const body = topics
+          .map(
+            ([heading, keys]) =>
+              `<div><dt>${escapeHtml(t(heading))}</dt><dd>${keys
+                .flatMap((key) => t(key).split("\n"))
+                .filter(Boolean)
+                .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+                .join("")}</dd></div>`
+          )
+          .join("");
+        return `<details class="mwi-context-help" data-settings-help-topic="${title}"><summary class="mwi-help-toggle" id="mwi-help-${title}">${escapeHtml(t(title))}</summary><dl class="mwi-help-sections">${body}</dl></details>`;
+      }).join("");
+      return `<section class="mwi-settings-block mwi-settings-help" data-role="settings-help" aria-labelledby="mwi-settings-help-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-help-heading">${escapeHtml(t("settingsHelp"))}</h4></div>${sections}</section>`;
+    }
+
     function renderSettingsContent(snapshot) {
-      return `<section class="mwi-settings-block" aria-labelledby="mwi-settings-autofill-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-autofill-heading">${escapeHtml(
-        t("shrineAutofillRange")
-      )}</h4><p>${escapeHtml(t("shrineAutofillRangeHint"))}</p></div>${renderShrineAutofillSettings(
-        snapshot
-      )}</section><section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(
-        t("interfaceVisibility")
-      )}</h4></div><form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" aria-describedby="mwi-settings-sidebar-name-hint" autocomplete="off"><button id="mwi-settings-sidebar-name-save" type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button id="mwi-settings-sidebar-name-reset" type="button" data-role="settings-sidebar-name-reset">${escapeHtml(t("sidebarNameReset"))}</button></div><p id="mwi-settings-sidebar-name-hint">${escapeHtml(t("sidebarDisplayNameHint"))}</p></form><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
-        t("showConstructionView")
-      )}</strong><small id="mwi-settings-construction-hint">${escapeHtml(
-        t("showConstructionViewHint")
-      )}</small></span><input id="mwi-settings-show-construction" class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch" aria-describedby="mwi-settings-construction-hint"></label><label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(
-        t("showTrialHistoryView")
-      )}</strong><small id="mwi-settings-trials-hint">${escapeHtml(
-        t("showTrialHistoryViewHint")
-      )}</small></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch" aria-describedby="mwi-settings-trials-hint"></label></section>`;
+      return `<section class="mwi-settings-block" aria-labelledby="mwi-settings-autofill-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-autofill-heading">${escapeHtml(t("shrineAutofillRange"))}</h4></div>${renderShrineAutofillSettings(snapshot)}</section>
+      <section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(t("interfaceVisibility"))}</h4></div>
+      <form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" autocomplete="off"><button id="mwi-settings-sidebar-name-save" type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button id="mwi-settings-sidebar-name-reset" type="button">${escapeHtml(t("sidebarNameReset"))}</button></div></form>
+      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showConstructionView"))}</strong></span><input id="mwi-settings-show-construction" class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch"></label>
+      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showTrialHistoryView"))}</strong></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch"></label></section>${renderHelp()}`;
     }
 
     function renderSettingsMarkup() {
@@ -102,9 +197,9 @@
       const hidden = state.settingsOpen === true ? "" : " hidden";
       return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-labelledby="mwi-settings-title" tabindex="-1"${hidden}><header class="mwi-settings-header"><span><h3 id="mwi-settings-title">${escapeHtml(
         t("interfaceSettings")
-      )}</h3><p>${escapeHtml(t("interfaceSettingsHint"))}</p></span><button class="mwi-settings-close" data-role="settings-close" type="button" title="${escapeHtml(
-        t("closeInterfaceSettings")
-      )}" aria-label="${escapeHtml(t("closeInterfaceSettings"))}">×</button></header><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
+      )}</h3></span><button class="mwi-settings-close" data-role="settings-close" type="button" title="${escapeHtml(
+        t("backFromSettings")
+      )}" aria-label="${escapeHtml(t("backFromSettings"))}">${escapeHtml(t("backFromSettings"))}</button></header><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
         snapshot
       )}</div><p class="mwi-settings-status" data-role="settings-status" role="status" aria-live="polite" aria-atomic="true"></p></section>`;
     }
@@ -123,7 +218,15 @@
       const focused = content?.ownerDocument?.activeElement;
       const focusedId = focused && content.contains(focused) ? focused.id : "";
       const selection = focused === nameInput ? [nameInput.selectionStart, nameInput.selectionEnd] : null;
+      const openHelpTopics = new Set(
+        Array.from(
+          content?.querySelectorAll("[data-settings-help-topic][open]") || [],
+          (node) => node.dataset.settingsHelpTopic
+        )
+      );
       updateRenderedMarkup(content, renderSettingsContent(snapshot));
+      for (const topic of content?.querySelectorAll("[data-settings-help-topic]") || [])
+        topic.open = openHelpTopics.has(topic.dataset.settingsHelpTopic);
       const updatedNameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
       if (updatedNameInput && draftName !== undefined) updatedNameInput.value = draftName;
       const excludedHrids = currentExcludedGuildBuffHrids();

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.53] - 2026-10-03
+
+### Changed
+
+- 修正公会点数线性回归取样与预算；预测参数始终展开，设置独立成页并集中帮助说明；完善历史试炼展示、玩家资料与名称显示，修复本地加载和侧栏启动。
+
 ## [1.2.52] - 2026-09-26
 
 ### Changed

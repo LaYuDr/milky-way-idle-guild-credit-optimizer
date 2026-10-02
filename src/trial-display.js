@@ -21,14 +21,14 @@
   );
 
   const rankingColumns = [
+    "joinedAt",
     "participations",
     "skilling",
     "combat",
+    "all",
     "damageDealt",
     "healingDone",
-    "premitigatedDamageTaken",
-    "all",
-    "joinedAt"
+    "premitigatedDamageTaken"
   ];
   function normalizeRankingOrder(value) {
     return [

@@ -39,6 +39,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.equal(files.at(-1), "src/userscript.js");
   const requiredModules = [
     "src/trial-history.js",
+    "src/ui/trial-signup-warning.js",
     "src/ui/trial-history-view.js",
     "src/runtime/config.js",
     "src/runtime/storage.js",
@@ -60,6 +61,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/ui/credit-view.js"
   ];
   for (const file of requiredModules) assert.ok(files.includes(file), `missing module entry ${file}`);
+  assert.ok(files.indexOf("src/ui/trial-signup-warning.js") < files.indexOf("src/ui/trial-history-view.js"));
   const userscriptIndex = files.indexOf("src/userscript.js");
   assert.ok(requiredModules.every((file) => files.indexOf(file) < userscriptIndex));
   assert.ok(files.indexOf("src/runtime/config.js") < files.indexOf("src/trial-history.js"));
@@ -99,6 +101,7 @@ test("设置视图按官方增益标识呈现正向选择并同步本地设置�
     }
   };
   const content = {
+    querySelectorAll: () => [],
     ownerDocument: { activeElement: focused, getElementById: (id) => (id === focused.id ? replacement : null) },
     contains: (element) => element === focused || element === replacement
   };
@@ -221,5 +224,44 @@ test("神龛设置显示游戏图标、独立每级效果与中英文说明", ()
       api.renderSettingsMarkup(),
       locale === "zh-CN" ? /每级效果暂未读取/ : /Per-level effects not yet available/
     );
+  }
+});
+
+test("设置帮助按分类提供双语说明，控制区不再重复，文本无未替换变量", () => {
+  const { createLocalizer } = require("../src/localization.js");
+  for (const locale of ["zh-CN", "en"]) {
+    const { t } = createLocalizer(locale);
+    const api = settingsViewApi.createSettingsView({
+      core: require("../src/core.js"),
+      state: { settingsOpen: true },
+      t,
+      ui: () => ({ locale }),
+      escapeHtml: require("../src/ui/dom.js").escapeHtml,
+      guildBuffEntries: () => [],
+      guildBuffLabel: () => "",
+      guildBuildingSpriteBaseHref: () => "",
+      guildBuildingIconMarkup: () => "",
+      updateRenderedMarkup: () => false
+    });
+    const markup = api.renderSettingsMarkup();
+    const helpStart = markup.indexOf('<section class="mwi-settings-block mwi-settings-help"');
+    assert.ok(helpStart > 0);
+    const controls = markup.slice(0, helpStart);
+    const help = markup.slice(helpStart);
+    assert.equal((help.match(/data-settings-help-topic=/g) || []).length, 8);
+    assert.doesNotMatch(help, /<details[^>]*\sopen(?:\s|>)/);
+    assert.doesNotMatch(help, /\{[a-zA-Z]+\}/);
+    for (const key of [
+      "guildPointHelpMethod",
+      "trialScreenshotHelp",
+      "trialRankingAverageHelp",
+      "shrineStepsHint",
+      "showConstructionViewHint",
+      "maxItemUnitPriceHint"
+    ]) {
+      const paragraph = require("../src/ui/dom.js").escapeHtml(t(key).split("\n")[0]);
+      assert.ok(help.includes(paragraph), `${locale}: ${key} is available in help`);
+      assert.ok(!controls.includes(paragraph), `${locale}: ${key} does not crowd the controls`);
+    }
   }
 });
