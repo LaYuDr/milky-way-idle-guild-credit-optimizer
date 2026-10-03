@@ -577,21 +577,35 @@
         #mwi-credit-optimizer .mwi-building-tile-name{font-size:14px;font-weight:500;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-tile-level,#mwi-credit-optimizer .mwi-building-tile-cost{font-size:12px;font-weight:400;line-height:1.4;color:var(--build-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"] .mwi-building-tile-level{color:var(--build-accent)}
-        #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;margin-top:20px;padding-top:14px;border-top:1px solid var(--build-line)}
+        #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;text-align:left;margin-top:20px;padding-top:14px;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading>span:first-child{display:grid;gap:3px;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading h4{margin:0;font-size:16px;font-weight:650;color:var(--build-text)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading small{font-size:12px;color:var(--build-muted);line-height:1.4}
         #mwi-credit-optimizer .mwi-guild-point-autosaved{font-size:12px;color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-autosaved[data-source="cache"]{color:var(--build-warning)}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px 0}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{display:grid;align-content:start;gap:4px;min-width:0}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:var(--build-muted);font-size:12px;line-height:1.4}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{font-size:20px;line-height:1.3;font-weight:600;color:var(--build-text);overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"]{grid-column:1/-1;padding:10px 12px;border:1px solid var(--build-line);border-radius:6px;background:var(--build-surface)}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:12px 0;text-align:left}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{min-width:0}
+        #mwi-credit-optimizer .mwi-guild-point-balance{padding:4px 12px;background:var(--build-surface);border-radius:6px}
+        #mwi-credit-optimizer .mwi-guild-point-metric{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);align-items:baseline;gap:4px 12px;min-width:0;padding:8px 0}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{min-width:0;color:var(--build-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{min-width:0;font-size:20px;line-height:1.3;font-weight:600;color:var(--build-text);text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-metric>small~small{grid-column:1/-1}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"]{margin-top:4px;padding-top:12px;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"] strong{color:var(--build-accent)}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="up"] strong{color:var(--build-accent)}
-        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="down"] strong{color:var(--build-danger)}
+        #mwi-credit-optimizer .mwi-guild-point-weekly{padding:0 12px}
+        #mwi-credit-optimizer .mwi-guild-point-weekly strong{font-size:18px}
+        #mwi-credit-optimizer .mwi-guild-point-growth{margin:4px 0 0;padding:8px 0 0;border-top:1px solid var(--build-line);color:var(--build-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-growth span{font-weight:600;white-space:nowrap}
+        #mwi-credit-optimizer .mwi-guild-point-growth [data-trend="up"]{color:var(--build-accent)}
+        #mwi-credit-optimizer .mwi-guild-point-growth [data-trend="down"]{color:var(--build-danger)}
+        #mwi-credit-optimizer .mwi-guild-point-outlook{display:grid;grid-template-columns:minmax(0,1fr);gap:0 24px;padding:4px 12px 0;border-top:1px solid var(--build-line)}
+        #mwi-credit-optimizer .mwi-guild-point-outlook strong{font-size:18px}
+        @container (min-width:560px){
+          #mwi-credit-optimizer .mwi-guild-point-forecast-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 24px}
+          #mwi-credit-optimizer .mwi-guild-point-weekly{padding-top:4px}
+          #mwi-credit-optimizer .mwi-guild-point-outlook{grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+        }
         #mwi-credit-optimizer .mwi-guild-point-forecast-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:0 0 10px}
         #mwi-credit-optimizer .mwi-guild-point-forecast-status{flex:1 1 220px;min-width:0;margin:0;color:var(--build-muted);font-size:12px;line-height:1.5}
         #mwi-credit-optimizer .mwi-guild-point-history-actions{display:flex;flex:0 1 auto;flex-wrap:wrap;gap:6px;min-width:0;max-width:100%}
@@ -771,7 +785,8 @@
         #mwi-credit-optimizer [data-mwi-trial-low-work="true"], [class*="GuildPanel_signupModal__"] [data-mwi-trial-low-work="true"]{color:#ffa7b5!important;text-decoration:underline dotted;text-underline-offset:3px}
         :is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"],.mwi-trial-name-text span,[class*="CharacterName_name__"] span){color:#ffa7b5!important;-webkit-text-fill-color:#ffa7b5!important;background-image:none!important;text-shadow:none!important;animation:none!important}
         :is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"])::before,:is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"])::after{display:none!important}
-        #mwi-credit-optimizer .mwi-trial-member-absent{display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:help;line-height:1}
+        #mwi-credit-optimizer .mwi-trial-member-absent{position:relative;display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:default;line-height:1}
+        #mwi-credit-optimizer .mwi-trial-member-absent:is(:hover,:focus-visible)::after{content:attr(data-explanation);position:absolute;z-index:10;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);width:max-content;max-width:min(240px,80vw);padding:5px 8px;border:1px solid var(--trial-line);border-radius:4px;background:var(--trial-surface);color:var(--trial-text);font:12px/1.4 system-ui,-apple-system,"Microsoft YaHei",sans-serif;white-space:normal;box-shadow:0 6px 16px #10111c99;pointer-events:none}
         #mwi-credit-optimizer .mwi-trial-member-absent:focus-visible{outline:2px solid var(--trial-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-trial-table small{display:block;color:var(--trial-muted);font-size:12px;font-weight:normal}
         #mwi-credit-optimizer .mwi-trial-raw{margin:6px 0;min-width:0}

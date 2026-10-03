@@ -4809,9 +4809,10 @@
       );
       checks.absentMemberLabel = [...host.querySelectorAll(".mwi-trial-member-absent")].every(
         (icon) =>
-          icon.title ===
+          icon.dataset.explanation ===
             (new URLSearchParams(location.search).get("locale") === "en" ? "Has left the guild" : "已退出工会") &&
-          icon.getAttribute("aria-label") === icon.title &&
+          !icon.hasAttribute("title") &&
+          icon.getAttribute("aria-label") === icon.dataset.explanation &&
           icon.tabIndex === 0
       );
       checks.membershipDoesNotAlterRecords = JSON.stringify(saved()) === originalRecords;

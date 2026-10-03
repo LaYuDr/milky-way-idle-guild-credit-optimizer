@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.55] - 2026-10-03
+
+### Changed
+
+- Improved construction point summary layout and trial departed-member explanation display.
+
 ## [1.2.54] - 2026-10-03
 
 ### Changed

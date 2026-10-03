@@ -526,15 +526,32 @@
           ? availablePoints + history.currentWeekRemaining
           : null;
       const trialEstimate = getTrialPointEstimate();
-      const trialEstimateMarkup = `<div><small>${escapeHtml(t("trialHistoryPointEstimate"))}</small><strong data-role="trial-history-point-estimate">${trialEstimate?.total == null ? "-" : escapeHtml(formatNumber(trialEstimate.total, 2))}</strong><small>${escapeHtml(trialEstimate?.total == null ? t("trialHistoryPointEstimateUnavailable") : t("trialHistoryPointEstimateCoverage", { matched: trialEstimate.matched, missing: trialEstimate.missing }))}</small></div>`;
-      const metrics = [
-        ["currentAvailableGuildPoints", "forecast-current-available", availablePoints],
-        ["currentWeekGuildPoints", "latest-weekly-guild-points", history.currentWeekPoints],
-        ["predictedCurrentWeekGuildPoints", "current-week-total-forecast", history.currentWeekTotal],
-        ["remainingCurrentWeekGuildPoints", "current-week-remaining-forecast", history.currentWeekRemaining],
-        ["projectedAvailableGuildPoints", "current-week-projected-available", projectedAvailable],
-        ["nextWeekGuildPointForecast", "next-week-guild-point-forecast", history.nextWeekForecastPoints]
-      ];
+      const trialEstimateMarkup = `<div class="mwi-guild-point-metric"><small>${escapeHtml(t("trialHistoryPointEstimate"))}</small><strong data-role="trial-history-point-estimate">${trialEstimate?.total == null ? "-" : escapeHtml(formatNumber(trialEstimate.total, 2))}</strong><small>${escapeHtml(trialEstimate?.total == null ? t("trialHistoryPointEstimateUnavailable") : t("trialHistoryPointEstimateCoverage", { matched: trialEstimate.matched, missing: trialEstimate.missing }))}</small></div>`;
+      const renderMetric = (label, role, value, hint = "") =>
+        `<div class="mwi-guild-point-metric" data-role="${role}-metric"><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong>${hint ? `<small class="mwi-guild-point-metric-hint">${escapeHtml(t(hint))}</small>` : ""}</div>`;
+      const balanceMarkup = [
+        renderMetric("currentAvailableGuildPoints", "forecast-current-available", availablePoints),
+        renderMetric(
+          "remainingCurrentWeekGuildPoints",
+          "current-week-remaining-forecast",
+          history.currentWeekRemaining
+        ),
+        renderMetric(
+          "projectedAvailableGuildPoints",
+          "current-week-projected-available",
+          projectedAvailable,
+          "projectedAvailableGuildPointsHint"
+        )
+      ].join("");
+      const weeklyMarkup = [
+        renderMetric("currentWeekGuildPoints", "latest-weekly-guild-points", history.currentWeekPoints),
+        renderMetric("predictedCurrentWeekGuildPoints", "current-week-total-forecast", history.currentWeekTotal)
+      ].join("");
+      const nextWeekMarkup = renderMetric(
+        "nextWeekGuildPointForecast",
+        "next-week-guild-point-forecast",
+        history.nextWeekForecastPoints
+      );
       const status = !state.guildPointSummary
         ? t("guildPointHistoryUnavailable")
         : history.hasConflict
@@ -544,8 +561,10 @@
             : "";
       const growth = history.growthRate;
       const growthText = Number.isFinite(growth) ? `${growth > 0 ? "+" : ""}${formatNumber(growth * 100, 1)}%` : "-";
+      const growthTrend = Number.isFinite(growth) ? (growth > 0 ? "up" : growth < 0 ? "down" : "flat") : "unknown";
+      const growthMarkup = `<p class="mwi-guild-point-growth">${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth" data-trend="${growthTrend}">${escapeHtml(growthText)}</span></p>`;
       const canExport = history.trackedWeeks.length > 0;
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}">${metrics.map(([label, role, value]) => `<div data-role="${role}-metric"><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong>${role === "current-week-projected-available" ? `<small>${escapeHtml(t("projectedAvailableGuildPointsHint"))}</small>` : ""}</div>`).join("")}${trialEstimateMarkup}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${status ? `${escapeHtml(status)}<br>` : ""}${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth">${escapeHtml(growthText)}</span></p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}"><div class="mwi-guild-point-balance">${balanceMarkup}</div><div class="mwi-guild-point-weekly">${weeklyMarkup}${growthMarkup}</div><div class="mwi-guild-point-outlook">${nextWeekMarkup}${trialEstimateMarkup}</div></div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${escapeHtml(status)}</p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
