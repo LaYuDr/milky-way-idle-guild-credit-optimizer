@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.53";
+window.MwiGuildCreditVersion = "1.2.54";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -808,6 +808,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       next = {
         ...next,
         guild,
+        weeklyTrialSet: changed || weekChanged ? null : previous.weeklyTrialSet,
         members: changed ? {} : previous.members,
         roster: changed ? null : previous.roster,
         membershipEvidence: changed ? [] : previous.membershipEvidence,
@@ -816,6 +817,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       };
     }
     if (message.guildId != null && String(message.guildId) !== String(next.guild?.id)) return next;
+    if (isObject(message.guildWeeklyTrialSet)) next = { ...next, weeklyTrialSet: message.guildWeeklyTrialSet };
     if (message.guildSharableCharacterMap) next = { ...next, members: message.guildSharableCharacterMap };
     // Stats can include names for historical participants. Only a current roster
     // response can establish membership; keep it separate from captured names.
@@ -1448,6 +1450,60 @@ window.MwiGuildCreditVersion = "1.2.53";
     return share !== null && metricValue(record, row, "workDone") / summary.total < 9 / 1000 ? share : null;
   }
 
+  // Estimate this week's lineup from each project's latest known prior result.
+  function estimateCurrentTrialPoints(records, context = {}, now = Date.now()) {
+    const guild = context.guild;
+    const week = timestamp(guild?.currentWeekStartAt);
+    const trials = objectData(guild?.currentTrialsData);
+    if (
+      guild?.id == null ||
+      !Number.isFinite(week) ||
+      week > now ||
+      now >= week + 7 * 86400000 ||
+      (!(Array.isArray(context.weeklyTrialSet?.skillHrids) && Array.isArray(context.weeklyTrialSet?.combatHrids)) &&
+        (!isObject(trials.skilling?.parties) || !isObject(trials.combat?.parties)))
+    )
+      return null;
+    const lineup = context.weeklyTrialSet;
+    const projects = [
+      ...new Set(
+        Array.isArray(lineup?.skillHrids) && Array.isArray(lineup?.combatHrids)
+          ? [...lineup.skillHrids, ...lineup.combatHrids].filter((hrid) => typeof hrid === "string" && hrid)
+          : ["skilling", "combat"].flatMap((kind) => Object.keys(trials[kind]?.parties || {}))
+      )
+    ];
+    if (!projects.length) return null;
+    const latest = new Map();
+    for (const record of records) {
+      if (
+        record.guildId !== String(guild.id) ||
+        !projects.includes(record.trialHrid) ||
+        record.party?.done !== true ||
+        !Number.isFinite(record.weekStartAt) ||
+        record.weekStartAt >= week ||
+        !Number.isSafeInteger(record.points) ||
+        record.points < 0
+      )
+        continue;
+      const previous = latest.get(record.trialHrid);
+      if (
+        !previous ||
+        record.weekStartAt > previous.weekStartAt ||
+        (record.weekStartAt === previous.weekStartAt && record.capturedAt > previous.capturedAt)
+      )
+        latest.set(record.trialHrid, record);
+    }
+    const matched = latest.size;
+    const sum = [...latest.values()].reduce((total, record) => total + record.points, 0);
+    const total = matched ? sum + (sum / matched) * (projects.length - matched) : null;
+    return {
+      total: total !== null && Number.isFinite(total) ? total : null,
+      matched,
+      missing: projects.length - matched,
+      count: projects.length
+    };
+  }
+
   function signupWorkWarnings(records, context = {}, trialHrid) {
     const warnings = new Map();
     const week = timestamp(context.guild?.currentWeekStartAt);
@@ -1497,7 +1553,7 @@ window.MwiGuildCreditVersion = "1.2.53";
 
   // Rankings use game-captured v1 records only; manual v2 transcripts remain in history.
   // Missing projects never imply absence or zero.
-  function participationRankings(records) {
+  function participationRankings(records, { adjustCombatDamageTaken = false } = {}) {
     const players = new Map();
     const seenRecords = new Set();
     const bucket = () => ({ count: 0, average: null });
@@ -1538,6 +1594,8 @@ window.MwiGuildCreditVersion = "1.2.53";
           .map((field, index) => {
             const value = metricAverageMultiple(record, row, field, summaries[index]);
             if (record.kind === "combat" && value !== null) add(player[field], value);
+            // Offset only the combined combat ranking; raw metric rankings and project overviews stay intact.
+            if (adjustCombatDamageTaken && field === "premitigatedDamageTaken" && value !== null) return value - 1;
             return value;
           })
           .filter((value) => value !== null);
@@ -1605,7 +1663,9 @@ window.MwiGuildCreditVersion = "1.2.53";
       for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) player[field] = bucket();
     }
     for (const week of weeks.values()) {
-      const attendees = new Map(participationRankings(week.records).map((player) => [player.key, player]));
+      const attendees = new Map(
+        participationRankings(week.records, { adjustCombatDamageTaken: true }).map((player) => [player.key, player])
+      );
       for (const key of week.guild.players) {
         const player = players.get(key);
         if (!player) continue;
@@ -1852,6 +1912,7 @@ window.MwiGuildCreditVersion = "1.2.53";
     metricShare,
     lowWorkShare,
     signupWorkWarnings,
+    estimateCurrentTrialPoints,
     metricAverageMultiple,
     playerRankings,
     playerProjectOverview,
@@ -2683,6 +2744,7 @@ window.MwiGuildCreditVersion = "1.2.53";
         if (snapshots.length) bridge.pendingTrialSnapshots.push(...snapshots);
         const membershipChanged =
           previousContext.guild !== bridge.trialHistoryContext.guild ||
+          previousContext.weeklyTrialSet !== bridge.trialHistoryContext.weeklyTrialSet ||
           previousContext.roster !== bridge.trialHistoryContext.roster ||
           previousContext.signups !== bridge.trialHistoryContext.signups ||
           previousContext.signupLevels !== bridge.trialHistoryContext.signupLevels;
@@ -3933,10 +3995,15 @@ window.MwiGuildCreditVersion = "1.2.53";
       currentAvailableGuildPoints: "当前可用",
       currentWeekGuildPoints: "本周已获",
       predictedCurrentWeekGuildPoints: "本周预计总量",
+      projectedAvailableGuildPoints: "本周预计可用",
+      projectedAvailableGuildPointsHint: "当前可用 ＋ 本周预计剩余",
       latestWeeklyGuildPoints: "最近完整周获得",
       weeklyGuildPointGrowth: "环比增长",
       guildPointEstimatedGrowth: "预计周增长速度",
       nextWeekGuildPointForecast: "下周预测",
+      trialHistoryPointEstimate: "按试炼历史估计",
+      trialHistoryPointEstimateUnavailable: "本周项目或对应历史点数不足",
+      trialHistoryPointEstimateCoverage: "最近记录匹配 {matched} 项，平均值补齐 {missing} 项",
       guildPointHistoryUnavailable: "尚未读取公会点数；打开公会页面后会自动建立本机基线。",
       guildPointHistoryBaseline: "已建立累计点数基线；下一次周奖励到账后将生成首条周记录。",
       guildPointForecastNeedsHistory: "回看范围内需要至少 2 周有效点数才能做线性回归；不使用历史均值补足。",
@@ -4012,14 +4079,14 @@ window.MwiGuildCreditVersion = "1.2.53";
       guildPointHistorySource: "来源",
       saveManualGuildPointHistory: "保存整张表",
       manualGuildPointHint:
-        "灰色占位数为自动估算。修改游戏追踪值需先确认警告。清空后保存：原追踪值为 0 时改为自动补充，非零时恢复原值；直接填写 0 则保留零值。当前周仅供查看。",
+        "灰色占位数由全部已有有效周做线性回归补齐；不足两周保持空缺，补充值不参与拟合。修改游戏追踪值需先确认警告。清空后保存：原追踪值为 0 时改为自动补充，非零时恢复原值；直接填写 0 则保留零值。当前周仅供查看。",
       manualGuildPointHistoryEmpty: "尚无已结束的试炼周可填写。",
       guildPointManualWeekOption: "{week} 开始",
       guildPointSourceTracked: "游戏追踪",
       guildPointSourceTrackedEditing: "待保存更正",
       guildPointSourceManual: "手动录入",
       guildPointSourceManualOverride: "手工覆盖追踪值",
-      guildPointSourceEstimated: "自动补充",
+      guildPointSourceEstimated: "回归估算",
       guildPointSourceEmpty: "待填写",
       guildPointSourceCurrent: "游戏追踪中",
       guildPointSourceCurrentEstimated: "本周预测",
@@ -4039,7 +4106,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       cancelTrackedGuildPointEdit: "取消",
       confirmTrackedGuildPointEdit: "继续修改",
       manualGuildPointWeekInvalid: "请选择已结束的试炼周，并输入不小于 0 的整数。",
-      manualGuildPointWeekRemoved: "手动历史记录已删除，空缺周已恢复为自动补充。",
+      manualGuildPointWeekRemoved: "手动历史记录已删除，空缺周已重新估算；样本不足时保持空缺。",
       manualGuildPointHistorySaved: "历史公会点数表已保存，留空的周将继续自动估算。",
       constructionEta: "施工计划预计",
       constructionEtaNoPlan: "尚无计划",
@@ -4370,7 +4437,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       trialRankingCountHelp:
         "仅使用插件从游戏采集的记录，手动整理记录不参与排行榜。每参与一个生活或战斗项目计 1 次，包含零贡献记录；未采集的项目不计。同值并列。",
       trialRankingAverageHelp:
-        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。各项人均基准仅计入该项数值大于 0 的成员。生活使用工作量人均倍数；战斗每个项目将伤害、治疗、承伤的有效人均倍数直接相加，再对当周有效项目取平均，最后对各周等权平均。\n伤害、治疗、承伤三个独立榜分别只使用对应指标的人均倍数，承伤采用减伤前承伤；每项独立排除缺失或分母为零的数据。\n缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。\n合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。\n样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
+        "生活、战斗分别按在会且具备资格的试炼周计算：周开始前已入会的成员，确认缺席记 0，每类每周分母只加 1。各项人均基准仅计入该项数值大于 0 的成员。生活使用工作量人均倍数；战斗每个项目将伤害、治疗的有效人均倍数与（有效承伤人均倍数 − 1）相加，再对当周有效项目取平均；承伤缺失或分母为零时跳过该项，负值保留，最后对各周等权平均。\n伤害、治疗、承伤三个独立榜分别只使用对应指标的人均倍数，承伤采用减伤前承伤；每项独立排除缺失或分母为零的数据。\n缺席只在当周该类项目已完整采集、且入会时间或参试记录能确认在会时计入；未知在会状态、未完整采集及无法计算倍数的周不补零。只覆盖已采集完成的周，旧手动记录完全不参与。\n合并榜为生活均值＋战斗均值，不除以 2；只有一类有效时保留该类。\n样本数按已采集的实际参试记录计数：每周每类最多 1 个，参加但贡献为零或数值未知也计入，未参加不计入；合并榜为两类样本数之和。样本数不等于平均值分母，确认缺席周仍按 0 参与平均。",
       trialPlayerFind: "选择玩家",
       trialPlayerSwitch: "当前玩家：{name} · 切换玩家",
       trialPlayerSearchLabel: "搜索历史玩家",
@@ -4724,10 +4791,15 @@ window.MwiGuildCreditVersion = "1.2.53";
       currentAvailableGuildPoints: "Available now",
       currentWeekGuildPoints: "Earned this week",
       predictedCurrentWeekGuildPoints: "This week: expected total",
+      projectedAvailableGuildPoints: "Expected available this week",
+      projectedAvailableGuildPointsHint: "Available now + expected remainder",
       latestWeeklyGuildPoints: "Latest complete week",
       weeklyGuildPointGrowth: "Week-over-week",
       guildPointEstimatedGrowth: "Estimated weekly growth",
       nextWeekGuildPointForecast: "Next-week forecast",
+      trialHistoryPointEstimate: "Trial-history estimate",
+      trialHistoryPointEstimateUnavailable: "Current lineup or historical points unavailable",
+      trialHistoryPointEstimateCoverage: "Latest results: {matched}; filled with their mean: {missing}",
       guildPointHistoryUnavailable:
         "Guild Points are not available yet. Open the Guild page to create a local baseline.",
       guildPointHistoryBaseline:
@@ -4811,14 +4883,14 @@ window.MwiGuildCreditVersion = "1.2.53";
       guildPointHistorySource: "Source",
       saveManualGuildPointHistory: "Save full table",
       manualGuildPointHint:
-        "Gray placeholders are estimates. Confirm the warning before editing tracked values. Clear and save to auto-fill an original tracked zero, or restore a nonzero original. Entering 0 keeps a zero value. The current week is read-only.",
+        "Gray placeholders use linear regression over all available valid weeks. Fewer than two weeks leave gaps; filled values never train the model. Confirm the warning before editing tracked values. Clear and save to auto-fill an original tracked zero, or restore a nonzero original. Entering 0 keeps a zero value. The current week is read-only.",
       manualGuildPointHistoryEmpty: "There are no completed trial weeks to enter yet.",
       guildPointManualWeekOption: "Starting {week}",
       guildPointSourceTracked: "Game tracked",
       guildPointSourceTrackedEditing: "Correction not saved",
       guildPointSourceManual: "Manual",
       guildPointSourceManualOverride: "Manual override",
-      guildPointSourceEstimated: "Auto-filled",
+      guildPointSourceEstimated: "Estimated",
       guildPointSourceEmpty: "Not entered",
       guildPointSourceCurrent: "Tracking now",
       guildPointSourceCurrentEstimated: "Current-week forecast",
@@ -4839,7 +4911,8 @@ window.MwiGuildCreditVersion = "1.2.53";
       cancelTrackedGuildPointEdit: "Cancel",
       confirmTrackedGuildPointEdit: "Continue editing",
       manualGuildPointWeekInvalid: "Choose a completed trial week and enter a non-negative integer.",
-      manualGuildPointWeekRemoved: "The manual record was removed and the missing week is auto-filled again.",
+      manualGuildPointWeekRemoved:
+        "The manual record was removed. Missing weeks were re-estimated, or left blank if samples are insufficient.",
       manualGuildPointHistorySaved: "The historical Guild Point table was saved; blank weeks will remain estimated.",
       constructionEta: "Construction ETA",
       constructionEtaNoPlan: "No plan yet",
@@ -5184,7 +5257,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       trialRankingCountHelp:
         "Only records captured by the plugin from the game count; manual transcripts are excluded from rankings. Each skilling or combat project attended counts once, including zero contributions. Uncaptured projects are excluded. Equal values share a rank.",
       trialRankingAverageHelp:
-        "The separate damage, healing and pre-mitigation damage taken rankings use only their own metric multiples, excluding missing values and zero denominators independently.\nSkilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Each per-member baseline includes only members with a positive value for that metric.\nSkilling uses work; combat sums the valid damage, healing and damage-taken multiples for each project, averages the valid projects within each week, then averages across weeks.\nAbsence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded.\nCombined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average.\nSamples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
+        "The separate damage, healing and pre-mitigation damage taken rankings use only their own metric multiples, excluding missing values and zero denominators independently.\nSkilling and combat each average weekly multiples over eligible guild weeks. Membership must begin before the week starts. Confirmed absence counts as 0, and each category adds at most one denominator per week. Each per-member baseline includes only members with a positive value for that metric.\nSkilling uses work; combat sums valid damage and healing multiples plus (valid damage-taken multiple − 1) for each project, averages valid projects within each week, then averages across weeks. Missing damage taken or a zero denominator skips that term; negative scores are retained.\nAbsence requires a fully captured category and membership evidence from join times or attendance. Unknown membership, incomplete captures and unavailable multiples are not treated as zero. Only captured completed weeks are covered; manual records are entirely excluded.\nCombined score = skilling average + combat average, without dividing by 2; a sole valid category retains its average.\nSamples count captured attendance, at most once per category per week. Attended weeks count even with zero or unknown metrics; absences do not. Combined samples sum both categories. Samples differ from the averaging denominator: confirmed absences still enter the average as zero.",
       trialPlayerFind: "Choose a player",
       trialPlayerSwitch: "Current player: {name} · Change player",
       trialPlayerSearchLabel: "Search historical players",
@@ -6259,87 +6332,78 @@ window.MwiGuildCreditVersion = "1.2.53";
     options = {}
   ) {
     const normalized = normalizedGuildPointHistory(history);
-    const coldStart = estimateGuildPointColdStart(lifetimePoints, currentWeekPoints, observedAt, firstTrialStartAt);
-    if (coldStart.status !== "ok") return { status: coldStart.status, history: normalized, estimatedCount: 0 };
+    // Old generated estimates are disposable; they must never train the model.
+    normalized.weeks = normalized.weeks.filter((record) => record.source !== "estimated");
     const firstTrial = Number(firstTrialStartAt);
-    const completeTracked = new Map(
-      normalized.weeks
-        .filter((record) => record.complete && record.coverage === "verified" && record.source !== "estimated")
-        .map((record) => [record.weekStartAt, record])
-    );
-    const manual = new Map(normalized.manualWeeks.map((record) => [record.weekStartAt, record]));
-    const records = [];
-    const missing = [];
-    let knownPoints = 0;
-    for (let index = 0; index < coldStart.pastWeekCount; index += 1) {
-      const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
-      const trackedRecord = completeTracked.get(weekStartAt);
-      const manualRecord = manual.get(weekStartAt);
-      const record = manualRecord
-        ? { ...manualRecord, complete: true, coverage: "verified", source: "manual" }
-        : trackedRecord
-          ? { ...trackedRecord, source: "tracked" }
-          : null;
-      if (record) {
-        records.push(record);
-        knownPoints += record.earnedPoints;
-      } else {
-        missing.push({ weekStartAt, ordinal: index + 1 });
-      }
-    }
-    const historicalTotal = Number(lifetimePoints) - Number(currentWeekPoints);
-    if (knownPoints > historicalTotal) {
-      return {
-        status: "known_points_exceed_total",
-        history: normalized,
-        estimatedCount: 0,
-        manualCount: records.filter((record) => record.source === "manual").length,
-        trackedCount: records.filter((record) => record.source === "tracked").length,
-        averageWeeklyChange: null,
-        forecastPoints: null,
-        growthRate: null,
-        forecastSampleCount: 0
-      };
-    }
-    const remainingPoints = historicalTotal - knownPoints;
-    const estimateBase = missing.length ? Math.floor(remainingPoints / missing.length) : 0;
-    const estimateRemainder = missing.length ? remainingPoints % missing.length : 0;
-    const estimates = missing.map((record, index) => ({
-      weekStartAt: record.weekStartAt,
-      earnedPoints: estimateBase + (index >= missing.length - estimateRemainder ? 1 : 0)
-    }));
-    for (const record of estimates) {
-      records.push({
-        weekStartAt: record.weekStartAt,
-        earnedPoints: record.earnedPoints,
-        complete: true,
-        observedAt: Number(observedAt),
-        source: "estimated"
-      });
-    }
-    records.sort((left, right) => left.weekStartAt - right.weekStartAt);
-    const currentWeekStartAt = firstTrial + coldStart.pastWeekCount * GUILD_POINT_WEEK_MS;
-    const outsideRange = normalized.weeks.filter(
-      (record) => record.weekStartAt < firstTrial || record.weekStartAt >= currentWeekStartAt
-    );
+    const observed = Number(observedAt);
+    if (!Number.isSafeInteger(firstTrial) || firstTrial <= 0 || !Number.isSafeInteger(observed) || observed <= 0)
+      return { status: "unavailable", history: normalized, estimatedCount: 0 };
+    if (observed < firstTrial) return { status: "before_first_trial", history: normalized, estimatedCount: 0 };
+    const pastWeekCount = Math.floor((observed - firstTrial) / GUILD_POINT_WEEK_MS);
+    const currentWeekStartAt = firstTrial + pastWeekCount * GUILD_POINT_WEEK_MS;
     const forecast = summarizeGuildPointHistory(normalized, {
       forecastWeekCount: options.forecastWeekCount,
       currentWeekStartAt,
       currentWeekPoints
     });
+    const historicalRecords = forecast.trackedWeeks.filter(
+      (record) => record.weekStartAt >= firstTrial && record.weekStartAt < currentWeekStartAt
+    );
+    const knownPoints = historicalRecords
+      .filter(isReliableGuildPointWeek)
+      .reduce((total, record) => total + record.earnedPoints, 0);
+    const canCheckTotal =
+      Number.isSafeInteger(lifetimePoints) &&
+      lifetimePoints >= 0 &&
+      Number.isSafeInteger(currentWeekPoints) &&
+      currentWeekPoints >= 0;
+    if (canCheckTotal && knownPoints > lifetimePoints - currentWeekPoints) {
+      return {
+        status: "known_points_exceed_total",
+        history: normalized,
+        estimatedCount: 0,
+        forecastPoints: null,
+        forecastSampleCount: 0
+      };
+    }
+    // Historical reconstruction uses all observed weeks, independently of the
+    // recent-window forecast. Missing dates keep their actual time spacing.
+    const samples = historicalRecords.filter(isGuildPointForecastSample);
+    const currentSample = forecast.forecastSamples.find((record) => record.weekStartAt === currentWeekStartAt);
+    if (currentSample) samples.push(currentSample);
+    const recordsByWeek = new Map(forecast.trackedWeeks.map((record) => [record.weekStartAt, record]));
+    let estimatedCount = 0;
+    for (let index = 0; index < pastWeekCount; index += 1) {
+      const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
+      if (recordsByWeek.has(weekStartAt)) continue;
+      const earnedPoints = guildPointModelPrediction(samples, weekStartAt, "linear");
+      if (earnedPoints === null) continue;
+      recordsByWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints,
+        complete: true,
+        coverage: "partial",
+        observedAt: observed,
+        source: "estimated"
+      });
+      estimatedCount += 1;
+    }
     return {
       status: "ok",
-      history: { ...normalized, weeks: [...records, ...outsideRange] },
-      estimatedCount: estimates.length,
-      manualCount: records.filter((record) => record.source === "manual").length,
-      trackedCount: records.filter((record) => record.source === "tracked").length,
+      history: {
+        ...normalized,
+        weeks: [...recordsByWeek.values()].sort((left, right) => left.weekStartAt - right.weekStartAt)
+      },
+      estimatedCount,
+      estimationSampleCount: samples.length,
+      manualCount: historicalRecords.filter((record) => record.source === "manual").length,
+      trackedCount: historicalRecords.filter((record) => record.source !== "manual").length,
       averageWeeklyChange: forecast.averageWeeklyChange,
       forecastPoints: forecast.forecastPoints,
       growthRate: forecast.growthRate,
       forecastSampleCount: forecast.forecastSampleCount,
       forecast,
-      currentWeekStartAt,
-      historicalAveragePoints: coldStart.historicalAveragePoints
+      currentWeekStartAt
     };
   }
 
@@ -10827,6 +10891,8 @@ window.MwiGuildCreditVersion = "1.2.53";
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{display:grid;align-content:start;gap:4px;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:var(--build-muted);font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{font-size:20px;line-height:1.3;font-weight:600;color:var(--build-text);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"]{grid-column:1/-1;padding:10px 12px;border:1px solid var(--build-line);border-radius:6px;background:var(--build-surface)}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"] strong{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="up"] strong{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="down"] strong{color:var(--build-danger)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:0 0 10px}
@@ -11257,7 +11323,8 @@ window.MwiGuildCreditVersion = "1.2.53";
       document,
       URL,
       Blob,
-      guildTrialFirstStartAt
+      guildTrialFirstStartAt,
+      getTrialPointEstimate = () => null
     } = dependencies;
 
     const constructionUi = {
@@ -11422,10 +11489,9 @@ window.MwiGuildCreditVersion = "1.2.53";
 
     function supplementedGuildPointHistory() {
       const summary = state.guildPointSummary;
-      if (!summary) return { history: state.guildPointHistory, estimatedCount: 0 };
       return core.supplementGuildPointHistory(
         state.guildPointHistory,
-        summary.lifetimePoints,
+        summary?.lifetimePoints,
         currentGuildWeekPoints(),
         Date.now(),
         guildTrialFirstStartAt,
@@ -11454,10 +11520,10 @@ window.MwiGuildCreditVersion = "1.2.53";
         Math.floor((Date.now() - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)) * 7 * 24 * 60 * 60 * 1000;
       // Keep observed values for fitting; auto-fill is only a display aid.
       const weeksByStart = new Map(
-        [...(supplemented.history?.weeks || []), ...(state.guildPointHistory?.weeks || [])].map((record) => [
-          record.weekStartAt,
-          record
-        ])
+        [
+          ...(supplemented.history?.weeks || []),
+          ...(state.guildPointHistory?.weeks || []).filter((record) => record.source !== "estimated")
+        ].map((record) => [record.weekStartAt, record])
       );
       const history = core.summarizeGuildPointHistory(
         { ...supplemented.history, weeks: [...weeksByStart.values()] },
@@ -11533,7 +11599,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       ).reverse();
     }
 
-    function renderCurrentGuildPointWeek() {
+    function renderCurrentGuildPointWeek(history) {
       const weekMs = 7 * 24 * 60 * 60 * 1000;
       const elapsedWeeks = Math.floor((Date.now() - guildTrialFirstStartAt) / weekMs);
       const fallbackWeekStartAt =
@@ -11550,8 +11616,10 @@ window.MwiGuildCreditVersion = "1.2.53";
       if (!weekStartAt) return "";
 
       const currentWeekPoints = currentGuildWeekPoints();
-      const source = currentWeekPoints === null ? "currentUnavailable" : "current";
-      const points = currentWeekPoints === null ? "-" : formatNumber(currentWeekPoints);
+      const total = guildPointForecastBasis(history).currentWeekTotal;
+      const source =
+        currentWeekPoints === null ? "currentUnavailable" : currentWeekPoints > 0 ? "current" : "currentEstimated";
+      const points = total === null ? "-" : formatNumber(total);
       const week = guildPointWeekLabel(weekStartAt);
       return `<tr data-source="${source}" data-current-week="true" aria-label="${escapeHtml(t("currentGuildPointWeek"))}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time><small class="mwi-guild-point-current-label">${escapeHtml(t("currentGuildPointWeek"))}</small></th><td><strong class="mwi-guild-point-readonly" data-role="current-week-guild-points">${escapeHtml(points)}</strong></td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
     }
@@ -11569,7 +11637,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
       const trackedByWeek = new Map(
         (state.guildPointHistory?.weeks || [])
-          .filter((record) => record.weekStartAt < history.currentWeekStartAt)
+          .filter((record) => record.source !== "estimated" && record.weekStartAt < history.currentWeekStartAt)
           .map((record) => [record.weekStartAt, record])
       );
       const manualByWeek = new Map(
@@ -11743,10 +11811,22 @@ window.MwiGuildCreditVersion = "1.2.53";
     function renderGuildPointForecast(historySummary) {
       const history = guildPointForecastBasis(historySummary);
       const show = (value) => (Number.isSafeInteger(value) ? formatNumber(value) : "-");
+      const availablePoints = state.guildPointSummary?.availablePoints;
+      const projectedAvailable =
+        Number.isSafeInteger(availablePoints) &&
+        availablePoints >= 0 &&
+        Number.isSafeInteger(history.currentWeekRemaining) &&
+        Number.isSafeInteger(availablePoints + history.currentWeekRemaining)
+          ? availablePoints + history.currentWeekRemaining
+          : null;
+      const trialEstimate = getTrialPointEstimate();
+      const trialEstimateMarkup = `<div><small>${escapeHtml(t("trialHistoryPointEstimate"))}</small><strong data-role="trial-history-point-estimate">${trialEstimate?.total == null ? "-" : escapeHtml(formatNumber(trialEstimate.total, 2))}</strong><small>${escapeHtml(trialEstimate?.total == null ? t("trialHistoryPointEstimateUnavailable") : t("trialHistoryPointEstimateCoverage", { matched: trialEstimate.matched, missing: trialEstimate.missing }))}</small></div>`;
       const metrics = [
+        ["currentAvailableGuildPoints", "forecast-current-available", availablePoints],
         ["currentWeekGuildPoints", "latest-weekly-guild-points", history.currentWeekPoints],
         ["predictedCurrentWeekGuildPoints", "current-week-total-forecast", history.currentWeekTotal],
         ["remainingCurrentWeekGuildPoints", "current-week-remaining-forecast", history.currentWeekRemaining],
+        ["projectedAvailableGuildPoints", "current-week-projected-available", projectedAvailable],
         ["nextWeekGuildPointForecast", "next-week-guild-point-forecast", history.nextWeekForecastPoints]
       ];
       const status = !state.guildPointSummary
@@ -11759,8 +11839,7 @@ window.MwiGuildCreditVersion = "1.2.53";
       const growth = history.growthRate;
       const growthText = Number.isFinite(growth) ? `${growth > 0 ? "+" : ""}${formatNumber(growth * 100, 1)}%` : "-";
       const canExport = history.trackedWeeks.length > 0;
-      const canReset = Boolean(state.guildPointHistory?.lastObservation || history.trackedWeeks.length);
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}">${metrics.map(([label, role, value]) => `<div><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong></div>`).join("")}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${status ? `${escapeHtml(status)}<br>` : ""}${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth">${escapeHtml(growthText)}</span></p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}">${metrics.map(([label, role, value]) => `<div data-role="${role}-metric"><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong>${role === "current-week-projected-available" ? `<small>${escapeHtml(t("projectedAvailableGuildPointsHint"))}</small>` : ""}</div>`).join("")}${trialEstimateMarkup}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${status ? `${escapeHtml(status)}<br>` : ""}${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth">${escapeHtml(growthText)}</span></p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -12241,12 +12320,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const rows = [[t("guildPointCsvWeekStart"), t("guildPointCsvEarned"), t("guildPointCsvStatus")]];
       const exported = new Map(history.trackedWeeks.map((record) => [record.weekStartAt, record]));
       for (const raw of state.guildPointHistory?.weeks || []) {
-        if (!exported.has(raw.weekStartAt)) exported.set(raw.weekStartAt, raw);
+        if (raw.source !== "estimated" && !exported.has(raw.weekStartAt)) exported.set(raw.weekStartAt, raw);
       }
       for (const entry of [...exported.values()].sort((left, right) => left.weekStartAt - right.weekStartAt)) {
         const raw = (state.guildPointHistory?.weeks || []).find((record) => record.weekStartAt === entry.weekStartAt);
         const partial =
           raw &&
+          raw.source !== "estimated" &&
           raw.weekStartAt < history.currentWeekStartAt &&
           raw.coverage !== "verified" &&
           entry.source !== "manual";
@@ -13499,7 +13579,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     profileReaderApi,
     resolveItemName,
     getBridge,
-    getPanel
+    getPanel,
+    onRecordsChanged = () => {}
   }) {
     let mode = "week";
     let screenshotMode = false;
@@ -13628,6 +13709,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       for (const [key, record] of unsaved) merged.set(key, record);
       records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
       signupWarning.refresh();
+      onRecordsChanged();
       multipleGuilds =
         new Set(
           records.map((record) => JSON.stringify([record.guildId, record.guildId == null ? record.guildName : null]))
@@ -14578,7 +14660,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const bridge = getBridge();
       if (bridge?.onTrialStatsUpdated === onStats) bridge.onTrialStatsUpdated = null;
     }
-    return { start, dispose, bind, refresh };
+    return {
+      start,
+      dispose,
+      bind,
+      refresh,
+      estimateCurrentTrialPoints: () =>
+        trialHistoryApi.estimateCurrentTrialPoints(records, getBridge()?.trialHistoryContext)
+    };
   }
   return { createTrialHistoryView, projectIconSpec };
 });
@@ -19156,6 +19245,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   });
   const { renderSettingsMarkup, refreshSettings } = settingsView;
   const constructionView = constructionViewApi.createConstructionView({
+    getTrialPointEstimate: () => trialHistoryView.estimateCurrentTrialPoints(),
     state,
     buildingDataApi,
     t,
@@ -19237,7 +19327,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     profileTooltipApi: window.MwiGuildProfileTooltip,
     resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
-    getPanel: () => state.panel
+    getPanel: () => state.panel,
+    onRecordsChanged: () => {
+      if (state.panel?.dataset.activeView === "construction") guildDataRefreshTask.schedule();
+    }
   });
   const refreshTrialHistory = (panel) => trialHistoryView.refresh(panel);
 

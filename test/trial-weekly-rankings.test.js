@@ -257,9 +257,59 @@ test("战斗单项榜独立按周取平均，保留综合战斗榜和合计榜",
   assert.equal(result.premitigatedDamageTaken.average, 1);
   assert.equal(result.premitigatedDamageTaken.unknownWeeks, 1);
   assert.equal(result.damageDealt.sampleCount, 2);
-  assert.equal(result.combat.average, 1.375); // (mean(2.5, 1) + 1) / 2
+  assert.equal(result.combat.average, 1.125); // (mean(2.5 - 1, 1) + 1) / 2
   assert.equal(result.all.total, result.combat.average);
   assert.equal(JSON.stringify(records), before);
+});
+
+test("战斗每场承伤减一后按周平均，保留缺席零值及生活合计", () => {
+  const combat = (index, rows) =>
+    record(index, 1, {
+      key: `combat-offset-${index}`,
+      kind: "combat",
+      trialHrid: combatHrid,
+      weekTrials: { skilling: [hrid], combat: [combatHrid] },
+      rows
+    });
+  const records = [
+    ...[0, 1, 2].map((index) =>
+      combat(index, [
+        { characterId: 1, damageDealt: 30, premitigatedDamageTaken: 10 },
+        { characterId: 2, damageDealt: 10, premitigatedDamageTaken: 30 }
+      ])
+    ),
+    record(0, 1.5)
+  ];
+  const attended = player(records);
+  assert.equal(attended.combat.average, (3 * 1.5 + (3 * 0.5 - 3)) / 3);
+  assert.equal(attended.combat.count, 3);
+  assert.equal(attended.combat.sampleCount, 3);
+  assert.equal(attended.premitigatedDamageTaken.average, 0.5);
+  assert.equal(attended.skilling.average, 1.5);
+  assert.equal(attended.all.total, 2.5);
+  const absent = player([...records, combat(3, [{ characterId: 2, damageDealt: 10, premitigatedDamageTaken: 10 }])]);
+  assert.equal(absent.combat.average, 0.75);
+  assert.equal(absent.combat.count, 4);
+  assert.equal(absent.combat.sampleCount, 3);
+  assert.equal(absent.combat.absentWeeks, 1);
+  assert.equal(absent.all.total, 2.25);
+});
+
+test("战斗有效零承伤减一后允许负值，承伤榜和项目概览保留原值", () => {
+  const source = record(0, 1, {
+    kind: "combat",
+    trialHrid: combatHrid,
+    weekTrials: { skilling: [], combat: [combatHrid] },
+    rows: [
+      { characterId: 1, damageDealt: 0, premitigatedDamageTaken: 0 },
+      { characterId: 2, damageDealt: 10, premitigatedDamageTaken: 10 }
+    ]
+  });
+  const result = player([source]);
+  assert.equal(result.combat.average, -1);
+  assert.equal(result.premitigatedDamageTaken.average, 0);
+  assert.equal(result.all.total, -1);
+  assert.equal(api.playerProjectOverview([source], { id: "1" }).find((row) => row.trialHrid === combatHrid).average, 0);
 });
 
 test("战斗单项榜保留确认缺席零值，手工记录不参与", () => {

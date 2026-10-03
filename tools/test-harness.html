@@ -241,22 +241,25 @@
               weekStartAt: currentWeekStart,
               observedAt: currentWeekStart + 60 * 60 * 1000
             },
-            weeks: coldStartAudit
-              ? []
-              : [
-                  {
-                    weekStartAt: Date.parse("2026-08-25T02:00:00Z"),
-                    earnedPoints: 300,
-                    complete: true,
-                    observedAt: Date.parse("2026-09-01T02:00:00Z")
-                  },
-                  {
-                    weekStartAt: Date.parse("2026-09-01T02:00:00Z"),
-                    earnedPoints: 360,
-                    complete: true,
-                    observedAt: currentWeekStart
-                  }
-                ]
+            // Construction interactions start with only the current week, then
+            // add/remove a manual sample to verify regression and empty gaps.
+            weeks:
+              coldStartAudit || constructionAudit
+                ? []
+                : [
+                    {
+                      weekStartAt: Date.parse("2026-08-25T02:00:00Z"),
+                      earnedPoints: 300,
+                      complete: true,
+                      observedAt: Date.parse("2026-09-01T02:00:00Z")
+                    },
+                    {
+                      weekStartAt: Date.parse("2026-09-01T02:00:00Z"),
+                      earnedPoints: 360,
+                      complete: true,
+                      observedAt: currentWeekStart
+                    }
+                  ]
           }
         })
       );
@@ -1755,7 +1758,7 @@
           planningWeeks: root.querySelector('[data-role="guild-point-planning-weeks"]')?.value || "",
           planningSummary: normalizedText(root.querySelector(".mwi-guild-point-controls output")),
           exportDisabled: Boolean(root.querySelector('[data-role="export-guild-point-history"]')?.disabled),
-          resetDisabled: Boolean(root.querySelector('[data-role="reset-guild-point-history"]')?.disabled)
+          resetAbsent: !root.querySelector('[data-role="reset-guild-point-history"]')
         },
         readability: {
           primaryText: Array.from(
@@ -1788,6 +1791,44 @@
 
     const runConstructionInteractionAudit = async (panel) => {
       const audit = {};
+      const trialBridge = window.__mwiGuildCreditBridge;
+      const trialWeek = trialBridge.guildWeekStartAt;
+      const trialProjects = [
+        "/guild_skilling/milking",
+        "/guild_skilling/foraging",
+        "/guild_combat/badger",
+        "/guild_combat/hedgehog"
+      ];
+      trialBridge.trialHistoryContext = window.MwiGuildTrialHistory.updateContext(
+        {},
+        {
+          type: "guild_updated",
+          guild: { id: "fixture-guild", currentWeekStartAt: trialWeek, currentTrialsData: null },
+          guildWeeklyTrialSet: { skillHrids: trialProjects.slice(0, 2), combatHrids: trialProjects.slice(2) }
+        }
+      );
+      const trialRecord = (trialHrid, points) => ({
+        schemaVersion: 1,
+        guildId: "fixture-guild",
+        key: JSON.stringify(["fixture-guild", trialWeek - 604800000, trialHrid]),
+        weekStartAt: trialWeek - 604800000,
+        capturedAt: Date.now(),
+        trialHrid,
+        kind: "skilling",
+        points,
+        party: { done: true },
+        members: {},
+        rows: [{ trialHrid, characterId: 1, workDone: 100 }]
+      });
+      trialBridge.pendingTrialSnapshots.push(trialRecord(trialProjects[0], 100), trialRecord(trialProjects[1], 200));
+      trialBridge.onTrialStatsUpdated();
+      await waitFor(
+        () =>
+          Number(panel.querySelector('[data-role="trial-history-point-estimate"]')?.textContent.replace(/,/g, "")) ===
+          600
+      );
+      audit.trialEstimateUsesMean = true;
+
       const compactNumber = (value) => String(value || "").replace(/[\s,，]/g, "");
       const expectedOrder = [
         "/guild_buildings/guild_hall",
@@ -1995,6 +2036,12 @@
         currentWeekAfterForecast:
           panel.querySelector('.mwi-guild-point-history tr[data-next-week="true"]')?.nextElementSibling ===
           panel.querySelector('.mwi-guild-point-history tr[data-current-week="true"]'),
+        historicalEstimatesMatchRegression: Array.from(
+          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"] input')
+        ).every((input) => {
+          const weeksBeforeManual = (selectedManualWeek - Number(input.dataset.weekStartAt)) / 604800000;
+          return compactNumber(input.placeholder) === String(10000 + 352 * weeksBeforeManual) && input.value === "";
+        }),
         nextWeekPoints: normalizedText(panel.querySelector('[data-role="next-week-guild-points"]')),
         nextWeekReadonly:
           panel.querySelectorAll('.mwi-guild-point-history tr[data-next-week="true"] :is(input,button)').length === 0,
@@ -2010,8 +2057,7 @@
       await waitFor(
         () =>
           !panel.querySelector('.mwi-guild-point-history tr[data-source="manual"]') &&
-          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length ===
-            expectedEstimatedCount
+          panel.querySelectorAll('.mwi-guild-point-history tr[data-source="estimated"]').length === 0
       );
       audit.manualGuildPointHistory.afterRemove = {
         manualCount: panel.querySelectorAll('.mwi-guild-point-history tr[data-source="manual"]').length,
@@ -2153,8 +2199,9 @@
           // Only one actual week remains after clearing the manual sample.
           normalizedText(panel.querySelector('[data-role="next-week-guild-point-forecast"]')) === "-" &&
           normalizedText(panel.querySelector('[data-role="construction-eta"]')) === "-" &&
-          !panel.querySelector('[data-role="export-guild-point-history"]')?.disabled &&
-          !panel.querySelector('[data-role="reset-guild-point-history"]')?.disabled,
+          panel.querySelector('[data-role="export-guild-point-history"]')?.disabled === true &&
+          !panel.querySelector('[data-role="reset-guild-point-history"]'),
+        trialEstimateUsesMean: audit.trialEstimateUsesMean,
         forecastSeparatesCurrentProgress:
           compactNumber(panel.querySelector('[data-role="current-week-total-forecast"]')?.textContent) === "9648" &&
           compactNumber(panel.querySelector('[data-role="current-week-remaining-forecast"]')?.textContent) === "0" &&
@@ -2198,13 +2245,14 @@
           audit.manualGuildPointHistory.nextWeekAtTop &&
           audit.manualGuildPointHistory.currentWeekAfterForecast &&
           audit.manualGuildPointHistory.nextWeekReadonly &&
+          audit.manualGuildPointHistory.historicalEstimatesMatchRegression &&
           compactNumber(audit.manualGuildPointHistory.nextWeekPoints) === "9296" &&
           normalizedText(panel.querySelector('[data-role="next-week-guild-points"]')) ===
             normalizedText(panel.querySelector('[data-role="next-week-guild-point-forecast"]')) &&
           compactNumber(audit.manualGuildPointHistory.currentWeekPoints) === "9648" &&
           audit.manualGuildPointHistory.currentWeekSource === "current" &&
           audit.manualGuildPointHistory.afterRemove.manualCount === 0 &&
-          audit.manualGuildPointHistory.afterRemove.estimatedCount === expectedEstimatedCount &&
+          audit.manualGuildPointHistory.afterRemove.estimatedCount === 0 &&
           audit.manualGuildPointHistory.afterRemove.detailsOpen,
         buttonReorderRecalculatesBudget:
           audit.buttonReorder.groupOrder[0] === gymHrid &&
@@ -4273,7 +4321,7 @@
           rankedRows(scope)
             .map((row) => row.querySelector("[data-trial-ranking-value]").textContent)
             .join(",") ===
-            (scope === "skilling" ? "1.00×,0.00×" : scope === "combat" ? "3.00×,0.00×" : "4.00×,0.00×") &&
+            (scope === "skilling" ? "1.00×,0.00×" : scope === "combat" ? "2.00×,-1.00×" : "3.00×,-1.00×") &&
           rankedRows(scope).every((row) => row.querySelector("[data-trial-ranking-samples]").textContent === count);
       }
       const rankingHighlights = () => [...host.querySelectorAll(".mwi-trial-member-highlight")];

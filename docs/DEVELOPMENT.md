@@ -499,7 +499,10 @@ The audit adds three known-level buildings, directly
 adds one unread building as `0 -> 1` without a manual-level prompt, checks inline target editing, collapsed step
 details, button and pointer reordering, Escape cancellation, clear-with-undo,
 search focus, focus visibility after rerenders, and the full weekly-point edit
-table: every completed week is visible at once. When current-week earned points are positive, a read-only next-week
+table: every completed week is visible at once. The current-week row uses the same
+value as the current-week total summary, labelled as a forecast until positive
+earned points are available. Unknown totals remain a dash. Export and historical
+editing remain available; the reset weekly records button is absent. When current-week earned points are positive, a read-only next-week
 forecast row appears above the current week, using the same value as the forecast
 summary. Zero, unknown, or stale prior-week progress does not show this row;
 unavailable forecasts display a dash. The row never enters saved history or CSV.
@@ -511,7 +514,7 @@ on input without changing the observed game balance, and clearing the input
 restores the game balance. Auto-filled weeks are excluded from regression. The audit checks that insufficient
 samples leave the forecast unknown, then that a manual prior week of 10,000 plus
 the current completed week of 9,648 predicts 9,296 using linear regression.
-Clearing that manual sample restores the unknown forecast. Current-week positive
+Earlier empty weeks are backfilled by linear regression from the manual and current-week samples (10,352 for the week before the manual value, then 10,704). Clearing that manual sample removes these estimates and restores the unknown forecast. Current-week positive
 points make its remaining earnings zero. Separate unit tests verify the 2-week
 window, raw tracked values, manual overrides, rollover, budget and ETA consistency.
 See [forecast rules](GUILD_POINT_FORECAST.md) for the sampling rules and local CSV/JSON analysis command.
@@ -956,8 +959,11 @@ manual transcripts (schema v2 or explicit manual source), including manual recor
 with character IDs. Exported/restored game captures remain eligible; stored manual
 records remain available to the existing history views. Each captured project counts
 once, including zero contributions.
-Skilling uses work / project mean work. Combat sums valid damage, healing
-and premitigated-damage-taken multiples. Each category averages by guild week,
+Skilling uses work / project mean work. The combined combat ranking sums valid damage
+and healing multiples plus (valid premitigated-damage-taken multiple - 1) per project.
+Missing damage taken or a zero denominator skips that term; valid zero becomes -1
+and negative scores are retained. Separate metric rankings and player project
+overviews retain their original multiples. Each category averages by guild week,
 with one denominator per eligible week. Confirmed eligible absences count as zero;
 membership must begin before the week starts. Native guildCharacterMap.joinTime
 is captured passively with observation time and persisted as optional
@@ -1053,3 +1059,17 @@ viewport positioning and cleanup on scroll, collapse, rerender or disposal.
 The trial fixture covers five equal ability tiles, pointer/focus behavior, data
 forwarding, fallback, containment and no profile requests or history writes.
 Native game formula rendering still requires installed-game verification.
+
+### Trial-history point estimate
+
+The construction points summary also estimates the current lineup by summing each
+project's latest known completed result from an earlier week in the same guild.
+Both skilling and combat projects are included. The lineup comes from the official
+`guildWeeklyTrialSet` even before trials start; completed party keys are a fallback
+for older contexts. Guild and week changes clear the old lineup. Missing projects use the mean of
+the matched project values; valid zero points participate in that mean. With no
+matches, an incomplete lineup, or a stale current week, the estimate is unavailable.
+The display reports matched and imputed counts. It reuses the trial history view's
+loaded records and passive bridge updates, without changing forecasts, budgets,
+saved points or exports. The construction matrix covers passive history updates
+and mean imputation; pure tests cover latest records, boundaries and missing data.

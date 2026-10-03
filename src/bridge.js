@@ -513,6 +513,7 @@
         if (snapshots.length) bridge.pendingTrialSnapshots.push(...snapshots);
         const membershipChanged =
           previousContext.guild !== bridge.trialHistoryContext.guild ||
+          previousContext.weeklyTrialSet !== bridge.trialHistoryContext.weeklyTrialSet ||
           previousContext.roster !== bridge.trialHistoryContext.roster ||
           previousContext.signups !== bridge.trialHistoryContext.signups ||
           previousContext.signupLevels !== bridge.trialHistoryContext.signupLevels;

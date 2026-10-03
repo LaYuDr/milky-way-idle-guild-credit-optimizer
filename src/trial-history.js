@@ -27,6 +27,7 @@
       next = {
         ...next,
         guild,
+        weeklyTrialSet: changed || weekChanged ? null : previous.weeklyTrialSet,
         members: changed ? {} : previous.members,
         roster: changed ? null : previous.roster,
         membershipEvidence: changed ? [] : previous.membershipEvidence,
@@ -35,6 +36,7 @@
       };
     }
     if (message.guildId != null && String(message.guildId) !== String(next.guild?.id)) return next;
+    if (isObject(message.guildWeeklyTrialSet)) next = { ...next, weeklyTrialSet: message.guildWeeklyTrialSet };
     if (message.guildSharableCharacterMap) next = { ...next, members: message.guildSharableCharacterMap };
     // Stats can include names for historical participants. Only a current roster
     // response can establish membership; keep it separate from captured names.
@@ -667,6 +669,60 @@
     return share !== null && metricValue(record, row, "workDone") / summary.total < 9 / 1000 ? share : null;
   }
 
+  // Estimate this week's lineup from each project's latest known prior result.
+  function estimateCurrentTrialPoints(records, context = {}, now = Date.now()) {
+    const guild = context.guild;
+    const week = timestamp(guild?.currentWeekStartAt);
+    const trials = objectData(guild?.currentTrialsData);
+    if (
+      guild?.id == null ||
+      !Number.isFinite(week) ||
+      week > now ||
+      now >= week + 7 * 86400000 ||
+      (!(Array.isArray(context.weeklyTrialSet?.skillHrids) && Array.isArray(context.weeklyTrialSet?.combatHrids)) &&
+        (!isObject(trials.skilling?.parties) || !isObject(trials.combat?.parties)))
+    )
+      return null;
+    const lineup = context.weeklyTrialSet;
+    const projects = [
+      ...new Set(
+        Array.isArray(lineup?.skillHrids) && Array.isArray(lineup?.combatHrids)
+          ? [...lineup.skillHrids, ...lineup.combatHrids].filter((hrid) => typeof hrid === "string" && hrid)
+          : ["skilling", "combat"].flatMap((kind) => Object.keys(trials[kind]?.parties || {}))
+      )
+    ];
+    if (!projects.length) return null;
+    const latest = new Map();
+    for (const record of records) {
+      if (
+        record.guildId !== String(guild.id) ||
+        !projects.includes(record.trialHrid) ||
+        record.party?.done !== true ||
+        !Number.isFinite(record.weekStartAt) ||
+        record.weekStartAt >= week ||
+        !Number.isSafeInteger(record.points) ||
+        record.points < 0
+      )
+        continue;
+      const previous = latest.get(record.trialHrid);
+      if (
+        !previous ||
+        record.weekStartAt > previous.weekStartAt ||
+        (record.weekStartAt === previous.weekStartAt && record.capturedAt > previous.capturedAt)
+      )
+        latest.set(record.trialHrid, record);
+    }
+    const matched = latest.size;
+    const sum = [...latest.values()].reduce((total, record) => total + record.points, 0);
+    const total = matched ? sum + (sum / matched) * (projects.length - matched) : null;
+    return {
+      total: total !== null && Number.isFinite(total) ? total : null,
+      matched,
+      missing: projects.length - matched,
+      count: projects.length
+    };
+  }
+
   function signupWorkWarnings(records, context = {}, trialHrid) {
     const warnings = new Map();
     const week = timestamp(context.guild?.currentWeekStartAt);
@@ -716,7 +772,7 @@
 
   // Rankings use game-captured v1 records only; manual v2 transcripts remain in history.
   // Missing projects never imply absence or zero.
-  function participationRankings(records) {
+  function participationRankings(records, { adjustCombatDamageTaken = false } = {}) {
     const players = new Map();
     const seenRecords = new Set();
     const bucket = () => ({ count: 0, average: null });
@@ -757,6 +813,8 @@
           .map((field, index) => {
             const value = metricAverageMultiple(record, row, field, summaries[index]);
             if (record.kind === "combat" && value !== null) add(player[field], value);
+            // Offset only the combined combat ranking; raw metric rankings and project overviews stay intact.
+            if (adjustCombatDamageTaken && field === "premitigatedDamageTaken" && value !== null) return value - 1;
             return value;
           })
           .filter((value) => value !== null);
@@ -824,7 +882,9 @@
       for (const field of ["damageDealt", "healingDone", "premitigatedDamageTaken"]) player[field] = bucket();
     }
     for (const week of weeks.values()) {
-      const attendees = new Map(participationRankings(week.records).map((player) => [player.key, player]));
+      const attendees = new Map(
+        participationRankings(week.records, { adjustCombatDamageTaken: true }).map((player) => [player.key, player])
+      );
       for (const key of week.guild.players) {
         const player = players.get(key);
         if (!player) continue;
@@ -1071,6 +1131,7 @@
     metricShare,
     lowWorkShare,
     signupWorkWarnings,
+    estimateCurrentTrialPoints,
     metricAverageMultiple,
     playerRankings,
     playerProjectOverview,

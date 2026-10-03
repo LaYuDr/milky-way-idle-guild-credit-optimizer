@@ -588,6 +588,8 @@
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid>div{display:grid;align-content:start;gap:4px;min-width:0}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid small{color:var(--build-muted);font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid strong{font-size:20px;line-height:1.3;font-weight:600;color:var(--build-text);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"]{grid-column:1/-1;padding:10px 12px;border:1px solid var(--build-line);border-radius:6px;background:var(--build-surface)}
+        #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-role="current-week-projected-available-metric"] strong{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="up"] strong{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-grid [data-trend="down"] strong{color:var(--build-danger)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:0 0 10px}

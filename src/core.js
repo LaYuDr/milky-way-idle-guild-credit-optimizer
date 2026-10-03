@@ -816,87 +816,78 @@
     options = {}
   ) {
     const normalized = normalizedGuildPointHistory(history);
-    const coldStart = estimateGuildPointColdStart(lifetimePoints, currentWeekPoints, observedAt, firstTrialStartAt);
-    if (coldStart.status !== "ok") return { status: coldStart.status, history: normalized, estimatedCount: 0 };
+    // Old generated estimates are disposable; they must never train the model.
+    normalized.weeks = normalized.weeks.filter((record) => record.source !== "estimated");
     const firstTrial = Number(firstTrialStartAt);
-    const completeTracked = new Map(
-      normalized.weeks
-        .filter((record) => record.complete && record.coverage === "verified" && record.source !== "estimated")
-        .map((record) => [record.weekStartAt, record])
-    );
-    const manual = new Map(normalized.manualWeeks.map((record) => [record.weekStartAt, record]));
-    const records = [];
-    const missing = [];
-    let knownPoints = 0;
-    for (let index = 0; index < coldStart.pastWeekCount; index += 1) {
-      const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
-      const trackedRecord = completeTracked.get(weekStartAt);
-      const manualRecord = manual.get(weekStartAt);
-      const record = manualRecord
-        ? { ...manualRecord, complete: true, coverage: "verified", source: "manual" }
-        : trackedRecord
-          ? { ...trackedRecord, source: "tracked" }
-          : null;
-      if (record) {
-        records.push(record);
-        knownPoints += record.earnedPoints;
-      } else {
-        missing.push({ weekStartAt, ordinal: index + 1 });
-      }
-    }
-    const historicalTotal = Number(lifetimePoints) - Number(currentWeekPoints);
-    if (knownPoints > historicalTotal) {
-      return {
-        status: "known_points_exceed_total",
-        history: normalized,
-        estimatedCount: 0,
-        manualCount: records.filter((record) => record.source === "manual").length,
-        trackedCount: records.filter((record) => record.source === "tracked").length,
-        averageWeeklyChange: null,
-        forecastPoints: null,
-        growthRate: null,
-        forecastSampleCount: 0
-      };
-    }
-    const remainingPoints = historicalTotal - knownPoints;
-    const estimateBase = missing.length ? Math.floor(remainingPoints / missing.length) : 0;
-    const estimateRemainder = missing.length ? remainingPoints % missing.length : 0;
-    const estimates = missing.map((record, index) => ({
-      weekStartAt: record.weekStartAt,
-      earnedPoints: estimateBase + (index >= missing.length - estimateRemainder ? 1 : 0)
-    }));
-    for (const record of estimates) {
-      records.push({
-        weekStartAt: record.weekStartAt,
-        earnedPoints: record.earnedPoints,
-        complete: true,
-        observedAt: Number(observedAt),
-        source: "estimated"
-      });
-    }
-    records.sort((left, right) => left.weekStartAt - right.weekStartAt);
-    const currentWeekStartAt = firstTrial + coldStart.pastWeekCount * GUILD_POINT_WEEK_MS;
-    const outsideRange = normalized.weeks.filter(
-      (record) => record.weekStartAt < firstTrial || record.weekStartAt >= currentWeekStartAt
-    );
+    const observed = Number(observedAt);
+    if (!Number.isSafeInteger(firstTrial) || firstTrial <= 0 || !Number.isSafeInteger(observed) || observed <= 0)
+      return { status: "unavailable", history: normalized, estimatedCount: 0 };
+    if (observed < firstTrial) return { status: "before_first_trial", history: normalized, estimatedCount: 0 };
+    const pastWeekCount = Math.floor((observed - firstTrial) / GUILD_POINT_WEEK_MS);
+    const currentWeekStartAt = firstTrial + pastWeekCount * GUILD_POINT_WEEK_MS;
     const forecast = summarizeGuildPointHistory(normalized, {
       forecastWeekCount: options.forecastWeekCount,
       currentWeekStartAt,
       currentWeekPoints
     });
+    const historicalRecords = forecast.trackedWeeks.filter(
+      (record) => record.weekStartAt >= firstTrial && record.weekStartAt < currentWeekStartAt
+    );
+    const knownPoints = historicalRecords
+      .filter(isReliableGuildPointWeek)
+      .reduce((total, record) => total + record.earnedPoints, 0);
+    const canCheckTotal =
+      Number.isSafeInteger(lifetimePoints) &&
+      lifetimePoints >= 0 &&
+      Number.isSafeInteger(currentWeekPoints) &&
+      currentWeekPoints >= 0;
+    if (canCheckTotal && knownPoints > lifetimePoints - currentWeekPoints) {
+      return {
+        status: "known_points_exceed_total",
+        history: normalized,
+        estimatedCount: 0,
+        forecastPoints: null,
+        forecastSampleCount: 0
+      };
+    }
+    // Historical reconstruction uses all observed weeks, independently of the
+    // recent-window forecast. Missing dates keep their actual time spacing.
+    const samples = historicalRecords.filter(isGuildPointForecastSample);
+    const currentSample = forecast.forecastSamples.find((record) => record.weekStartAt === currentWeekStartAt);
+    if (currentSample) samples.push(currentSample);
+    const recordsByWeek = new Map(forecast.trackedWeeks.map((record) => [record.weekStartAt, record]));
+    let estimatedCount = 0;
+    for (let index = 0; index < pastWeekCount; index += 1) {
+      const weekStartAt = firstTrial + index * GUILD_POINT_WEEK_MS;
+      if (recordsByWeek.has(weekStartAt)) continue;
+      const earnedPoints = guildPointModelPrediction(samples, weekStartAt, "linear");
+      if (earnedPoints === null) continue;
+      recordsByWeek.set(weekStartAt, {
+        weekStartAt,
+        earnedPoints,
+        complete: true,
+        coverage: "partial",
+        observedAt: observed,
+        source: "estimated"
+      });
+      estimatedCount += 1;
+    }
     return {
       status: "ok",
-      history: { ...normalized, weeks: [...records, ...outsideRange] },
-      estimatedCount: estimates.length,
-      manualCount: records.filter((record) => record.source === "manual").length,
-      trackedCount: records.filter((record) => record.source === "tracked").length,
+      history: {
+        ...normalized,
+        weeks: [...recordsByWeek.values()].sort((left, right) => left.weekStartAt - right.weekStartAt)
+      },
+      estimatedCount,
+      estimationSampleCount: samples.length,
+      manualCount: historicalRecords.filter((record) => record.source === "manual").length,
+      trackedCount: historicalRecords.filter((record) => record.source !== "manual").length,
       averageWeeklyChange: forecast.averageWeeklyChange,
       forecastPoints: forecast.forecastPoints,
       growthRate: forecast.growthRate,
       forecastSampleCount: forecast.forecastSampleCount,
       forecast,
-      currentWeekStartAt,
-      historicalAveragePoints: coldStart.historicalAveragePoints
+      currentWeekStartAt
     };
   }
 

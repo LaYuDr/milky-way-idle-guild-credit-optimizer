@@ -29,7 +29,8 @@
       document,
       URL,
       Blob,
-      guildTrialFirstStartAt
+      guildTrialFirstStartAt,
+      getTrialPointEstimate = () => null
     } = dependencies;
 
     const constructionUi = {
@@ -194,10 +195,9 @@
 
     function supplementedGuildPointHistory() {
       const summary = state.guildPointSummary;
-      if (!summary) return { history: state.guildPointHistory, estimatedCount: 0 };
       return core.supplementGuildPointHistory(
         state.guildPointHistory,
-        summary.lifetimePoints,
+        summary?.lifetimePoints,
         currentGuildWeekPoints(),
         Date.now(),
         guildTrialFirstStartAt,
@@ -226,10 +226,10 @@
         Math.floor((Date.now() - guildTrialFirstStartAt) / (7 * 24 * 60 * 60 * 1000)) * 7 * 24 * 60 * 60 * 1000;
       // Keep observed values for fitting; auto-fill is only a display aid.
       const weeksByStart = new Map(
-        [...(supplemented.history?.weeks || []), ...(state.guildPointHistory?.weeks || [])].map((record) => [
-          record.weekStartAt,
-          record
-        ])
+        [
+          ...(supplemented.history?.weeks || []),
+          ...(state.guildPointHistory?.weeks || []).filter((record) => record.source !== "estimated")
+        ].map((record) => [record.weekStartAt, record])
       );
       const history = core.summarizeGuildPointHistory(
         { ...supplemented.history, weeks: [...weeksByStart.values()] },
@@ -305,7 +305,7 @@
       ).reverse();
     }
 
-    function renderCurrentGuildPointWeek() {
+    function renderCurrentGuildPointWeek(history) {
       const weekMs = 7 * 24 * 60 * 60 * 1000;
       const elapsedWeeks = Math.floor((Date.now() - guildTrialFirstStartAt) / weekMs);
       const fallbackWeekStartAt =
@@ -322,8 +322,10 @@
       if (!weekStartAt) return "";
 
       const currentWeekPoints = currentGuildWeekPoints();
-      const source = currentWeekPoints === null ? "currentUnavailable" : "current";
-      const points = currentWeekPoints === null ? "-" : formatNumber(currentWeekPoints);
+      const total = guildPointForecastBasis(history).currentWeekTotal;
+      const source =
+        currentWeekPoints === null ? "currentUnavailable" : currentWeekPoints > 0 ? "current" : "currentEstimated";
+      const points = total === null ? "-" : formatNumber(total);
       const week = guildPointWeekLabel(weekStartAt);
       return `<tr data-source="${source}" data-current-week="true" aria-label="${escapeHtml(t("currentGuildPointWeek"))}"><th scope="row"><time datetime="${new Date(weekStartAt).toISOString()}">${escapeHtml(week)}</time><small class="mwi-guild-point-current-label">${escapeHtml(t("currentGuildPointWeek"))}</small></th><td><strong class="mwi-guild-point-readonly" data-role="current-week-guild-points">${escapeHtml(points)}</strong></td><td><small>${escapeHtml(t(`guildPointSource${source[0].toUpperCase()}${source.slice(1)}`))}</small></td></tr>`;
     }
@@ -341,7 +343,7 @@
       const recordsByWeek = new Map(history.weeks.map((record) => [record.weekStartAt, record]));
       const trackedByWeek = new Map(
         (state.guildPointHistory?.weeks || [])
-          .filter((record) => record.weekStartAt < history.currentWeekStartAt)
+          .filter((record) => record.source !== "estimated" && record.weekStartAt < history.currentWeekStartAt)
           .map((record) => [record.weekStartAt, record])
       );
       const manualByWeek = new Map(
@@ -515,10 +517,22 @@
     function renderGuildPointForecast(historySummary) {
       const history = guildPointForecastBasis(historySummary);
       const show = (value) => (Number.isSafeInteger(value) ? formatNumber(value) : "-");
+      const availablePoints = state.guildPointSummary?.availablePoints;
+      const projectedAvailable =
+        Number.isSafeInteger(availablePoints) &&
+        availablePoints >= 0 &&
+        Number.isSafeInteger(history.currentWeekRemaining) &&
+        Number.isSafeInteger(availablePoints + history.currentWeekRemaining)
+          ? availablePoints + history.currentWeekRemaining
+          : null;
+      const trialEstimate = getTrialPointEstimate();
+      const trialEstimateMarkup = `<div><small>${escapeHtml(t("trialHistoryPointEstimate"))}</small><strong data-role="trial-history-point-estimate">${trialEstimate?.total == null ? "-" : escapeHtml(formatNumber(trialEstimate.total, 2))}</strong><small>${escapeHtml(trialEstimate?.total == null ? t("trialHistoryPointEstimateUnavailable") : t("trialHistoryPointEstimateCoverage", { matched: trialEstimate.matched, missing: trialEstimate.missing }))}</small></div>`;
       const metrics = [
+        ["currentAvailableGuildPoints", "forecast-current-available", availablePoints],
         ["currentWeekGuildPoints", "latest-weekly-guild-points", history.currentWeekPoints],
         ["predictedCurrentWeekGuildPoints", "current-week-total-forecast", history.currentWeekTotal],
         ["remainingCurrentWeekGuildPoints", "current-week-remaining-forecast", history.currentWeekRemaining],
+        ["projectedAvailableGuildPoints", "current-week-projected-available", projectedAvailable],
         ["nextWeekGuildPointForecast", "next-week-guild-point-forecast", history.nextWeekForecastPoints]
       ];
       const status = !state.guildPointSummary
@@ -531,8 +545,7 @@
       const growth = history.growthRate;
       const growthText = Number.isFinite(growth) ? `${growth > 0 ? "+" : ""}${formatNumber(growth * 100, 1)}%` : "-";
       const canExport = history.trackedWeeks.length > 0;
-      const canReset = Boolean(state.guildPointHistory?.lastObservation || history.trackedWeeks.length);
-      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}">${metrics.map(([label, role, value]) => `<div><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong></div>`).join("")}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${status ? `${escapeHtml(status)}<br>` : ""}${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth">${escapeHtml(growthText)}</span></p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button><button data-role="reset-guild-point-history" type="button"${canReset ? "" : " disabled"}>${escapeHtml(t("resetGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
+      return `<section class="mwi-guild-point-forecast" aria-label="${escapeHtml(t("guildPointStatisticsHeading"))}"><div class="mwi-guild-point-forecast-heading"><span><h4>${escapeHtml(t("guildPointStatisticsHeading"))}</h4></span><span class="mwi-guild-point-autosaved" data-source="${state.guildPointSummaryCached ? "cache" : "live"}">${escapeHtml(t(state.guildPointSummaryCached ? "guildPointSavedSnapshot" : "guildPointAutoSaved"))}</span></div><div class="mwi-guild-point-forecast-grid" data-source="${history.forecastSource}">${metrics.map(([label, role, value]) => `<div data-role="${role}-metric"><small>${escapeHtml(t(label))}</small><strong data-role="${role}">${escapeHtml(show(value))}</strong>${role === "current-week-projected-available" ? `<small>${escapeHtml(t("projectedAvailableGuildPointsHint"))}</small>` : ""}</div>`).join("")}${trialEstimateMarkup}</div><div class="mwi-guild-point-forecast-footer"><p class="mwi-guild-point-forecast-status">${status ? `${escapeHtml(status)}<br>` : ""}${escapeHtml(t("weeklyGuildPointGrowth"))}：<span data-role="weekly-guild-point-growth">${escapeHtml(growthText)}</span></p><span class="mwi-guild-point-history-actions"><button data-role="export-guild-point-history" type="button"${canExport ? "" : " disabled"}>${escapeHtml(t("exportGuildPointHistory"))}</button></span></div>${renderGuildPointForecastSettings()}${renderManualGuildPointHistory(history)}</section>`;
     }
 
     function discardGuildBuildingClearUndo() {
@@ -1013,12 +1026,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const rows = [[t("guildPointCsvWeekStart"), t("guildPointCsvEarned"), t("guildPointCsvStatus")]];
       const exported = new Map(history.trackedWeeks.map((record) => [record.weekStartAt, record]));
       for (const raw of state.guildPointHistory?.weeks || []) {
-        if (!exported.has(raw.weekStartAt)) exported.set(raw.weekStartAt, raw);
+        if (raw.source !== "estimated" && !exported.has(raw.weekStartAt)) exported.set(raw.weekStartAt, raw);
       }
       for (const entry of [...exported.values()].sort((left, right) => left.weekStartAt - right.weekStartAt)) {
         const raw = (state.guildPointHistory?.weeks || []).find((record) => record.weekStartAt === entry.weekStartAt);
         const partial =
           raw &&
+          raw.source !== "estimated" &&
           raw.weekStartAt < history.currentWeekStartAt &&
           raw.coverage !== "verified" &&
           entry.source !== "manual";

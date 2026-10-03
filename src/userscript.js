@@ -604,6 +604,7 @@
   });
   const { renderSettingsMarkup, refreshSettings } = settingsView;
   const constructionView = constructionViewApi.createConstructionView({
+    getTrialPointEstimate: () => trialHistoryView.estimateCurrentTrialPoints(),
     state,
     buildingDataApi,
     t,
@@ -685,7 +686,10 @@
     profileTooltipApi: window.MwiGuildProfileTooltip,
     resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
-    getPanel: () => state.panel
+    getPanel: () => state.panel,
+    onRecordsChanged: () => {
+      if (state.panel?.dataset.activeView === "construction") guildDataRefreshTask.schedule();
+    }
   });
   const refreshTrialHistory = (panel) => trialHistoryView.refresh(panel);
 

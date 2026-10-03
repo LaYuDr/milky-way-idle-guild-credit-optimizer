@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.54] - 2026-10-03
+
+### Changed
+
+- Rebuilt guild point history estimates with linear regression; added current trial lineup point estimates; refined trial combat rankings and related UI.
+
 ## [1.2.53] - 2026-10-03
 
 ### Changed

@@ -294,22 +294,12 @@ test("冷启动估算不将尚未结束的本周当作完整周趋势", () => {
   assert.equal(core.estimateGuildPointColdStart(-1, 0, firstTrial, firstTrial).status, "unavailable");
 });
 
-test("缺失历史周按累计点数均匀补齐且不引入本周进度", () => {
+test("仅有累计点数和本周值时不再平均补齐缺失历史", () => {
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
-  const week = 7 * 24 * 60 * 60 * 1000;
-  const result = core.supplementGuildPointHistory(null, 65000, 9000, firstTrial + 7 * week, firstTrial);
-  const summary = core.summarizeGuildPointHistory(result.history);
+  const result = core.supplementGuildPointHistory(null, 65000, 9000, firstTrial + 7 * GUILD_TRIAL_WEEK_MS, firstTrial);
   assert.equal(result.status, "ok");
-  assert.equal(result.estimatedCount, 7);
-  assert.deepEqual(
-    summary.weeks.map((record) => record.earnedPoints),
-    [8000, 8000, 8000, 8000, 8000, 8000, 8000]
-  );
-  assert.equal(
-    summary.weeks.reduce((total, record) => total + record.earnedPoints, 0),
-    56000
-  );
-  assert.equal(result.averageWeeklyChange, null);
+  assert.equal(result.estimatedCount, 0);
+  assert.deepEqual(result.history.weeks, []);
   assert.equal(result.forecastPoints, null);
 });
 
@@ -411,8 +401,31 @@ test("建设页保留本周真实零值，样本不足的预计总量保持未�
   assert.match(markup, /predictedCurrentWeekGuildPoints/);
   assert.match(markup, /data-role="latest-weekly-guild-points">0<\/strong>/);
   assert.match(markup, /data-role="current-week-total-forecast">-<\/strong>/);
-  assert.match(markup, /data-source="current" data-current-week="true"/);
-  assert.match(markup, /data-role="current-week-guild-points">\d+<\/strong>/);
+  assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
+  assert.match(markup, /data-role="current-week-guild-points">-<\/strong>/);
+});
+
+test("当前周记录与预计总量同步，预测不写入历史且无重置按钮", () => {
+  const harness = createConstructionHarness();
+  harness.state.guildPointSummary = {
+    guildId: "guild-1",
+    lifetimePoints: 65000,
+    availablePoints: 1000,
+    currentWeekPoints: 0
+  };
+  const history = harness.view.guildPointHistorySummary();
+  const saved = JSON.stringify(harness.state.guildPointHistory);
+  const csv = harness.view.guildPointHistoryCsv();
+  for (const forecastPoints of [10627, 11000]) {
+    const markup = renderGuildPointForecast(harness, { ...history, forecastPoints });
+    assert.match(markup, new RegExp(`data-role="current-week-guild-points">${forecastPoints}</strong>`));
+    assert.match(markup, new RegExp(`data-role="current-week-total-forecast">${forecastPoints}</strong>`));
+    assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
+    assert.doesNotMatch(markup, /data-role="reset-guild-point-history"/);
+    assert.match(markup, /data-role="export-guild-point-history"/);
+  }
+  assert.equal(JSON.stringify(harness.state.guildPointHistory), saved);
+  assert.equal(harness.view.guildPointHistoryCsv(), csv);
 });
 
 test("余额更新后仍区分本周真实零值、预测和未知进度", () => {
@@ -430,7 +443,7 @@ test("余额更新后仍区分本周真实零值、预测和未知进度", () =>
   adapter.setGuildWeekStartAtFrom(balance);
   markup = renderGuildPointForecast(harness, harness.view.guildPointHistorySummary());
   assert.match(markup, /predictedCurrentWeekGuildPoints/);
-  assert.match(markup, /data-source="current" data-current-week="true"/);
+  assert.match(markup, /data-source="currentEstimated" data-current-week="true"/);
   assert.doesNotMatch(markup, /data-role="(?:latest-weekly-guild-points|current-week-guild-points)">633<\/strong>/);
   assert.deepEqual(harness.state.guildPointHistory.weeks, []);
 });
@@ -523,7 +536,7 @@ test("规划周数将预测产出加入当前预算且对缺失预测降级", ()
   });
 });
 
-test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
+test("手动历史覆盖估算值且其余空缺按回归逐周补充", () => {
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   const week = 7 * 24 * 60 * 60 * 1000;
   const observedAt = firstTrial + 7 * week;
@@ -535,9 +548,9 @@ test("手动历史覆盖估算值且剩余缺口继续自动补充", () => {
   assert.equal(result.estimatedCount, 6);
   assert.equal(records.find((record) => record.weekStartAt === firstTrial + 3 * week).earnedPoints, 8500);
   assert.equal(records.find((record) => record.weekStartAt === firstTrial + 3 * week).source, "manual");
-  assert.equal(
-    records.reduce((total, record) => total + record.earnedPoints, 0),
-    56000
+  assert.deepEqual(
+    records.map((record) => record.earnedPoints),
+    [8125, 8250, 8375, 8500, 8625, 8750, 8875]
   );
   const removed = core.removeManualGuildPointWeek(saved.history, firstTrial + 3 * week);
   assert.equal(removed.changed, true);
@@ -636,14 +649,14 @@ test("明确清空零值追踪周才移除追踪记录，并回退自动补充",
   );
   const restored = supplemented.history.weeks.find((record) => record.weekStartAt === firstTrial);
   assert.equal(restored.source, "estimated");
-  assert.equal(restored.earnedPoints, 8000);
+  assert.equal(restored.earnedPoints, 14000);
   assert.equal(
     core.removeManualGuildPointWeek(history, firstTrial + week, { discardZeroTracked: true }).changed,
     false
   );
 });
 
-test("清空零值追踪需要确认，保存后来源与 CSV 都变为自动补充", () => {
+test("清空零值追踪需要确认，样本不足时留空且不导出伪造补值", () => {
   const harness = createConstructionHarness();
   const firstTrial = config.GUILD_TRIAL_FIRST_START_AT;
   harness.state.guildPointSummary = {
@@ -665,9 +678,8 @@ test("清空零值追踪需要确认，保存后来源与 CSV 都变为自动补
   );
   assert.equal(harness.state.guildPointHistory.weeks.length, 0);
   const restored = harness.view.guildPointHistorySummary().weeks.find((record) => record.weekStartAt === firstTrial);
-  assert.equal(restored.source, "estimated");
-  assert.ok(restored.earnedPoints > 0);
-  assert.match(harness.view.guildPointHistoryCsv(), /"guildPointCsvEstimated"/);
+  assert.equal(restored, undefined);
+  assert.doesNotMatch(harness.view.guildPointHistoryCsv(), /"guildPointCsvEstimated"/);
   assert.doesNotMatch(
     renderGuildPointForecast(harness, harness.view.guildPointHistorySummary()),
     /data-source="trackedEditing"/
@@ -1311,11 +1323,27 @@ test("本周已有点数时剩余为零，样本不足保留当前预算", () =>
   const markup = renderGuildPointForecast(harness, summary);
   assert.match(markup, /data-role="current-week-total-forecast">9000<\/strong>/);
   assert.match(markup, /data-role="current-week-remaining-forecast">0<\/strong>/);
+  assert.match(markup, /data-role="current-week-projected-available">1000<\/strong>/);
   assert.equal(harness.view.guildPointPlanningBudget(summary).budget, 1000);
   harness.state.guildPointPlanningWeeks = 2;
   assert.equal(harness.view.guildPointPlanningBudget(summary).budget, 1000 + summary.nextWeekForecastPoints);
   harness.state.guildPointSummary.currentWeekPoints = undefined;
   assert.equal(harness.view.guildPointPlanningBudget().status, "missing_forecast");
+});
+
+test("本周预计可用只叠加尚未到账的预测点数", () => {
+  const harness = createConstructionHarness();
+  harness.state.guildPointSummary = { lifetimePoints: 30000, availablePoints: 1200, currentWeekPoints: 0 };
+  const summary = { ...harness.view.guildPointHistorySummary(), forecastPoints: 10627 };
+  const markup = harness.view.renderGuildPointForecast(summary);
+  assert.match(markup, /data-role="forecast-current-available">1200<\/strong>/);
+  assert.match(markup, /data-role="current-week-remaining-forecast">10627<\/strong>/);
+  assert.match(markup, /data-role="current-week-projected-available">11827<\/strong>/);
+  harness.state.guildPointSummary.availablePoints = null;
+  assert.match(
+    harness.view.renderGuildPointForecast(summary),
+    /data-role="current-week-projected-available">-<\/strong>/
+  );
 });
 
 test("已过期本周进度不进入预算；缓存展示不产生新的采集记录", () => {
@@ -1390,4 +1418,35 @@ test("建设页使用原始追踪与本周结算值回归，预算和预测行�
   assert.equal(stale.currentWeekComplete, false);
   assert.ok(stale.forecastSamples.every((r) => r.earnedPoints !== 10571));
   assert.equal(harness.view.guildPointPlanningBudget(stale).status, "missing_forecast");
+});
+
+test("历史回归占位值和CSV保持估算来源，不覆盖旧存储或参与后续预测", (t) => {
+  const first = config.GUILD_TRIAL_FIRST_START_AT;
+  const week = GUILD_TRIAL_WEEK_MS;
+  t.mock.timers.enable({ apis: ["Date"], now: first + 4 * week });
+  const harness = createConstructionHarness();
+  harness.state.guildPointHistory.weeks = [
+    { weekStartAt: first, earnedPoints: 99999, complete: true, source: "estimated" },
+    { weekStartAt: first + week, earnedPoints: 200, complete: true, source: "tracked" },
+    { weekStartAt: first + 3 * week, earnedPoints: 400, complete: true, source: "tracked" }
+  ];
+  const original = JSON.stringify(harness.state.guildPointHistory);
+  const history = harness.view.guildPointHistorySummary();
+  assert.equal(history.supplemented.estimationSampleCount, 2);
+  assert.equal(history.forecastSampleCount, 2);
+  assert.equal(history.forecastPoints, 500);
+  const markup = harness.view.renderGuildPointForecast(history);
+  assert.match(markup, /data-source="estimated"/);
+  assert.match(markup, /value="" placeholder="100"/);
+  assert.match(markup, /value="" placeholder="300"/);
+  const csv = harness.view.guildPointHistoryCsv();
+  assert.ok(csv.includes('"100","guildPointCsvEstimated"'));
+  assert.ok(csv.includes('"300","guildPointCsvEstimated"'));
+  assert.doesNotMatch(csv, /99999/);
+  assert.equal(JSON.stringify(harness.state.guildPointHistory), original);
+  assert.equal(harness.persistCount(), 0);
+  harness.state.guildPointHistory.weeks.pop();
+  const missing = harness.view.guildPointHistorySummary();
+  assert.equal(missing.supplemented.estimatedCount, 0);
+  assert.doesNotMatch(harness.view.guildPointHistoryCsv(), /99999|guildPointCsvEstimated/);
 });

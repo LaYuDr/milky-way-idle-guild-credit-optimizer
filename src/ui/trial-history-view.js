@@ -51,7 +51,8 @@
     profileReaderApi,
     resolveItemName,
     getBridge,
-    getPanel
+    getPanel,
+    onRecordsChanged = () => {}
   }) {
     let mode = "week";
     let screenshotMode = false;
@@ -180,6 +181,7 @@
       for (const [key, record] of unsaved) merged.set(key, record);
       records = Array.from(merged.values()).sort(trialHistoryApi.compareSnapshots);
       signupWarning.refresh();
+      onRecordsChanged();
       multipleGuilds =
         new Set(
           records.map((record) => JSON.stringify([record.guildId, record.guildId == null ? record.guildName : null]))
@@ -1130,7 +1132,14 @@
       const bridge = getBridge();
       if (bridge?.onTrialStatsUpdated === onStats) bridge.onTrialStatsUpdated = null;
     }
-    return { start, dispose, bind, refresh };
+    return {
+      start,
+      dispose,
+      bind,
+      refresh,
+      estimateCurrentTrialPoints: () =>
+        trialHistoryApi.estimateCurrentTrialPoints(records, getBridge()?.trialHistoryContext)
+    };
   }
   return { createTrialHistoryView, projectIconSpec };
 });

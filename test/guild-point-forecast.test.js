@@ -172,3 +172,86 @@ test("反转和下降序列仍使用线性回归，预测保持非负", () => {
   assert.equal(descending.forecastPoints, 0);
   assert.equal(descending.nextWeekForecastPoints, 0);
 });
+
+test("历史缺失周按全部实际周线性回填，保留时间间隔且不受未来预测窗口限制", () => {
+  const h = {
+    weeks: [
+      { weekStartAt: FIRST + 3 * WEEK, earnedPoints: 400, complete: true, source: "tracked" },
+      { weekStartAt: FIRST + 5 * WEEK, earnedPoints: 600, complete: true, source: "tracked" }
+    ]
+  };
+  const before = JSON.stringify(h);
+  const result = core.supplementGuildPointHistory(h, null, null, FIRST + 10 * WEEK, FIRST, { forecastWeekCount: 2 });
+  assert.equal(result.estimationSampleCount, 2);
+  assert.equal(result.estimatedCount, 8);
+  assert.equal(result.forecastPoints, null);
+  assert.deepEqual(
+    result.history.weeks.map((r) => r.earnedPoints),
+    [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+  );
+  assert.ok(result.history.weeks.filter((r) => r.source === "estimated").every((r) => r.coverage === "partial"));
+  assert.equal(result.history.weeks[3].source, "tracked");
+  assert.equal(JSON.stringify(h), before);
+  const again = core.supplementGuildPointHistory(result.history, null, null, FIRST + 10 * WEEK, FIRST, {
+    forecastWeekCount: 2
+  });
+  assert.deepEqual(again.history, result.history);
+  assert.equal(again.estimationSampleCount, 2);
+});
+
+test("已结束本周参与历史回归，旧平均估算被重算且不递归进入样本", () => {
+  const h = {
+    weeks: [
+      { weekStartAt: FIRST, earnedPoints: 8659, complete: true, source: "estimated" },
+      { weekStartAt: FIRST + 10 * WEEK, earnedPoints: 10061, complete: true, source: "tracked" },
+      { weekStartAt: FIRST + 11 * WEEK, earnedPoints: 123, complete: false, source: "tracked" }
+    ]
+  };
+  const result = core.supplementGuildPointHistory(h, 200000, 10571, FIRST + 11 * WEEK, FIRST, { forecastWeekCount: 2 });
+  assert.equal(result.estimationSampleCount, 2);
+  assert.equal(result.history.weeks.find((r) => r.weekStartAt === FIRST + 9 * WEEK).earnedPoints, 9551);
+  assert.equal(result.history.weeks.find((r) => r.weekStartAt === FIRST + 8 * WEEK).earnedPoints, 9041);
+  assert.equal(result.forecast.nextWeekForecastPoints, 11081);
+  assert.equal(result.history.weeks.find((r) => r.weekStartAt === FIRST + 11 * WEEK).earnedPoints, 123);
+  const again = core.supplementGuildPointHistory(result.history, 200000, 10571, FIRST + 11 * WEEK, FIRST);
+  assert.equal(again.estimationSampleCount, 2);
+  assert.deepEqual(again.history.weeks, result.history.weeks);
+});
+
+test("零或一个有效周保持空缺，旧估算清除，零追踪不作为第二个样本", () => {
+  const h = {
+    weeks: [
+      { weekStartAt: FIRST, earnedPoints: 999, complete: true, source: "estimated" },
+      { weekStartAt: FIRST + WEEK, earnedPoints: 0, complete: true, source: "tracked" },
+      { weekStartAt: FIRST + 2 * WEEK, earnedPoints: 100, complete: true, source: "tracked" }
+    ]
+  };
+  const result = core.supplementGuildPointHistory(h, 99999, 0, FIRST + 4 * WEEK, FIRST);
+  assert.equal(result.estimationSampleCount, 1);
+  assert.equal(result.estimatedCount, 0);
+  assert.deepEqual(
+    result.history.weeks.map((r) => r.earnedPoints),
+    [0, 100]
+  );
+  assert.equal(h.weeks[0].earnedPoints, 999);
+});
+
+test("手动覆盖和真实零值保留，未来记录不用于回填，负外推截为零", () => {
+  const h = {
+    weeks: [
+      { weekStartAt: FIRST + WEEK, earnedPoints: 50, complete: true, source: "tracked" },
+      { weekStartAt: FIRST + 3 * WEEK, earnedPoints: 999999, complete: true, source: "manual" }
+    ],
+    manualWeeks: [
+      { weekStartAt: FIRST + WEEK, earnedPoints: 0 },
+      { weekStartAt: FIRST + 2 * WEEK, earnedPoints: 101 }
+    ]
+  };
+  const result = core.supplementGuildPointHistory(h, null, 0, FIRST + 3 * WEEK, FIRST);
+  assert.equal(result.estimationSampleCount, 2);
+  assert.equal(result.history.weeks[0].earnedPoints, 0);
+  assert.equal(result.history.weeks[0].source, "estimated");
+  assert.equal(result.history.weeks[1].earnedPoints, 0);
+  assert.equal(result.history.weeks[1].source, "manual");
+  assert.equal(result.history.weeks[3].earnedPoints, 999999);
+});

@@ -1152,3 +1152,78 @@ test("报名提醒按同公会、同项目、角色 ID 的最近一次参与判�
   ])
     assert.equal(api.signupWorkWarnings([record], { ...context, signups: { 1: signup } }, project).size, 0);
 });
+
+test("本周试炼估计按最近同公会项目匹配，缺失用已知项目均值补齐", () => {
+  const start = Date.parse(week);
+  const context = {
+    guild: {
+      id: "g",
+      currentWeekStartAt: week,
+      currentTrialsData: JSON.stringify({
+        skilling: { parties: { A: {}, B: {} } },
+        combat: { parties: { C: {}, D: {} } }
+      })
+    }
+  };
+  const record = (trialHrid, points, offset = 1, extra = {}) => ({
+    guildId: "g",
+    trialHrid,
+    points,
+    weekStartAt: start - offset * 604800000,
+    capturedAt: 1,
+    party: { done: true },
+    ...extra
+  });
+  const estimate = (records) => api.estimateCurrentTrialPoints(records, context, now);
+  assert.deepEqual(estimate([record("A", 10), record("B", 20), record("C", 30), record("D", 40)]), {
+    total: 100,
+    matched: 4,
+    missing: 0,
+    count: 4
+  });
+  assert.deepEqual(estimate([record("A", 10), record("B", 20)]), { total: 60, matched: 2, missing: 2, count: 4 });
+  assert.equal(estimate([record("A", 0), record("B", 20)]).total, 40);
+  assert.equal(estimate([record("A", 0)]).total, 0);
+  assert.equal(estimate([]).total, null);
+  const records = [
+    record("A", 5, 2),
+    record("A", 10),
+    record("A", 15, 1, { capturedAt: 2 }),
+    record("B", null),
+    record("C", 900, 1, { guildId: "other" }),
+    record("D", 999, 0),
+    record("D", 999, -1),
+    record("D", 900, 1, { party: { done: false } }),
+    record("X", 999)
+  ];
+  const saved = JSON.stringify(records);
+  assert.equal(estimate(records).total, 60);
+  assert.equal(JSON.stringify(records), saved);
+  assert.equal(api.estimateCurrentTrialPoints(records, context, start + 604800000), null);
+  assert.equal(api.estimateCurrentTrialPoints(records, {}, now), null);
+  for (const points of [null, undefined, "10", -1, Infinity, NaN])
+    assert.equal(estimate([record("A", points)]).total, null);
+});
+
+test("报名阶段从官方本周项目表估计，换周或换公会清除旧项目", () => {
+  const guild = { id: "g", currentWeekStartAt: week, currentTrialsData: null };
+  const weekly = { skillHrids: ["A", "B"], combatHrids: ["C", "D"] };
+  const context = api.updateContext({}, { type: "guild_updated", guild, guildWeeklyTrialSet: weekly });
+  const records = [
+    { guildId: "g", trialHrid: "A", points: 100, weekStartAt: Date.parse(week) - 604800000, party: { done: true } }
+  ];
+  assert.deepEqual(api.estimateCurrentTrialPoints(records, context, now), {
+    total: 400,
+    matched: 1,
+    missing: 3,
+    count: 4
+  });
+  assert.equal(api.updateContext(context, { guild: { ...guild, id: "other" } }).weeklyTrialSet, null);
+  assert.equal(
+    api.updateContext(context, { guild: { ...guild, currentWeekStartAt: "2026-09-21T00:00:00Z" } }).weeklyTrialSet,
+    null
+  );
+  assert.equal(api.updateContext(context, { guild }).weeklyTrialSet, weekly);
+  const next = api.updateContext(context, { guildWeeklyTrialSet: { skillHrids: ["A"], combatHrids: [] } });
+  assert.equal(api.estimateCurrentTrialPoints(records, next, now).total, 100);
+});
