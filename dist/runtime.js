@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.55";
+window.MwiGuildCreditVersion = "1.2.56";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -14467,6 +14467,63 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (button.dataset.trialChoice === "player") buttons[index].focus();
         else buttons[index].click();
       });
+      // Wheel events have no portable gesture-end signal. A quiet interval separates
+      // gestures; a gesture that starts inside the rail can never turn a page.
+      let edgeGesture = null;
+      host.addEventListener(
+        "wheel",
+        (event) => {
+          const rail = event.target.closest?.(".mwi-trial-rail");
+          if (!rail || mode === "player" || event.ctrlKey || event.metaKey) {
+            edgeGesture = null;
+            return;
+          }
+          const dx = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
+          const dy = event.shiftKey && !event.deltaX ? 0 : event.deltaY;
+          const direction = Math.sign(dx);
+          const now = event.timeStamp;
+          const key = `${mode}:${selectedWeek}:${selectedProject}:${rail.id}`;
+          const atEdge = (element) =>
+            direction > 0
+              ? element.scrollLeft + element.clientWidth >= element.scrollWidth - 2
+              : element.scrollLeft <= 2;
+          let atBoundary = atEdge(rail);
+          // A wide member table must finish scrolling before its parent can switch.
+          const table = event.target.closest?.(".mwi-trial-table-scroll");
+          if (table && !atEdge(table)) atBoundary = false;
+          if (!edgeGesture || now - edgeGesture.time > 240 || edgeGesture.key !== key) {
+            edgeGesture = { key, time: now, direction, armed: atBoundary, distance: 0, used: false };
+          }
+          edgeGesture.time = now;
+          if (!direction || Math.abs(dx) <= Math.abs(dy) || direction !== edgeGesture.direction) {
+            edgeGesture.armed = false;
+            return;
+          }
+          if (!atBoundary) edgeGesture.armed = false;
+          if (!edgeGesture.armed || edgeGesture.used) return;
+          const choices = [...host.querySelectorAll(`[data-trial-choice="${mode}"]`)];
+          const index = choices.findIndex((button) => button.getAttribute("aria-pressed") === "true");
+          const next = choices[index + direction];
+          if (!next) return;
+          event.preventDefault();
+          const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rail.clientWidth : 1;
+          edgeGesture.distance += Math.abs(dx) * unit;
+          if (edgeGesture.distance < 100) return;
+          edgeGesture.used = true;
+          const railId = rail.id;
+          if (mode === "week") selectedWeek = next.value;
+          else selectedProject = next.value;
+          resetScroll = true;
+          refresh(panel);
+          // Keep the gesture latched across the render and land at the near edge.
+          edgeGesture.key = `${mode}:${selectedWeek}:${selectedProject}:${railId}`;
+          const destination = host.querySelector(`#${railId}`);
+          if (destination && direction < 0) destination.scrollLeft = destination.scrollWidth;
+          destination?.focus({ preventScroll: true });
+          updateScrollButtons(host);
+        },
+        { passive: false }
+      );
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
         const moveButton = event.target.closest("[data-trial-ranking-move]");

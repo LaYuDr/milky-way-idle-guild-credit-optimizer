@@ -840,6 +840,13 @@ Weekly layout uses four parallel skilling columns above two parallel combat colu
 missing records use unnamed placeholders because the saved data cannot identify
 uncaptured projects. Project history places newer weeks on the left. Native horizontal
 scrolling, focusable regions and left/right buttons keep both modes accessible.
+At either rail edge, a fresh horizontal wheel/trackpad gesture of at least 100
+CSS pixels selects the adjacent week (older to the right) or project in selector
+order. A 240 ms quiet interval separates gestures; scrolling into an edge and
+inertial continuation cannot switch selections in that same gesture. Nested wide
+member tables must also reach the edge. Vertical scrolling and player mode are
+unaffected; endpoint selections do not wrap. Reverse navigation lands at the
+right edge of the destination rail. Existing selectors and buttons remain available.
 Original member order and numeric precision are preserved. Member tables expand
 to their full row count with no fixed height or internal vertical scrolling;
 wide tables still scroll horizontally. Expanded raw records

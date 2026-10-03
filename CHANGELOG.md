@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.56] - 2026-10-03
+
+### Changed
+
+- Added deliberate edge-swipe navigation between trial weeks and projects, with inertia protection and boundary checks.
+
 ## [1.2.55] - 2026-10-03
 
 ### Changed
