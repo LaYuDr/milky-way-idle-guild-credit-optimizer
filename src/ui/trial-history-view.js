@@ -36,6 +36,21 @@
     return sprite && /^[a-z0-9_]+$/.test(symbol || "") ? { sprite, symbol } : null;
   }
 
+  function profileIconSpec(kind, hrid) {
+    const name = String(hrid || "")
+      .split("/")
+      .pop();
+    const sprite =
+      kind === "skill"
+        ? "skills_sprite"
+        : kind === "ability"
+          ? "abilities_sprite"
+          : kind === "shrine"
+            ? "misc_sprite"
+            : "items_sprite";
+    return { sprite, symbol: kind === "shrine" ? `guild_shrine_${name}` : name };
+  }
+
   function createTrialHistoryView({
     document,
     domApi,
@@ -48,6 +63,8 @@
     sortableApi,
     screenshotApi,
     profileTooltipApi,
+    shrineEffects,
+    guildBuffEntries,
     profileReaderApi,
     resolveItemName,
     getBridge,
@@ -111,13 +128,8 @@
     }
 
     function profileIcon(kind, hrid) {
-      return gameIcon(
-        kind === "skill" ? "skills_sprite" : kind === "ability" ? "abilities_sprite" : "items_sprite",
-        String(hrid || "")
-          .split("/")
-          .pop(),
-        "mwi-trial-profile-icon"
-      );
+      const { sprite, symbol } = profileIconSpec(kind, hrid);
+      return gameIcon(sprite, symbol, "mwi-trial-profile-icon");
     }
 
     function gameIcon(sprite, symbol, className) {
@@ -831,6 +843,8 @@
       bindRankingSortable(panel);
       profileTooltip?.dispose();
       profileTooltip = profileTooltipApi?.createTooltip({
+        shrineEffects,
+        guildBuffEntries,
         document,
         pageWindow,
         host,
@@ -1198,5 +1212,5 @@
         trialHistoryApi.estimateCurrentTrialPoints(records, getBridge()?.trialHistoryContext)
     };
   }
-  return { createTrialHistoryView, projectIconSpec };
+  return { createTrialHistoryView, projectIconSpec, profileIconSpec };
 });

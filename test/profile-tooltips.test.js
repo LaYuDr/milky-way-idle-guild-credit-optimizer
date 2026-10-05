@@ -123,3 +123,43 @@ test("renderer fails safely before webpack is initialized or when native renderi
   });
   assert.equal(bad.render({}, profile, "skill", profile.characterSkills[0]), false);
 });
+
+test("shrine bonuses reuse level effects and preserve zero and unknown values", () => {
+  const { createFormatter } = require("../src/ui/shrine-effects.js");
+  const core = require("../src/core.js");
+  const { t } = require("../src/localization.js").createLocalizer("en");
+  const formatter = createFormatter({ core, t, ui: () => ({ locale: "en" }) });
+  const detail = { buffs: [{ typeHrid: "/buff_types/action_speed", flatBoost: 0.02, flatBoostLevelBonus: 0.01 }] };
+  assert.match(formatter.atLevel(detail, 3), /\+4%/);
+  assert.match(formatter.atLevel(detail, 0), /\+0%/);
+  for (const level of [null, -1, 1.5, NaN])
+    assert.equal(formatter.atLevel(detail, level), t("shrineEffectsUnavailable"));
+  assert.equal(formatter.atLevel(null, 3), t("shrineEffectsUnavailable"));
+});
+
+test("profile shrine effects reuse upgrade entries, match life aliases and describe unknown levels", () => {
+  const { createFormatter } = require("../src/ui/shrine-effects.js");
+  const core = require("../src/core.js");
+  for (const locale of ["zh", "en"]) {
+    const { t } = require("../src/localization.js").createLocalizer(locale);
+    const formatter = createFormatter({ core, t, ui: () => ({ locale }) });
+    const entries = [false, true].map((isCombat) => ({
+      hrid: `/guild_buffs/tempo_${isCombat ? "combat" : "life"}`,
+      detail: {
+        shrineHrid: "/guild_shrines/tempo",
+        isCombat,
+        buffs: [
+          { typeHrid: "/buff_types/action_speed", flatBoost: isCombat ? 0.02 : 0.005, flatBoostLevelBonus: 0.005 }
+        ]
+      }
+    }));
+    assert.match(formatter.profileSummary(entries, "/guild_buffs/tempo_skilling", 3), /\+1.5%/);
+    assert.match(formatter.profileSummary(entries, "/guild_buffs/tempo_combat", 3), /\+3%/);
+    assert.match(formatter.profileSummary(entries, "/guild_buffs/tempo_skilling", 0), /\+0%/);
+    assert.equal(
+      formatter.profileSummary(entries, "/guild_buffs/tempo_skilling", null),
+      formatter.perLevel(entries[0].detail, "\n")
+    );
+    assert.equal(formatter.profileSummary(entries, "/guild_buffs/unknown_skilling", 3), t("shrineEffectsUnavailable"));
+  }
+});

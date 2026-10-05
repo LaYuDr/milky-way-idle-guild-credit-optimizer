@@ -684,6 +684,8 @@
     screenshotApi: window.MwiGuildTrialScreenshot,
     profileReaderApi: window.MwiGuildProfileReader,
     profileTooltipApi: window.MwiGuildProfileTooltip,
+    shrineEffects: window.MwiGuildShrineEffects.createFormatter({ core, t, ui }),
+    guildBuffEntries,
     resolveItemName,
     getBridge: () => window.__mwiGuildCreditBridge,
     getPanel: () => state.panel,

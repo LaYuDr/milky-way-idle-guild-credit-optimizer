@@ -87,7 +87,27 @@
         ? t("shrineEffectsPerLevel", { effects: describe("increment") })
         : t("shrineEffectsFirstAndPerLevel", { first: describe("first"), later: describe("increment") });
     }
-    return { name, value, perLevel, summary };
+    function atLevel(detail, level) {
+      if (!Number.isSafeInteger(level) || level < 0) return t("shrineEffectsUnavailable");
+      const effects = core.guildBuffLevelEffects(detail);
+      if (!effects.length) return t("shrineEffectsUnavailable");
+      return effects
+        .map((effect) => `${name(effect)} ${value(effect, core.guildBuffEffectAtLevel(effect, level))}`)
+        .join("\n");
+    }
+    function profileSummary(entries, hrid, level) {
+      const match = /^\/guild_buffs\/(tempo|spirit|force|rarity|scholar)_(skilling|life|combat)$/.exec(hrid || "");
+      const exact = entries.find((entry) => entry.hrid === hrid);
+      const entry =
+        exact ||
+        (match &&
+          entries.find(
+            ({ detail }) =>
+              detail?.shrineHrid === `/guild_shrines/${match[1]}` && detail.isCombat === (match[2] === "combat")
+          ));
+      return Number.isSafeInteger(level) && level >= 0 ? atLevel(entry?.detail, level) : perLevel(entry?.detail, "\n");
+    }
+    return { name, value, perLevel, summary, atLevel, profileSummary };
   }
   return { createFormatter };
 });

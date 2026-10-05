@@ -105,6 +105,16 @@ test("历史项目选择复用游戏技能、试炼怪物和虫群图标", () =>
   assert.equal(projectIconSpec({ kind: "skilling", trialHrid: '<bad"' }), null);
 });
 
+test("个人资料神龛图标使用游戏的公会神龛符号", () => {
+  const { profileIconSpec } = require("../src/ui/trial-history-view.js");
+  for (const name of ["tempo", "spirit", "force", "rarity", "scholar"]) {
+    assert.deepEqual(profileIconSpec("shrine", `/guild_shrines/${name}`), {
+      sprite: "misc_sprite",
+      symbol: `guild_shrine_${name}`
+    });
+  }
+});
+
 test("说明组件转义标题和正文，保留明确的分段边界", () => {
   const summary = domApi.renderHelpSummary('<img src=x onerror="run()">', "<em>preview</em>");
   const body = domApi.renderHelpSections([["<b>Heading</b>", "First\n\n<script>run()</script>"]]);

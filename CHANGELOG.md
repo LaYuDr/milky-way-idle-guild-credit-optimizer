@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.57] - 2026-10-05
+
+### Changed
+
+- 历史试炼个人资料将生活与战斗神龛合并为独立折叠区；悬停复用神龛升级数据展示属性加成，兼容生活神龛标识与缓存，等级未知时显示每级效果。
+
 ## [1.2.56] - 2026-10-03
 
 ### Changed

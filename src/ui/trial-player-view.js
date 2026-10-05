@@ -30,6 +30,7 @@
     ranged: "archery_range",
     magic: "mystical_study"
   };
+  const SHRINE_KEYS = ["tempo", "spirit", "force", "rarity", "scholar"];
   function skillHouseLevel(roomMap, skillKey) {
     const room = SKILL_ROOMS[skillKey];
     if (!room || !roomMap || typeof roomMap !== "object" || Array.isArray(roomMap)) return null;
@@ -272,6 +273,30 @@
         })
         .join("")}</div>`;
     }
+    function shrineBuffLevel(profile, hrid) {
+      const source = profile.guildBuffLevelMap || profile.characterGuildBuffMap;
+      const value = source && source[hrid];
+      const level = value && typeof value === "object" ? (value.level ?? value.currentLevel) : value;
+      return Number.isSafeInteger(level) && level >= 0 ? level : null;
+    }
+    function shrineMarkup(profile) {
+      const groups = [
+        ["life", "trialShrineLife", "skilling"],
+        ["combat", "trialShrineCombat", "combat"]
+      ];
+      return `<div class="mwi-trial-shrine-groups">${groups
+        .map(([domain, heading, suffix]) => {
+          const tiles = SHRINE_KEYS.map((key) => {
+            const hrid = `/guild_buffs/${key}_${suffix}`;
+            const name = t(`shrine${key[0].toUpperCase()}${key.slice(1)}`);
+            const level = shrineBuffLevel(profile, hrid);
+            const description = `${name} · ${t(heading)} Lv.${number(level)}`;
+            return `<div class="mwi-trial-equipment-slot mwi-trial-shrine-slot" data-trial-shrine="${domain}-${key}" ${tooltipAttribute("shrine", { guildBuffHrid: hrid, level })} tabindex="0" role="img" aria-label="${e(description)}" title="${e(description)}">${profileIcon?.("shrine", `/guild_shrines/${key}`) || ""}<span class="mwi-trial-equipment-level">Lv.${e(number(level))}</span></div>`;
+          }).join("");
+          return `<section class="mwi-trial-shrine-group" data-trial-shrine-domain="${domain}"><div class="mwi-trial-shrine-grid" aria-label="${e(t(heading))}">${tiles}</div></section>`;
+        })
+        .join("")}</div>`;
+    }
     function profileSection(key, title, content, sectionOpen) {
       if (!content) return "";
       return `<details class="mwi-trial-profile-section" data-trial-profile-section="${key}" ${sectionOpen[key] !== false ? "open" : ""}><summary>${e(t(title))}</summary>${content}</details>`;
@@ -347,6 +372,7 @@
         equipmentMarkup(profile) + abilitiesMarkup(profile),
         sectionOpen
       );
+      html += profileSection("shrines", "trialProfileShrines", shrineMarkup(profile), sectionOpen);
       for (const [field, heading, hrid] of [["characterHouseRoomMap", "trialProfileHouse", "roomHrid"]]) {
         const values = entries(profile[field]).filter((item) => item?.[hrid]);
         if (values.length)

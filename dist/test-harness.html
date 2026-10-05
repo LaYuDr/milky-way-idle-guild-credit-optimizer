@@ -4124,6 +4124,7 @@
                 collectionPoints: 591,
                 bestiaryPoints: 32,
                 famePoints: 10,
+                guildBuffLevelMap: { "/guild_buffs/tempo_skilling": 3, "/guild_buffs/tempo_combat": 0 },
                 characterSkills: [
                   { skillHrid: "/skills/milking", level: 143, experience: 2347754 },
                   { skillHrid: "/skills/enhancing", level: 138 },
@@ -4640,6 +4641,24 @@
       const tooltipRequestsBefore = profileFrames.length;
       const tooltipSavedBefore = JSON.stringify(saved());
       const tooltip = () => document.getElementById("mwi-trial-profile-tooltip");
+      const cachedShrineDefinitions = tooltipBridge.guildBuffDetails;
+      tooltipBridge.guildBuffDetails = null;
+      const shrineTile = host.querySelector('[data-trial-shrine="life-tempo"]');
+      shrineTile.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      checks.profileShrineBonus = tooltip()?.textContent.includes("+1.5%") === true;
+      checks.profileShrineUnifiedSection =
+        host.querySelectorAll('[data-trial-profile-section="shrines"]').length === 1 &&
+        host.querySelectorAll('[data-trial-profile-section="shrines"] [data-trial-shrine]').length === 10 &&
+        !host.querySelector(".mwi-trial-shrine-group h4");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      host.querySelector('[data-trial-shrine="life-spirit"]').focus({ preventScroll: true });
+      checks.profileShrineUnknown =
+        Boolean(tooltip()) &&
+        tooltip().textContent.includes(english ? "level" : "级") &&
+        !tooltip().textContent.includes("NaN") &&
+        !tooltip().textContent.includes("+0%");
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      tooltipBridge.guildBuffDetails = cachedShrineDefinitions;
       const tooltipSkill = host.querySelector('[data-profile-skill="milking"]');
       tooltipSkill.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       checks.profileTooltipSkillExperience = tooltip()?.textContent.includes("2347754") === true;
@@ -4724,10 +4743,15 @@
         !profileSection("equipment").open &&
         !host.querySelector("[data-equipment-slot]").checkVisibility() &&
         !host.querySelector(".mwi-trial-profile-abilities").checkVisibility();
+      checks.profileShrinesIndependent = profileSection("shrines").open && shrineTile.checkVisibility();
+      profileSection("shrines").querySelector("summary").click();
+      checks.profileShrinesCollapse = !profileSection("shrines").open && !shrineTile.checkVisibility();
       host.querySelector("[data-trial-display]").dispatchEvent(new Event("change", { bubbles: true }));
+      checks.profileShrinesCollapseRetained = !profileSection("shrines").open;
       checks.profileCollapseSurvivesRender =
         !profileSection("overview").open && !profileSection("skills").open && !profileSection("equipment").open;
-      for (const key of ["overview", "skills", "equipment"]) profileSection(key).querySelector("summary").click();
+      for (const key of ["overview", "skills", "equipment", "shrines"])
+        profileSection(key).querySelector("summary").click();
       checks.profileSectionsReopen =
         host.querySelector("[data-profile-skill]").checkVisibility() &&
         host.querySelector("[data-equipment-slot]").checkVisibility() &&

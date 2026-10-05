@@ -1052,6 +1052,15 @@ view refreshes. Equipment includes its following ability slots. The fixture chec
 collapse/reopen visibility, unchanged stored records and no extra profile requests.
 
 Equipped abilities also use five columns with the same tile dimensions as equipment.
+An independent, default-open Shrines disclosure lists the five life and five combat guild-buff levels,
+in that order, using the selected profile's `guildBuffLevelMap` or compatible
+`characterGuildBuffMap`. Missing or invalid levels remain unknown. The trials
+matrix checks all ten tiles, ordering, labels, and narrow-width containment.
+Shrine tiles share the profile tooltip portal and typography. Their bonuses use
+`guildBuffEntries()` from the upgrade page (including its existing cache hydration),
+the selected profile level and the existing shrine-effect calculator/formatter.
+Life `_skilling`/`_life` identifiers resolve by shrine and domain when needed.
+Unknown player levels show per-level effects; absent definitions remain unavailable.
 Profile tile tooltips reuse the installed game's read-only Skill, Ability and Item
 tooltip renderers through `runtime/profile-tooltips.js`; they pass the selected
 profile's XP, level and enhancement, without attaching game action handlers or

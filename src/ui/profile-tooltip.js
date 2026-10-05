@@ -4,7 +4,17 @@
   root.MwiGuildProfileTooltip = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  function createTooltip({ document, pageWindow, host, getData, getProfile, getBridge, t }) {
+  function createTooltip({
+    document,
+    pageWindow,
+    host,
+    getData,
+    getProfile,
+    getBridge,
+    t,
+    shrineEffects,
+    guildBuffEntries
+  }) {
     let anchor = null;
     let tooltip = null;
     let originalTitle = null;
@@ -63,7 +73,12 @@
       document.body.appendChild(tooltip);
       const hasExperience =
         data.kind === "item" || (Number.isFinite(data.record.level) && Number.isFinite(data.record.experience));
-      if (!hasExperience || getBridge()?.renderProfileTooltip?.(tooltip, profile, data.kind, data.record) !== true) {
+      if (data.kind === "shrine") {
+        tooltip.textContent = `${anchor.getAttribute("aria-label")}\n${shrineEffects?.profileSummary(guildBuffEntries?.() || [], data.record.guildBuffHrid, data.record.level) || t("shrineEffectsUnavailable")}`;
+      } else if (
+        !hasExperience ||
+        getBridge()?.renderProfileTooltip?.(tooltip, profile, data.kind, data.record) !== true
+      ) {
         tooltip.textContent = `${anchor.getAttribute("aria-label")}\n${t("trialProfileTooltipUnavailable")}`;
       }
       anchor.setAttribute("aria-describedby", tooltip.id);

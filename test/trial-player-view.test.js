@@ -2,6 +2,55 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { equipmentLayout } = require("../src/ui/trial-player-view.js");
+test("资料独立神龛折叠区按生活、战斗顺序展示全部十种神龛增益等级", () => {
+  const { createRenderer } = require("../src/ui/trial-player-view.js");
+  const { createLocalizer } = require("../src/localization.js");
+  const { t } = createLocalizer("zh-CN");
+  const renderer = createRenderer({
+    t,
+    escapeHtml: (value) => String(value).replaceAll('"', "&quot;"),
+    trialHistoryApi: require("../src/trial-history.js"),
+    getBridge: () => ({}),
+    isScreenshotMode: () => true,
+    formatMemberName: (member) => member.name,
+    profileIcon: (kind, hrid) => `<svg data-icon="${kind}:${hrid}"></svg>`,
+    resolveItemName: (hrid) => hrid
+  });
+  const levels = Object.fromEntries(
+    ["tempo", "spirit", "force", "rarity", "scholar"].flatMap((shrine, index) => [
+      [`/guild_buffs/${shrine}_skilling`, { level: index + 1 }],
+      [`/guild_buffs/${shrine}_combat`, index + 6]
+    ])
+  );
+  const html = renderer.render({
+    member: { id: "1", name: "Player" },
+    weeks: [],
+    profileState: { status: "ready", profile: { guildBuffLevelMap: levels } }
+  });
+  assert.ok(html.includes('data-trial-profile-section="shrines" open><summary>神龛</summary>'));
+  const shrineIds = [...html.matchAll(/data-trial-shrine="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(shrineIds, [
+    "life-tempo",
+    "life-spirit",
+    "life-force",
+    "life-rarity",
+    "life-scholar",
+    "combat-tempo",
+    "combat-spirit",
+    "combat-force",
+    "combat-rarity",
+    "combat-scholar"
+  ]);
+  assert.equal([...html.matchAll(/class="[^"]*mwi-trial-shrine-slot/g)].length, 10);
+  assert.ok(html.includes('data-trial-shrine-domain="life"><div class="mwi-trial-shrine-grid" aria-label="生活神龛">'));
+  assert.ok(
+    html.includes('data-trial-shrine-domain="combat"><div class="mwi-trial-shrine-grid" aria-label="战斗神龛">')
+  );
+  assert.ok(html.includes('aria-label="节奏神龛 · 生活神龛 Lv.1"'));
+  assert.ok(html.includes('aria-label="学者神龛 · 战斗神龛 Lv.10"'));
+  assert.ok(html.indexOf('data-trial-shrine-domain="life"') < html.indexOf('data-trial-shrine-domain="combat"'));
+});
+
 test("资料装备使用游戏槽位，双手装备占主手，未知和重复槽位不丢失", () => {
   const equipment = {
     a: { itemHrid: "/items/a", itemLocationHrid: "/item_locations/two_hand", enhancementLevel: 11 },
