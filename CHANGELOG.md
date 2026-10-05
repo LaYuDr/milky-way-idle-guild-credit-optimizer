@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.58] - 2026-10-06
+
+### Changed
+
+- Fixed leaderboard badge compatibility so players without custom name colors are recognized by installed ranking overlays; preserved simple-name and anonymous modes.
+
 ## [1.2.57] - 2026-10-05
 
 ### Changed

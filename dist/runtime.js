@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.57";
+window.MwiGuildCreditVersion = "1.2.58";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -12707,8 +12707,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const color = validHrid(appearance?.nameColorHrid, "name_colors")
         ? classes.get(appearance.nameColorHrid.split("/").pop())
         : null;
-      const native = color && classes.get("characterName") && classes.get("name");
-      return `<span class="mwi-trial-member-name${native ? ` ${e(classes.get("characterName"))}` : ""}" translate="no">${icons}<span class="mwi-trial-name-text${native ? ` ${e(classes.get("name"))} ${e(color)}` : ""}"${native ? ` data-name="${e(name)}"` : ""}><span>${e(name)}</span></span></span>`;
+      // Ranking overlays identify every native name, including names without a color.
+      const native = classes.get("characterName") && classes.get("name");
+      return `<span class="mwi-trial-member-name${native ? ` ${e(classes.get("characterName"))}` : ""}" translate="no">${icons}<span class="mwi-trial-name-text${native ? ` ${e(classes.get("name"))}${color ? ` ${e(color)}` : ""}` : ""}"${native ? ` data-name="${e(name)}"` : ""}><span>${e(name)}</span></span></span>`;
     };
     render.refresh = (records, context = {}) => {
       classes = nativeNameClasses(document);

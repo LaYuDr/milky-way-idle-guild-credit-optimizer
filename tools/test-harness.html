@@ -4248,6 +4248,31 @@
         simpleNamesToggle().getAttribute("aria-pressed") === "false" &&
         Boolean(decoratedName()) &&
         host.querySelectorAll(".mwi-trial-name-icon").length === 6;
+      // Same selector used by the installed MWITools ranking overlay. Every
+      // personalized name must be discoverable, not just custom-colored ones.
+      const ordinaryRenderer = window.MwiGuildTrialPlayerView.createMemberNameRenderer({
+        document,
+        escapeHtml: (value) => String(value),
+        formatMemberName: (member) => member.name,
+        isPlain: () => false,
+        gameIcon: () => ""
+      });
+      ordinaryRenderer.refresh([]);
+      const ordinaryHost = document.createElement("div");
+      ordinaryHost.innerHTML = ordinaryRenderer({ id: "999", name: "Lyronyia" });
+      const trialNames = [
+        ...host.querySelectorAll(".mwi-trial-name-text"),
+        ordinaryHost.querySelector(".mwi-trial-name-text")
+      ];
+      checks.rankingOverlayNames =
+        trialNames.length > 0 &&
+        trialNames.some((name) => !name.classList.contains("CharacterName_custom_fixture__fixture")) &&
+        trialNames.every(
+          (name) =>
+            name.matches('[class*="CharacterName_name"][data-name]') &&
+            name.dataset.name === name.textContent &&
+            name.parentElement.className.includes("CharacterName_characterName")
+        );
       checks.nativeNameGradient = getComputedStyle(decoratedName()).backgroundImage.includes("linear-gradient");
       const decoratedImage = window.MwiGuildTrialScreenshot.snapshot(host, document, window);
       checks.personalizedNameScreenshot =

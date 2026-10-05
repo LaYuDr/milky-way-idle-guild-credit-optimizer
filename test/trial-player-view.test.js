@@ -431,8 +431,19 @@ test("个性化名字按角色 ID 使用已缓存装饰，简洁与匿名模式�
   assert.match(markup, /data-symbol="admin"/);
   assert.doesNotMatch(markup, /<img|data-symbol="old"/);
   assert.match(markup, /data-name="&lt;img/);
-  assert.doesNotMatch(render({ id: "2", name: member.name }), /<svg|CharacterName_/);
-  assert.doesNotMatch(render({ id: null, name: member.name }), /<svg|CharacterName_/);
+  assert.doesNotMatch(render({ id: "2", name: member.name }), /<svg|CharacterName_custom_/);
+  assert.doesNotMatch(render({ id: null, name: member.name }), /<svg|CharacterName_custom_/);
+  // MWITools scans this selector even when the player has no custom cosmetics.
+  for (const entry of [
+    { id: "2", name: "Lyronyia" },
+    { id: null, name: "huhi762" }
+  ]) {
+    const ordinary = render(entry);
+    assert.match(ordinary, /class="mwi-trial-member-name CharacterName_characterName__abc"/);
+    assert.match(ordinary, /class="mwi-trial-name-text CharacterName_name__def"/);
+    assert.ok(ordinary.includes(`data-name="${entry.name}"`));
+    assert.doesNotMatch(ordinary, /custom_test|undefined|null/);
+  }
   plain = true;
   assert.doesNotMatch(render(member), /<svg|CharacterName_|data-name/);
   plain = false;
@@ -440,11 +451,11 @@ test("个性化名字按角色 ID 使用已缓存装饰，简洁与匿名模式�
   assert.equal(render(member), '<span class="mwi-trial-member-name">Player 1</span>');
   anonymous = false;
   render.refresh(records, { members: { 1: { chatIconHrid: null, nameColorHrid: null } } });
-  assert.doesNotMatch(render(member), /<svg|CharacterName_/);
+  assert.doesNotMatch(render(member), /<svg|CharacterName_custom_/);
   render.refresh([], {});
   assert.doesNotMatch(
     render(member, { chatIconHrid: '/chat_icons/x" onload="bad', nameColorHrid: '/name_colors/custom_test" bad' }),
-    /<svg|CharacterName_/
+    /<svg|CharacterName_custom_/
   );
   assert.equal(JSON.stringify({ records, context }), before);
 });
