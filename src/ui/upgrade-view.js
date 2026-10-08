@@ -448,11 +448,12 @@
       }
       const pickerSnapshot = picker.capture();
       const plannedHrids = new Set(state.upgradePlans.map((plan) => plan.guildBuffHrid));
-      const openPlans = new Set(
-        [...list.querySelectorAll("details[data-shrine-steps][open]")].map(
-          (node) => node.closest("[data-plan-id]").dataset.planId
-        )
-      );
+      const openPlans = new Set(state.upgradePlans.filter((plan) => plan.stepsExpanded).map((plan) => plan.id));
+      for (const node of list.querySelectorAll("details[data-shrine-steps]")) {
+        const id = node.closest("[data-plan-id]").dataset.planId;
+        if (node.open) openPlans.add(id);
+        else openPlans.delete(id);
+      }
       const active = list.ownerDocument.activeElement;
       const focusedPlan = list.contains(active) ? active.closest("[data-plan-id]")?.dataset.planId : null;
       const focusedRole = active?.dataset?.role;

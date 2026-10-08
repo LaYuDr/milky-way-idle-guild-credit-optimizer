@@ -30,6 +30,7 @@ test("发布脚本只允许当前版本归档并排除未跟踪工具草稿", as
   assert.equal(release.isAllowedReleasePath("tools/dev-server.js", "1.1.29", true), true);
   assert.equal(release.isAllowedReleasePath("tools/check.mjs", "1.1.29", false), true);
   assert.equal(release.isAllowedReleasePath("tools/browser-audit.mjs", "1.1.29", false), true);
+  assert.equal(release.isAllowedReleasePath("tools/persistence-audit.mjs", "1.2.59", false), true);
   assert.equal(release.isAllowedReleasePath("tools/test-trial-sprite.svg", "1.2.44", false), true);
   assert.equal(release.isAllowedReleasePath("docs/GUILD_POINT_FORECAST.md", "1.2.53", false), true);
   assert.equal(release.isAllowedReleasePath("tools/backtest-guild-points.mjs", "1.2.53", false), true);

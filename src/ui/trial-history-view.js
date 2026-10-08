@@ -71,9 +71,10 @@
     getPanel,
     onRecordsChanged = () => {}
   }) {
-    let mode = "week";
-    let screenshotMode = false;
-    let simpleNames = false;
+    const savedView = pluginStorage.loadTrialViewState?.() || {};
+    let mode = savedView.mode || "week";
+    let screenshotMode = savedView.screenshotMode === true;
+    let simpleNames = savedView.simpleNames === true;
     let screenshotBusy = false;
     let screenshotNotice = "";
     const isScreenshotMode = () => screenshotMode;
@@ -85,8 +86,8 @@
       isPlain: () => screenshotMode || simpleNames,
       gameIcon
     });
-    let selectedWeek = "";
-    let selectedProject = "";
+    let selectedWeek = savedView.selectedWeek || "";
+    let selectedProject = savedView.selectedProject || "";
     let resetScroll = false;
     let resizeObserver = null;
     let profileTooltip = null;
@@ -97,7 +98,8 @@
     let importNotice = null;
     let importBusy = false;
     let importRevision = 0;
-    let displaySettingsOpen = false;
+    let displaySettingsOpen = savedView.displaySettingsOpen === true;
+    let viewSaveFailed = false;
     let displaySaveFailed = false;
     let rankingOrder = displayApi.normalizeRankingOrder(pluginStorage.loadTrialRankingOrder());
     let rankingOrderSaveFailed = false;
@@ -112,13 +114,19 @@
     let highlightedMember = null;
     let hoveredMemberCell = null;
     let focusedMemberCell = null;
-    let selectedMember = null;
-    let profileState = { status: "loading" };
-    const profileSectionsOpen = { overview: true, skills: true, equipment: true };
+    let selectedMember = savedView.selectedMember || null;
+    let profileState = { status: "unavailable" };
+    const profileSectionsOpen = {
+      overview: true,
+      skills: true,
+      equipment: true,
+      shrines: true,
+      ...savedView.profileSectionsOpen
+    };
     let profileRevision = 0;
-    let playerReturn = null;
-    let playerSearch = "";
-    let playerPickerOpen = true;
+    let playerReturn = { mode: savedView.returnMode || "week" };
+    let playerSearch = savedView.playerSearch || "";
+    let playerPickerOpen = savedView.playerPickerOpen !== false;
     let playerSearchComposing = false;
 
     function projectIcon(record) {
@@ -331,7 +339,24 @@
       });
     }
 
-    const tableSorts = new Map();
+    const tableSorts = new Map(savedView.tableSorts || []);
+    function persistView() {
+      viewSaveFailed =
+        pluginStorage.saveTrialViewState?.({
+          mode,
+          screenshotMode,
+          simpleNames,
+          selectedWeek,
+          selectedProject,
+          selectedMember,
+          returnMode: playerReturn?.mode,
+          playerSearch,
+          playerPickerOpen,
+          displaySettingsOpen,
+          profileSectionsOpen,
+          tableSorts: [...tableSorts]
+        }) === false;
+    }
     function getSort(key, kind) {
       const fields = visibleFields(kind);
       const saved = tableSorts.get(key);
@@ -601,6 +626,7 @@
       const input = host.querySelector("[data-trial-player-search]");
       if (!input) return;
       playerSearch = input.value;
+      persistView();
       const members = trialHistoryApi.historyMembers(records);
       const current =
         host.querySelector('[data-trial-choice="player"][aria-pressed="true"]')?.value ||
@@ -672,7 +698,22 @@
       const project = projects.find((entry) => entry.key === selectedProject) || projects[0];
       selectedWeek = week?.key || "";
       selectedProject = project?.key || "";
+      // Restore navigation only to identities present in the saved history or current guild.
+      // Profile contents remain live reads: a reload does not silently request a profile.
+      if (
+        selectedMember &&
+        records.length &&
+        !trialHistoryApi.historyMembers(records).some((member) => trialHistoryApi.sameMember(member, selectedMember)) &&
+        !Object.entries(getBridge()?.trialHistoryContext?.members || {}).some(([id, member]) =>
+          trialHistoryApi.sameMember({ id, name: member.name }, selectedMember)
+        )
+      ) {
+        selectedMember = null;
+        playerPickerOpen = true;
+      }
+      persistView();
       let markup = renderImport();
+      if (viewSaveFailed) markup += `<p role="status">${escapeHtml(t("trialDisplaySaveFailed"))}</p>`;
       markup += `<div class="mwi-trial-display-controls"><div class="mwi-trial-mode" role="group" aria-label="${escapeHtml(t("trialDisplayMode"))}">${["week", "project", "player"].map((value) => `<button type="button" data-trial-mode="${value}" aria-pressed="${mode === value}">${escapeHtml(t(value === "week" ? "trialByWeek" : value === "project" ? "trialByProject" : "trialByPlayer"))}</button>`).join("")}</div>`;
       if (mode === "player") {
         const members = trialHistoryApi.historyMembers(records);
@@ -865,9 +906,16 @@
       host.addEventListener(
         "toggle",
         (event) => {
+          if (!event.target.isConnected) return;
           if (event.target.matches(".mwi-trial-display-settings")) displaySettingsOpen = event.target.open;
-          if (event.target.matches(".mwi-trial-player-picker") && event.target.isConnected)
-            playerPickerOpen = event.target.open;
+          else if (event.target.matches(".mwi-trial-player-picker")) playerPickerOpen = event.target.open;
+          else if (
+            event.target.matches("[data-trial-profile-section]") &&
+            Object.hasOwn(profileSectionsOpen, event.target.dataset.trialProfileSection)
+          )
+            profileSectionsOpen[event.target.dataset.trialProfileSection] = event.target.open;
+          else return;
+          persistView();
         },
         true
       );

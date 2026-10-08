@@ -40,6 +40,7 @@ const FIXED_RELEASE_PATHS = new Set([
   "tools/verify-repository.mjs",
   "tools/check.mjs",
   "tools/browser-audit.mjs",
+  "tools/persistence-audit.mjs",
   "tools/backtest-guild-points.mjs",
   "tools/test-trial-sprite.svg",
   "发布当前版本.command",

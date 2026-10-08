@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.59] - 2026-10-09
+
+### Changed
+
+- Persist trial navigation, player search, table sorting and display choices; restore construction searches and expanded sections, settings help and shrine upgrade steps. Validate saved state and add reload regression coverage.
+
 ## [1.2.58] - 2026-10-06
 
 ### Changed

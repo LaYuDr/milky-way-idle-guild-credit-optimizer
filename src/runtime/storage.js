@@ -206,6 +206,66 @@
     return displayApi.normalize(value);
   }
 
+  function shortText(value, limit = 200) {
+    return typeof value === "string" ? value.slice(0, limit) : "";
+  }
+
+  function normalizeTrialViewState(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const member = source.selectedMember;
+    const tableSorts = (Array.isArray(source.tableSorts) ? source.tableSorts : [])
+      .filter(
+        (entry) =>
+          Array.isArray(entry) &&
+          typeof entry[0] === "string" &&
+          entry[0].length <= 500 &&
+          entry[1] &&
+          Object.hasOwn(displayApi.defaults, entry[1].field) &&
+          ["asc", "desc"].includes(entry[1].direction)
+      )
+      .slice(-500)
+      .map(([key, sort]) => [key, { field: sort.field, direction: sort.direction }]);
+    return {
+      mode: ["week", "project", "player"].includes(source.mode) ? source.mode : "week",
+      selectedWeek: shortText(source.selectedWeek, 500),
+      selectedProject: shortText(source.selectedProject, 500),
+      selectedMember:
+        member &&
+        typeof member.name === "string" &&
+        member.name.trim() &&
+        (member.id == null || typeof member.id === "string" || Number.isSafeInteger(member.id))
+          ? { id: member.id == null ? null : String(member.id).slice(0, 160), name: shortText(member.name) }
+          : null,
+      returnMode: ["week", "project", "player"].includes(source.returnMode) ? source.returnMode : "week",
+      playerSearch: shortText(source.playerSearch),
+      playerPickerOpen: source.playerPickerOpen !== false,
+      simpleNames: source.simpleNames === true,
+      screenshotMode: source.screenshotMode === true,
+      displaySettingsOpen: source.displaySettingsOpen === true,
+      profileSectionsOpen: Object.fromEntries(
+        ["overview", "skills", "equipment", "shrines"].map((key) => [key, source.profileSectionsOpen?.[key] !== false])
+      ),
+      tableSorts
+    };
+  }
+
+  function normalizeConstructionUi(value, plans = []) {
+    const source = value && typeof value === "object" ? value : {};
+    const planned = new Set(plans.map((plan) => plan.buildingHrid));
+    return {
+      pickerOpen: typeof source.pickerOpen === "boolean" ? source.pickerOpen : plans.length === 0,
+      guildPointHistoryOpen: source.guildPointHistoryOpen === true,
+      expandedBuildingHrids: [
+        ...new Set(
+          (Array.isArray(source.expandedBuildingHrids) || source.expandedBuildingHrids instanceof Set
+            ? Array.from(source.expandedBuildingHrids)
+            : []
+          ).filter((hrid) => planned.has(hrid))
+        )
+      ]
+    };
+  }
+
   function createPluginStorage(options) {
     const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
@@ -257,6 +317,25 @@
     function saveTrialRankingOrder(value) {
       try {
         storage.setItem(`${trialDisplayKey()}:ranking-order`, JSON.stringify(displayApi.normalizeRankingOrder(value)));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function loadTrialViewState() {
+      try {
+        return normalizeTrialViewState(JSON.parse(storage.getItem(`${trialDisplayKey()}:view`)));
+      } catch (_) {
+        return normalizeTrialViewState(null);
+      }
+    }
+
+    function saveTrialViewState(value) {
+      try {
+        const key = `${trialDisplayKey()}:view`;
+        const text = JSON.stringify(normalizeTrialViewState(value));
+        if (storage.getItem(key) !== text) storage.setItem(key, text);
         return true;
       } catch (_) {
         return false;
@@ -398,6 +477,8 @@
         showConstructionView: true,
         showTrialHistoryView: true,
         sidebarDisplayName: "",
+        settingsOpen: false,
+        openHelpTopics: [],
         activeView: "credit",
         panelOrder: normalizePanelOrder([], config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
         targetCredit: config.DEFAULT_TARGET_CREDIT,
@@ -424,7 +505,8 @@
                 guildBuffHrid: plan.guildBuffHrid,
                 startLevel: plan.startLevel,
                 targetLevel: plan.targetLevel,
-                ...(plan.collapsed === true ? { collapsed: true } : {})
+                ...(plan.collapsed === true ? { collapsed: true } : {}),
+                ...(plan.stepsExpanded === true ? { stepsExpanded: true } : {})
               }))
           : [];
         const targetCredit = Number(stored.targetCredit);
@@ -461,6 +543,16 @@
           showConstructionView: stored.showConstructionView !== false,
           showTrialHistoryView: stored.showTrialHistoryView !== false,
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
+          settingsOpen: stored.settingsOpen === true,
+          openHelpTopics: Array.isArray(stored.openHelpTopics)
+            ? [
+                ...new Set(
+                  stored.openHelpTopics.filter(
+                    (key) => typeof key === "string" && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(key)
+                  )
+                )
+              ].slice(0, 50)
+            : [],
           activeView: normalizePanelView(stored.activeView, config.PANEL_VIEWS),
           panelOrder: normalizePanelOrder(stored.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
           targetCredit: Number.isSafeInteger(targetCredit) && targetCredit > 0 ? targetCredit : fallback.targetCredit,
@@ -477,6 +569,8 @@
         manualGuildPoints: null,
         guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
         category: "all",
+        search: "",
+        constructionUi: normalizeConstructionUi(null),
         guildPointHistory: normalizeGuildPointHistory(null),
         guildPointSnapshot: null
       };
@@ -536,6 +630,8 @@
                 : 0
           },
           category,
+          search: shortText(stored.search),
+          constructionUi: normalizeConstructionUi(stored.constructionUi, plans),
           guildPointHistory: migrateLegacyGuildPointManualWeeks(
             stored.guildPointHistory,
             stored.schemaVersion,
@@ -566,6 +662,8 @@
               guildPointForecastWeeks: state.guildPointForecastWeeks,
               guildPointPlanningWeeks: state.guildPointPlanningWeeks,
               category: state.buildingCategory,
+              search: shortText(state.buildingSearch),
+              constructionUi: normalizeConstructionUi(state.constructionUi, state.buildingPlans),
               guildPointHistory: normalizeGuildPointHistory(state.guildPointHistory),
               guildPointSnapshot: normalizeGuildPointSnapshot({
                 ...state.guildPointSummary,
@@ -591,7 +689,8 @@
           guildBuffHrid: plan.guildBuffHrid,
           startLevel: plan.startLevel,
           targetLevel: plan.targetLevel,
-          ...(plan.collapsed === true ? { collapsed: true } : {})
+          ...(plan.collapsed === true ? { collapsed: true } : {}),
+          ...(plan.stepsExpanded === true ? { stepsExpanded: true } : {})
         }));
         storage.setItem(
           config.UI_STATE_STORAGE_KEY,
@@ -611,6 +710,8 @@
             showConstructionView: state.showConstructionView === true,
             showTrialHistoryView: state.showTrialHistoryView === true,
             sidebarDisplayName: normalizeSidebarDisplayName(state.sidebarDisplayName),
+            settingsOpen: state.settingsOpen === true,
+            openHelpTopics: Array.isArray(state.openHelpTopics) ? state.openHelpTopics.slice(0, 50) : [],
             activeView: state.activeView,
             panelOrder: normalizePanelOrder(state.panelOrder, config.PANEL_VIEWS, config.DEFAULT_PANEL_ORDER),
             useGuildTokensForMissingCredits: config.CREDIT_TYPES.every(([hrid]) =>
@@ -764,6 +865,8 @@
     return {
       guildBuildingPlannerStorageKey,
       loadTrialHistory,
+      loadTrialViewState,
+      saveTrialViewState,
       loadTrialDisplay,
       saveTrialDisplay,
       loadTrialRankingOrder,
@@ -786,6 +889,8 @@
   }
 
   return {
+    normalizeTrialViewState,
+    normalizeConstructionUi,
     normalizeSidebarDisplayName,
     normalizeTrialDisplay,
     normalizePanelView,

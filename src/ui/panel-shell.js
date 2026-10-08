@@ -263,6 +263,7 @@
 
     function setSettingsOpen(panel, open, { restoreFocus = false } = {}) {
       state.settingsOpen = Boolean(open);
+      persistPluginUiState();
       syncSettingsPage(panel);
       const trigger = panel.querySelector('[data-role="toggle-settings"]');
       if (state.settingsOpen) {
@@ -557,6 +558,29 @@
           return;
         applyMaxItemUnitPrice(panel, event.target);
       });
+      panel.addEventListener(
+        "toggle",
+        (event) => {
+          if (!event.target.isConnected) return;
+          if (event.target.matches("[data-settings-help-topic]")) {
+            const topics = new Set(state.openHelpTopics || []);
+            const key = event.target.dataset.settingsHelpTopic;
+            if (event.target.open) topics.add(key);
+            else topics.delete(key);
+            state.openHelpTopics = [...topics];
+            persistPluginUiState();
+          }
+          if (event.target.matches("[data-shrine-steps]")) {
+            const id = event.target.closest("[data-plan-id]")?.dataset.planId;
+            const plan = state.upgradePlans.find((entry) => entry.id === id);
+            if (plan && plan.stepsExpanded !== event.target.open) {
+              plan.stepsExpanded = event.target.open;
+              persistPluginUiState();
+            }
+          }
+        },
+        true
+      );
       const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
       const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
       settingsTrigger.addEventListener("click", () => setSettingsOpen(panel, !state.settingsOpen));
@@ -681,6 +705,7 @@
         }
         if (event.target.matches('[data-role="building-search"]')) {
           state.buildingSearch = event.target.value;
+          persistGuildBuildingPlannerState();
           applyGuildBuildingFilters(constructionResults);
         }
       });
@@ -716,6 +741,7 @@
         }
         if (event.target.matches('[data-role="building-search"]')) {
           state.buildingSearch = event.target.value;
+          persistGuildBuildingPlannerState();
           applyGuildBuildingFilters(constructionResults);
           return;
         }

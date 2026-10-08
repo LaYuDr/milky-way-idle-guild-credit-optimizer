@@ -179,7 +179,7 @@
                 .join("")}</dd></div>`
           )
           .join("");
-        return `<details class="mwi-context-help" data-settings-help-topic="${title}"><summary class="mwi-help-toggle" id="mwi-help-${title}">${escapeHtml(t(title))}</summary><dl class="mwi-help-sections">${body}</dl></details>`;
+        return `<details class="mwi-context-help" data-settings-help-topic="${title}"${state.openHelpTopics?.includes(title) ? " open" : ""}><summary class="mwi-help-toggle" id="mwi-help-${title}">${escapeHtml(t(title))}</summary><dl class="mwi-help-sections">${body}</dl></details>`;
       }).join("");
       return `<section class="mwi-settings-block mwi-settings-help" data-role="settings-help" aria-labelledby="mwi-settings-help-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-help-heading">${escapeHtml(t("settingsHelp"))}</h4></div>${sections}</section>`;
     }
@@ -218,12 +218,7 @@
       const focused = content?.ownerDocument?.activeElement;
       const focusedId = focused && content.contains(focused) ? focused.id : "";
       const selection = focused === nameInput ? [nameInput.selectionStart, nameInput.selectionEnd] : null;
-      const openHelpTopics = new Set(
-        Array.from(
-          content?.querySelectorAll("[data-settings-help-topic][open]") || [],
-          (node) => node.dataset.settingsHelpTopic
-        )
-      );
+      const openHelpTopics = new Set(state.openHelpTopics || []);
       updateRenderedMarkup(content, renderSettingsContent(snapshot));
       for (const topic of content?.querySelectorAll("[data-settings-help-topic]") || [])
         topic.open = openHelpTopics.has(topic.dataset.settingsHelpTopic);

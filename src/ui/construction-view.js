@@ -34,14 +34,16 @@
     } = dependencies;
 
     const constructionUi = {
-      pickerOpen: state.buildingPlans.length === 0,
-      expandedBuildingHrids: new Set(),
-      guildPointHistoryOpen: false,
+      pickerOpen: state.constructionUi?.pickerOpen ?? state.buildingPlans.length === 0,
+      expandedBuildingHrids: new Set(state.constructionUi?.expandedBuildingHrids || []),
+      guildPointHistoryOpen: state.constructionUi?.guildPointHistoryOpen === true,
       trackedGuildPointEditWeekStarts: new Set(),
       trackedGuildPointEditWarning: null,
       clearUndoPlans: null,
       clearUndoTimer: null
     };
+
+    state.constructionUi = constructionUi;
 
     function guildPointForecastWeekCount() {
       return core.normalizeGuildPointForecastWeeks(state.guildPointForecastWeeks);
@@ -403,6 +405,7 @@
 
     function setGuildPointHistoryOpen(open) {
       constructionUi.guildPointHistoryOpen = Boolean(open);
+      persistGuildBuildingPlannerState();
     }
 
     function openTrackedGuildPointEditWarning(weekStartAt) {
@@ -575,6 +578,7 @@
 
     function setGuildBuildingPickerOpen(open) {
       constructionUi.pickerOpen = Boolean(open);
+      persistGuildBuildingPlannerState();
       return constructionUi.pickerOpen;
     }
 
@@ -667,9 +671,11 @@
     function toggleGuildBuildingSteps(buildingHrid) {
       if (constructionUi.expandedBuildingHrids.has(buildingHrid)) {
         constructionUi.expandedBuildingHrids.delete(buildingHrid);
+        persistGuildBuildingPlannerState();
         return false;
       }
       constructionUi.expandedBuildingHrids.add(buildingHrid);
+      persistGuildBuildingPlannerState();
       return true;
     }
 

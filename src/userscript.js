@@ -124,7 +124,8 @@
     showConstructionView: savedUiState.showConstructionView,
     showTrialHistoryView: savedUiState.showTrialHistoryView,
     sidebarDisplayName: savedUiState.sidebarDisplayName,
-    settingsOpen: false,
+    settingsOpen: savedUiState.settingsOpen,
+    openHelpTopics: savedUiState.openHelpTopics,
     shrineGuideContext: null,
     shrineGuideModel: null,
     shrineGuideFrame: null,
@@ -176,7 +177,8 @@
   state.manualGuildPoints = savedBuildingPlannerState.manualGuildPoints;
   state.guildPointHistory = savedBuildingPlannerState.guildPointHistory;
   state.buildingCategory = savedBuildingPlannerState.category;
-  state.buildingSearch = "";
+  state.buildingSearch = savedBuildingPlannerState.search;
+  state.constructionUi = savedBuildingPlannerState.constructionUi;
   state.buildingPlanNotice = "";
   let guildBuildingSpriteHref = "";
   let guildBuildingSpriteLoadPromise = null;

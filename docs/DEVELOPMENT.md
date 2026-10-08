@@ -1089,3 +1089,45 @@ The display reports matched and imputed counts. It reuses the trial history view
 loaded records and passive bridge updates, without changing forecasts, budgets,
 saved points or exports. The construction matrix covers passive history updates
 and mean imputation; pure tests cover latest records, boundaries and missing data.
+
+### Persistent navigation and disclosure state
+
+Persistence is an allowlist of user choices and validated data, not a dump of
+runtime objects. Existing saved plans, budgets, point history/snapshots, market
+caches, trial records, column settings and ranking order retain their formats.
+The following additional choices now survive reloads:
+
+| Area           | Saved choices                                                                                                                                                                           | Storage scope                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Panel/settings | Settings page open, expanded help topics                                                                                                                                                | Existing host-local UI key                           |
+| Shrine plans   | Per-plan upgrade steps expanded                                                                                                                                                         | Existing UI plan entries                             |
+| Construction   | Search, picker open, recent point history open, expanded building steps                                                                                                                 | Existing host/character planner key                  |
+| Trials         | Week/project/player mode, selected week/project/member, return mode, player search and picker, simple names, screenshot mode, column settings disclosure, profile sections, table sorts | Host/character trial display key with `:view` suffix |
+
+Old records without these fields retain their previous defaults. Construction
+step expansion is limited to valid saved plans. Trial strings and sort lists
+are bounded (200-character search, 500 sort entries), malformed fields fall back
+independently, and unchanged trial rerenders do not rewrite storage. A failed
+trial-view write keeps the current page usable and displays the existing save
+failure message on refresh. Storage is browser-local; this is not a cross-device
+backup and clearing site data removes it.
+
+Do not restore live inventory, profile contents, sockets, observers, request
+callbacks, DOM nodes, hover/focus, pixel scroll positions, open popovers, pending
+imports, edit confirmations, unsaved form drafts or timed undo as current state.
+The existing game-data hydration and cache freshness rules remain authoritative.
+A saved player selection restores history navigation; profile details require an
+explicit refresh after reload and do not trigger a new request during restoration.
+
+Verification:
+
+```bash
+npm run check:quick -- test/runtime-storage.test.js test/trial-display.test.js test/trial-player-view.test.js
+node tools/persistence-audit.mjs
+npm run test:browser -- --suite layout,credit,construction,settings,trials,shrine-upgrade,upgrade-empty
+npm run check:handoff
+```
+
+The persistence audit runs two actual reloads at 320/900px in Chinese and English,
+checks restored controls and identities, and uses isolated localhost storage with
+external requests blocked. Its fixture checks are not installed-game evidence.

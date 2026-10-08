@@ -48,6 +48,8 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     showConstructionView: true,
     showTrialHistoryView: true,
     sidebarDisplayName: "",
+    settingsOpen: false,
+    openHelpTopics: [],
     activeView: "credit",
     panelOrder: ["upgrade", "credit", "construction", "trials"],
     targetCredit: 100,
@@ -201,6 +203,8 @@ test("公会建设计划按站点和角色隔离并过滤非法等级", () => {
     manualGuildPoints: 5000,
     guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
     category: "life",
+    search: "",
+    constructionUi: { pickerOpen: false, guildPointHistoryOpen: false, expandedBuildingHrids: [] },
     guildPointHistory: { guildId: "", lastObservation: null, weeks: [], manualWeeks: [] },
     guildPointSnapshot: null
   });
@@ -631,4 +635,141 @@ test("榜单顺序独立持久化，列预设不覆盖顺序，存储失败可�
   });
   assert.equal(broken.loadTrialRankingOrder().length, 8);
   assert.equal(broken.saveTrialRankingOrder(["joinedAt"]), false);
+});
+
+test("试炼导航、玩家身份与排序重载恢复，站点和角色隔离", () => {
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const view = {
+    mode: "player",
+    selectedWeek: "week-1",
+    selectedProject: "project-1",
+    selectedMember: { id: 101, name: "玩家一" },
+    returnMode: "project",
+    playerSearch: "玩家",
+    playerPickerOpen: false,
+    simpleNames: true,
+    screenshotMode: true,
+    displaySettingsOpen: true,
+    profileSectionsOpen: { overview: false, shrines: false },
+    tableSorts: [["record-1", { field: "workDone", direction: "asc" }]]
+  };
+  assert.equal(api.saveTrialViewState(view), true);
+  const restored = createStorage(storage).loadTrialViewState();
+  assert.deepEqual(restored, storageApi.normalizeTrialViewState(view));
+  assert.deepEqual(restored.selectedMember, { id: "101", name: "玩家一" });
+  for (const location of [
+    { href: "https://www.milkywayidle.com/game?characterId=hero-8", hostname: "www.milkywayidle.com" },
+    { href: "https://www.milkywayidlecn.com/game?characterId=hero-7", hostname: "www.milkywayidlecn.com" }
+  ]) {
+    const isolated = storageApi.createPluginStorage({ storage, location, config, buildingDataApi, marketDataApi });
+    assert.equal(isolated.loadTrialViewState().selectedMember, null);
+    assert.equal(isolated.loadTrialViewState().mode, "week");
+  }
+  let writes = 0;
+  const setItem = storage.setItem;
+  storage.setItem = (...args) => {
+    writes += 1;
+    setItem(...args);
+  };
+  assert.equal(api.saveTrialViewState(restored), true);
+  assert.equal(writes, 0, "unchanged rerenders must not rewrite localStorage");
+});
+
+test("持久化导航拒绝损坏字段、限制容量且不保存请求和确认状态", () => {
+  const normalized = storageApi.normalizeTrialViewState({
+    mode: "unknown",
+    playerSearch: "x".repeat(1000),
+    selectedMember: { id: {}, name: "wrong" },
+    screenshotMode: "false",
+    profileSectionsOpen: { skills: false, arbitrary: false },
+    tableSorts: [
+      ["bad", { field: "__proto__", direction: "desc" }],
+      ["bad2", { field: "workDone", direction: "up" }],
+      ...Array.from({ length: 600 }, (_, index) => [String(index), { field: "workDone", direction: "desc" }])
+    ],
+    importPreview: { confirmed: true },
+    profileState: { status: "loading" }
+  });
+  assert.equal(normalized.mode, "week");
+  assert.equal(normalized.playerSearch.length, 200);
+  assert.equal(normalized.selectedMember, null);
+  assert.equal(normalized.screenshotMode, false);
+  assert.equal(normalized.profileSectionsOpen.skills, false);
+  assert.equal(normalized.tableSorts.length, 500);
+  assert.equal(normalized.tableSorts[0][0], "100");
+  assert.equal(Object.hasOwn(normalized, "importPreview"), false);
+  assert.equal(Object.hasOwn(normalized, "profileState"), false);
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const key = `${config.TRIAL_DISPLAY_STORAGE_PREFIX}:${api.guildBuildingPlannerStorageKey()}:view`;
+  for (const text of ["{", "null", "[]", "42"]) {
+    storage.setItem(key, text);
+    assert.deepEqual(api.loadTrialViewState(), storageApi.normalizeTrialViewState(null));
+  }
+  const blocked = createStorage({
+    getItem() {
+      throw new Error("denied");
+    },
+    setItem() {
+      throw new Error("quota");
+    }
+  });
+  assert.deepEqual(blocked.loadTrialViewState(), storageApi.normalizeTrialViewState(null));
+  assert.equal(blocked.saveTrialViewState({ mode: "player" }), false);
+});
+
+test("建设搜索与展开状态随计划恢复，编辑授权和撤销计时器不写入", () => {
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const buildingHrid = "/guild_buildings/guild_hall";
+  api.persistGuildBuildingPlannerState({
+    buildingPlans: [{ buildingHrid, startLevel: 1, targetLevel: 3 }],
+    buildingSearch: "公会大厅",
+    buildingCategory: "core",
+    constructionUi: {
+      pickerOpen: true,
+      guildPointHistoryOpen: true,
+      expandedBuildingHrids: new Set([buildingHrid, "/unknown"]),
+      trackedGuildPointEditWarning: { confirmed: true },
+      clearUndoTimer: 100
+    }
+  });
+  const restored = createStorage(storage).loadSavedGuildBuildingPlannerState();
+  assert.equal(restored.search, "公会大厅");
+  assert.deepEqual(restored.constructionUi, {
+    pickerOpen: true,
+    guildPointHistoryOpen: true,
+    expandedBuildingHrids: [buildingHrid]
+  });
+  assert.equal(storage.value(api.guildBuildingPlannerStorageKey()).includes("clearUndoTimer"), false);
+  assert.deepEqual(storageApi.normalizeConstructionUi({ expandedBuildingHrids: 4 }), {
+    pickerOpen: true,
+    guildPointHistoryOpen: false,
+    expandedBuildingHrids: []
+  });
+});
+
+test("设置页面、帮助和升级步骤展开状态可恢复且兼容旧计划", () => {
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const state = api.loadSavedPluginUiState();
+  Object.assign(state, {
+    settingsOpen: true,
+    openHelpTopics: ["guildPointOverview", "trialHistory"],
+    upgradePlans: [{ guildBuffHrid: "/guild_buffs/spirit_life", startLevel: 0, targetLevel: 1, stepsExpanded: true }]
+  });
+  state.collapsedCreditSections = new Set();
+  state.guildTokenCreditHrids = new Set();
+  assert.equal(api.persistPluginUiState(state), true);
+  const restored = createStorage(storage).loadSavedPluginUiState();
+  assert.equal(restored.settingsOpen, true);
+  assert.deepEqual(restored.openHelpTopics, state.openHelpTopics);
+  assert.deepEqual(restored.upgradePlans, state.upgradePlans);
+  storage.setItem(
+    config.UI_STATE_STORAGE_KEY,
+    JSON.stringify({ settingsOpen: "true", openHelpTopics: [null, "<script>", "trialHistory", "trialHistory"] })
+  );
+  assert.equal(api.loadSavedPluginUiState().settingsOpen, false);
+  assert.deepEqual(api.loadSavedPluginUiState().openHelpTopics, ["trialHistory"]);
 });
