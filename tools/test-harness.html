@@ -1976,7 +1976,12 @@
       const originalCatalogOrder = catalogOrder();
       panel.querySelector('[data-role="building-category"][data-category="combat"]').click();
       audit.catalogCombatOrder =
-        catalogOrder().join(",") === "combat_encampment,dining_room,dojo,armory,gym,archery_range";
+        catalogOrder().join(",") ===
+        "combat_encampment,dining_room,library,dojo,armory,gym,archery_range,mystical_study";
+      panel.querySelector('[data-role="building-category"][data-category="life"]').click();
+      audit.catalogLifeOrder =
+        catalogOrder().join(",") ===
+        "skilling_encampment,dairy_barn,garden,log_shed,forge,workshop,sewing_parlor,kitchen,brewery,laboratory,observatory";
       panel.querySelector('[data-role="building-category"][data-category="all"]').click();
       let searchInput = panel.querySelector('[data-role="building-search"]');
       searchInput.focus();
@@ -2155,7 +2160,7 @@
         catalogNativeOrder:
           catalogOrder().slice(0, 23).join(",") ===
           "guild_hall,builders_hall,treasury,archives,skilling_encampment,combat_encampment,dairy_barn,garden,log_shed,forge,workshop,sewing_parlor,kitchen,brewery,laboratory,observatory,dining_room,library,dojo,armory,gym,archery_range,mystical_study",
-        catalogCategoryOrder: audit.catalogCombatOrder,
+        catalogCategoryOrder: audit.catalogCombatOrder && audit.catalogLifeOrder,
         catalogOrderAfterSearchAndQueueChanges: catalogOrder().join(",") === originalCatalogOrder.join(","),
         forecastSettingsOutsideHistory:
           audit.forecastSettingsOutsideHistory &&

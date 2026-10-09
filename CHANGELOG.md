@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.60] - 2026-10-09
+
+### Changed
+
+- Corrected Guild Library and Guild Mystical Study to the combat building category, with life/combat catalog regression coverage.
+
 ## [1.2.59] - 2026-10-09
 
 ### Changed

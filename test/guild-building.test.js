@@ -1266,7 +1266,23 @@ test("建筑目录兜底采用游戏顺序，保留分类筛选相对顺序且�
   );
   assert.deepEqual(
     sorted.filter((entry) => entry.category === "combat").map((entry) => entry.hrid.split("/").pop()),
-    ["combat_encampment", "dining_room", "dojo", "armory", "gym", "archery_range"]
+    ["combat_encampment", "dining_room", "library", "dojo", "armory", "gym", "archery_range", "mystical_study"]
+  );
+  assert.deepEqual(
+    sorted.filter((entry) => entry.category === "life").map((entry) => entry.hrid.split("/").pop()),
+    [
+      "skilling_encampment",
+      "dairy_barn",
+      "garden",
+      "log_shed",
+      "forge",
+      "workshop",
+      "sewing_parlor",
+      "kitchen",
+      "brewery",
+      "laboratory",
+      "observatory"
+    ]
   );
   assert.equal(sorted.length, 28);
   assert.equal(new Set(sorted.map((entry) => entry.hrid)).size, 28);

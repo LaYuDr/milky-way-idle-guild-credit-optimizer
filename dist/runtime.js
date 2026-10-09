@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.59";
+window.MwiGuildCreditVersion = "1.2.60";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3667,12 +3667,12 @@ window.MwiGuildCreditVersion = "1.2.59";
     { hrid: "/guild_buildings/kitchen", nameKey: "buildingKitchen", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/sewing_parlor", nameKey: "buildingSewingParlor", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/brewery", nameKey: "buildingBrewery", category: "life", costMultiplier: 0.5 },
-    { hrid: "/guild_buildings/library", nameKey: "buildingLibrary", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/library", nameKey: "buildingLibrary", category: "combat", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/laboratory", nameKey: "buildingLaboratory", category: "life", costMultiplier: 0.5 },
     {
       hrid: "/guild_buildings/mystical_study",
       nameKey: "buildingMysticalStudy",
-      category: "life",
+      category: "combat",
       costMultiplier: 0.5
     },
     {

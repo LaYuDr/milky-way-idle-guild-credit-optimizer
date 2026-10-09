@@ -50,12 +50,12 @@
     { hrid: "/guild_buildings/kitchen", nameKey: "buildingKitchen", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/sewing_parlor", nameKey: "buildingSewingParlor", category: "life", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/brewery", nameKey: "buildingBrewery", category: "life", costMultiplier: 0.5 },
-    { hrid: "/guild_buildings/library", nameKey: "buildingLibrary", category: "life", costMultiplier: 0.5 },
+    { hrid: "/guild_buildings/library", nameKey: "buildingLibrary", category: "combat", costMultiplier: 0.5 },
     { hrid: "/guild_buildings/laboratory", nameKey: "buildingLaboratory", category: "life", costMultiplier: 0.5 },
     {
       hrid: "/guild_buildings/mystical_study",
       nameKey: "buildingMysticalStudy",
-      category: "life",
+      category: "combat",
       costMultiplier: 0.5
     },
     {
