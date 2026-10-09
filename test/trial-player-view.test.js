@@ -51,6 +51,45 @@ test("资料独立神龛折叠区按生活、战斗顺序展示全部十种神�
   assert.ok(html.indexOf('data-trial-shrine-domain="life"') < html.indexOf('data-trial-shrine-domain="combat"'));
 });
 
+test("资料神龛的显式和省略零级保持为 0，缺失等级表和异常值保持未知", () => {
+  const { createRenderer } = require("../src/ui/trial-player-view.js");
+  const { t } = require("../src/localization.js").createLocalizer("zh-CN");
+  const renderer = createRenderer({
+    t,
+    escapeHtml: (value) => String(value).replaceAll('"', "&quot;"),
+    trialHistoryApi: require("../src/trial-history.js"),
+    getBridge: () => ({}),
+    isScreenshotMode: () => false,
+    formatMemberName: (member) => member.name,
+    resolveItemName: (hrid) => hrid
+  });
+  const hrid = "/guild_buffs/rarity_skilling";
+  function check(profile, expected) {
+    const before = JSON.stringify(profile);
+    const html = renderer.render({
+      member: { id: "1", name: "Player" },
+      weeks: [],
+      profileState: { status: "ready", profile }
+    });
+    const tile = html.match(/<div[^>]*data-trial-shrine="life-rarity"[^>]*>[\s\S]*?<\/div>/)[0];
+    const label = expected === null ? "—" : String(expected);
+    assert.ok(tile.includes(`aria-label="稀有神龛 · 生活神龛 Lv.${label}"`));
+    assert.ok(tile.includes(`>Lv.${label}</span>`));
+    const key = /data-trial-profile-tooltip="(\d+)"/.exec(tile)[1];
+    assert.deepEqual(renderer.tooltipData(key), { kind: "shrine", record: { guildBuffHrid: hrid, level: expected } });
+    assert.equal(JSON.stringify(profile), before);
+  }
+  for (const field of ["guildBuffLevelMap", "characterGuildBuffMap"]) {
+    check({ [field]: {} }, 0);
+    check({ [field]: { "/guild_buffs/tempo_skilling": 3 } }, 0);
+    for (const value of [0, { level: 0 }, { currentLevel: 0 }]) check({ [field]: { [hrid]: value } }, 0);
+    for (const value of [null, undefined, -1, 1.5, NaN, Infinity, "0", {}, { level: null }])
+      check({ [field]: { [hrid]: value } }, null);
+    for (const source of [null, undefined, [], "", "invalid", 0]) check({ [field]: source }, null);
+  }
+  check({}, null);
+});
+
 test("资料装备使用游戏槽位，双手装备占主手，未知和重复槽位不丢失", () => {
   const equipment = {
     a: { itemHrid: "/items/a", itemLocationHrid: "/item_locations/two_hand", enhancementLevel: 11 },

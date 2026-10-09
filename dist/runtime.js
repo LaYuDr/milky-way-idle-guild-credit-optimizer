@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.60";
+window.MwiGuildCreditVersion = "1.2.61";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -12938,7 +12938,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
     function shrineBuffLevel(profile, hrid) {
       const source = profile.guildBuffLevelMap || profile.characterGuildBuffMap;
-      const value = source && source[hrid];
+      if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+      // Native profiles use a sparse level map: omitted shrines have level 0.
+      if (!Object.hasOwn(source, hrid)) return 0;
+      const value = source[hrid];
       const level = value && typeof value === "object" ? (value.level ?? value.currentLevel) : value;
       return Number.isSafeInteger(level) && level >= 0 ? level : null;
     }

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.61] - 2026-10-09
+
+### Changed
+
+- Show omitted shrine entries in valid profile level maps as Lv.0 with zero bonuses, while preserving unknown states for missing maps or invalid levels.
+
 ## [1.2.60] - 2026-10-09
 
 ### Changed

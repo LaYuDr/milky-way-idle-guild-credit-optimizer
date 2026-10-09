@@ -1054,7 +1054,8 @@ collapse/reopen visibility, unchanged stored records and no extra profile reques
 Equipped abilities also use five columns with the same tile dimensions as equipment.
 An independent, default-open Shrines disclosure lists the five life and five combat guild-buff levels,
 in that order, using the selected profile's `guildBuffLevelMap` or compatible
-`characterGuildBuffMap`. Missing or invalid levels remain unknown. The trials
+`characterGuildBuffMap`. An omitted shrine in a valid level map has level 0, as in
+the native profile. A missing map or an explicit invalid level remains unknown. The trials
 matrix checks all ten tiles, ordering, labels, and narrow-width containment.
 Shrine tiles share the profile tooltip portal and typography. Their bonuses use
 `guildBuffEntries()` from the upgrade page (including its existing cache hydration),

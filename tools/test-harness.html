@@ -4129,7 +4129,11 @@
                 collectionPoints: 591,
                 bestiaryPoints: 32,
                 famePoints: 10,
-                guildBuffLevelMap: { "/guild_buffs/tempo_skilling": 3, "/guild_buffs/tempo_combat": 0 },
+                guildBuffLevelMap: {
+                  "/guild_buffs/tempo_skilling": 3,
+                  "/guild_buffs/tempo_combat": 0,
+                  "/guild_buffs/spirit_skilling": null
+                },
                 characterSkills: [
                   { skillHrid: "/skills/milking", level: 143, experience: 2347754 },
                   { skillHrid: "/skills/enhancing", level: 138 },
@@ -4681,6 +4685,21 @@
         host.querySelectorAll('[data-trial-profile-section="shrines"] [data-trial-shrine]').length === 10 &&
         !host.querySelector(".mwi-trial-shrine-group h4");
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      checks.profileShrineOmittedLifeZero = host
+        .querySelector('[data-trial-shrine="life-rarity"]')
+        .getAttribute("aria-label")
+        .endsWith("Lv.0");
+      checks.profileShrineZero = ["combat-tempo", "combat-spirit"].every((key) => {
+        const tile = host.querySelector(`[data-trial-shrine="${key}"]`);
+        tile.focus({ preventScroll: true });
+        const correct =
+          tile.querySelector(".mwi-trial-equipment-level").textContent === "Lv.0" &&
+          tile.getAttribute("aria-label").endsWith("Lv.0") &&
+          tooltip()?.textContent.includes("Lv.0") &&
+          tooltip()?.textContent.includes("+0%");
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        return correct;
+      });
       host.querySelector('[data-trial-shrine="life-spirit"]').focus({ preventScroll: true });
       checks.profileShrineUnknown =
         Boolean(tooltip()) &&

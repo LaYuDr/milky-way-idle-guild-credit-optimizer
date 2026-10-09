@@ -276,7 +276,10 @@
     }
     function shrineBuffLevel(profile, hrid) {
       const source = profile.guildBuffLevelMap || profile.characterGuildBuffMap;
-      const value = source && source[hrid];
+      if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+      // Native profiles use a sparse level map: omitted shrines have level 0.
+      if (!Object.hasOwn(source, hrid)) return 0;
+      const value = source[hrid];
       const level = value && typeof value === "object" ? (value.level ?? value.currentLevel) : value;
       return Number.isSafeInteger(level) && level >= 0 ? level : null;
     }
