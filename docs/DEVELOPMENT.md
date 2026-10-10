@@ -826,6 +826,13 @@ use synthetic data for committed fixtures.
 
 `src/ui/trial-history-view.js` renders saved records and original member statistics
 in two display modes: weekly projects and a horizontally scrollable project history.
+The toolbar's fullscreen action uses the browser Fullscreen API on the existing
+trial view. A sticky exit bar and Escape return to the sidebar; browser-initiated
+exit synchronizes the controls. This is session-only and does not recreate the
+view, alter saved records, or issue profile requests. Unsupported or denied
+fullscreen requests show an inline status. Removing/rebuilding the panel leaves
+fullscreen through the browser lifecycle. The trials matrix also checks fullscreen
+entry/exit, mode changes, sticky controls, and unchanged historical storage.
 Week and project selectors are horizontal rows of directly clickable buttons.
 All options render at once, with overflow contained in the selector; the active
 choice is highlighted and revealed on selection. Arrow keys and Home/End select

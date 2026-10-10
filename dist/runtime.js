@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.61";
+window.MwiGuildCreditVersion = "1.2.62";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -4346,6 +4346,10 @@ window.MwiGuildCreditVersion = "1.2.61";
       trialScreenshotFailed: "截图成失败。请重试或切换到单周视图后下载 PNG。",
       trialSimpleNames: "简洁模式",
       trialSimpleNamesHint: "只显示普通玩家名字，隐藏个性化图标和颜色；本次页面内生效。",
+      trialFullscreenEnter: "全屏查看",
+      trialFullscreenExit: "退出全屏",
+      trialFullscreenUnavailable: "当前浏览器不支持全屏查看。",
+      trialFullscreenFailed: "无法切换全屏，请重试或检查浏览器的全屏权限。",
       trialScreenshotMode: "隐藏玩家名",
       trialScreenshotExit: "退出隐藏玩家名",
       trialScreenshotHint: "仅隐藏历史试炼页面的玩家名；导出 JSON 保留原名。刷新游戏后关闭。",
@@ -5166,6 +5170,10 @@ window.MwiGuildCreditVersion = "1.2.61";
       trialScreenshotFailed: "Could not generate the image. Retry or select a single week and download PNG.",
       trialSimpleNames: "Simple names",
       trialSimpleNamesHint: "Show plain player names without custom icons or colors for this page session.",
+      trialFullscreenEnter: "View fullscreen",
+      trialFullscreenExit: "Exit fullscreen",
+      trialFullscreenUnavailable: "Fullscreen viewing is unavailable in this browser.",
+      trialFullscreenFailed: "Could not switch fullscreen. Try again or check your browser's fullscreen permissions.",
       trialScreenshotMode: "Hide player names",
       trialScreenshotExit: "Show player names",
       trialScreenshotHint:
@@ -11140,6 +11148,11 @@ window.MwiGuildCreditVersion = "1.2.61";
 
           /* Trial workspace inherits the construction page's compact visual system. */
         #mwi-credit-optimizer [data-role="trials-view"]{--trial-surface:#24273b;--trial-field:#191c2e;--trial-line:#41465f;--trial-text:#edf0fa;--trial-muted:#b7bfd4;--trial-accent:#91dfcb;--trial-warning:#e9c487;--trial-danger:#ffa7b5;container-type:inline-size;container-name:mwi-trials;color:var(--trial-text);font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;scrollbar-color:#66708b var(--trial-surface)}
+        #mwi-credit-optimizer [data-role="trials-view"]:fullscreen{box-sizing:border-box;width:100%;height:100%;min-width:0;max-width:none;margin:0;padding:0 16px 16px;border:0;background:var(--trial-surface);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+        #mwi-credit-optimizer .mwi-trial-fullscreen-bar{display:none}
+        #mwi-credit-optimizer [data-role="trials-view"]:fullscreen>.mwi-trial-fullscreen-bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:10px 0;border-bottom:1px solid var(--trial-line);background:var(--trial-surface)}
+        #mwi-credit-optimizer [data-role="trials-view"]:fullscreen .mwi-trial-toolbar [data-trial-fullscreen]{display:none}
+        #mwi-credit-optimizer [data-trial-fullscreen-status]:empty{display:none}
         #mwi-credit-optimizer [data-role="trials-view"] :is(input,select){width:100%;min-width:0;max-width:100%;padding:4px 8px;border:1px solid #626b86;border-radius:5px;background:var(--trial-field);color:var(--trial-text);color-scheme:dark;font:14px system-ui,sans-serif;caret-color:var(--trial-accent)}
         #mwi-credit-optimizer [data-role="trials-view"] input::placeholder{color:var(--trial-muted);opacity:1}
         #mwi-credit-optimizer [data-role="trials-view"] button{min-height:30px;padding:4px 8px;border-radius:4px;background:#34394f;color:var(--trial-text);font-size:12px}
@@ -13353,7 +13366,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     // but retain selected labels to identify the week/project and the visible columns.
     copy
       .querySelectorAll(
-        ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-guide,.mwi-trial-display-settings," +
+        ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-fullscreen-bar,[data-trial-fullscreen-status],.mwi-trial-guide,.mwi-trial-display-settings," +
           ".mwi-trial-scroll-buttons,.mwi-trial-player-picker,.mwi-trial-raw,.mwi-trial-import-preview," +
           "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
           "[data-trial-player-back],[data-trial-profile-refresh],.mwi-trial-ranking-controls,[data-trial-ranking-order-hint],[data-trial-ranking-order-status]," +
@@ -13804,6 +13817,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     let mode = savedView.mode || "week";
     let screenshotMode = savedView.screenshotMode === true;
     let simpleNames = savedView.simpleNames === true;
+    let fullscreenBusy = false;
+    let fullscreenNotice = "";
+    let fullscreenHost = null;
     let screenshotBusy = false;
     let screenshotNotice = "";
     const isScreenshotMode = () => screenshotMode;
@@ -13966,6 +13982,43 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       return record.trialDate || t("trialUnknownDate");
     }
 
+    const isFullscreen = () => document.fullscreenElement === fullscreenHost && fullscreenHost !== null;
+
+    function syncFullscreenControls(host) {
+      const active = document.fullscreenElement === host;
+      for (const button of host.querySelectorAll("[data-trial-fullscreen]")) {
+        button.textContent = t(active ? "trialFullscreenExit" : "trialFullscreenEnter");
+        button.setAttribute("aria-pressed", String(active));
+        button.disabled = fullscreenBusy;
+      }
+      const notice = host.querySelector("[data-trial-fullscreen-status]");
+      if (notice) notice.textContent = fullscreenNotice ? t(fullscreenNotice) : "";
+    }
+
+    async function toggleFullscreen(host) {
+      if (fullscreenBusy) return;
+      fullscreenBusy = true;
+      fullscreenNotice = "";
+      syncFullscreenControls(host);
+      try {
+        if (document.fullscreenElement === host) await document.exitFullscreen();
+        else if (host.requestFullscreen && document.fullscreenEnabled !== false) await host.requestFullscreen();
+        else fullscreenNotice = "trialFullscreenUnavailable";
+      } catch (_) {
+        fullscreenNotice = "trialFullscreenFailed";
+      } finally {
+        fullscreenBusy = false;
+        if (host.isConnected && !disposed) {
+          syncFullscreenControls(host);
+          host
+            .querySelector(
+              isFullscreen() ? ".mwi-trial-fullscreen-bar button" : ".mwi-trial-toolbar [data-trial-fullscreen]"
+            )
+            ?.focus({ preventScroll: true });
+        }
+      }
+    }
+
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
       const count = (status) => preview.filter((entry) => entry.status === status).length;
@@ -13975,10 +14028,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
-      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+      let markup = `<div class="mwi-trial-fullscreen-bar"><strong>${escapeHtml(t("trialHistory"))}</strong><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t("trialFullscreenExit"))}</button></div><section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t(isFullscreen() ? "trialFullscreenExit" : "trialFullscreenEnter"))}</button><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
 
+        <p class="mwi-trial-help" data-trial-fullscreen-status role="status" aria-live="polite">${escapeHtml(fullscreenNotice ? t(fullscreenNotice) : "")}</p>
         <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
 
@@ -14609,6 +14663,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      fullscreenHost = host;
+      host.addEventListener("fullscreenchange", () => {
+        syncFullscreenControls(host);
+        if (!document.fullscreenElement && host.isConnected)
+          host.querySelector(".mwi-trial-toolbar [data-trial-fullscreen]")?.focus({ preventScroll: true });
+      });
+      host.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key !== "Escape" || document.fullscreenElement !== host) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void toggleFullscreen(host);
+        },
+        true
+      );
       rankingSortableHost = host;
       bindRankingSortable(panel);
       profileTooltip?.dispose();
@@ -14755,6 +14825,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-fullscreen]")) {
+          void toggleFullscreen(host);
+          return;
+        }
         const moveButton = event.target.closest("[data-trial-ranking-move]");
         if (moveButton) {
           const key = moveButton.dataset.trialRankingMove;
@@ -14968,6 +15042,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       signupWarning.start();
     }
     function dispose() {
+      if (isFullscreen()) void document.exitFullscreen().catch(() => {});
+      fullscreenHost = null;
       signupWarning.dispose();
       rankingSortable?.destroy();
       rankingSortableHost = null;

@@ -75,6 +75,9 @@
     let mode = savedView.mode || "week";
     let screenshotMode = savedView.screenshotMode === true;
     let simpleNames = savedView.simpleNames === true;
+    let fullscreenBusy = false;
+    let fullscreenNotice = "";
+    let fullscreenHost = null;
     let screenshotBusy = false;
     let screenshotNotice = "";
     const isScreenshotMode = () => screenshotMode;
@@ -237,6 +240,43 @@
       return record.trialDate || t("trialUnknownDate");
     }
 
+    const isFullscreen = () => document.fullscreenElement === fullscreenHost && fullscreenHost !== null;
+
+    function syncFullscreenControls(host) {
+      const active = document.fullscreenElement === host;
+      for (const button of host.querySelectorAll("[data-trial-fullscreen]")) {
+        button.textContent = t(active ? "trialFullscreenExit" : "trialFullscreenEnter");
+        button.setAttribute("aria-pressed", String(active));
+        button.disabled = fullscreenBusy;
+      }
+      const notice = host.querySelector("[data-trial-fullscreen-status]");
+      if (notice) notice.textContent = fullscreenNotice ? t(fullscreenNotice) : "";
+    }
+
+    async function toggleFullscreen(host) {
+      if (fullscreenBusy) return;
+      fullscreenBusy = true;
+      fullscreenNotice = "";
+      syncFullscreenControls(host);
+      try {
+        if (document.fullscreenElement === host) await document.exitFullscreen();
+        else if (host.requestFullscreen && document.fullscreenEnabled !== false) await host.requestFullscreen();
+        else fullscreenNotice = "trialFullscreenUnavailable";
+      } catch (_) {
+        fullscreenNotice = "trialFullscreenFailed";
+      } finally {
+        fullscreenBusy = false;
+        if (host.isConnected && !disposed) {
+          syncFullscreenControls(host);
+          host
+            .querySelector(
+              isFullscreen() ? ".mwi-trial-fullscreen-bar button" : ".mwi-trial-toolbar [data-trial-fullscreen]"
+            )
+            ?.focus({ preventScroll: true });
+        }
+      }
+    }
+
     function renderImport() {
       const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
       const count = (status) => preview.filter((entry) => entry.status === status).length;
@@ -246,10 +286,11 @@
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
-      let markup = `<section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
-        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
+      let markup = `<div class="mwi-trial-fullscreen-bar"><strong>${escapeHtml(t("trialHistory"))}</strong><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t("trialFullscreenExit"))}</button></div><section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
+        <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t(isFullscreen() ? "trialFullscreenExit" : "trialFullscreenEnter"))}</button><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
         <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
 
+        <p class="mwi-trial-help" data-trial-fullscreen-status role="status" aria-live="polite">${escapeHtml(fullscreenNotice ? t(fullscreenNotice) : "")}</p>
         <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
         <input type="file" accept=".json,application/json" data-role="trial-import-file" aria-label="${escapeHtml(t("trialImportFile"))}" hidden>
 
@@ -880,6 +921,22 @@
 
     function bind(panel) {
       const host = panel.querySelector('[data-role="trials-view"]');
+      fullscreenHost = host;
+      host.addEventListener("fullscreenchange", () => {
+        syncFullscreenControls(host);
+        if (!document.fullscreenElement && host.isConnected)
+          host.querySelector(".mwi-trial-toolbar [data-trial-fullscreen]")?.focus({ preventScroll: true });
+      });
+      host.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key !== "Escape" || document.fullscreenElement !== host) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void toggleFullscreen(host);
+        },
+        true
+      );
       rankingSortableHost = host;
       bindRankingSortable(panel);
       profileTooltip?.dispose();
@@ -1026,6 +1083,10 @@
       );
       host.addEventListener("scroll", () => updateScrollButtons(host), true);
       host.addEventListener("click", (event) => {
+        if (event.target.closest("[data-trial-fullscreen]")) {
+          void toggleFullscreen(host);
+          return;
+        }
         const moveButton = event.target.closest("[data-trial-ranking-move]");
         if (moveButton) {
           const key = moveButton.dataset.trialRankingMove;
@@ -1239,6 +1300,8 @@
       signupWarning.start();
     }
     function dispose() {
+      if (isFullscreen()) void document.exitFullscreen().catch(() => {});
+      fullscreenHost = null;
       signupWarning.dispose();
       rankingSortable?.destroy();
       rankingSortableHost = null;

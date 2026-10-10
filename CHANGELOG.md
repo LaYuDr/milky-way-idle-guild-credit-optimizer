@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.62] - 2026-10-10
+
+### Changed
+
+- 新增历史试炼全屏查看，支持固定退出按钮和 Esc 返回；保留筛选与浏览状态，并补充全屏布局、退出恢复及只读数据回归检查。
+
 ## [1.2.61] - 2026-10-09
 
 ### Changed

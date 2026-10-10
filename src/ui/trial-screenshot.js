@@ -45,7 +45,7 @@
     // but retain selected labels to identify the week/project and the visible columns.
     copy
       .querySelectorAll(
-        ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-guide,.mwi-trial-display-settings," +
+        ".mwi-trial-toolbar .mwi-trial-controls,.mwi-trial-fullscreen-bar,[data-trial-fullscreen-status],.mwi-trial-guide,.mwi-trial-display-settings," +
           ".mwi-trial-scroll-buttons,.mwi-trial-player-picker,.mwi-trial-raw,.mwi-trial-import-preview," +
           "[data-role='trial-import-status'],[data-trial-image-status],[data-trial-image-help],input," +
           "[data-trial-player-back],[data-trial-profile-refresh],.mwi-trial-ranking-controls,[data-trial-ranking-order-hint],[data-trial-ranking-order-status]," +
