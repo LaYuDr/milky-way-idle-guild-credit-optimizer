@@ -833,7 +833,10 @@ view, alter saved records, or issue profile requests. Unsupported or denied
 fullscreen requests show an inline status. Removing/rebuilding the panel leaves
 fullscreen through the browser lifecycle. The trials matrix also checks fullscreen
 entry/exit, mode changes, sticky controls, and unchanged historical storage.
-Week and project selectors are horizontal rows of directly clickable buttons.
+Week selectors are horizontal rows of directly clickable buttons. Project selectors
+place skilling projects on the first row and combat projects on a separate second
+row, omitting empty categories. Each row scrolls independently; keyboard navigation
+retains the complete project order across both rows.
 All options render at once, with overflow contained in the selector; the active
 choice is highlighted and revealed on selection. Arrow keys and Home/End select
 adjacent or endpoint options. Background refresh preserves selector scroll position.

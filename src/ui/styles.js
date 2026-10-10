@@ -840,6 +840,7 @@
         #mwi-credit-optimizer .mwi-trial-overview p{margin:2px 0 4px;color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-display-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0 0 8px}
         #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-project-choices{display:grid;gap:4px;min-width:0}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}

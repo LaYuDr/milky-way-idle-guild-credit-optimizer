@@ -49,6 +49,14 @@ export async function auditTrialFullscreen(page, screenshotPath) {
       (await host.evaluate((element) => globalThis.document.fullscreenElement === element)) &&
       (await exit.getAttribute("aria-pressed")) === "true";
   }
+  await host.locator('[data-trial-mode="project"]').click();
+  checks.projectRowsFullscreen = await host.evaluate((element) => {
+    const life = element.querySelector('[data-trial-project-kind="skilling"]').getBoundingClientRect();
+    const combat = element.querySelector('[data-trial-project-kind="combat"]').getBoundingClientRect();
+    return combat.top >= life.bottom;
+  });
+  await page.screenshot({ path: screenshotPath.replace(/\.png$/, "-projects.png") });
+  await host.locator('[data-trial-mode="week"]').click();
   await host.locator('[data-trial-choice="week"]').last().click();
   checks.weekSelectionWorks =
     (await host.locator('[data-trial-choice="week"]').last().getAttribute("aria-pressed")) === "true";

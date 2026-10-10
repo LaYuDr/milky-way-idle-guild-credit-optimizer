@@ -5028,6 +5028,23 @@
           .slice(0, 4)
           .map((el) => JSON.parse(el.value)[1])
           .join(",") === skills.join(",");
+      const projectRow = (kind) => host.querySelector(`[data-trial-project-kind="${kind}"]`);
+      checks.projectCategoryRows = ["skilling", "combat"].every((kind) =>
+        [...projectRow(kind).querySelectorAll("button")].every((button) => JSON.parse(button.value)[0] === kind)
+      );
+      checks.projectCombatSeparateRow =
+        projectRow("combat").getBoundingClientRect().top >= projectRow("skilling").getBoundingClientRect().bottom;
+      checks.projectRowsContained = ["skilling", "combat"].every(
+        (kind) => projectRow(kind).clientWidth <= host.clientWidth
+      );
+      const lastSkill = projectRow("skilling").querySelector("button:last-child");
+      const firstCombat = projectRow("combat").querySelector("button").value;
+      lastSkill.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      checks.projectKeyboardAcrossRows =
+        host.querySelector('[data-trial-choice="project"][aria-pressed="true"]').value === firstCombat;
+      const combatScrollBefore = projectRow("combat").scrollLeft;
+      projectRow("skilling").scrollLeft = projectRow("skilling").scrollWidth;
+      checks.projectRowsScrollIndependently = projectRow("combat").scrollLeft === combatScrollBefore;
       checks.directProjectChoices =
         host.querySelectorAll('[data-role="trial-project"] button').length === 6 && !host.querySelector("select");
       checks.projectSwitch =

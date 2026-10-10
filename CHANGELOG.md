@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.63] - 2026-10-10
+
+### Changed
+
+- 历史试炼按项目查看将生活项目与战斗项目分为上下两行，各行独立横向滚动，保留跨行键盘选择和原有项目顺序；补充普通侧栏及全屏布局回归检查。
+
 ## [1.2.62] - 2026-10-10
 
 ### Changed

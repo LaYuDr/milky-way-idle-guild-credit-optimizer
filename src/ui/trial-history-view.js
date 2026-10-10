@@ -643,7 +643,28 @@
       const label = t(
         kind === "week" ? "trialChooseWeek" : kind === "player" ? "trialChoosePlayer" : "trialChooseProject"
       );
-      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
+      const buttons = (choices) =>
+        choices
+          .map(
+            ({ key, label: name, icon = "" }) =>
+              `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`
+          )
+          .join("");
+      const choices =
+        kind === "project"
+          ? `<div class="mwi-trial-project-choices" data-role="trial-project" role="group" aria-labelledby="mwi-trial-choice-label">${[
+              "skilling",
+              "combat"
+            ]
+              .map((group) => {
+                const items = entries.filter((entry) => entry.kind === group);
+                return items.length
+                  ? `<div class="mwi-trial-choices" data-trial-project-kind="${group}" data-trial-scroll-id="choice-project-${group}" role="group" aria-label="${escapeHtml(t(group === "combat" ? "trialCombat" : "trialSkilling"))}">${buttons(items)}</div>`
+                  : "";
+              })
+              .join("")}</div>`
+          : `<div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${buttons(entries)}</div>`;
+      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span>${choices}</div>`;
     }
 
     function renderPlayerResults(members, current) {
@@ -844,6 +865,7 @@
             "project",
             projects.map((entry) => ({
               key: entry.key,
+              kind: entry.kind,
               label: trialName(entry.records[0]),
               icon: projectIcon(entry.records[0])
             })),
@@ -875,8 +897,8 @@
         if (position && (!resetScroll || el.dataset.trialScrollId.startsWith("choice-")))
           [el.scrollLeft, el.scrollTop] = position;
       }
-      if (resetScroll || !scroll.has(`choice-${mode}`))
-        revealChoice(host.querySelector('[data-trial-choice][aria-pressed="true"]'));
+      const activeChoice = host.querySelector('[data-trial-choice][aria-pressed="true"]');
+      if (resetScroll || !scroll.has(activeChoice?.parentElement.dataset.trialScrollId)) revealChoice(activeChoice);
       resetScroll = false;
       updateScrollButtons(host);
     }
@@ -1013,7 +1035,8 @@
         const button = event.target.closest("[data-trial-choice]");
         if (!button || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
-        const buttons = [...button.parentElement.querySelectorAll("[data-trial-choice]")];
+        const choices = button.closest('[data-role="trial-project"]') || button.parentElement;
+        const buttons = [...choices.querySelectorAll("[data-trial-choice]")];
         const current = buttons.indexOf(button);
         const index =
           event.key === "Home"

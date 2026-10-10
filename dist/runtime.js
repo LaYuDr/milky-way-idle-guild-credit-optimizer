@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.62";
+window.MwiGuildCreditVersion = "1.2.63";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -11262,6 +11262,7 @@ window.MwiGuildCreditVersion = "1.2.62";
         #mwi-credit-optimizer .mwi-trial-overview p{margin:2px 0 4px;color:var(--trial-muted);overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-trial-display-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0 0 8px}
         #mwi-credit-optimizer .mwi-trial-choice-field{display:grid;gap:4px;min-width:0;font-size:12px;color:var(--trial-muted)}
+        #mwi-credit-optimizer .mwi-trial-project-choices{display:grid;gap:4px;min-width:0}
         #mwi-credit-optimizer .mwi-trial-choices{display:flex;gap:6px;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 2px 4px}
         #mwi-credit-optimizer .mwi-trial-choices button{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;white-space:nowrap;min-height:30px;padding:3px 8px;border:1px solid var(--trial-line);background:transparent;color:var(--trial-muted);font-size:14px}
         #mwi-credit-optimizer .mwi-trial-rankings{margin:12px 0 20px;min-width:0}
@@ -14385,7 +14386,28 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const label = t(
         kind === "week" ? "trialChooseWeek" : kind === "player" ? "trialChoosePlayer" : "trialChooseProject"
       );
-      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span><div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${entries.map(({ key, label: name, icon = "" }) => `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`).join("")}</div></div>`;
+      const buttons = (choices) =>
+        choices
+          .map(
+            ({ key, label: name, icon = "" }) =>
+              `<button type="button" data-trial-choice="${kind}" value="${escapeHtml(key)}" aria-pressed="${key === current}">${icon}<span>${escapeHtml(name)}</span></button>`
+          )
+          .join("");
+      const choices =
+        kind === "project"
+          ? `<div class="mwi-trial-project-choices" data-role="trial-project" role="group" aria-labelledby="mwi-trial-choice-label">${[
+              "skilling",
+              "combat"
+            ]
+              .map((group) => {
+                const items = entries.filter((entry) => entry.kind === group);
+                return items.length
+                  ? `<div class="mwi-trial-choices" data-trial-project-kind="${group}" data-trial-scroll-id="choice-project-${group}" role="group" aria-label="${escapeHtml(t(group === "combat" ? "trialCombat" : "trialSkilling"))}">${buttons(items)}</div>`
+                  : "";
+              })
+              .join("")}</div>`
+          : `<div class="mwi-trial-choices" data-role="trial-${kind}" data-trial-scroll-id="choice-${kind}" role="group" aria-labelledby="mwi-trial-choice-label">${buttons(entries)}</div>`;
+      return `<div class="mwi-trial-choice-field"><span id="mwi-trial-choice-label">${escapeHtml(label)}</span>${choices}</div>`;
     }
 
     function renderPlayerResults(members, current) {
@@ -14586,6 +14608,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             "project",
             projects.map((entry) => ({
               key: entry.key,
+              kind: entry.kind,
               label: trialName(entry.records[0]),
               icon: projectIcon(entry.records[0])
             })),
@@ -14617,8 +14640,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (position && (!resetScroll || el.dataset.trialScrollId.startsWith("choice-")))
           [el.scrollLeft, el.scrollTop] = position;
       }
-      if (resetScroll || !scroll.has(`choice-${mode}`))
-        revealChoice(host.querySelector('[data-trial-choice][aria-pressed="true"]'));
+      const activeChoice = host.querySelector('[data-trial-choice][aria-pressed="true"]');
+      if (resetScroll || !scroll.has(activeChoice?.parentElement.dataset.trialScrollId)) revealChoice(activeChoice);
       resetScroll = false;
       updateScrollButtons(host);
     }
@@ -14755,7 +14778,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         const button = event.target.closest("[data-trial-choice]");
         if (!button || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
-        const buttons = [...button.parentElement.querySelectorAll("[data-trial-choice]")];
+        const choices = button.closest('[data-role="trial-project"]') || button.parentElement;
+        const buttons = [...choices.querySelectorAll("[data-trial-choice]")];
         const current = buttons.indexOf(button);
         const index =
           event.key === "Home"
