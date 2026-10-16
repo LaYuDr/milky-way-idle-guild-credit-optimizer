@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
+const usageBuild = require("./usage-build.js");
 const source = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const outputDirectory = path.join(root, "dist");
 fs.mkdirSync(outputDirectory, { recursive: true });
@@ -66,11 +67,11 @@ const header = `// ==UserScript==
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
 // @updateURL    ${updateUrl}
 // @downloadURL  ${downloadUrl}
-// @description  银河奶牛公会助手：比较信用点兑换成本、规划神龛升级与公会建设、保存历史试炼统计；不会自动交易、兑换或升级，不会上传账号数据。
-// @description:en Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history; does not automate buying, selling, exchanging, or upgrading, and does not upload account data.
+// @description  银河奶牛公会助手：比较信用点兑换成本、规划神龛升级与公会建设、保存历史试炼统计。
+// @description:en Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history.
 // @match        https://www.milkywayidle.com/*
 // @match        https://www.milkywayidlecn.com/*
-// @grant        GM_addElement
+${usageBuild.metadata}// @grant        GM_addElement
 // @grant        unsafeWindow
 // @sandbox      raw
 // @run-at       document-start
@@ -121,7 +122,8 @@ const SOURCE_FILES = [
 ];
 const runtimeSource = SOURCE_FILES.map((file) => `// SOURCE: ${file}\n${source(file)}`).join("\n\n");
 const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${runtimeSource}`;
-const bundle = `${header}${runtime}`;
+const usage = usageBuild.buildUsage(root, "src/runtime/usage-client.js", "mwi_guild", "公会助手", version);
+const bundle = `${header}${usage}${runtime}`;
 const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
 fs.writeFileSync(output, bundle);
 

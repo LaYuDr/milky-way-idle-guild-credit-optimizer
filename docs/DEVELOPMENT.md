@@ -1142,3 +1142,28 @@ npm run check:handoff
 The persistence audit runs two actual reloads at 320/900px in Chinese and English,
 checks restored controls and identities, and uses isolated localhost storage with
 external requests blocked. Its fixture checks are not installed-game evidence.
+
+### Installation and activity statistics
+
+The guild production bundle enables default-on reporting through explicit build
+configuration. Saved `false` choices take precedence. The page runtime and dev
+loader do not contain the telemetry client. User-facing privacy and opt-out
+semantics are documented in [USAGE_STATISTICS.md](USAGE_STATISTICS.md).
+
+After building the production bundle, run:
+
+```bash
+node tools/browser-usage.mjs
+npm run test:browser -- --suite settings --channel chrome
+```
+
+The usage runner uses the settings matrix (eleven Chinese widths from 320–1200px,
+English 320/610/900) with mocked GM storage/transport on intercepted documents.
+It checks default-on and exact payloads, synthetic-click rejection, failed
+preference saves, one identity-free opt-out attempt even when delivery fails,
+remote-tab disable without extra events, saved-off reload, enable/cancel
+confirmation, same-day deduplication, in-flight heartbeat cancellation, privacy
+text overflow and minimum control height. It saves 320px Chinese/English captures
+and a matrix report under `.workbench/browser-usage-*`. No real game or statistics
+service is contacted. This does not replace final Tampermonkey or receiver
+integration evidence.

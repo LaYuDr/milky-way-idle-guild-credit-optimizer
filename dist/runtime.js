@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.63";
+window.MwiGuildCreditVersion = "1.2.64";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -16585,7 +16585,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(t("interfaceVisibility"))}</h4></div>
       <form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" autocomplete="off"><button id="mwi-settings-sidebar-name-save" type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button id="mwi-settings-sidebar-name-reset" type="button">${escapeHtml(t("sidebarNameReset"))}</button></div></form>
       <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showConstructionView"))}</strong></span><input id="mwi-settings-show-construction" class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch"></label>
-      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showTrialHistoryView"))}</strong></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch"></label></section>${renderHelp()}`;
+      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showTrialHistoryView"))}</strong></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch"></label></section><div data-layu-usage-settings="mwi_guild" lang="${escapeHtml(ui().locale)}"></div>${renderHelp()}`;
     }
 
     function renderSettingsMarkup() {
@@ -16615,7 +16615,11 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const focusedId = focused && content.contains(focused) ? focused.id : "";
       const selection = focused === nameInput ? [nameInput.selectionStart, nameInput.selectionEnd] : null;
       const openHelpTopics = new Set(state.openHelpTopics || []);
+      const usageHost = content?.querySelector?.('[data-layu-usage-settings="mwi_guild"]');
       updateRenderedMarkup(content, renderSettingsContent(snapshot));
+      const nextUsageHost = content?.querySelector?.('[data-layu-usage-settings="mwi_guild"]');
+      if (usageHost && nextUsageHost && usageHost !== nextUsageHost && usageHost.lang === nextUsageHost.lang)
+        nextUsageHost.replaceWith(usageHost);
       for (const topic of content?.querySelectorAll("[data-settings-help-topic]") || [])
         topic.open = openHelpTopics.has(topic.dataset.settingsHelpTopic);
       const updatedNameInput = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');

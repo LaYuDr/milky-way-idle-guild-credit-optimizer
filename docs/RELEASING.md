@@ -52,3 +52,16 @@ Do not rewrite an existing historical artifact. If a published version is
 faulty, restore the source in a new commit and publish a higher patch version.
 The earlier file remains in releases/ as an accurate record of what was
 released.
+
+## Default-on statistics release dependency
+
+The guild build now defaults installation/activity statistics on while preserving saved opt-outs. Turning off attempts one identity-free opt-out report, with no retry. The receiver and computer-sync source changes are local preparation, not proof of deployment.
+
+Before publishing this policy:
+
+1. Consistently back up relay and computer databases, then update the computer-sync installed runtime before the receiver. The schema-3 migrations preserve schema-2 heartbeat history; rollback requires the matching backup, not simply an old executable.
+2. Deploy the receiver supporting `/v1/opt-out`, retaining strict heartbeat validation and authenticated batch/ACK. Verify a bounded test event through durable sync without treating it as real-user data.
+3. Verify default-on, saved-off upgrade, off-event delivery and failure behavior in the final Tampermonkey script. Fixture checks are separate evidence.
+4. Review and publish `docs/GREASY_FORK_DESCRIPTION.md` as the public introduction alongside the final script. The public introduction could not be read in this run (HTTP 403); this is a complete replacement draft based on current project sources. Do not claim the public page was updated.
+
+Use `python3 ../插件使用量统计/source/client/sync_clients.py --project 银河奶牛公会助手 --check` to check only the authorized guild client. Other assistants retain their existing deployed policy and are not release inputs for this task.

@@ -30,6 +30,7 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   fs.copyFileSync(path.join(projectRoot, "package.json"), path.join(root, "package.json"));
   fs.cpSync(path.join(projectRoot, "src"), path.join(root, "src"), { recursive: true });
   fs.copyFileSync(path.join(projectRoot, "tools", "build.js"), path.join(root, "tools", "build.js"));
+  fs.copyFileSync(path.join(projectRoot, "tools", "usage-build.js"), path.join(root, "tools", "usage-build.js"));
   fs.copyFileSync(path.join(projectRoot, "tools", "test-harness.html"), path.join(root, "tools", "test-harness.html"));
 
   const normalBuild = runBuild(root, false);
@@ -55,7 +56,7 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   assert.doesNotMatch(loader, /^\/\/ @(?:updateURL|downloadURL)\s+/m);
   assert.match(
     currentBundle,
-    /^\/\/ @description:en\s+Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history;/m
+    /^\/\/ @description:en\s+Read-only guild assistant for credit exchange comparisons, shrine and construction planning, and trial history\.$/m
   );
 
   const firstReleaseBuild = runBuild(root, true);

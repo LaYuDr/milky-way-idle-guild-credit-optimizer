@@ -2519,7 +2519,6 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(buildSource, /@sandbox      raw/);
   assert.match(buildSource, /@homepageURL  https:\/\/github\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
   assert.match(buildSource, /银河奶牛公会助手：比较信用点兑换成本、规划神龛升级与公会建设、保存历史试炼统计/);
-  assert.match(buildSource, /不会上传账号数据/);
   assert.match(buildSource, /MWI_GUILD_CREDIT_RUNTIME/);
   assert.match(buildSource, /window\.MwiGuildCreditVersion/);
   assert.match(buildSource, /"src\/market-dom\.js"/);

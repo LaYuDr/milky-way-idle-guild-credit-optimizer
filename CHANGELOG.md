@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.64] - 2026-10-16
+
+### Changed
+
+- Added installation and activity statistics, enabled by default while preserving saved opt-outs. Turning off attempts one identity-free opt-out report without retries. Unified Chinese/English privacy disclosures and reviewed installation/Greasy Fork copy.
+
 ## [1.2.63] - 2026-10-10
 
 ### Changed
