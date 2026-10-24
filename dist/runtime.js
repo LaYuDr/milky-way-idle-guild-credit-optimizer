@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.64";
+window.MwiGuildCreditVersion = "1.2.65";
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -713,10 +713,8 @@ window.MwiGuildCreditVersion = "1.2.64";
   ];
   const UPDATE_SCRIPT_URL =
     "https://raw.githubusercontent.com/LaYuDr/milky-way-idle-guild-credit-optimizer/main/dist/milky-way-idle-guild-credit-optimizer.user.js";
-  const FALLBACK_UPDATE_SCRIPT_URL =
-    "https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
-  const FALLBACK_INSTALL_URL =
-    "https://www.tampermonkey.net/script_installation.php#url=https://js.nainai.eu.org/proxy/https://update.greasyfork.org/scripts/586873/%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B%E5%85%AC%E4%BC%9A%E4%BF%A1%E7%94%A8%E7%82%B9%E6%80%A7%E4%BB%B7%E6%AF%94.user.js";
+  const FALLBACK_UPDATE_SCRIPT_URL = `https://gh-proxy.org/${UPDATE_SCRIPT_URL}`;
+  const FALLBACK_INSTALL_URL = `https://www.tampermonkey.net/script_installation.php#url=${FALLBACK_UPDATE_SCRIPT_URL}`;
 
   return {
     UPDATE_SOURCES: [

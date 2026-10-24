@@ -10,6 +10,7 @@ const marketDataApi = require("../src/market-data.js");
 const marketDomApi = require("../src/market-dom.js");
 const itemNameCatalogApi = require("../src/item-name-catalog.js");
 const releaseInfoApi = require("../src/release-info.js");
+const config = require("../src/runtime/config.js");
 const localizationApi = require("../src/localization.js");
 const sidebarIntegrationApi = require("../src/ui/sidebar-integration.js");
 
@@ -561,24 +562,22 @@ test("更新检查复用五分钟内的成功结果", async () => {
 test("主更新源失败后使用备用源及其安装地址", async () => {
   const requestedUrls = [];
   const checker = releaseInfoApi.createVersionChecker({
-    sources: [
-      { url: "https://primary.example/script.user.js", installUrl: "https://primary.example/install" },
-      { url: "https://fallback.example/script.user.js", installUrl: "https://fallback.example/install" }
-    ],
+    sources: config.UPDATE_SOURCES,
     fetchImpl: async (url) => {
       requestedUrls.push(url);
-      if (url.includes("primary")) throw new Error("主更新源不可用");
+      if (url === config.UPDATE_SOURCES[0].url) throw new Error("主更新源不可用");
       return { ok: true, status: 200, text: async () => "// @version 1.0.2" };
     }
   });
 
   assert.deepEqual(await checker.latestRelease(), {
     latestVersion: "1.0.2",
-    installUrl: "https://fallback.example/install"
+    installUrl: `https://www.tampermonkey.net/script_installation.php#url=https://gh-proxy.org/${config.UPDATE_SOURCES[0].url}`
   });
+  assert.equal(config.FALLBACK_INSTALL_URL, (await checker.latestRelease()).installUrl);
   assert.deepEqual(requestedUrls, [
-    "https://primary.example/script.user.js",
-    "https://fallback.example/script.user.js"
+    config.UPDATE_SOURCES[0].url,
+    `https://gh-proxy.org/${config.UPDATE_SOURCES[0].url}`
   ]);
 });
 
@@ -2507,7 +2506,7 @@ test("总览界面固定展示八种信用点、前五项、官方名称与物�
   assert.match(source, /updateLatest/);
   assert.match(source, /mwi-update-available/);
   assert.match(source, /raw\.githubusercontent\.com\/LaYuDr\/milky-way-idle-guild-credit-optimizer/);
-  assert.match(source, /js\.nainai\.eu\.org\/proxy\/https:\/\/update\.greasyfork\.org\/scripts\/586873/);
+  assert.doesNotMatch(source, /js\.nainai\.eu\.org\/proxy\//);
   assert.match(source, /UPDATE_CHECK_TIMEOUT_MS: 8000/);
   assert.match(source, /updateChecker\.latestRelease\(\)/);
   assert.match(source, /updateLink\.href = installUrl/);

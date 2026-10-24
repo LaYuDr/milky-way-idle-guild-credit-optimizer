@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.65] - 2026-10-25
+
+### Changed
+
+- 将备用更新检查和备用安装入口改为 gh-proxy.org 的 GitHub 代理，避免经过资源中心统计入口。
+
 ## [1.2.64] - 2026-10-16
 
 ### Changed
