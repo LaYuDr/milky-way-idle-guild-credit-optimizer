@@ -578,6 +578,7 @@
         #mwi-credit-optimizer .mwi-building-tile-copy{display:grid;gap:2px;min-width:0}
         #mwi-credit-optimizer .mwi-building-tile-name{font-size:14px;font-weight:500;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-tile-level,#mwi-credit-optimizer .mwi-building-tile-cost{font-size:12px;font-weight:400;line-height:1.4;color:var(--build-muted);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-building-tile-cost[data-numeric-cost="true"]{white-space:nowrap;overflow-wrap:normal}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"] .mwi-building-tile-level{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;text-align:left;margin-top:20px;padding-top:14px;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}

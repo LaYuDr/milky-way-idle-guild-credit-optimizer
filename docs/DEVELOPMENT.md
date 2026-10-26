@@ -581,6 +581,17 @@ The settings matrix opens every help topic, checks translated content, overflow,
 missing description targets, and expansion retention after a setting changes.
 The trials matrix requires the former ranking-help block to be absent.
 
+### Building catalog cost lines
+
+Numeric next-level costs use a compact, unbroken line (`11级 · 20,100点` /
+`L11 · 20,100pt`). The full localized wording remains in its title. This preserves
+the entire formatted amount and unit with the existing 12px font, 30px icon,
+30px icon column, gaps, padding and catalog column sizing. Only numeric costs
+use `white-space: nowrap`; unavailable-cost messages retain their existing wrapping.
+No ellipsis, clipping, shrinking or rounding is used. The construction browser
+matrix verifies 20,100 and the current rules' maximum next-level cost 299,450
+stay on one text line and fit their cell at every documented width and locale.
+
 ### Current skilling trial buildings
 
 The construction catalog marks this week's matching life buildings with an amber

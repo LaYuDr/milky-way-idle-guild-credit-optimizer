@@ -129,7 +129,58 @@ export async function auditConstructionTrials(page, screenshotPath) {
     bridge.trialHistoryContext = context;
     bridge.onTrialStatsUpdated();
   }, beforeContext);
+  await page.evaluate(() => {
+    const bridge = globalThis.window.__mwiGuildCreditBridge;
+    globalThis.window.__costPreviousLevels = bridge.guildBuildingLevels;
+    bridge.guildBuildingLevels = {
+      ...bridge.guildBuildingLevels,
+      "/guild_buildings/builders_hall": { level: 19 },
+      "/guild_buildings/archives": { level: 10 }
+    };
+    bridge.onGuildBuffLevelsUpdated?.();
+    bridge.onTrialStatsUpdated();
+  });
+  await page.locator('[data-role="building-category"][data-category="all"]').click();
+  await page.waitForFunction(
+    () =>
+      globalThis.document.querySelector(
+        '[data-role="building-tile"][data-building-hrid="/guild_buildings/builders_hall"]'
+      )?.dataset.currentLevel === "19"
+  );
+  for (const [building, amount] of [
+    ["builders_hall", "299,450"],
+    ["archives", "20,100"]
+  ]) {
+    const cost = page.locator(
+      `[data-role="building-tile"][data-building-hrid="/guild_buildings/${building}"] .mwi-building-tile-cost`
+    );
+    assert.ok((await cost.textContent()).includes(amount));
+    const geometry = await cost.evaluate((element) => {
+      const range = globalThis.document.createRange();
+      range.selectNodeContents(element);
+      return {
+        lines: range.getClientRects().length,
+        width: element.clientWidth,
+        textWidth: range.getBoundingClientRect().width,
+        font: globalThis.getComputedStyle(element).fontSize,
+        whiteSpace: globalThis.getComputedStyle(element).whiteSpace
+      };
+    });
+    assert.equal(geometry.lines, 1, `${building}: full point amount and unit must stay on one line`);
+    assert.ok(geometry.textWidth <= geometry.width + 1, `${building}: no clipping or overflow`);
+    assert.equal(geometry.font, "12px");
+    assert.equal(geometry.whiteSpace, "nowrap");
+    assert.ok((await cost.getAttribute("title")).includes(amount));
+  }
+  await page.screenshot({ path: screenshotPath.replace(/\.png$/, "-large-cost.png") });
+  await page.evaluate(() => {
+    const bridge = globalThis.window.__mwiGuildCreditBridge;
+    bridge.guildBuildingLevels = globalThis.window.__costPreviousLevels;
+    bridge.onGuildBuffLevelsUpdated?.();
+    bridge.onTrialStatsUpdated();
+  });
   return {
+    largeCostsSingleLine: true,
     fourProjectsMapped: true,
     registrationLineup: true,
     fallbackParties: true,

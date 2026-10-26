@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.70] - 2026-10-26
+
+### Changed
+
+- 修复公会建设目录升级费用较大时点数单位换行的问题。数值行采用紧凑完整写法，保持原字号、图标、列宽和内边距，完整说明仍可查看；中英文大点数单行显示通过全部建设宽度矩阵。
+
 ## [1.2.69] - 2026-10-26
 
 ### Changed

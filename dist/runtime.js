@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.69";
+window.MwiGuildCreditVersion = "1.2.70";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -4446,6 +4446,7 @@ window.MwiGuildCreditVersion = "1.2.69";
       buildingCatalogPlannedLevel: "{current} → {target} 级 · 已加入",
       buildingCatalogUnknownLevel: "当前 {current} 级",
       buildingCatalogNextLevelCost: "升至 {level} 级：{points} 点",
+      buildingCatalogNextLevelCostCompact: "{level}级 · {points}点",
       buildingCatalogNextLevelCostUnavailable: "下一级点数未提供",
       guildPointPlanningHeading: "建设预算",
       guildPointStartingBalance: "自定起始点数",
@@ -5307,6 +5308,7 @@ window.MwiGuildCreditVersion = "1.2.69";
       buildingCatalogPlannedLevel: "Level {current} → {target} · In plan",
       buildingCatalogUnknownLevel: "Current level {current}",
       buildingCatalogNextLevelCost: "Level {level}: {points} points",
+      buildingCatalogNextLevelCostCompact: "L{level} · {points}pt",
       buildingCatalogNextLevelCostUnavailable: "Next-level cost unavailable",
       guildPointPlanningHeading: "Construction budget",
       guildPointStartingBalance: "Custom starting points",
@@ -11923,6 +11925,7 @@ window.MwiGuildCreditVersion = "1.2.69";
         #mwi-credit-optimizer .mwi-building-tile-copy{display:grid;gap:2px;min-width:0}
         #mwi-credit-optimizer .mwi-building-tile-name{font-size:14px;font-weight:500;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-tile-level,#mwi-credit-optimizer .mwi-building-tile-cost{font-size:12px;font-weight:400;line-height:1.4;color:var(--build-muted);overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-building-tile-cost[data-numeric-cost="true"]{white-space:nowrap;overflow-wrap:normal}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"] .mwi-building-tile-level{color:var(--build-accent)}
         #mwi-credit-optimizer .mwi-guild-point-forecast{min-width:0;text-align:left;margin-top:20px;padding-top:14px;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-guild-point-forecast-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
@@ -13173,10 +13176,17 @@ window.MwiGuildCreditVersion = "1.2.69";
                 points: formatNumber(nextLevelCost.totalCost)
               })
             : t("buildingCatalogNextLevelCostUnavailable");
+      const numericCost = liveLevel < definition.maxLevel && nextLevelCost.status === "ok";
+      const visibleCostLabel = numericCost
+        ? t("buildingCatalogNextLevelCostCompact", {
+            level: formatNumber(liveLevel + 1),
+            points: formatNumber(nextLevelCost.totalCost)
+          })
+        : costLabel;
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
       const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
       const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {

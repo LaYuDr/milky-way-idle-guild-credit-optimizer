@@ -809,10 +809,17 @@
                 points: formatNumber(nextLevelCost.totalCost)
               })
             : t("buildingCatalogNextLevelCostUnavailable");
+      const numericCost = liveLevel < definition.maxLevel && nextLevelCost.status === "ok";
+      const visibleCostLabel = numericCost
+        ? t("buildingCatalogNextLevelCostCompact", {
+            level: formatNumber(liveLevel + 1),
+            points: formatNumber(nextLevelCost.totalCost)
+          })
+        : costLabel;
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
       const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
       const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
