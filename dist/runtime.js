@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.71";
+window.MwiGuildCreditVersion = "1.2.72";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -4733,7 +4733,6 @@ window.MwiGuildCreditVersion = "1.2.71";
       collapseBuildingSteps: "收起 {building} 的逐级费用",
       removeBuildingFromPlan: "将 {building} 移出施工计划",
       buildingLevelsCoverage: "已读取 {known}/{total}",
-      buildingLevelsPartialHint: "{unknown} 座建筑未读取到等级，已按 0 级处理。",
       missingBuildingCost: "{building} 缺少 {level} 级费用，未计入总成本。",
       moreConstructionActions: "更多施工计划操作",
       clearBuildingPlans: "清空施工计划",
@@ -5612,7 +5611,6 @@ window.MwiGuildCreditVersion = "1.2.71";
       collapseBuildingSteps: "Collapse per-level costs for {building}",
       removeBuildingFromPlan: "Remove {building} from the construction plan",
       buildingLevelsCoverage: "Levels loaded: {known}/{total}",
-      buildingLevelsPartialHint: "{unknown} building level(s) are unavailable and default to level 0.",
       missingBuildingCost: "{building} is missing its level {level} cost and is excluded from the total.",
       moreConstructionActions: "More construction plan actions",
       clearBuildingPlans: "Clear construction plan",
@@ -13531,12 +13529,11 @@ window.MwiGuildCreditVersion = "1.2.71";
           )
         )
         .join("");
-      const unknownCount = Math.max(0, levels.totalCount - levels.knownCount);
       const status = t("buildingLevelsCoverage", {
         known: formatNumber(levels.knownCount),
         total: formatNumber(levels.totalCount)
       });
-      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">${constructionIcon("add")}</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionIcon("chevron")}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}><div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4>${unknownCount ? `<small>${escapeHtml(t("buildingLevelsPartialHint", { unknown: formatNumber(unknownCount) }))}</small>` : ""}</span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
+      return `<section class="mwi-building-picker" data-open="${String(constructionUi.pickerOpen)}"><button class="mwi-building-picker-toggle" data-role="toggle-building-picker" type="button" aria-expanded="${String(constructionUi.pickerOpen)}" aria-controls="mwi-building-picker-body"><span class="mwi-building-picker-plus" aria-hidden="true">${constructionIcon("add")}</span><span><strong>${escapeHtml(constructionUi.pickerOpen ? t("closeBuildingPicker") : t("addBuilding"))}</strong><small class="mwi-building-level-status" data-known-count="${levels.knownCount}" data-total-count="${levels.totalCount}" data-complete="${String(levels.knownCount === levels.totalCount)}">${escapeHtml(status)}</small></span><span class="mwi-building-picker-chevron" aria-hidden="true">${constructionIcon("chevron")}</span></button><div id="mwi-building-picker-body" class="mwi-building-picker-body"${constructionUi.pickerOpen ? "" : " hidden"}><div class="mwi-building-pane-heading"><span><h4>${escapeHtml(t("buildingCatalog"))}</h4></span><input data-role="building-search" type="search" placeholder="${escapeHtml(t("searchBuildings"))}" aria-label="${escapeHtml(t("searchBuildings"))}" value="${escapeHtml(state.buildingSearch)}"></div><div class="mwi-building-categories" role="group" aria-label="${escapeHtml(t("buildingCategoryFilter"))}">${categories}</div><div class="mwi-building-grid">${tiles}</div><div class="mwi-empty" data-role="building-filter-empty" role="status" aria-live="polite" aria-atomic="true" hidden></div></div></section>`;
     }
 
     function renderGuildConstructionActions(plan) {

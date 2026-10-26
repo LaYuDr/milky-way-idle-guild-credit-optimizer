@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.72] - 2026-10-27
+
+### Changed
+
+- 移除建筑目录中未读取等级按 0 级处理的汇总提示，保留已读取计数、未知等级处理和规划逻辑。
+
 ## [1.2.71] - 2026-10-26
 
 ### Changed

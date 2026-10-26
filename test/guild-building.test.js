@@ -1216,7 +1216,6 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "collapseBuildingSteps",
     "removeBuildingFromPlan",
     "buildingLevelsCoverage",
-    "buildingLevelsPartialHint",
     "dragConstructionPlan",
     "undoClearBuildingPlans",
     "buildingPlanRestored",
