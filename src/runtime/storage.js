@@ -269,7 +269,8 @@
 
   function createPluginStorage(options) {
     const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
-    const storage = storageCodec.createStorage(options.storage);
+    const rawStorage = options.storage;
+    const storage = storageCodec.createStorage(rawStorage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {
@@ -352,7 +353,12 @@
           const key = storage.key(index);
           if (!key || !key.startsWith(trialHistoryPrefix())) continue;
           try {
-            const record = trialHistoryApi.normalizeSnapshot(JSON.parse(storage.getItem(key)));
+            let record;
+            const text = storage.getItem(key, (value) => {
+              record = trialHistoryApi.normalizeSnapshot(JSON.parse(value));
+              return trialHistoryApi.validSnapshot(record);
+            });
+            record ??= trialHistoryApi.normalizeSnapshot(JSON.parse(text));
             if (trialHistoryApi.validSnapshot(record)) records.push(record);
             else failed = true;
           } catch (_) {
@@ -368,58 +374,173 @@
       };
     }
 
-    function importTrialHistory(incoming) {
+    function trialRecoveryPrefix() {
+      return `mwi-guild-trial-recovery-v1:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function inspectTrialImport(record) {
+      const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+      const previousRaw = rawStorage.getItem(key);
+      if (previousRaw === null) return { record, status: "new", previousRaw };
+      let previous;
+      try {
+        previous = trialHistoryApi.normalizeSnapshot(JSON.parse(storageCodec.decode(previousRaw)));
+      } catch (_) {
+        return { record, status: "recoverable", previousRaw };
+      }
+      if (!trialHistoryApi.validSnapshot(previous)) return { record, status: "recoverable", previousRaw };
+      // A valid record under the wrong storage key is still user data, not damage
+      // that an import may silently replace.
+      if (previous.key !== record.key) return { record, status: "conflict", previousRaw };
+      return { ...trialHistoryApi.previewImport([record], [previous])[0], previousRaw };
+    }
+
+    function previewTrialImport(incoming, existing = []) {
+      const memory = new Map(existing.map((record) => [record.key, record]));
+      return incoming.map((record) => {
+        // Protect pending captures even when their storage write has failed.
+        if (memory.has(record.key)) return trialHistoryApi.previewImport([record], [memory.get(record.key)])[0];
+        try {
+          return inspectTrialImport(record);
+        } catch (_) {
+          return { record, status: "unavailable" };
+        }
+      });
+    }
+
+    function trialRecoveryBackupCount() {
+      let count = 0;
+      try {
+        for (let index = 0; index < rawStorage.length; index += 1)
+          if (rawStorage.key(index)?.startsWith(trialRecoveryPrefix())) count += 1;
+      } catch (_) {
+        // Counting is optional; failures must not interrupt history browsing.
+      }
+      return count;
+    }
+
+    function loadTrialRecoveryBackups() {
+      const backups = [];
+      for (let index = 0; index < rawStorage.length; index += 1) {
+        const key = rawStorage.key(index);
+        if (!key?.startsWith(trialRecoveryPrefix())) continue;
+        const backup = JSON.parse(storageCodec.decode(rawStorage.getItem(key)));
+        if (
+          backup?.schemaVersion !== 1 ||
+          typeof backup.recordKey !== "string" ||
+          backup.storageKey !== trialHistoryPrefix() + encodeURIComponent(backup.recordKey) ||
+          typeof backup.rawValue !== "string"
+        )
+          throw new Error("Invalid trial recovery backup");
+        backups.push(backup);
+      }
+      return backups;
+    }
+
+    function backupTrialValue(record, previousRaw) {
+      const prefix = trialRecoveryPrefix() + encodeURIComponent(record.key) + ":";
+      // Retrying a failed recovery must not accumulate identical backup copies.
+      for (let index = 0; index < rawStorage.length; index += 1) {
+        const key = rawStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        try {
+          const previous = JSON.parse(storageCodec.decode(rawStorage.getItem(key)));
+          if (
+            previous.schemaVersion === 1 &&
+            previous.recordKey === record.key &&
+            previous.storageKey === trialHistoryPrefix() + encodeURIComponent(record.key) &&
+            previous.rawValue === previousRaw
+          )
+            return;
+        } catch (_) {
+          // Preserve unreadable backups and create a separate verified copy.
+        }
+      }
+      const backup = {
+        schemaVersion: 1,
+        recordKey: record.key,
+        storageKey: trialHistoryPrefix() + encodeURIComponent(record.key),
+        rawValue: previousRaw,
+        savedAt: Date.now()
+      };
+      let key;
+      do {
+        key = prefix + (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+      } while (rawStorage.getItem(key) !== null);
+      const text = storageCodec.encode(JSON.stringify(backup));
+      rawStorage.setItem(key, text);
+      if (rawStorage.getItem(key) !== text) throw new Error("Trial recovery backup was not saved");
+    }
+
+    function importTrialHistory(incoming, { recoveries = [] } = {}) {
       const written = [];
       let duplicates = 0;
       let conflicts = 0;
+      const approved = new Map(recoveries.map((entry) => [entry.key, entry.previousRaw]));
+      const totals = (entries) => {
+        const recovered = entries.filter((entry) => entry.mode === "recovered").length;
+        return {
+          added: entries.filter((entry) => entry.mode === "new").length,
+          dated: entries.filter((entry) => entry.mode === "dated").length,
+          ...(recovered ? { recovered } : {})
+        };
+      };
+      const changed = () => {
+        throw Object.assign(new Error("Local trial data changed"), { code: "trialImportChanged" });
+      };
       try {
         const validated = trialHistoryApi.parseImport(JSON.stringify({ schemaVersion: 2, records: incoming }));
         for (const record of validated) {
           const key = trialHistoryPrefix() + encodeURIComponent(record.key);
-          const previous = storage.getItem(key);
-          if (previous !== null) {
-            let existing;
-            try {
-              existing = JSON.parse(previous);
-            } catch (_) {
-              existing = { key: record.key };
-            }
-            const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
-            if (status === "duplicate") duplicates += 1;
-            else if (status !== "dated") conflicts += 1;
-            if (status !== "dated") continue;
+          const { status, previousRaw } = inspectTrialImport(record);
+          if (status === "duplicate") {
+            duplicates += 1;
+            continue;
           }
-          const text = JSON.stringify(record);
-          storage.setItem(key, text);
-          written.push({ key, text, previous });
+          if (status === "conflict" || (status === "recoverable" && !approved.has(record.key))) {
+            conflicts += 1;
+            continue;
+          }
+          const mode = status === "recoverable" ? "recovered" : status;
+          if (mode === "recovered") {
+            if (approved.get(record.key) !== previousRaw) changed();
+            backupTrialValue(record, previousRaw);
+          }
+          const text = storageCodec.encode(JSON.stringify(record));
+          if (rawStorage.getItem(key) !== previousRaw) changed();
+          rawStorage.setItem(key, text);
+          written.push({ key, text, previousRaw, mode });
         }
         return {
           status: "imported",
-          added: written.filter((entry) => entry.previous === null).length,
-          dated: written.filter((entry) => entry.previous !== null).length,
+          ...totals(written),
           duplicates,
           conflicts
         };
-      } catch (_) {
-        let added = 0;
-        let dated = 0;
+      } catch (error) {
+        const remaining = [];
         // Restore only our own writes, including the exact pre-import value
-        // when enriching a date. Do not overwrite another page's newer write.
-        for (const { key, text, previous } of written) {
+        // and damaged compressed bytes. Do not overwrite another page's write.
+        for (const entry of written) {
+          const { key, text, previousRaw } = entry;
           let retained = false;
           try {
-            if (storage.getItem(key) === text) {
-              if (previous === null) storage.removeItem(key);
-              else storage.setItem(key, previous);
+            if (rawStorage.getItem(key) === text) {
+              if (previousRaw === null) rawStorage.removeItem(key);
+              else rawStorage.setItem(key, previousRaw);
             }
-            retained = storage.getItem(key) !== previous;
+            retained = rawStorage.getItem(key) !== previousRaw;
           } catch (_) {
             retained = true;
           }
-          if (retained && previous === null) added += 1;
-          else if (retained) dated += 1;
+          if (retained) remaining.push(entry);
         }
-        return { status: added + dated ? "partial" : "failed", added, dated, duplicates, conflicts };
+        return {
+          status: remaining.length ? "partial" : error?.code === "trialImportChanged" ? "stale" : "failed",
+          ...totals(remaining),
+          duplicates,
+          conflicts
+        };
       }
     }
 
@@ -875,6 +996,9 @@
       saveTrialRankingOrder,
       saveTrialSnapshot,
       importTrialHistory,
+      previewTrialImport,
+      trialRecoveryBackupCount,
+      loadTrialRecoveryBackups,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,

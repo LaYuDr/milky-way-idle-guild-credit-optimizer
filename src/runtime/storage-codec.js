@@ -101,7 +101,7 @@
       key(index) {
         return storage.key(index);
       },
-      getItem(key) {
+      getItem(key, canMigrate = () => true) {
         const raw = storage.getItem(key);
         if (raw === null || !eligible(key)) return raw;
         const cached = cache.get(key);
@@ -112,7 +112,7 @@
         }
         const text = decode(raw);
         let saved = raw;
-        if (raw === text) {
+        if (raw === text && canMigrate(text)) {
           const encoded = encode(text);
           if (encoded !== raw) {
             try {

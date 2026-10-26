@@ -663,7 +663,20 @@
         "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；可补全未知日期及周次，重复或统计冲突记录会跳过。",
       trialImportReading: "正在读取文件…",
       trialImportPreview: "导入预览",
-      trialImportSummary: "新增 {added} 项 · 补全周次 {dated} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项",
+      trialImportSummary:
+        "新增 {added} 项 · 补全周次 {dated} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项 · 可恢复 {recovered} 项",
+      trialImportSourceHint:
+        "游戏采集记录从备份恢复后，仍参与游戏采集数据的排名、缺席等判断；手动整理记录仍按原规则处理。",
+      trialImportStatus_recoverable: "损坏残留，可从备份恢复",
+      trialImportStatus_unavailable: "本地存储暂不可读取，请稍后重试",
+      trialRecoveryWarning:
+        "发现 {count} 项损坏残留。确认后会先在当前浏览器保存原值备份，再恢复这些项目；有效冲突记录仍会保留。",
+      trialImportConfirmRecovery: "确认导入并恢复 {count} 项",
+      trialRecoveryExport: "导出恢复前原值备份",
+      trialRecoveryExportFailed: "无法导出恢复前备份，原值仍保留在当前浏览器；请检查存储是否可读取后重试。",
+      trialImportChanged: "本地记录已变化，本次更改已撤回。请检查更新后的预览，再确认导入。",
+      trialImportRecoveryComplete:
+        "已导入 {added} 项，补全周次 {dated} 项，恢复 {recovered} 项；跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。恢复前原值已在当前浏览器备份，可导出保存。",
       trialImportStatus_new: "新增",
       trialImportStatus_dated: "补全日期与周次",
       trialImportStatus_duplicate: "重复，跳过",
@@ -680,7 +693,8 @@
       trialImportComplete:
         "已导入 {added} 项，补全周次 {dated} 项，跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。",
       trialImportSaveFailed: "保存失败，本次更改已撤回；请检查浏览器存储空间后重试。",
-      trialImportPartial: "保存失败，本次仍保留新增 {added} 项、补全周次 {dated} 项。重试会跳过已保存项。",
+      trialImportPartial:
+        "保存失败，本次仍保留新增 {added} 项、补全周次 {dated} 项、恢复 {recovered} 项。重试会跳过已保存项。",
       trialUnknownDate: "日期未注明",
       trialUnknownGuild: "公会未注明",
       trialManualSource: "手动整理",
@@ -1490,7 +1504,22 @@
         "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Missing dates and weeks can be filled in; duplicates and statistics conflicts are skipped.",
       trialImportReading: "Reading file…",
       trialImportPreview: "Import preview",
-      trialImportSummary: "{added} new · {dated} dates filled · {duplicates} duplicates · {conflicts} conflicts",
+      trialImportSummary:
+        "{added} new · {dated} dates filled · {duplicates} duplicates · {conflicts} conflicts · {recovered} recoverable",
+      trialImportSourceHint:
+        "Game captures restored from backups still count in capture-based rankings, absence checks and other analysis. Manual transcripts retain their existing rules.",
+      trialImportStatus_recoverable: "Unreadable local record; recoverable from backup",
+      trialImportStatus_unavailable: "Local storage is unavailable; retry later",
+      trialRecoveryWarning:
+        "Found {count} unreadable local records. Confirming first saves their original values in this browser, then restores those projects. Valid conflicting records are kept.",
+      trialImportConfirmRecovery: "Import and recover {count} records",
+      trialRecoveryExport: "Export pre-recovery values",
+      trialRecoveryExportFailed:
+        "The pre-recovery backup could not be exported. Its original values remain in this browser. Check storage access and retry.",
+      trialImportChanged:
+        "Local records changed. This attempt was rolled back. Review the updated preview before confirming again.",
+      trialImportRecoveryComplete:
+        "Imported {added}; filled {dated} dates; recovered {recovered}; skipped {duplicates} duplicates and {conflicts} conflicts. Original values are backed up in this browser and can be exported.",
       trialImportStatus_new: "New",
       trialImportStatus_dated: "Fill in date and week",
       trialImportStatus_duplicate: "Duplicate, skipped",
@@ -1512,7 +1541,7 @@
       trialImportSaveFailed:
         "Saving failed. Changes from this attempt were rolled back. Check browser storage space and retry.",
       trialImportPartial:
-        "Saving failed; {added} new records and {dated} date updates remain saved. Retrying skips saved records.",
+        "Saving failed; {added} new records, {dated} date updates and {recovered} recovered records remain saved. Retrying skips saved records.",
       trialUnknownDate: "Date unspecified",
       trialUnknownGuild: "Guild unspecified",
       trialManualSource: "Manual transcript",

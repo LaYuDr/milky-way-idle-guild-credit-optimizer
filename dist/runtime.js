@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.66";
+window.MwiGuildCreditVersion = "1.2.67";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -311,7 +311,7 @@ window.MwiGuildCreditVersion = "1.2.66";
       key(index) {
         return storage.key(index);
       },
-      getItem(key) {
+      getItem(key, canMigrate = () => true) {
         const raw = storage.getItem(key);
         if (raw === null || !eligible(key)) return raw;
         const cached = cache.get(key);
@@ -322,7 +322,7 @@ window.MwiGuildCreditVersion = "1.2.66";
         }
         const text = decode(raw);
         let saved = raw;
-        if (raw === text) {
+        if (raw === text && canMigrate(text)) {
           const encoded = encode(text);
           if (encoded !== raw) {
             try {
@@ -1257,9 +1257,15 @@ window.MwiGuildCreditVersion = "1.2.66";
     return isMetric(level) ? level : null;
   }
 
+  // Provenance belongs to each record, not to the act of importing a file or
+  // the export envelope's version. Export/reimport keeps v1 captures eligible.
+  function isGameCapture(record) {
+    return record?.schemaVersion === 1 && record.source !== "manual";
+  }
+
   function withMemberLevels(record, context = {}) {
     if (
-      record.schemaVersion !== 1 ||
+      !isGameCapture(record) ||
       String(context.guild?.id) !== record.guildId ||
       timestamp(context.guild?.currentWeekStartAt) !== record.weekStartAt
     )
@@ -1290,8 +1296,7 @@ window.MwiGuildCreditVersion = "1.2.66";
   }
 
   function withMembershipEvidence(record, context = {}) {
-    if (record.schemaVersion !== 1 || record.source === "manual" || record.guildId !== String(context.guild?.id))
-      return record;
+    if (!isGameCapture(record) || record.guildId !== String(context.guild?.id)) return record;
     const evidence = mergeMembershipEvidence(record.membershipEvidence || [], context.membershipEvidence || []);
     const trials = objectData(context.guild?.currentTrialsData);
     const weekTrials =
@@ -1866,8 +1871,7 @@ window.MwiGuildCreditVersion = "1.2.66";
     const latest = new Map();
     for (const record of records) {
       if (
-        record.schemaVersion !== 1 ||
-        record.source === "manual" ||
+        !isGameCapture(record) ||
         record.kind !== "skilling" ||
         record.guildId !== String(context.guild.id) ||
         record.trialHrid !== trialHrid ||
@@ -1917,7 +1921,7 @@ window.MwiGuildCreditVersion = "1.2.66";
       target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
     };
     for (const record of records) {
-      if (record.schemaVersion !== 1 || record.source === "manual") continue;
+      if (!isGameCapture(record)) continue;
       if (seenRecords.has(record.key)) continue;
       seenRecords.add(record.key);
       const fields =
@@ -1976,13 +1980,7 @@ window.MwiGuildCreditVersion = "1.2.66";
   // A guild week is one denominator unit per category, regardless of project count.
   // Absence requires both membership evidence and a completely captured category.
   function playerRankings(records) {
-    const captured = [
-      ...new Map(
-        records
-          .filter((record) => record.schemaVersion === 1 && record.source !== "manual")
-          .map((record) => [record.key, record])
-      ).values()
-    ];
+    const captured = [...new Map(records.filter(isGameCapture).map((record) => [record.key, record])).values()];
     const players = new Map(participationRankings(captured).map((player) => [player.key, player]));
     const guilds = new Map();
     const weeks = new Map();
@@ -2113,7 +2111,7 @@ window.MwiGuildCreditVersion = "1.2.66";
   }
 
   function playerProjectOverview(records, identity, details = {}) {
-    const captured = records.filter((record) => record.schemaVersion === 1 && record.source !== "manual");
+    const captured = records.filter(isGameCapture);
     const catalog = new Map();
     for (const [kind, names] of [
       ["skilling", config.GUILD_TRIAL_SKILL_ORDER],
@@ -2281,6 +2279,7 @@ window.MwiGuildCreditVersion = "1.2.66";
     searchHistoryMembers,
     sameMember,
     memberLevel,
+    isGameCapture,
     currentMemberJoinedAt,
     currentMembershipRankings,
     withMemberLevels,
@@ -4826,7 +4825,20 @@ window.MwiGuildCreditVersion = "1.2.66";
         "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；可补全未知日期及周次，重复或统计冲突记录会跳过。",
       trialImportReading: "正在读取文件…",
       trialImportPreview: "导入预览",
-      trialImportSummary: "新增 {added} 项 · 补全周次 {dated} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项",
+      trialImportSummary:
+        "新增 {added} 项 · 补全周次 {dated} 项 · 重复 {duplicates} 项 · 冲突 {conflicts} 项 · 可恢复 {recovered} 项",
+      trialImportSourceHint:
+        "游戏采集记录从备份恢复后，仍参与游戏采集数据的排名、缺席等判断；手动整理记录仍按原规则处理。",
+      trialImportStatus_recoverable: "损坏残留，可从备份恢复",
+      trialImportStatus_unavailable: "本地存储暂不可读取，请稍后重试",
+      trialRecoveryWarning:
+        "发现 {count} 项损坏残留。确认后会先在当前浏览器保存原值备份，再恢复这些项目；有效冲突记录仍会保留。",
+      trialImportConfirmRecovery: "确认导入并恢复 {count} 项",
+      trialRecoveryExport: "导出恢复前原值备份",
+      trialRecoveryExportFailed: "无法导出恢复前备份，原值仍保留在当前浏览器；请检查存储是否可读取后重试。",
+      trialImportChanged: "本地记录已变化，本次更改已撤回。请检查更新后的预览，再确认导入。",
+      trialImportRecoveryComplete:
+        "已导入 {added} 项，补全周次 {dated} 项，恢复 {recovered} 项；跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。恢复前原值已在当前浏览器备份，可导出保存。",
       trialImportStatus_new: "新增",
       trialImportStatus_dated: "补全日期与周次",
       trialImportStatus_duplicate: "重复，跳过",
@@ -4843,7 +4855,8 @@ window.MwiGuildCreditVersion = "1.2.66";
       trialImportComplete:
         "已导入 {added} 项，补全周次 {dated} 项，跳过 {duplicates} 项重复记录和 {conflicts} 项冲突记录。",
       trialImportSaveFailed: "保存失败，本次更改已撤回；请检查浏览器存储空间后重试。",
-      trialImportPartial: "保存失败，本次仍保留新增 {added} 项、补全周次 {dated} 项。重试会跳过已保存项。",
+      trialImportPartial:
+        "保存失败，本次仍保留新增 {added} 项、补全周次 {dated} 项、恢复 {recovered} 项。重试会跳过已保存项。",
       trialUnknownDate: "日期未注明",
       trialUnknownGuild: "公会未注明",
       trialManualSource: "手动整理",
@@ -5653,7 +5666,22 @@ window.MwiGuildCreditVersion = "1.2.66";
         "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Missing dates and weeks can be filled in; duplicates and statistics conflicts are skipped.",
       trialImportReading: "Reading file…",
       trialImportPreview: "Import preview",
-      trialImportSummary: "{added} new · {dated} dates filled · {duplicates} duplicates · {conflicts} conflicts",
+      trialImportSummary:
+        "{added} new · {dated} dates filled · {duplicates} duplicates · {conflicts} conflicts · {recovered} recoverable",
+      trialImportSourceHint:
+        "Game captures restored from backups still count in capture-based rankings, absence checks and other analysis. Manual transcripts retain their existing rules.",
+      trialImportStatus_recoverable: "Unreadable local record; recoverable from backup",
+      trialImportStatus_unavailable: "Local storage is unavailable; retry later",
+      trialRecoveryWarning:
+        "Found {count} unreadable local records. Confirming first saves their original values in this browser, then restores those projects. Valid conflicting records are kept.",
+      trialImportConfirmRecovery: "Import and recover {count} records",
+      trialRecoveryExport: "Export pre-recovery values",
+      trialRecoveryExportFailed:
+        "The pre-recovery backup could not be exported. Its original values remain in this browser. Check storage access and retry.",
+      trialImportChanged:
+        "Local records changed. This attempt was rolled back. Review the updated preview before confirming again.",
+      trialImportRecoveryComplete:
+        "Imported {added}; filled {dated} dates; recovered {recovered}; skipped {duplicates} duplicates and {conflicts} conflicts. Original values are backed up in this browser and can be exported.",
       trialImportStatus_new: "New",
       trialImportStatus_dated: "Fill in date and week",
       trialImportStatus_duplicate: "Duplicate, skipped",
@@ -5675,7 +5703,7 @@ window.MwiGuildCreditVersion = "1.2.66";
       trialImportSaveFailed:
         "Saving failed. Changes from this attempt were rolled back. Check browser storage space and retry.",
       trialImportPartial:
-        "Saving failed; {added} new records and {dated} date updates remain saved. Retrying skips saved records.",
+        "Saving failed; {added} new records, {dated} date updates and {recovered} recovered records remain saved. Retrying skips saved records.",
       trialUnknownDate: "Date unspecified",
       trialUnknownGuild: "Guild unspecified",
       trialManualSource: "Manual transcript",
@@ -7945,7 +7973,8 @@ window.MwiGuildCreditVersion = "1.2.66";
 
   function createPluginStorage(options) {
     const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
-    const storage = storageCodec.createStorage(options.storage);
+    const rawStorage = options.storage;
+    const storage = storageCodec.createStorage(rawStorage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {
@@ -8028,7 +8057,12 @@ window.MwiGuildCreditVersion = "1.2.66";
           const key = storage.key(index);
           if (!key || !key.startsWith(trialHistoryPrefix())) continue;
           try {
-            const record = trialHistoryApi.normalizeSnapshot(JSON.parse(storage.getItem(key)));
+            let record;
+            const text = storage.getItem(key, (value) => {
+              record = trialHistoryApi.normalizeSnapshot(JSON.parse(value));
+              return trialHistoryApi.validSnapshot(record);
+            });
+            record ??= trialHistoryApi.normalizeSnapshot(JSON.parse(text));
             if (trialHistoryApi.validSnapshot(record)) records.push(record);
             else failed = true;
           } catch (_) {
@@ -8044,58 +8078,173 @@ window.MwiGuildCreditVersion = "1.2.66";
       };
     }
 
-    function importTrialHistory(incoming) {
+    function trialRecoveryPrefix() {
+      return `mwi-guild-trial-recovery-v1:${guildBuildingPlannerStorageKey()}:`;
+    }
+
+    function inspectTrialImport(record) {
+      const key = trialHistoryPrefix() + encodeURIComponent(record.key);
+      const previousRaw = rawStorage.getItem(key);
+      if (previousRaw === null) return { record, status: "new", previousRaw };
+      let previous;
+      try {
+        previous = trialHistoryApi.normalizeSnapshot(JSON.parse(storageCodec.decode(previousRaw)));
+      } catch (_) {
+        return { record, status: "recoverable", previousRaw };
+      }
+      if (!trialHistoryApi.validSnapshot(previous)) return { record, status: "recoverable", previousRaw };
+      // A valid record under the wrong storage key is still user data, not damage
+      // that an import may silently replace.
+      if (previous.key !== record.key) return { record, status: "conflict", previousRaw };
+      return { ...trialHistoryApi.previewImport([record], [previous])[0], previousRaw };
+    }
+
+    function previewTrialImport(incoming, existing = []) {
+      const memory = new Map(existing.map((record) => [record.key, record]));
+      return incoming.map((record) => {
+        // Protect pending captures even when their storage write has failed.
+        if (memory.has(record.key)) return trialHistoryApi.previewImport([record], [memory.get(record.key)])[0];
+        try {
+          return inspectTrialImport(record);
+        } catch (_) {
+          return { record, status: "unavailable" };
+        }
+      });
+    }
+
+    function trialRecoveryBackupCount() {
+      let count = 0;
+      try {
+        for (let index = 0; index < rawStorage.length; index += 1)
+          if (rawStorage.key(index)?.startsWith(trialRecoveryPrefix())) count += 1;
+      } catch (_) {
+        // Counting is optional; failures must not interrupt history browsing.
+      }
+      return count;
+    }
+
+    function loadTrialRecoveryBackups() {
+      const backups = [];
+      for (let index = 0; index < rawStorage.length; index += 1) {
+        const key = rawStorage.key(index);
+        if (!key?.startsWith(trialRecoveryPrefix())) continue;
+        const backup = JSON.parse(storageCodec.decode(rawStorage.getItem(key)));
+        if (
+          backup?.schemaVersion !== 1 ||
+          typeof backup.recordKey !== "string" ||
+          backup.storageKey !== trialHistoryPrefix() + encodeURIComponent(backup.recordKey) ||
+          typeof backup.rawValue !== "string"
+        )
+          throw new Error("Invalid trial recovery backup");
+        backups.push(backup);
+      }
+      return backups;
+    }
+
+    function backupTrialValue(record, previousRaw) {
+      const prefix = trialRecoveryPrefix() + encodeURIComponent(record.key) + ":";
+      // Retrying a failed recovery must not accumulate identical backup copies.
+      for (let index = 0; index < rawStorage.length; index += 1) {
+        const key = rawStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        try {
+          const previous = JSON.parse(storageCodec.decode(rawStorage.getItem(key)));
+          if (
+            previous.schemaVersion === 1 &&
+            previous.recordKey === record.key &&
+            previous.storageKey === trialHistoryPrefix() + encodeURIComponent(record.key) &&
+            previous.rawValue === previousRaw
+          )
+            return;
+        } catch (_) {
+          // Preserve unreadable backups and create a separate verified copy.
+        }
+      }
+      const backup = {
+        schemaVersion: 1,
+        recordKey: record.key,
+        storageKey: trialHistoryPrefix() + encodeURIComponent(record.key),
+        rawValue: previousRaw,
+        savedAt: Date.now()
+      };
+      let key;
+      do {
+        key = prefix + (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+      } while (rawStorage.getItem(key) !== null);
+      const text = storageCodec.encode(JSON.stringify(backup));
+      rawStorage.setItem(key, text);
+      if (rawStorage.getItem(key) !== text) throw new Error("Trial recovery backup was not saved");
+    }
+
+    function importTrialHistory(incoming, { recoveries = [] } = {}) {
       const written = [];
       let duplicates = 0;
       let conflicts = 0;
+      const approved = new Map(recoveries.map((entry) => [entry.key, entry.previousRaw]));
+      const totals = (entries) => {
+        const recovered = entries.filter((entry) => entry.mode === "recovered").length;
+        return {
+          added: entries.filter((entry) => entry.mode === "new").length,
+          dated: entries.filter((entry) => entry.mode === "dated").length,
+          ...(recovered ? { recovered } : {})
+        };
+      };
+      const changed = () => {
+        throw Object.assign(new Error("Local trial data changed"), { code: "trialImportChanged" });
+      };
       try {
         const validated = trialHistoryApi.parseImport(JSON.stringify({ schemaVersion: 2, records: incoming }));
         for (const record of validated) {
           const key = trialHistoryPrefix() + encodeURIComponent(record.key);
-          const previous = storage.getItem(key);
-          if (previous !== null) {
-            let existing;
-            try {
-              existing = JSON.parse(previous);
-            } catch (_) {
-              existing = { key: record.key };
-            }
-            const status = trialHistoryApi.previewImport([record], [existing || { key: record.key }])[0].status;
-            if (status === "duplicate") duplicates += 1;
-            else if (status !== "dated") conflicts += 1;
-            if (status !== "dated") continue;
+          const { status, previousRaw } = inspectTrialImport(record);
+          if (status === "duplicate") {
+            duplicates += 1;
+            continue;
           }
-          const text = JSON.stringify(record);
-          storage.setItem(key, text);
-          written.push({ key, text, previous });
+          if (status === "conflict" || (status === "recoverable" && !approved.has(record.key))) {
+            conflicts += 1;
+            continue;
+          }
+          const mode = status === "recoverable" ? "recovered" : status;
+          if (mode === "recovered") {
+            if (approved.get(record.key) !== previousRaw) changed();
+            backupTrialValue(record, previousRaw);
+          }
+          const text = storageCodec.encode(JSON.stringify(record));
+          if (rawStorage.getItem(key) !== previousRaw) changed();
+          rawStorage.setItem(key, text);
+          written.push({ key, text, previousRaw, mode });
         }
         return {
           status: "imported",
-          added: written.filter((entry) => entry.previous === null).length,
-          dated: written.filter((entry) => entry.previous !== null).length,
+          ...totals(written),
           duplicates,
           conflicts
         };
-      } catch (_) {
-        let added = 0;
-        let dated = 0;
+      } catch (error) {
+        const remaining = [];
         // Restore only our own writes, including the exact pre-import value
-        // when enriching a date. Do not overwrite another page's newer write.
-        for (const { key, text, previous } of written) {
+        // and damaged compressed bytes. Do not overwrite another page's write.
+        for (const entry of written) {
+          const { key, text, previousRaw } = entry;
           let retained = false;
           try {
-            if (storage.getItem(key) === text) {
-              if (previous === null) storage.removeItem(key);
-              else storage.setItem(key, previous);
+            if (rawStorage.getItem(key) === text) {
+              if (previousRaw === null) rawStorage.removeItem(key);
+              else rawStorage.setItem(key, previousRaw);
             }
-            retained = storage.getItem(key) !== previous;
+            retained = rawStorage.getItem(key) !== previousRaw;
           } catch (_) {
             retained = true;
           }
-          if (retained && previous === null) added += 1;
-          else if (retained) dated += 1;
+          if (retained) remaining.push(entry);
         }
-        return { status: added + dated ? "partial" : "failed", added, dated, duplicates, conflicts };
+        return {
+          status: remaining.length ? "partial" : error?.code === "trialImportChanged" ? "stale" : "failed",
+          ...totals(remaining),
+          duplicates,
+          conflicts
+        };
       }
     }
 
@@ -8551,6 +8700,9 @@ window.MwiGuildCreditVersion = "1.2.66";
       saveTrialRankingOrder,
       saveTrialSnapshot,
       importTrialHistory,
+      previewTrialImport,
+      trialRecoveryBackupCount,
+      loadTrialRecoveryBackups,
       loadSavedPluginUiState,
       loadSavedGuildBuildingPlannerState,
       persistGuildBuildingPlannerState,
@@ -14380,17 +14532,22 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function renderImport() {
-      const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
+      const preview = importPreview
+        ? pluginStorage.previewTrialImport?.(importPreview.records, records) ||
+          trialHistoryApi.previewImport(importPreview.records, records)
+        : [];
+      if (importPreview) importPreview.plan = preview;
       const count = (status) => preview.filter((entry) => entry.status === status).length;
       const summary = {
         added: count("new"),
         dated: count("dated"),
+        recovered: count("recoverable"),
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
       let markup = `<div class="mwi-trial-fullscreen-bar"><strong>${escapeHtml(t("trialHistory"))}</strong><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t("trialFullscreenExit"))}</button></div><section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
         <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t(isFullscreen() ? "trialFullscreenExit" : "trialFullscreenEnter"))}</button><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
-        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
+        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button>${pluginStorage.trialRecoveryBackupCount?.() ? `<button type="button" data-role="trial-recovery-export">${escapeHtml(t("trialRecoveryExport"))}</button>` : ""}</div></header>
 
         <p class="mwi-trial-help" data-trial-fullscreen-status role="status" aria-live="polite">${escapeHtml(fullscreenNotice ? t(fullscreenNotice) : "")}</p>
         <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
@@ -14400,8 +14557,10 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
           <p class="mwi-trial-meta">${screenshotMode ? "" : `${escapeHtml(importPreview.name)}<br>`}${escapeHtml(t("trialImportSummary", summary))}</p>
+          <p class="mwi-trial-help">${escapeHtml(t("trialImportSourceHint"))}</p>
+          ${summary.recovered ? `<p class="mwi-trial-notice" data-role="trial-recovery-warning">${escapeHtml(t("trialRecoveryWarning", { count: summary.recovered }))}</p>` : ""}
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
-          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
+          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated + summary.recovered) || importBusy ? " disabled" : ""}>${escapeHtml(t(summary.recovered ? "trialImportConfirmRecovery" : "trialImportConfirm", { count: summary.added + summary.dated + summary.recovered }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
       }
       return markup + "</section>";
@@ -14442,18 +14601,40 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function confirmImport(panel) {
       if (!importPreview || importBusy) return;
+      const recoveries = (importPreview.plan || [])
+        .filter((entry) => entry.status === "recoverable")
+        .map((entry) => ({ key: entry.record.key, previousRaw: entry.previousRaw }));
       // Pending automatic captures also count as existing; never replace them
       // with an imported copy while browser storage is unavailable.
       capture();
-      const plan = trialHistoryApi.previewImport(importPreview.records, records);
-      const additions = plan.filter((entry) => ["new", "dated"].includes(entry.status)).map((entry) => entry.record);
+      const plan =
+        pluginStorage.previewTrialImport?.(importPreview.records, records) ||
+        trialHistoryApi.previewImport(importPreview.records, records);
+      if (
+        plan.some(
+          (entry) =>
+            entry.status === "recoverable" &&
+            !recoveries.some(
+              (approved) => approved.key === entry.record.key && approved.previousRaw === entry.previousRaw
+            )
+        ) ||
+        plan.some((entry) => entry.status === "unavailable")
+      ) {
+        importNotice = { key: "trialImportChanged", values: {} };
+        refresh(panel);
+        return;
+      }
+      const additions = plan
+        .filter((entry) => ["new", "dated", "recoverable"].includes(entry.status))
+        .map((entry) => entry.record);
       const result = additions.length
-        ? pluginStorage.importTrialHistory(additions)
+        ? pluginStorage.importTrialHistory(additions, { recoveries })
         : { status: "imported", added: 0, dated: 0, duplicates: 0, conflicts: 0 };
+      result.recovered = result.recovered || 0;
       result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
       result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
       if (result.status === "imported") {
-        if (result.added + result.dated) {
+        if (result.added + result.dated + result.recovered) {
           selectedWeek = trialHistoryApi.historyWeeks([additions[0]])[0].key;
           selectedProject = trialHistoryApi.historyProjectKey(additions[0]);
           resetScroll = true;
@@ -14463,10 +14644,14 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       importNotice = {
         key:
           result.status === "imported"
-            ? "trialImportComplete"
+            ? result.recovered
+              ? "trialImportRecoveryComplete"
+              : "trialImportComplete"
             : result.status === "partial"
               ? "trialImportPartial"
-              : "trialImportSaveFailed",
+              : result.status === "stale"
+                ? "trialImportChanged"
+                : "trialImportSaveFailed",
         values: result
       };
       refresh(panel);
@@ -15005,18 +15190,38 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       updateScrollButtons(host);
     }
 
-    function exportHistory() {
-      capture();
+    function downloadHistoryJson(data, filename) {
       const url = pageWindow.URL.createObjectURL(
-        new pageWindow.Blob([JSON.stringify({ schemaVersion: 2, records }, null, 2)], { type: "application/json" })
+        new pageWindow.Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
       );
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "guild-trial-history.json";
+      anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 0);
+    }
+
+    function exportHistory() {
+      capture();
+      downloadHistoryJson({ schemaVersion: 2, records }, "guild-trial-history.json");
+    }
+
+    function exportRecoveryBackups(panel) {
+      try {
+        downloadHistoryJson(
+          {
+            schemaVersion: 1,
+            format: "guild-trial-recovery-backup",
+            backups: pluginStorage.loadTrialRecoveryBackups()
+          },
+          "guild-trial-recovery-backup.json"
+        );
+      } catch (_) {
+        importNotice = { key: "trialRecoveryExportFailed", values: {} };
+        refresh(panel);
+      }
     }
 
     async function exportScreenshot(host, target) {
@@ -15410,6 +15615,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           host.querySelector('[data-role="trial-import-open"]')?.focus();
         }
         if (event.target.closest('[data-role="trial-export"]')) exportHistory();
+        if (event.target.closest('[data-role="trial-recovery-export"]')) exportRecoveryBackups(panel);
       });
     }
     const onStats = () => {

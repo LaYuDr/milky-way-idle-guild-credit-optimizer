@@ -121,9 +121,15 @@
     return isMetric(level) ? level : null;
   }
 
+  // Provenance belongs to each record, not to the act of importing a file or
+  // the export envelope's version. Export/reimport keeps v1 captures eligible.
+  function isGameCapture(record) {
+    return record?.schemaVersion === 1 && record.source !== "manual";
+  }
+
   function withMemberLevels(record, context = {}) {
     if (
-      record.schemaVersion !== 1 ||
+      !isGameCapture(record) ||
       String(context.guild?.id) !== record.guildId ||
       timestamp(context.guild?.currentWeekStartAt) !== record.weekStartAt
     )
@@ -154,8 +160,7 @@
   }
 
   function withMembershipEvidence(record, context = {}) {
-    if (record.schemaVersion !== 1 || record.source === "manual" || record.guildId !== String(context.guild?.id))
-      return record;
+    if (!isGameCapture(record) || record.guildId !== String(context.guild?.id)) return record;
     const evidence = mergeMembershipEvidence(record.membershipEvidence || [], context.membershipEvidence || []);
     const trials = objectData(context.guild?.currentTrialsData);
     const weekTrials =
@@ -730,8 +735,7 @@
     const latest = new Map();
     for (const record of records) {
       if (
-        record.schemaVersion !== 1 ||
-        record.source === "manual" ||
+        !isGameCapture(record) ||
         record.kind !== "skilling" ||
         record.guildId !== String(context.guild.id) ||
         record.trialHrid !== trialHrid ||
@@ -781,7 +785,7 @@
       target.average = target.average === null ? value : target.average + (value - target.average) / target.count;
     };
     for (const record of records) {
-      if (record.schemaVersion !== 1 || record.source === "manual") continue;
+      if (!isGameCapture(record)) continue;
       if (seenRecords.has(record.key)) continue;
       seenRecords.add(record.key);
       const fields =
@@ -840,13 +844,7 @@
   // A guild week is one denominator unit per category, regardless of project count.
   // Absence requires both membership evidence and a completely captured category.
   function playerRankings(records) {
-    const captured = [
-      ...new Map(
-        records
-          .filter((record) => record.schemaVersion === 1 && record.source !== "manual")
-          .map((record) => [record.key, record])
-      ).values()
-    ];
+    const captured = [...new Map(records.filter(isGameCapture).map((record) => [record.key, record])).values()];
     const players = new Map(participationRankings(captured).map((player) => [player.key, player]));
     const guilds = new Map();
     const weeks = new Map();
@@ -977,7 +975,7 @@
   }
 
   function playerProjectOverview(records, identity, details = {}) {
-    const captured = records.filter((record) => record.schemaVersion === 1 && record.source !== "manual");
+    const captured = records.filter(isGameCapture);
     const catalog = new Map();
     for (const [kind, names] of [
       ["skilling", config.GUILD_TRIAL_SKILL_ORDER],
@@ -1145,6 +1143,7 @@
     searchHistoryMembers,
     sameMember,
     memberLevel,
+    isGameCapture,
     currentMemberJoinedAt,
     currentMembershipRankings,
     withMemberLevels,

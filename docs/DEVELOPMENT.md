@@ -792,7 +792,33 @@ records, unknown dates can be filled in after preview and confirmation.
 Known dates and statistics conflicts are never replaced; an older undated
 copy is treated as a duplicate. Write failures restore this attempt's exact
 previous values, unless another page has since changed them. If rollback
-itself fails, the UI reports remaining additions and date updates.
+itself fails, the UI reports remaining additions, date updates and recoveries.
+
+Missing records are compared by their complete guild/week/project key; another
+project in the same week never prevents restoration. A retained empty, malformed,
+invalid or corrupt compressed value is shown as recoverable rather than as a
+valid conflict. Confirmation explicitly authorizes only the damaged raw values
+shown in that preview. Changed values require a fresh preview, unreadable storage
+is unavailable, and valid conflicting records (including misplaced keys) remain
+protected. Pending unsaved captures also take precedence.
+
+Before replacing a damaged value, save and read back an exact local raw-value
+backup under `mwi-guild-trial-recovery-v1:<planner-key>:<encoded-record-key>:<id>`.
+Backup quota/access failure prevents replacement. Retries reuse an identical
+verified backup; failed batch writes restore the original raw bytes, including
+corrupt compression. Backups remain scoped to the character and server and can
+be downloaded using **Export recovery backups** as `guild-trial-recovery-backup.json`.
+This separate diagnostic format contains `recordKey`, `storageKey`, `rawValue`
+and `savedAt`; it is not an ordinary trial-history import file. No automatic
+backup deletion is performed.
+
+Record provenance survives standard old and current export envelopes (versions
+1 and 2). `isGameCapture` checks each record's schema version 1 and non-manual
+source, so exporting and importing a capture does not exclude it from rankings,
+absence evidence, project statistics or signup work warnings. Manual schema 2
+records retain their existing exclusions. The import preview explains this;
+no user provenance override is necessary for these identifiable backups.
+Missing/invalid provenance is rejected rather than converted into a capture.
 
 Manual transcripts use record schema version 2 and `source: "manual"`.
 They have a stable `recordId` and `key = JSON.stringify(["manual", recordId])`,
@@ -815,7 +841,10 @@ missing values as zero. Exports now use envelope schema version 2 and can
 contain both automatic and manual records.
 
 Browser QA for import: test from an empty history and from existing records;
-choose a file, inspect the preview, cancel once, then confirm. Verify numeric
+choose a file, inspect the preview, cancel once, then confirm. Include missing and
+damaged combat keys alongside existing skilling records from the same week,
+verify recovery notices and exported raw-value backups, and re-import standard
+old/new game-capture backups without changing ranking/warning eligibility. Verify numeric
 member names, missing IDs, duplicate/conflict skipping, invalid JSON, invalid
 statistics, export/re-import and reload. Repeat preview and result states at
 320, 360, 420, 460, 480, 520, 560, 610, 720, 900 and 1200 pixels, plus English
@@ -1153,7 +1182,9 @@ bad lengths, checksums, unsupported versions and truncated payloads. Values over
 Legacy JSON is accepted alongside compressed values. Reading an eligible legacy
 value attempts one atomic, same-key replacement after rechecking its original
 value; a quota/access failure keeps the original readable. Only accessed records
-are migrated, without scanning other characters. Unreadable compressed history
+are migrated, without scanning other characters. Trial-history reads validate the
+business record before migrating, preserving invalid raw values for explicit
+recovery and exact backup. Unreadable compressed history
 reports the existing load failure and is not overwritten by capture. Save errors
 continue through the existing import rollback logic. A bounded cache (64 entries,
 2 Mi combined raw/decoded code units) avoids repeatedly decoding unchanged data

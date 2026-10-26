@@ -278,17 +278,22 @@
     }
 
     function renderImport() {
-      const preview = importPreview ? trialHistoryApi.previewImport(importPreview.records, records) : [];
+      const preview = importPreview
+        ? pluginStorage.previewTrialImport?.(importPreview.records, records) ||
+          trialHistoryApi.previewImport(importPreview.records, records)
+        : [];
+      if (importPreview) importPreview.plan = preview;
       const count = (status) => preview.filter((entry) => entry.status === status).length;
       const summary = {
         added: count("new"),
         dated: count("dated"),
+        recovered: count("recoverable"),
         duplicates: count("duplicate"),
         conflicts: count("conflict")
       };
       let markup = `<div class="mwi-trial-fullscreen-bar"><strong>${escapeHtml(t("trialHistory"))}</strong><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t("trialFullscreenExit"))}</button></div><section class="mwi-trial-import" aria-label="${escapeHtml(t("trialDataTransfer"))}" aria-busy="${importBusy}">
         <header class="mwi-trial-toolbar"><div class="mwi-trial-heading"><h2>${escapeHtml(t("trialHistory"))}</h2><p class="mwi-trial-notice" data-state="${unsaved.size || loadFailed ? "warning" : "saved"}" role="status" aria-live="polite">${escapeHtml(t(unsaved.size ? "trialSaveFailed" : loadFailed ? "trialLoadFailed" : "trialSavedCount", { count: records.length }))}</p></div><div class="mwi-trial-controls"><button type="button" data-trial-fullscreen aria-pressed="${isFullscreen()}"${fullscreenBusy ? " disabled" : ""}>${escapeHtml(t(isFullscreen() ? "trialFullscreenExit" : "trialFullscreenEnter"))}</button><button type="button" data-trial-simple-names aria-pressed="${simpleNames}">${escapeHtml(t("trialSimpleNames"))}</button><button type="button" data-trial-screenshot-mode aria-pressed="${screenshotMode}">${escapeHtml(t(screenshotMode ? "trialScreenshotExit" : "trialScreenshotMode"))}</button><button type="button" data-trial-image="copy"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotCopy"))}</button><button type="button" data-trial-image="download"${screenshotBusy || !records.length ? " disabled" : ""}>${escapeHtml(t("trialScreenshotDownload"))}</button><button type="button" data-role="trial-import-open"${importBusy ? " disabled" : ""}>${escapeHtml(t("trialImport"))}</button>
-        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button></div></header>
+        <button type="button" data-role="trial-export"${records.length ? "" : ` disabled title="${escapeHtml(t("trialHistoryEmpty"))}"`}>${escapeHtml(t("trialExport"))}</button>${pluginStorage.trialRecoveryBackupCount?.() ? `<button type="button" data-role="trial-recovery-export">${escapeHtml(t("trialRecoveryExport"))}</button>` : ""}</div></header>
 
         <p class="mwi-trial-help" data-trial-fullscreen-status role="status" aria-live="polite">${escapeHtml(fullscreenNotice ? t(fullscreenNotice) : "")}</p>
         <p class="mwi-trial-help" data-trial-image-status role="status" aria-live="polite">${escapeHtml(screenshotBusy ? t("trialScreenshotWorking") : screenshotNotice ? t(screenshotNotice) : "")}</p>
@@ -298,8 +303,10 @@
       if (importPreview) {
         markup += `<div class="mwi-trial-import-preview"><h3>${escapeHtml(t("trialImportPreview"))}</h3>
           <p class="mwi-trial-meta">${screenshotMode ? "" : `${escapeHtml(importPreview.name)}<br>`}${escapeHtml(t("trialImportSummary", summary))}</p>
+          <p class="mwi-trial-help">${escapeHtml(t("trialImportSourceHint"))}</p>
+          ${summary.recovered ? `<p class="mwi-trial-notice" data-role="trial-recovery-warning">${escapeHtml(t("trialRecoveryWarning", { count: summary.recovered }))}</p>` : ""}
           <ul class="mwi-trial-import-list" tabindex="0" aria-label="${escapeHtml(t("trialImportPreview"))}">${preview.map(({ record, status }) => `<li><strong>${escapeHtml(trialName(record))} · ${escapeHtml(t(`trialImportStatus_${status}`))}</strong><span>${escapeHtml(`${recordDate(record)} · ${record.guildName || t("trialUnknownGuild")}`)}</span><span>${escapeHtml(t("trialImportMemberCount", { count: record.rows.length }))} · ${escapeHtml(t(record.source === "manual" ? "trialManualSource" : "trialAutomaticSource"))}</span></li>`).join("")}</ul>
-          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated) || importBusy ? " disabled" : ""}>${escapeHtml(t("trialImportConfirm", { count: summary.added + summary.dated }))}</button>
+          <div class="mwi-trial-controls"><button type="button" data-role="trial-import-confirm"${!(summary.added + summary.dated + summary.recovered) || importBusy ? " disabled" : ""}>${escapeHtml(t(summary.recovered ? "trialImportConfirmRecovery" : "trialImportConfirm", { count: summary.added + summary.dated + summary.recovered }))}</button>
           <button type="button" data-role="trial-import-cancel">${escapeHtml(t("trialImportCancel"))}</button></div></div>`;
       }
       return markup + "</section>";
@@ -340,18 +347,40 @@
 
     function confirmImport(panel) {
       if (!importPreview || importBusy) return;
+      const recoveries = (importPreview.plan || [])
+        .filter((entry) => entry.status === "recoverable")
+        .map((entry) => ({ key: entry.record.key, previousRaw: entry.previousRaw }));
       // Pending automatic captures also count as existing; never replace them
       // with an imported copy while browser storage is unavailable.
       capture();
-      const plan = trialHistoryApi.previewImport(importPreview.records, records);
-      const additions = plan.filter((entry) => ["new", "dated"].includes(entry.status)).map((entry) => entry.record);
+      const plan =
+        pluginStorage.previewTrialImport?.(importPreview.records, records) ||
+        trialHistoryApi.previewImport(importPreview.records, records);
+      if (
+        plan.some(
+          (entry) =>
+            entry.status === "recoverable" &&
+            !recoveries.some(
+              (approved) => approved.key === entry.record.key && approved.previousRaw === entry.previousRaw
+            )
+        ) ||
+        plan.some((entry) => entry.status === "unavailable")
+      ) {
+        importNotice = { key: "trialImportChanged", values: {} };
+        refresh(panel);
+        return;
+      }
+      const additions = plan
+        .filter((entry) => ["new", "dated", "recoverable"].includes(entry.status))
+        .map((entry) => entry.record);
       const result = additions.length
-        ? pluginStorage.importTrialHistory(additions)
+        ? pluginStorage.importTrialHistory(additions, { recoveries })
         : { status: "imported", added: 0, dated: 0, duplicates: 0, conflicts: 0 };
+      result.recovered = result.recovered || 0;
       result.duplicates += plan.filter((entry) => entry.status === "duplicate").length;
       result.conflicts += plan.filter((entry) => entry.status === "conflict").length;
       if (result.status === "imported") {
-        if (result.added + result.dated) {
+        if (result.added + result.dated + result.recovered) {
           selectedWeek = trialHistoryApi.historyWeeks([additions[0]])[0].key;
           selectedProject = trialHistoryApi.historyProjectKey(additions[0]);
           resetScroll = true;
@@ -361,10 +390,14 @@
       importNotice = {
         key:
           result.status === "imported"
-            ? "trialImportComplete"
+            ? result.recovered
+              ? "trialImportRecoveryComplete"
+              : "trialImportComplete"
             : result.status === "partial"
               ? "trialImportPartial"
-              : "trialImportSaveFailed",
+              : result.status === "stale"
+                ? "trialImportChanged"
+                : "trialImportSaveFailed",
         values: result
       };
       refresh(panel);
@@ -903,18 +936,38 @@
       updateScrollButtons(host);
     }
 
-    function exportHistory() {
-      capture();
+    function downloadHistoryJson(data, filename) {
       const url = pageWindow.URL.createObjectURL(
-        new pageWindow.Blob([JSON.stringify({ schemaVersion: 2, records }, null, 2)], { type: "application/json" })
+        new pageWindow.Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
       );
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "guild-trial-history.json";
+      anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 0);
+    }
+
+    function exportHistory() {
+      capture();
+      downloadHistoryJson({ schemaVersion: 2, records }, "guild-trial-history.json");
+    }
+
+    function exportRecoveryBackups(panel) {
+      try {
+        downloadHistoryJson(
+          {
+            schemaVersion: 1,
+            format: "guild-trial-recovery-backup",
+            backups: pluginStorage.loadTrialRecoveryBackups()
+          },
+          "guild-trial-recovery-backup.json"
+        );
+      } catch (_) {
+        importNotice = { key: "trialRecoveryExportFailed", values: {} };
+        refresh(panel);
+      }
     }
 
     async function exportScreenshot(host, target) {
@@ -1308,6 +1361,7 @@
           host.querySelector('[data-role="trial-import-open"]')?.focus();
         }
         if (event.target.closest('[data-role="trial-export"]')) exportHistory();
+        if (event.target.closest('[data-role="trial-recovery-export"]')) exportRecoveryBackups(panel);
       });
     }
     const onStats = () => {
