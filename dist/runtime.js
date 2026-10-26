@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.72";
+window.MwiGuildCreditVersion = "1.2.73";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -4704,7 +4704,6 @@ window.MwiGuildCreditVersion = "1.2.72";
       buildingTilePlannedLabel: "定位到 {building} 的施工行，目标 {target} 级",
       buildingTileMaxLabel: "{building} 已满级，不能加入计划",
       cancel: "取消",
-      buildingAddedToPlan: "已将 {building} 加入施工计划。",
       buildingRemovedFromPlan: "已将 {building} 移出施工计划。",
       buildingTargetUpdated: "{building} 的目标已更新为 {target} 级。",
       buildingPlansReconciled: "已按实时等级调整 {adjusted} 项计划，并移除 {removed} 项已完成计划。",
@@ -5582,7 +5581,6 @@ window.MwiGuildCreditVersion = "1.2.72";
       buildingTilePlannedLabel: "Go to {building} in the plan, target level {target}",
       buildingTileMaxLabel: "{building} is at maximum level and cannot be added",
       cancel: "Cancel",
-      buildingAddedToPlan: "{building} added to the construction plan.",
       buildingRemovedFromPlan: "{building} removed from the construction plan.",
       buildingTargetUpdated: "{building}'s target is now level {target}.",
       buildingPlansReconciled: "Live levels adjusted {adjusted} plan(s) and removed {removed} completed plan(s).",
@@ -13312,7 +13310,7 @@ window.MwiGuildCreditVersion = "1.2.72";
         targetLevel: startLevel + 1
       };
       state.buildingPlans.push(plan);
-      state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
+      state.buildingPlanNotice = "";
       persistGuildBuildingPlannerState();
       return { status: "added", buildingHrid, plan };
     }

@@ -2,7 +2,7 @@
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.72
+// @version      1.2.73
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
@@ -507,7 +507,7 @@
     return { dispose, report, client };
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { createUsageClient, boot };
-  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.72","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
+  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.73","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
 setValue: typeof GM_setValue === "function" ? GM_setValue : null,
 listen: typeof GM_addValueChangeListener === "function" ? GM_addValueChangeListener : null,
 unlisten: typeof GM_removeValueChangeListener === "function" ? GM_removeValueChangeListener : null,
@@ -516,7 +516,7 @@ request: typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : null}); }
 
 // LAYU_USAGE_END mwi_guild
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.72";
+window.MwiGuildCreditVersion = "1.2.73";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -5221,7 +5221,6 @@ window.MwiGuildCreditVersion = "1.2.72";
       buildingTilePlannedLabel: "定位到 {building} 的施工行，目标 {target} 级",
       buildingTileMaxLabel: "{building} 已满级，不能加入计划",
       cancel: "取消",
-      buildingAddedToPlan: "已将 {building} 加入施工计划。",
       buildingRemovedFromPlan: "已将 {building} 移出施工计划。",
       buildingTargetUpdated: "{building} 的目标已更新为 {target} 级。",
       buildingPlansReconciled: "已按实时等级调整 {adjusted} 项计划，并移除 {removed} 项已完成计划。",
@@ -6099,7 +6098,6 @@ window.MwiGuildCreditVersion = "1.2.72";
       buildingTilePlannedLabel: "Go to {building} in the plan, target level {target}",
       buildingTileMaxLabel: "{building} is at maximum level and cannot be added",
       cancel: "Cancel",
-      buildingAddedToPlan: "{building} added to the construction plan.",
       buildingRemovedFromPlan: "{building} removed from the construction plan.",
       buildingTargetUpdated: "{building}'s target is now level {target}.",
       buildingPlansReconciled: "Live levels adjusted {adjusted} plan(s) and removed {removed} completed plan(s).",
@@ -13829,7 +13827,7 @@ window.MwiGuildCreditVersion = "1.2.72";
         targetLevel: startLevel + 1
       };
       state.buildingPlans.push(plan);
-      state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
+      state.buildingPlanNotice = "";
       persistGuildBuildingPlannerState();
       return { status: "added", buildingHrid, plan };
     }

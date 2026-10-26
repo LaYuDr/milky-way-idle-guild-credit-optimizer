@@ -659,7 +659,7 @@
         targetLevel: startLevel + 1
       };
       state.buildingPlans.push(plan);
-      state.buildingPlanNotice = t("buildingAddedToPlan", { building: guildBuildingLabel(definition) });
+      state.buildingPlanNotice = "";
       persistGuildBuildingPlannerState();
       return { status: "added", buildingHrid, plan };
     }

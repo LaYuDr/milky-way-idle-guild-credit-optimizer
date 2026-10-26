@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.73] - 2026-10-27
+
+### Changed
+
+- 添加建筑到施工计划后不再显示顶部成功提醒；继续保存计划并保留错误反馈及清空撤销入口。
+
 ## [1.2.72] - 2026-10-27
 
 ### Changed

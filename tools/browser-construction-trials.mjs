@@ -124,6 +124,11 @@ export async function auditConstructionTrials(page, screenshotPath) {
   );
   assert.equal(await wood.getAttribute("data-current-trial"), "true");
   assert.equal(
+    await page.locator('[data-role="construction-status"]').isVisible(),
+    false,
+    "Adding a building must not show the top success banner"
+  );
+  assert.equal(
     await wood.evaluate((element) => globalThis.getComputedStyle(element).backgroundColor),
     "rgb(41, 63, 65)"
   );
