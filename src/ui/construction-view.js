@@ -72,8 +72,27 @@
       return matching;
     }
 
-    function guildPointForecastWeekCount() {
-      return core.normalizeGuildPointForecastWeeks(state.guildPointForecastWeeks);
+    const guildPointWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+    function currentGuildPointWeekNumber() {
+      return Math.max(1, Math.floor((Date.now() - guildTrialFirstStartAt) / guildPointWeekMs) + 1);
+    }
+
+    function guildPointForecastStartAt() {
+      const start = state.guildPointForecastStartAt;
+      return Number.isSafeInteger(start) &&
+        start >= guildTrialFirstStartAt &&
+        (start - guildTrialFirstStartAt) % guildPointWeekMs === 0
+        ? start
+        : guildTrialFirstStartAt;
+    }
+
+    function setGuildPointForecastStartWeek(value) {
+      const week = Number(value);
+      if (!Number.isSafeInteger(week) || week < 1 || week > currentGuildPointWeekNumber()) return false;
+      state.guildPointForecastStartAt = guildTrialFirstStartAt + (week - 1) * guildPointWeekMs;
+      state.guildPointForecastSaveFailed = persistGuildBuildingPlannerState() === false;
+      return true;
     }
 
     function guildPointPlanningWeekCount() {
@@ -230,7 +249,7 @@
         currentGuildWeekPoints(),
         Date.now(),
         guildTrialFirstStartAt,
-        { forecastWeekCount: guildPointForecastWeekCount() }
+        { forecastStartAt: guildPointForecastStartAt() }
       );
     }
 
@@ -263,7 +282,7 @@
       const history = core.summarizeGuildPointHistory(
         { ...supplemented.history, weeks: [...weeksByStart.values()] },
         {
-          forecastWeekCount: guildPointForecastWeekCount(),
+          forecastStartAt: guildPointForecastStartAt(),
           currentWeekStartAt,
           currentWeekPoints: currentGuildWeekPoints()
         }
@@ -477,11 +496,20 @@
       return `<svg class="mwi-construction-icon" viewBox="0 0 16 16" aria-hidden="true">${paths[name]}</svg>`;
     }
 
-    function renderGuildPointWeekStepper(role, value, minimum, maximum, labelKey, increaseKey, decreaseKey) {
+    function renderGuildPointWeekStepper(
+      role,
+      value,
+      minimum,
+      maximum,
+      labelKey,
+      increaseKey,
+      decreaseKey,
+      describedBy = ""
+    ) {
       const label = escapeHtml(t(labelKey));
       const increase = escapeHtml(t(increaseKey));
       const decrease = escapeHtml(t(decreaseKey));
-      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}" aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
+      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}"${describedBy ? ` aria-describedby="${escapeHtml(describedBy)}"` : ""} aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
     }
 
     function guildPointPlanningSummary(planning) {
@@ -501,17 +529,22 @@
     }
 
     function renderGuildPointForecastSettings() {
-      const forecastWeeks = guildPointForecastWeekCount();
+      const startAt = guildPointForecastStartAt();
+      const startWeek = (startAt - guildTrialFirstStartAt) / guildPointWeekMs + 1;
+      const maximum = currentGuildPointWeekNumber();
       const forecastStepper = renderGuildPointWeekStepper(
-        "guild-point-forecast-weeks",
-        forecastWeeks,
-        2,
-        12,
-        "guildPointForecastWeeks",
-        "increaseGuildPointForecastWeeks",
-        "decreaseGuildPointForecastWeeks"
+        "guild-point-forecast-start-week",
+        startWeek,
+        1,
+        maximum,
+        "guildPointForecastStartWeek",
+        "increaseGuildPointForecastStartWeek",
+        "decreaseGuildPointForecastStartWeek",
+        "mwi-guild-point-start-save-error mwi-guild-point-start-error"
       );
-      return `<section class="mwi-guild-point-planning-options" aria-label="${escapeHtml(t("guildPointPlanningOptions"))}"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}</label></section>`;
+      const [weekPrefix, weekSuffix = ""] = t("guildPointForecastWeekInput").split("{week}");
+      const saveError = state.guildPointForecastSaveFailed ? t("guildPointForecastSaveFailed") : "";
+      return `<section class="mwi-guild-point-planning-options mwi-guild-point-start-options" aria-label="${escapeHtml(t("guildPointPlanningOptions"))}"><label><span>${escapeHtml(t("guildPointForecastStartWeek"))}</span><span class="mwi-guild-point-start-input"><span>${escapeHtml(weekPrefix)}</span>${forecastStepper}<span>${escapeHtml(weekSuffix)}</span></span></label><p id="mwi-guild-point-start-save-error" class="mwi-guild-point-start-error" role="status"${saveError ? "" : " hidden"}>${escapeHtml(saveError)}</p><p id="mwi-guild-point-start-error" class="mwi-guild-point-start-error" role="alert" hidden>${escapeHtml(t("guildPointForecastStartInvalid", { max: formatNumber(maximum) }))}</p></section>`;
     }
 
     function renderGuildPointForecastControls(plan) {
@@ -819,7 +852,7 @@
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
       const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
       const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -1253,6 +1286,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       hasGuildBuildingClearUndo,
       applyGuildBuildingFilters,
       guildPointHistorySummary,
+      setGuildPointForecastStartWeek,
       guildPointPlanningBudget,
       guildPointEta,
       renderGuildPointForecast,

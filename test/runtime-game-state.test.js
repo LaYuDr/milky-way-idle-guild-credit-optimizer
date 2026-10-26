@@ -22,6 +22,44 @@ function createState() {
     characterItems: null
   };
 }
+test("冻结规划前强制读取当前角色，角色切换不会沿用旧角色神龛和库存", () => {
+  const state = createState();
+  Object.assign(state, {
+    itemDetails: { cached: {} },
+    guildBuffDetails: { cached: {} },
+    guildBuffLevels: { old: 6 },
+    guildShrineLevels: { old: 7 },
+    guildBuildingLevels: { old: 2 },
+    characterItems: [{ itemHrid: "/items/guild_token", count: 999 }],
+    planningCharacterId: 42
+  });
+  const payload = {
+    character: { id: 43 },
+    characterGuildBuffDict: { "/guild_buffs/tempo_skilling": { level: 1 } },
+    characterItems: []
+  };
+  const node = { __reactContainer$fixture: { current: { stateNode: { state: payload } } } };
+  const gameData = gameDataApi.createGameData({
+    state,
+    pageWindow: { localStorage: { getItem: () => null } },
+    document: { getElementById: () => node, body: null },
+    marketDataApi: {},
+    core,
+    ...gameStateApi.createGameStateAdapter(state),
+    persistLiveMarketData() {},
+    scheduleMarketDataRefresh() {},
+    scheduleInventoryDataRefresh() {},
+    scheduleGuildDataRefresh() {},
+    resolveItemName: () => "",
+    CREDIT_TYPES: []
+  });
+  gameData.extractItemDetailsFromReact(true);
+  assert.equal(state.planningCharacterId, 43);
+  assert.deepEqual(state.characterItems, []);
+  assert.equal(state.guildBuffLevels.old, undefined);
+  assert.equal(state.guildShrineLevels, null);
+  assert.equal(state.guildBuildingLevels, null);
+});
 
 test("物品详情变化会清空计算缓存且拒绝空候选", () => {
   const state = createState();

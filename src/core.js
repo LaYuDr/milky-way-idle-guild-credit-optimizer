@@ -600,9 +600,7 @@
               : weekStartAt
       });
     }
-    return Array.from(byWeek.values())
-      .sort((left, right) => left.weekStartAt - right.weekStartAt)
-      .slice(-104);
+    return Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt);
   }
 
   function normalizeManualGuildPointWeeks(value) {
@@ -624,9 +622,7 @@
         observedAt: Number.isSafeInteger(observedAt) && observedAt > 0 ? observedAt : weekStartAt
       });
     }
-    return Array.from(byWeek.values())
-      .sort((left, right) => left.weekStartAt - right.weekStartAt)
-      .slice(-104);
+    return Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt);
   }
 
   function normalizedGuildPointHistory(history) {
@@ -827,6 +823,7 @@
     const currentWeekStartAt = firstTrial + pastWeekCount * GUILD_POINT_WEEK_MS;
     const forecast = summarizeGuildPointHistory(normalized, {
       forecastWeekCount: options.forecastWeekCount,
+      forecastStartAt: options.forecastStartAt,
       currentWeekStartAt,
       currentWeekPoints
     });
@@ -928,6 +925,8 @@
   // Estimates and unverified zeros are excluded; positive tracked values retain their coverage.
   function backtestGuildPointForecast(history, options = {}) {
     const lookback = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
+    const forecastStartAt =
+      Number.isSafeInteger(options.forecastStartAt) && options.forecastStartAt > 0 ? options.forecastStartAt : null;
     const records = normalizeGuildPointWeeks(history?.weeks).filter(isGuildPointForecastSample);
     const results = ["mean", "linear", "legacy"].map((method) => ({
       method,
@@ -942,7 +941,7 @@
       const samples = records.filter(
         (record) =>
           record.weekStartAt < target.weekStartAt &&
-          record.weekStartAt >= target.weekStartAt - lookback * GUILD_POINT_WEEK_MS
+          record.weekStartAt >= (forecastStartAt ?? target.weekStartAt - lookback * GUILD_POINT_WEEK_MS)
       );
       const row = { weekStartAt: target.weekStartAt, actual: target.earnedPoints };
       const candidates = results.map((result) => guildPointModelPrediction(samples, target.weekStartAt, result.method));
@@ -964,7 +963,13 @@
       meanAbsoluteError: result.count ? result.absoluteError / result.count : null,
       meanOverestimate: result.count ? result.overestimate / result.count : null
     }));
-    return { lookback, metrics, predictions, recommendedMethod: "linear" };
+    return {
+      lookback: forecastStartAt === null ? lookback : null,
+      forecastStartAt,
+      metrics,
+      predictions,
+      recommendedMethod: "linear"
+    };
   }
 
   function summarizeGuildPointHistory(history, options = {}) {
@@ -1005,13 +1010,15 @@
         ? (latest.earnedPoints - previous.earnedPoints) / previous.earnedPoints
         : null;
     const forecastWeekCount = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
-    const window = completedWeeks.filter(
-      (record) => record.weekStartAt >= forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS
-    );
+    const forecastStartAt =
+      Number.isSafeInteger(options.forecastStartAt) && options.forecastStartAt > 0
+        ? options.forecastStartAt
+        : forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS;
+    const window = completedWeeks.filter((record) => record.weekStartAt >= forecastStartAt);
     const samples = window.filter(isGuildPointForecastSample);
     const backtest = backtestGuildPointForecast(
       { weeks: window },
-      { forecastWeekCount, beforeWeekStartAt: forecastEndAt }
+      { forecastWeekCount, forecastStartAt: options.forecastStartAt, beforeWeekStartAt: forecastEndAt }
     );
     const forecastMethod = "linear";
     const forecastPoints = guildPointModelPrediction(samples, currentWeekStartAt, forecastMethod);
@@ -1033,14 +1040,14 @@
       verifiedSampleCount: samples.filter(isReliableGuildPointWeek).length,
       forecastSamples: samples,
       currentWeekComplete,
-      forecastWeekCount,
+      forecastWeekCount: Math.max(0, Math.round((forecastEndAt - forecastStartAt) / GUILD_POINT_WEEK_MS)),
       estimatedSampleCount: window.filter((record) => record.source === "estimated").length,
       partialSampleCount: window.filter((record) => record.source !== "estimated" && !isReliableGuildPointWeek(record))
         .length,
       forecastMethod,
       backtest,
       currentWeekStartAt,
-      forecastStartAt: forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS,
+      forecastStartAt,
       forecastEndAt
     };
   }

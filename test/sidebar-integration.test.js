@@ -297,6 +297,7 @@ function controllerFixture() {
       disconnect() {}
     }
   };
+  let active = false;
   const context = {
     MwiGuildCreditSidebarDom: {
       createIntegrationLocator: () => () => fixture.found,
@@ -312,10 +313,17 @@ function controllerFixture() {
     },
     MwiGuildCreditSidebarInteraction: {
       createSelectionController: () => ({
-        hide() {},
-        isActive: () => false,
+        hide() {
+          active = false;
+        },
+        isActive: () => active,
+        sync() {
+          state.panel.hidden = false;
+          return true;
+        },
         show() {
           calls.shown += 1;
+          active = true;
           state.panel.hidden = false;
         }
       }),
@@ -405,4 +413,43 @@ test("a different native tab bar still receives a newly created Guild tab", () =
   assert.equal(calls.removedTabs, 1);
   assert.equal(calls.createdTabs, 1);
   assert.equal(calls.preparedTabs.length, 0);
+});
+
+test("active Guild survives hidden content followed by panel-host replacement", () => {
+  const { fixture, controller, state, tab, calls } = controllerFixture();
+  state.panel.hidden = false;
+  tab.selected = true;
+  controller.refresh();
+  const panel = state.panel;
+  state.panel.hidden = true;
+  state.panel.isConnected = false;
+  fixture.found.panelHost = {
+    append(node) {
+      node.parentElement = this;
+      node.isConnected = true;
+    }
+  };
+  assert.equal(controller.refresh(), true);
+  assert.equal(state.panel, panel);
+  assert.equal(state.panel.hidden, false);
+  assert.equal(state.creditTab, tab);
+  assert.equal(calls.shown, 2);
+});
+
+test("Guild remount never reclaims selection from another tab", () => {
+  const { fixture, controller, state, tab, foreignTab, calls } = controllerFixture();
+  state.panel.hidden = false;
+  tab.selected = true;
+  foreignTab.getAttribute = () => "true";
+  controller.refresh();
+  assert.equal(calls.shown, 0);
+  fixture.found.panelHost = {
+    append(node) {
+      node.parentElement = this;
+      node.isConnected = true;
+    }
+  };
+  controller.refresh();
+  assert.equal(state.panel.hidden, true);
+  assert.equal(calls.shown, 0);
 });

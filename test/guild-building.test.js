@@ -42,7 +42,7 @@ function createConstructionHarness({
     nextBuildingPlanId: 1,
     buildingPlanNotice: "",
     manualGuildPoints: null,
-    guildPointForecastWeeks: 6,
+    guildPointForecastStartAt: config.GUILD_TRIAL_FIRST_START_AT,
     guildPointPlanningWeeks: 0,
     buildingSearch: "",
     buildingCategory: "all",
@@ -478,9 +478,9 @@ test("本周获得点数后在当前周前显示下周预测，预测行只读�
   assert.equal(JSON.stringify(harness.state.guildPointHistory), savedHistory);
   assert.equal(harness.view.guildPointHistoryCsv(), csv);
   assert.equal(harness.persistCount(), 0);
-  assert.match(markup, /data-role="guild-point-forecast-weeks" type="number" min="2" max="12" step="1"/);
+  assert.match(markup, /data-role="guild-point-forecast-start-week" type="number" min="1" max="\d+" step="1"/);
   assert.match(markup, /data-role="guild-point-planning-weeks" type="number" min="0" max="12" step="1"/);
-  assert.match(markup, /data-input-role="guild-point-forecast-weeks" data-direction="1"/);
+  assert.match(markup, /data-input-role="guild-point-forecast-start-week" data-direction="1"/);
   assert.match(markup, /data-input-role="guild-point-planning-weeks" data-direction="-1"/);
   assert.doesNotMatch(markup, /<select data-role="guild-point-(?:forecast|planning)-weeks"/);
 });
@@ -1087,7 +1087,7 @@ test("公会建设模块进入构建、桥接、界面与响应式测试链路",
   assert.match(userscript, /data-role="construction-affordable"/);
   assert.match(userscript, /data-role="construction-budget-summary"/);
   assert.match(userscript, /"next-week-guild-point-forecast"/);
-  assert.match(userscript, /data-role="guild-point-forecast-weeks"/);
+  assert.match(userscript, /data-role="guild-point-forecast-start-week"/);
   assert.match(userscript, /data-role="guild-point-planning-weeks"/);
   assert.match(userscript, /calculateGuildPointPlanningBudget/);
   assert.match(userscript, /recordGuildPointObservation/);
@@ -1136,10 +1136,10 @@ test("公会建设关键文案同时覆盖中文与英文", () => {
     "guildPointForecastMethod",
     "guildPointForecastEstimatedMethod",
     "guildPointHistoryConflict",
-    "guildPointForecastWeeks",
-    "guildPointForecastWeeksHint",
-    "increaseGuildPointForecastWeeks",
-    "decreaseGuildPointForecastWeeks",
+    "guildPointForecastStartWeek",
+    "guildPointForecastStartWeekHint",
+    "increaseGuildPointForecastStartWeek",
+    "decreaseGuildPointForecastStartWeek",
     "guildPointPlanningWeeks",
     "guildPointPlanningWeeksHint",
     "increaseGuildPointPlanningWeeks",
@@ -1398,7 +1398,7 @@ test("建设页使用原始追踪与本周结算值回归，预算和预测行�
   t.mock.timers.enable({ apis: ["Date"], now: start + 1 });
   const harness = createConstructionHarness();
   harness.state.guildWeekStartAt = start;
-  harness.state.guildPointForecastWeeks = 2;
+  harness.state.guildPointForecastStartAt = start - week;
   harness.state.guildPointSummary = {
     guildId: "guild-1",
     lifetimePoints: 105820,
@@ -1465,4 +1465,28 @@ test("历史回归占位值和CSV保持估算来源，不覆盖旧存储或参�
   const missing = harness.view.guildPointHistorySummary();
   assert.equal(missing.supplemented.estimatedCount, 0);
   assert.doesNotMatch(harness.view.guildPointHistoryCsv(), /99999|guildPointCsvEstimated/);
+});
+
+test("输入预测起始周只保存有效周次，跨周保持起点并更新取样", (t) => {
+  const first = config.GUILD_TRIAL_FIRST_START_AT,
+    week = GUILD_TRIAL_WEEK_MS;
+  t.mock.timers.enable({ apis: ["Date"], now: first + 13 * week + 1 });
+  const harness = createConstructionHarness();
+  const before = JSON.stringify(harness.state.guildPointHistory);
+  for (const value of ["", "0", "-1", "8.5", "15", "abc"]) {
+    assert.equal(harness.view.setGuildPointForecastStartWeek(value), false);
+  }
+  assert.equal(harness.persistCount(), 0);
+  assert.equal(harness.view.setGuildPointForecastStartWeek("8"), true);
+  assert.equal(harness.persistCount(), 1);
+  assert.equal(harness.state.guildPointForecastStartAt, first + 7 * week);
+  assert.equal(JSON.stringify(harness.state.guildPointHistory), before);
+  t.mock.timers.tick(week);
+  const summary = harness.view.guildPointHistorySummary();
+  assert.equal(summary.forecastStartAt, first + 7 * week);
+  assert.equal(summary.forecastSampleCount, 0);
+  const markup = renderGuildPointForecast(harness, summary);
+  assert.match(markup, /guild-point-forecast-start-week" type="number" min="1" max="15"/);
+  assert.doesNotMatch(markup, /data-role="guild-point-forecast-weeks"/);
+  assert.equal(harness.persistCount(), 1);
 });

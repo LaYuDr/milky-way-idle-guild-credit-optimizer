@@ -33,6 +33,7 @@ const FIXED_RELEASE_PATHS = new Set([
   "docs/GREASY_FORK_DESCRIPTION.md",
   "docs/TRIAL_ANALYTICS_RESTORE.md",
   "docs/THIRD_PARTY_NOTICES.md",
+  "docs/TRIAL_MEMBER_NAME_REPAIR.md",
   "eslint.config.mjs",
   "package.json",
   "package-lock.json",
@@ -48,11 +49,13 @@ const FIXED_RELEASE_PATHS = new Set([
   "tools/browser-trial-fullscreen.mjs",
   "tools/browser-storage-transfer.mjs",
   "tools/browser-construction-trials.mjs",
+  "tools/check-assistants-sidebar.mjs",
   "tools/persistence-audit.mjs",
   "tools/backtest-guild-points.mjs",
   "tools/test-trial-sprite.svg",
   "发布当前版本.command",
   "dist/milky-way-idle-guild-credit-dev-loader.user.js",
+  "dist/milky-way-idle-guild-assistant.user.js",
   "dist/milky-way-idle-guild-credit-optimizer.user.js",
   "dist/runtime.js",
   "dist/test-harness.html"
@@ -255,14 +258,15 @@ function extractUserscriptVersion(contents) {
 }
 
 function verifyBuild(version) {
-  const currentFile = "dist/milky-way-idle-guild-credit-optimizer.user.js";
+  const currentFile = "dist/milky-way-idle-guild-assistant.user.js";
+  const legacyFile = "dist/milky-way-idle-guild-credit-optimizer.user.js";
   const archiveFile = releaseArchivePath(version);
   const loaderFile = "dist/milky-way-idle-guild-credit-dev-loader.user.js";
   const runtimeFile = "dist/runtime.js";
-  for (const file of [currentFile, archiveFile, loaderFile, runtimeFile]) {
+  for (const file of [currentFile, legacyFile, archiveFile, loaderFile, runtimeFile]) {
     if (!fs.existsSync(path.join(ROOT, file))) throw new Error(`构建缺少文件：${file}`);
   }
-  for (const file of [currentFile, archiveFile, loaderFile]) {
+  for (const file of [currentFile, legacyFile, archiveFile, loaderFile]) {
     const actual = extractUserscriptVersion(fs.readFileSync(path.join(ROOT, file), "utf8"));
     if (actual !== version) throw new Error(`${file} 的版本是 ${actual || "未知"}，预期 ${version}`);
   }
@@ -270,8 +274,10 @@ function verifyBuild(version) {
   if (!runtime.includes(`window.MwiGuildCreditVersion = ${JSON.stringify(version)};`)) {
     throw new Error(`${runtimeFile} 未写入版本 ${version}`);
   }
-  if (!fs.readFileSync(path.join(ROOT, currentFile)).equals(fs.readFileSync(path.join(ROOT, archiveFile)))) {
-    throw new Error("当前安装脚本与本次版本归档内容不一致");
+  for (const file of [legacyFile, archiveFile]) {
+    if (!fs.readFileSync(path.join(ROOT, currentFile)).equals(fs.readFileSync(path.join(ROOT, file)))) {
+      throw new Error(`当前安装脚本与 ${file} 内容不一致`);
+    }
   }
 }
 

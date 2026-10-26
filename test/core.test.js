@@ -2087,6 +2087,21 @@ test("正式版桥接通过游戏原生控制器打开指定市场物品", () =>
   assert.equal(bridge.goToMarketplace("invalid-item"), false);
 });
 
+test("正式版桥接通过游戏原生控制器打开指定玩家资料", () => {
+  const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
+  class FakeWebSocket {}
+  const calls = [];
+  const controller = { handleViewProfile: (name) => calls.push(name) };
+  const root = { _reactRootContainer: { _internalRoot: { current: { child: { stateNode: controller } } } } };
+  const page = { WebSocket: FakeWebSocket, document: { getElementById: (id) => (id === "root" ? root : null) } };
+  vm.runInNewContext(bridgeSource, { window: page, JSON, Map, Object, Set, WeakSet, URL, String, Array });
+  const bridge = page.__mwiGuildCreditBridge;
+  assert.equal(bridge.openPlayerProfile(" Alpha "), true);
+  assert.deepEqual(calls, ["Alpha"]);
+  for (const invalid of ["", "  ", "A\nB", "A".repeat(65)]) assert.equal(bridge.openPlayerProfile(invalid), false);
+  assert.deepEqual(calls, ["Alpha"]);
+});
+
 test("正式版桥接会合并分帧到达的公会神龛建筑等级", () => {
   const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "src", "bridge.js"), "utf8");
   class FakeWebSocket {

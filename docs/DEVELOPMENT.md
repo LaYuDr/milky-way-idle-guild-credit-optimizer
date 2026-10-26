@@ -346,7 +346,8 @@ before acquiring shared DOM styles. Selection and scroll state belong to the liv
 nodes; no native tab ordering or new storage key is introduced.
 
 The integration audit also covers disabled/modified clicks, click-only activation,
-new sibling panels, `display` priority restoration, tab-bar and panel-host
+new sibling panels, selected Guild panel/host visibility recovery after delayed
+`hidden`/inline `display: none` writes, `display` priority restoration, tab-bar and panel-host
 replacement, cloned wheel markers, wheel boundaries, listener disposal and
 same-version controller takeover. Node tests cover locator boundaries, clean
 button creation, RTL scrolling and restoration after foreign writes. Reference
@@ -368,6 +369,18 @@ valid. Missing/disconnected/hidden layouts invalidate it immediately. A local
 observer catches tab changes and remounts; cold start observes the document
 until mounting. Scheduling is coalesced without resetting a pending deadline,
 so unrelated startup mutations cannot indefinitely delay mounting.
+
+可选的四助手同页回归（需同级邀请、强化、资产三个项目）：
+
+```bash
+node tools/check-assistants-sidebar.mjs
+```
+
+使用实际侧栏控制器与合成面板，覆盖 440/680/900/1440 容器、12 个有向切换组合、延迟隐藏、
+隐藏后更换容器、观察器漏报后的定时恢复、后台恢复事件和销毁。
+页面进入往返缓存（`pagehide.persisted`）时保留运行时，恢复后继续工作；真正退出才销毁。保留内容节点与草稿；
+其他标签选中后不恢复公会页面，包括重挂载与旧节点接管。报告位于
+`.workbench/assistants-sidebar/report.json`。这不替代各项目完整界面或真实游戏验收。
 
 ### Native sidebar tab interaction audit
 
@@ -408,6 +421,24 @@ Require every value in `checks` to be `true`. Run the audit at `320`, `420`,
 `610`, and `900` pixels in Chinese, then at `320` and `610` with `locale=en`.
 Each URL must be opened as a fresh navigation so the deliberate reload can
 complete its two-stage contract.
+
+### Shrine material purchase quantity
+
+Shrine material icons carry the purchase shortfall (required exchange items minus
+backpack inventory, or the direct material shortfall). Unknown inventory and zero
+shortfall do not arm a prefill. Successful native market navigation arms a
+memory-only, two-minute request through the existing bridge. The next matching
+unenhanced buy form receives the quantity once, capped by the native maximum and
+10 billion. Sell forms, changed items/characters, manual modal input, closing an
+observed form, and a newer icon click cancel it. Search fallback does not prefill.
+No price input, submit handler, or socket send is invoked.
+
+`test/market-purchase-prefill.test.js` covers the native controller boundary.
+The `shrine-upgrade` browser matrix checks inventory subtraction and the icon to
+bridge quantity payload. These synthetic checks do not prove compatibility with
+the current live game: manually verify an icon, open its buy form, check the
+quantity, then close without submitting. Also verify selling and another item
+remain untouched.
 
 ### Responsive layout matrix
 
@@ -507,7 +538,7 @@ forecast row appears above the current week, using the same value as the forecas
 summary. Zero, unknown, or stale prior-week progress does not show this row;
 unavailable forecasts display a dash. The row never enters saved history or CSV.
 Estimated weeks can be edited in place, and clearing a manual value restores its estimate. It also changes
-the forecast lookback and planning horizon once, verifies the rerendered controls,
+the fixed forecast start week and planning horizon, verifies the rerendered controls,
 then restores the current-points-only planning mode. It leaves a reusable final
 sample after verifying that custom starting points update the budget summary
 on input without changing the observed game balance, and clearing the input
@@ -515,13 +546,12 @@ restores the game balance. Auto-filled weeks are excluded from regression. The a
 samples leave the forecast unknown, then that a manual prior week of 10,000 plus
 the current completed week of 9,648 predicts 9,296 using linear regression.
 Earlier empty weeks are backfilled by linear regression from the manual and current-week samples (10,352 for the week before the manual value, then 10,704). Clearing that manual sample removes these estimates and restores the unknown forecast. Current-week positive
-points make its remaining earnings zero. Separate unit tests verify the 2-week
-window, raw tracked values, manual overrides, rollover, budget and ETA consistency.
+points make its remaining earnings zero. Separate unit tests verify fixed-start expansion beyond 12 and 104 weeks, raw tracked values, manual overrides, rollover, settings migration, budget and ETA consistency.
 See [forecast rules](GUILD_POINT_FORECAST.md) for the sampling rules and local CSV/JSON analysis command.
 Forecast settings are always visible above Recent weeks, outside all disclosures;
 there is no Forecast settings toggle. The planning horizon stays in the top budget
 area. Recent weeks retains its full-width, 48px-minimum native disclosure.
-The audit verifies one lookback input, its visibility across rerenders and history
+The audit verifies one start-week input (1 through the current week), persistence and reload, rejection of invalid weeks without changing the anchor, removal of the old lookback control, its visibility across rerenders and history
 collapse, and native Enter/Space history expansion without modifying records. The final fixture contains 28 visible named
 catalog entries, three collapsed building groups in
 their original order, nine total upgrade steps, a `5,000` budget, `13,975`
@@ -548,7 +578,8 @@ The `cards.readableNames`, `cards.visibleLevels`, `cards.readableNextLevelCosts`
 must be true. These check a 14px minimum for primary text and the history table,
 a 12px minimum for secondary text, and the budget / queue / statistics reading
 order. The catalog scrolls within a 340px maximum height; the weekly table
-retains all rows with a contained horizontal scroller on narrow panels.
+retains all rows, fits the panel width and uses normal page scrolling without a
+local scroller or overscroll containment, including on narrow panels.
 
 The compact construction workspace uses two budget columns and a queue/catalog
 split at a container width of 720px. Queue controls reflow using the queue pane's
@@ -594,9 +625,11 @@ stay on one text line and fit their cell at every documented width and locale.
 
 ### Current skilling trial buildings
 
-The construction catalog marks this week's matching life buildings with an amber
-border and a localized text badge. Planned tiles keep their existing green
-background and queue state. The highlight never adds, removes, reorders or
+The construction catalog marks this week's matching life buildings with a 1px blue
+(`#72b8ff`) inset outline. The localized trial label remains in the accessible name
+and tooltip, without adding a text row. Highlighting preserves tile geometry and
+the uniform 30px catalog icons. Planned tiles keep their existing green background,
+border and queue state. The highlight never adds, removes, reorders or
 changes plans, cost or levels. Full-level and unknown-level tiles use the same
 project match; existing disabled/default-zero rules remain authoritative.
 
@@ -615,8 +648,9 @@ clears it. No new requests, persistence keys or capture paths are introduced.
 Run `npm run check:quick -- test/current-trial-buildings.test.js test/guild-building.test.js`
 and the full construction browser matrix. The latter now also checks the screenshot's
 woodcutting/tailoring/brewing/alchemy mapping, registration and fallback data,
-guild/stale/missing data, accessible badges, retained planned colors, unchanged
-plans and contained layout at all documented widths/locales. These are localhost
+guild/stale/missing data, accessible labels, blue outlines including hover and
+keyboard focus, retained planned colors, unchanged tile geometry and 30px icons,
+unchanged plans and contained layout at all documented widths/locales. These are localhost
 fixtures, not real-game acceptance.
 
 ### Full local-data backup and cleanup
@@ -687,7 +721,8 @@ Guild Hall construction plan, and the complete panel order
 - require the text Settings button immediately after the left-aligned tab group,
   without left/right move buttons; retain drag sorting and saved tab order;
 - open the standalone settings page, require every feature panel to be hidden, and inspect its accessible name, linked
-  trigger, labelled inputs, live status, focus entry, Back/Escape focus return, and retention of an unsubmitted name draft;
+  trigger, labelled inputs, live status, focus entry, Settings-toggle/Escape return, and retention of an unsubmitted name draft;
+  the redundant settings header and Back button are absent, while the settings region retains a localized accessible name;
 - exclude only Spirit Shrine (life), fill life upgrades, and require the
   excluded existing plan to remain unchanged while Tempo Shrine (life) is
   filled;
@@ -995,7 +1030,8 @@ Removed feature details and source recovery steps are preserved in
 
 ### Low work-share warnings
 
-Historical skilling member names are red with a dotted underline when that
+Historical skilling member rows have a pale red background and a triangle warning
+icon before the red name when that
 completed record's raw work share is strictly below 0.9%. The tooltip and
 accessible description explain the share. Exact 0.9% is not flagged; explicit
 zero (including official v1 omitted zero) is valid. Missing metrics, an incomplete
@@ -1003,6 +1039,11 @@ known denominator, a zero total, and unfinished/combat trials are not flagged.
 The warning overrides personalized name colors, gradient text, shadows and text
 pseudo-elements in both history and native signup lists. Chat icons keep their
 appearance; removing the warning restores native name styling.
+The row background uses `:has()` on history table rows and native signup
+`GuildPanel_memberRow__` nodes. The icon is an empty CSS pseudo-element with an
+SVG mask, so native name text and React nodes remain unchanged. Hovered or
+selected warning rows retain their red background with a mint outline; existing
+keyboard focus indicators remain visible.
 
 `src/ui/trial-signup-warning.js` decorates only native `GuildPanel_signupModal__`
 member-name nodes, preserving native nodes and click handlers. It uses the most

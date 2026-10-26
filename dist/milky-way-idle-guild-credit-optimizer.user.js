@@ -2,7 +2,7 @@
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.70
+// @version      1.2.71
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
@@ -507,7 +507,7 @@
     return { dispose, report, client };
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { createUsageClient, boot };
-  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.70","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
+  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.71","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
 setValue: typeof GM_setValue === "function" ? GM_setValue : null,
 listen: typeof GM_addValueChangeListener === "function" ? GM_addValueChangeListener : null,
 unlisten: typeof GM_removeValueChangeListener === "function" ? GM_removeValueChangeListener : null,
@@ -516,7 +516,7 @@ request: typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : null}); }
 
 // LAYU_USAGE_END mwi_guild
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.70";
+window.MwiGuildCreditVersion = "1.2.71";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -3321,7 +3321,7 @@ window.MwiGuildCreditVersion = "1.2.70";
     return roots;
   }
 
-  function findGameController(methodName) {
+  function findGameController(methodName, includeAlternates = true) {
     const pending = reactFiberRoots();
     const visited = new Set();
     let inspected = 0;
@@ -3335,7 +3335,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       if (fiber.current) pending.push(fiber.current);
       if (fiber.child) pending.push(fiber.child);
       if (fiber.sibling) pending.push(fiber.sibling);
-      if (fiber.alternate) pending.push(fiber.alternate);
+      if (includeAlternates && fiber.alternate) pending.push(fiber.alternate);
     }
     return null;
   }
@@ -3351,6 +3351,75 @@ window.MwiGuildCreditVersion = "1.2.70";
       Number.isInteger(enhancementLevel) && enhancementLevel >= 0 ? enhancementLevel : 0;
     try {
       controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  let purchaseTimer = null;
+  function cancelOnPurchaseInput(event) {
+    if (event.target?.closest?.('[class*="MarketplacePanel_modalContent"]')) bridge.cancelPurchasePrefill();
+  }
+  bridge.cancelPurchasePrefill = function () {
+    if (purchaseTimer !== null) page.clearInterval(purchaseTimer);
+    purchaseTimer = null;
+    page.document?.removeEventListener?.("input", cancelOnPurchaseInput, true);
+  };
+  bridge.armPurchasePrefill = function (itemHrid, quantity) {
+    bridge.cancelPurchasePrefill();
+    if (!/^\/items\/[a-z0-9_]+$/.test(itemHrid) || !Number.isSafeInteger(quantity) || quantity <= 0) return false;
+    const controller = findGameController("handleGoToMarketplace", false);
+    if (!controller) return false;
+    const characterId = controller.state?.character?.id;
+    const expires = Date.now() + 120000;
+    let seenTarget = false;
+    let seenForm = false;
+    page.document?.addEventListener?.("input", cancelOnPurchaseInput, true);
+    purchaseTimer = page.setInterval(() => {
+      try {
+        if (Date.now() >= expires || controller.state?.character?.id !== characterId)
+          return bridge.cancelPurchasePrefill();
+        const panel = findGameController("handleQuantityInputChanged", false);
+        if (!panel) {
+          if (seenTarget) bridge.cancelPurchasePrefill();
+          return;
+        }
+        const state = panel.state;
+        if (state?.itemHrid !== itemHrid) {
+          if (seenTarget) bridge.cancelPurchasePrefill();
+          return;
+        }
+        seenTarget = true;
+        if (!state.showPostListing) {
+          if (seenForm) bridge.cancelPurchasePrefill();
+          return;
+        }
+        seenForm = true;
+        if (state.isSell !== false || Number(state.enhancementLevelInput) !== 0) return bridge.cancelPurchasePrefill();
+        const price = Number(state.priceInput);
+        if (!Number.isFinite(price) || price <= 0) return;
+        if (typeof panel.getMaxQuantity !== "function") return bridge.cancelPurchasePrefill();
+        const maximum = panel.getMaxQuantity(false, itemHrid, 0, price);
+        if (!Number.isFinite(maximum) || maximum <= 0) return bridge.cancelPurchasePrefill();
+        const amount = Math.min(quantity, Math.floor(maximum), 1e10);
+        bridge.cancelPurchasePrefill();
+        // Only update the native quantity input, once. Never submit an order.
+        if (amount > 0) panel.handleQuantityInputChanged({ target: { value: String(amount) } });
+      } catch (_) {
+        bridge.cancelPurchasePrefill();
+      }
+    }, 100);
+    return true;
+  };
+
+  bridge.openPlayerProfile = function (name) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\u0000-\u001f\u007f]/.test(name))
+      return false;
+    const controller = findGameController("handleViewProfile");
+    if (!controller) return false;
+    try {
+      controller.handleViewProfile(name.trim());
       return true;
     } catch (_) {
       return false;
@@ -4798,7 +4867,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       helpRankingOrder: "榜单顺序",
       helpSettingsAndMarket: "设置与市场参考",
       helpForecastEvidence:
-        "预测仅使用回看范围内的已确认记录和非零游戏追踪值。自动估算不参与，追踪零值需手动确认后参与。",
+        "预测仅使用起始周之后（含起始周）的已确认记录和非零游戏追踪值。自动估算不参与，追踪零值需手动确认后参与。",
       helpForecastBacktest: "历史回测用于查看线性回归在已有记录上的表现，不改变当前预测方法。",
       helpConstructionEta: "按计划缺少的点数估算等待时间：先计本周预计剩余，再按下周预测点数估算后续各周。",
       helpTrialCoverage: "部分成员数值未知时，汇总仅包含该指标的已知值。",
@@ -4988,7 +5057,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       trialHistoryPointEstimateCoverage: "最近记录匹配 {matched} 项，平均值补齐 {missing} 项",
       guildPointHistoryUnavailable: "尚未读取公会点数；打开公会页面后会自动建立本机基线。",
       guildPointHistoryBaseline: "已建立累计点数基线；下一次周奖励到账后将生成首条周记录。",
-      guildPointForecastNeedsHistory: "回看范围内需要至少 2 周有效点数才能做线性回归；不使用历史均值补足。",
+      guildPointForecastNeedsHistory: "起始周之后（含起始周）需要至少 2 周有效点数才能做线性回归；不使用历史均值补足。",
       guildPointForecastColdStart: "此前 {count} 周平均 {average} 点，本周已获 {current} 点；均值仅供参考。",
       guildPointForecastMethod: "使用最近 {count} 周内的已核实记录预测。",
       guildPointForecastEstimatedMethod: "依据累计点数提供历史均值参考，自动补充记录不参与趋势拟合。",
@@ -5036,10 +5105,14 @@ window.MwiGuildCreditVersion = "1.2.70";
       trialHelpRankingPreview: "参试次数、人均倍数和入会时间各有独立统计口径。",
       trialHelpCounts: "参试次数如何计算",
       trialHelpRankingAverage: "人均倍数与样本数",
-      guildPointForecastWeeks: "预测回看周数",
-      guildPointForecastWeeksHint: "本周已获点数时包含本周，否则截至上周；自动估算不参与线性回归。",
-      increaseGuildPointForecastWeeks: "增加 1 周预测回看范围",
-      decreaseGuildPointForecastWeeks: "减少 1 周预测回看范围",
+      guildPointForecastStartWeek: "预测起始周",
+      guildPointForecastStartWeekHint:
+        "起始周固定不变，新周自动纳入。本周已获点数时包含本周，否则截至上周；自动估算不参与线性回归。",
+      guildPointForecastWeekInput: "第 {week} 周",
+      guildPointForecastStartInvalid: "请输入 1～{max} 之间的整数周次；原起点未更改。",
+      guildPointForecastSaveFailed: "起点仅在本页生效，保存失败；请重新设置以重试。",
+      increaseGuildPointForecastStartWeek: "将预测起点推后 1 周",
+      decreaseGuildPointForecastStartWeek: "将预测起点提前 1 周",
       guildPointPlanningWeeks: "规划周数",
       guildPointPlanningOptions: "预测设置",
       guildPointPlanningWeeksHint:
@@ -5648,7 +5721,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       helpRankingOrder: "Ranking order",
       helpSettingsAndMarket: "Settings and market reference",
       helpForecastEvidence:
-        "Forecasts use confirmed records and nonzero game-tracked values within the lookback window. Estimated records are excluded; tracked zeros require manual confirmation.",
+        "Forecasts use confirmed records and nonzero game-tracked values on or after the selected start week. Estimated records are excluded; tracked zeros require manual confirmation.",
       helpForecastBacktest:
         "Historical backtests show how linear regression performs on existing records without changing the forecast method.",
       helpConstructionEta:
@@ -5853,7 +5926,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       guildPointHistoryBaseline:
         "The lifetime-point baseline is saved. The next weekly reward will create the first record.",
       guildPointForecastNeedsHistory:
-        "Linear regression needs at least two valid weeks within the lookback window. No historical-average fallback is used.",
+        "Linear regression needs at least two valid weeks on or after the selected start week. No historical-average fallback is used.",
       guildPointForecastColdStart:
         "The prior {count} weeks averaged {average} points; {current} earned this week. This average is a reference only.",
       guildPointForecastMethod: "Uses verified records within the latest {count} weeks.",
@@ -5875,7 +5948,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       guildPointHelpEvaluated: "Using {method}, evaluated against {count} past weeks.",
       guildPointHelpDataTitle: "Which records are used",
       guildPointHelpData:
-        "Positive current-week points mark this week as finished and include it in the lookback window; otherwise the window ends last week. Confirmed records and positive game-tracked values are used. Estimates and missing values are excluded. Tracked zeros require manual confirmation.",
+        "Positive current-week points mark this week as finished and include it in the forecast range; otherwise the window ends last week. Confirmed records and positive game-tracked values are used. Estimates and missing values are excluded. Tracked zeros require manual confirmation.",
       guildPointHelpMethodTitle: "How the forecast is calculated",
       guildPointHelpMethod:
         "Least-squares linear regression fits earned points against actual week numbers and extrapolates the target week, rounded to a nonnegative integer. At least two valid weeks are required. Evaluation no longer switches the method to a mean.\nMissing weeks retain their time gaps. No zeros or older samples are filled in. Insufficient data is shown as —.",
@@ -5904,11 +5977,14 @@ window.MwiGuildCreditVersion = "1.2.70";
       trialHelpRankingPreview: "Participation, average multiples and joining times each use separate rules.",
       trialHelpCounts: "Participation counts",
       trialHelpRankingAverage: "Average multiples and sample counts",
-      guildPointForecastWeeks: "Forecast lookback",
-      guildPointForecastWeeksHint:
-        "Includes this week once points are earned; otherwise ends last week. Estimates are excluded from regression.",
-      increaseGuildPointForecastWeeks: "Increase the forecast lookback by 1 week",
-      decreaseGuildPointForecastWeeks: "Decrease the forecast lookback by 1 week",
+      guildPointForecastStartWeek: "Forecast start week",
+      guildPointForecastStartWeekHint:
+        "The start week stays fixed as new weeks are added. Includes this week once points are earned; otherwise ends last week. Estimates are excluded from regression.",
+      guildPointForecastWeekInput: "Week {week}",
+      guildPointForecastStartInvalid: "Enter a whole week number from 1 to {max}; the previous start is unchanged.",
+      guildPointForecastSaveFailed: "Start applies to this page only; saving failed. Set it again to retry.",
+      increaseGuildPointForecastStartWeek: "Move the forecast start forward by 1 week",
+      decreaseGuildPointForecastStartWeek: "Move the forecast start back by 1 week",
       guildPointPlanningWeeks: "Planning horizon",
       guildPointPlanningOptions: "Forecast settings",
       guildPointPlanningWeeksHint:
@@ -7243,9 +7319,7 @@ window.MwiGuildCreditVersion = "1.2.70";
               : weekStartAt
       });
     }
-    return Array.from(byWeek.values())
-      .sort((left, right) => left.weekStartAt - right.weekStartAt)
-      .slice(-104);
+    return Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt);
   }
 
   function normalizeManualGuildPointWeeks(value) {
@@ -7267,9 +7341,7 @@ window.MwiGuildCreditVersion = "1.2.70";
         observedAt: Number.isSafeInteger(observedAt) && observedAt > 0 ? observedAt : weekStartAt
       });
     }
-    return Array.from(byWeek.values())
-      .sort((left, right) => left.weekStartAt - right.weekStartAt)
-      .slice(-104);
+    return Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt);
   }
 
   function normalizedGuildPointHistory(history) {
@@ -7470,6 +7542,7 @@ window.MwiGuildCreditVersion = "1.2.70";
     const currentWeekStartAt = firstTrial + pastWeekCount * GUILD_POINT_WEEK_MS;
     const forecast = summarizeGuildPointHistory(normalized, {
       forecastWeekCount: options.forecastWeekCount,
+      forecastStartAt: options.forecastStartAt,
       currentWeekStartAt,
       currentWeekPoints
     });
@@ -7571,6 +7644,8 @@ window.MwiGuildCreditVersion = "1.2.70";
   // Estimates and unverified zeros are excluded; positive tracked values retain their coverage.
   function backtestGuildPointForecast(history, options = {}) {
     const lookback = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
+    const forecastStartAt =
+      Number.isSafeInteger(options.forecastStartAt) && options.forecastStartAt > 0 ? options.forecastStartAt : null;
     const records = normalizeGuildPointWeeks(history?.weeks).filter(isGuildPointForecastSample);
     const results = ["mean", "linear", "legacy"].map((method) => ({
       method,
@@ -7585,7 +7660,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       const samples = records.filter(
         (record) =>
           record.weekStartAt < target.weekStartAt &&
-          record.weekStartAt >= target.weekStartAt - lookback * GUILD_POINT_WEEK_MS
+          record.weekStartAt >= (forecastStartAt ?? target.weekStartAt - lookback * GUILD_POINT_WEEK_MS)
       );
       const row = { weekStartAt: target.weekStartAt, actual: target.earnedPoints };
       const candidates = results.map((result) => guildPointModelPrediction(samples, target.weekStartAt, result.method));
@@ -7607,7 +7682,13 @@ window.MwiGuildCreditVersion = "1.2.70";
       meanAbsoluteError: result.count ? result.absoluteError / result.count : null,
       meanOverestimate: result.count ? result.overestimate / result.count : null
     }));
-    return { lookback, metrics, predictions, recommendedMethod: "linear" };
+    return {
+      lookback: forecastStartAt === null ? lookback : null,
+      forecastStartAt,
+      metrics,
+      predictions,
+      recommendedMethod: "linear"
+    };
   }
 
   function summarizeGuildPointHistory(history, options = {}) {
@@ -7648,13 +7729,15 @@ window.MwiGuildCreditVersion = "1.2.70";
         ? (latest.earnedPoints - previous.earnedPoints) / previous.earnedPoints
         : null;
     const forecastWeekCount = normalizeGuildPointForecastWeeks(options.forecastWeekCount);
-    const window = completedWeeks.filter(
-      (record) => record.weekStartAt >= forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS
-    );
+    const forecastStartAt =
+      Number.isSafeInteger(options.forecastStartAt) && options.forecastStartAt > 0
+        ? options.forecastStartAt
+        : forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS;
+    const window = completedWeeks.filter((record) => record.weekStartAt >= forecastStartAt);
     const samples = window.filter(isGuildPointForecastSample);
     const backtest = backtestGuildPointForecast(
       { weeks: window },
-      { forecastWeekCount, beforeWeekStartAt: forecastEndAt }
+      { forecastWeekCount, forecastStartAt: options.forecastStartAt, beforeWeekStartAt: forecastEndAt }
     );
     const forecastMethod = "linear";
     const forecastPoints = guildPointModelPrediction(samples, currentWeekStartAt, forecastMethod);
@@ -7676,14 +7759,14 @@ window.MwiGuildCreditVersion = "1.2.70";
       verifiedSampleCount: samples.filter(isReliableGuildPointWeek).length,
       forecastSamples: samples,
       currentWeekComplete,
-      forecastWeekCount,
+      forecastWeekCount: Math.max(0, Math.round((forecastEndAt - forecastStartAt) / GUILD_POINT_WEEK_MS)),
       estimatedSampleCount: window.filter((record) => record.source === "estimated").length,
       partialSampleCount: window.filter((record) => record.source !== "estimated" && !isReliableGuildPointWeek(record))
         .length,
       forecastMethod,
       backtest,
       currentWeekStartAt,
-      forecastStartAt: forecastEndAt - forecastWeekCount * GUILD_POINT_WEEK_MS,
+      forecastStartAt,
       forecastEndAt
     };
   }
@@ -8146,6 +8229,138 @@ window.MwiGuildCreditVersion = "1.2.70";
 });
 
 
+// SOURCE: src/runtime/upgrade-planning.js
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildUpgradePlanning = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  const requestEvent = "mwi:guild-upgrade-planning:request:v1";
+  const responseEvent = "mwi:guild-upgrade-planning:response:v1";
+  const allowed = /^\/guild_buffs\/(tempo|scholar)_(skilling|life)$/;
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  function create({ core, capture, owner, hostname, now = Date.now, version = "" }) {
+    let sequence = 0;
+    const snapshots = new Map();
+    const checkOwner = (id) => Number.isSafeInteger(id) && id > 0 && owner() === id;
+    async function take(characterId) {
+      const source = await capture();
+      if (!checkOwner(characterId)) throw Error("character_mismatch");
+      if (!source || !Array.isArray(source.shrines)) throw Error("rules_unavailable");
+      const id = `guild-plan-${now()}-${++sequence}`;
+      const snapshot = clone({
+        ...source,
+        id,
+        characterId,
+        host: hostname,
+        schemaVersion: 1,
+        providerVersion: version,
+        capturedAt: now()
+      });
+      snapshots.set(id, snapshot);
+      if (snapshots.size > 4) snapshots.delete(snapshots.keys().next().value);
+      return clone(snapshot);
+    }
+    function quote({ snapshotId, characterId, plans, inventory = {} }) {
+      const snapshot = snapshots.get(snapshotId);
+      if (!snapshot || !checkOwner(characterId) || snapshot.characterId !== characterId)
+        throw Error("snapshot_unavailable");
+      if (
+        !Array.isArray(plans) ||
+        plans.length < 1 ||
+        plans.length > 2 ||
+        new Set(plans.map((p) => p.hrid)).size !== plans.length
+      )
+        throw Error("invalid_plans");
+      const inputs = plans.map((p) => {
+        const shrine = snapshot.shrines.find((s) => s.hrid === p.hrid);
+        if (
+          !allowed.test(p.hrid) ||
+          !shrine ||
+          !Number.isInteger(p.start) ||
+          !Number.isInteger(p.target) ||
+          p.start < shrine.level ||
+          p.target > shrine.maxLevel ||
+          p.target <= p.start
+        )
+          throw Error("invalid_levels");
+        return {
+          guildBuffHrid: p.hrid,
+          startLevel: p.start,
+          targetLevel: p.target,
+          levelCosts: shrine.detail.levelCosts
+        };
+      });
+      if (
+        !inventory ||
+        typeof inventory !== "object" ||
+        Array.isArray(inventory) ||
+        Object.keys(inventory).length > 512 ||
+        Object.entries(inventory).some(
+          ([k, v]) => !/^\/items\/[a-z0-9_]+$/.test(k) || typeof v !== "number" || !Number.isFinite(v) || v < 0
+        )
+      )
+        throw Error("invalid_inventory");
+      const aggregate = core.aggregateGuildBuffPlans(inputs);
+      if (aggregate.status !== "ok") return { status: aggregate.status };
+      // A full-resource quote and an inventory-aware cash quote share the same
+      // core and selected conversion policy. Never derive total cost from a shortage.
+      const options = {
+        guildTokenCreditHrids: snapshot.policy.tokenCreditHrids,
+        guildTokenCreditConversions: snapshot.exchangeRules,
+        autoAllocateSurplusGuildTokens: false
+      };
+      const total = core.estimateGuildUpgradeCosts(aggregate.totals, snapshot.unitCosts, {}, options);
+      const cash = core.estimateGuildUpgradeCosts(aggregate.totals, snapshot.unitCosts, inventory, options);
+      return clone({
+        status: total.status,
+        total,
+        cash,
+        demands: aggregate.totals,
+        effects: inputs.map((p) =>
+          core.guildBuffUpgradePreview(
+            snapshot.shrines.find((s) => s.hrid === p.guildBuffHrid).detail,
+            p.startLevel,
+            p.targetLevel
+          )
+        )
+      });
+    }
+    return Object.freeze({ take, quote });
+  }
+  function install(target, provider) {
+    const reply = (id, result, error = null) =>
+      target.dispatchEvent(new target.CustomEvent(responseEvent, { detail: JSON.stringify({ id, result, error }) }));
+    const listener = (event) => {
+      let r;
+      try {
+        if (typeof event.detail !== "string" || event.detail.length > 100000) return;
+        r = JSON.parse(event.detail);
+      } catch (_) {
+        return;
+      }
+      if (!r || typeof r.id !== "string" || !/^[a-z0-9-]{1,100}$/.test(r.id)) return;
+      if (r.action === "capture")
+        provider.take(r.characterId).then(
+          (result) => reply(r.id, result),
+          (e) => reply(r.id, null, e.message)
+        );
+      else if (r.action === "quote") {
+        try {
+          reply(r.id, provider.quote(r));
+        } catch (e) {
+          reply(r.id, null, e.message);
+        }
+      }
+    };
+    target.addEventListener(requestEvent, listener);
+    return () => target.removeEventListener(requestEvent, listener);
+  }
+  return { create, install, requestEvent, responseEvent };
+});
+
+
 // SOURCE: src/shrine-guide.js
 (function (root, factory) {
   const api = factory();
@@ -8443,7 +8658,7 @@ window.MwiGuildCreditVersion = "1.2.70";
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
   const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const LEGACY_GUILD_TRIAL_FIRST_START_AT = Date.parse("2026-07-13T00:00:00Z");
-  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 8;
+  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 9;
 
   function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
     const values =
@@ -8555,12 +8770,8 @@ window.MwiGuildCreditVersion = "1.2.70";
     return {
       guildId: String(source.guildId || "").slice(0, 160),
       lastObservation: normalizeObservation(source.lastObservation),
-      weeks: Array.from(byWeek.values())
-        .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-104),
-      manualWeeks: Array.from(manualByWeek.values())
-        .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-104)
+      weeks: Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt),
+      manualWeeks: Array.from(manualByWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt)
     };
   }
 
@@ -9122,7 +9333,10 @@ window.MwiGuildCreditVersion = "1.2.70";
       const fallback = {
         plans: [],
         manualGuildPoints: null,
-        guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
+        guildPointSettings: {
+          guildPointForecastStartAt: config.GUILD_TRIAL_FIRST_START_AT,
+          guildPointPlanningWeeks: 0
+        },
         category: "all",
         search: "",
         constructionUi: normalizeConstructionUi(null),
@@ -9165,18 +9379,46 @@ window.MwiGuildCreditVersion = "1.2.70";
         const category = ["all", "core", "life", "combat", "shrine"].includes(stored.category)
           ? stored.category
           : "all";
-        const guildPointForecastWeeksValue = Number(stored.guildPointForecastWeeks);
+        const firstWeek = config.GUILD_TRIAL_FIRST_START_AT;
+        const currentWeek =
+          firstWeek + Math.max(0, Math.floor((Date.now() - firstWeek) / GUILD_POINT_WEEK_MS)) * GUILD_POINT_WEEK_MS;
+        const storedStart = Number(stored.guildPointForecastStartAt);
+        const validStart =
+          Number.isSafeInteger(storedStart) &&
+          storedStart >= firstWeek &&
+          storedStart <= currentWeek &&
+          (storedStart - firstWeek) % GUILD_POINT_WEEK_MS === 0;
+        const legacyWeeks = Number(stored.guildPointForecastWeeks);
+        const lookback = Number.isSafeInteger(legacyWeeks) && legacyWeeks >= 2 && legacyWeeks <= 12 ? legacyWeeks : 6;
+        const snapshot = normalizeGuildPointSnapshot(stored.guildPointSnapshot);
+        const includeCurrent =
+          Number(stored.schemaVersion) >= 7 &&
+          snapshot?.currentWeekPoints > 0 &&
+          Number.isSafeInteger(snapshot.weekStartAt) &&
+          Math.floor((snapshot.weekStartAt - firstWeek) / GUILD_POINT_WEEK_MS) ===
+            Math.floor((currentWeek - firstWeek) / GUILD_POINT_WEEK_MS);
+        const guildPointForecastStartAt = validStart
+          ? storedStart
+          : Math.max(
+              firstWeek,
+              currentWeek + (includeCurrent ? GUILD_POINT_WEEK_MS : 0) - lookback * GUILD_POINT_WEEK_MS
+            );
+        let forecastSaveFailed = false;
+        if (!validStart) {
+          // Freeze the migrated boundary once without rewriting unrelated planner data.
+          try {
+            storage.setItem(guildBuildingPlannerStorageKey(), JSON.stringify({ ...stored, guildPointForecastStartAt }));
+          } catch (_) {
+            forecastSaveFailed = true;
+          }
+        }
         const guildPointPlanningWeeksValue = Number(stored.guildPointPlanningWeeks);
         return {
           plans,
           manualGuildPoints,
           guildPointSettings: {
-            guildPointForecastWeeks:
-              Number.isSafeInteger(guildPointForecastWeeksValue) &&
-              guildPointForecastWeeksValue >= 2 &&
-              guildPointForecastWeeksValue <= 12
-                ? guildPointForecastWeeksValue
-                : 6,
+            guildPointForecastStartAt,
+            ...(forecastSaveFailed ? { guildPointForecastSaveFailed: true } : {}),
             guildPointPlanningWeeks:
               Number.isSafeInteger(guildPointPlanningWeeksValue) &&
               guildPointPlanningWeeksValue >= 0 &&
@@ -9207,6 +9449,7 @@ window.MwiGuildCreditVersion = "1.2.70";
 
     function persistGuildBuildingPlannerState(state) {
       try {
+        if (!storage || typeof storage.setItem !== "function") return false;
         storage &&
           storage.setItem(
             guildBuildingPlannerStorageKey(),
@@ -9214,7 +9457,7 @@ window.MwiGuildCreditVersion = "1.2.70";
               schemaVersion: GUILD_BUILDING_PLANNER_SCHEMA_VERSION,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
-              guildPointForecastWeeks: state.guildPointForecastWeeks,
+              guildPointForecastStartAt: state.guildPointForecastStartAt,
               guildPointPlanningWeeks: state.guildPointPlanningWeeks,
               category: state.buildingCategory,
               search: shortText(state.buildingSearch),
@@ -9232,8 +9475,10 @@ window.MwiGuildCreditVersion = "1.2.70";
               }))
             })
           );
+        return true;
       } catch (_) {
         // Keep the current page state when browser storage is unavailable.
+        return false;
       }
     }
 
@@ -10267,8 +10512,9 @@ window.MwiGuildCreditVersion = "1.2.70";
       }
     }
 
-    function extractItemDetailsFromReact() {
+    function extractItemDetailsFromReact(force = false) {
       if (
+        !force &&
         state.itemDetails &&
         state.guildBuffDetails &&
         state.guildBuffLevels &&
@@ -10298,6 +10544,15 @@ window.MwiGuildCreditVersion = "1.2.70";
         visited.add(fiber);
         scanned += 1;
         const stateValue = fiber.stateNode && fiber.stateNode.state;
+        if (Number.isSafeInteger(stateValue?.character?.id) && stateValue.character.id > 0) {
+          if (state.planningCharacterId && state.planningCharacterId !== stateValue.character.id) {
+            state.guildBuffLevels = null;
+            state.guildShrineLevels = null;
+            state.guildBuildingLevels = null;
+            state.characterItems = null;
+          }
+          state.planningCharacterId = stateValue.character.id;
+        }
         const candidates = [fiber.memoizedProps, fiber.pendingProps, stateValue, fiber.memoizedState];
         for (const candidate of candidates) {
           if (!candidate || typeof candidate !== "object") continue;
@@ -10318,7 +10573,8 @@ window.MwiGuildCreditVersion = "1.2.70";
             state.guildBuildingLevels &&
             state.guildPointSummary &&
             state.guildWeekStartAt &&
-            state.characterItems
+            state.characterItems &&
+            (!force || state.planningCharacterId)
           )
             return true;
         }
@@ -11201,7 +11457,13 @@ window.MwiGuildCreditVersion = "1.2.70";
     }
 
     function captureSiblings(panelHost, tabBar) {
-      for (const node of panelHost.children) {
+      const siblings = new Set(panelHost.children);
+      for (const [node, record] of hiddenNodes) {
+        if (siblings.has(node)) continue;
+        restoreStyle(node, "display", record);
+        hiddenNodes.delete(node);
+      }
+      for (const node of siblings) {
         if (node === active.panel || hiddenNodes.has(node) || !node.style) continue;
         hiddenNodes.set(node, claimStyle(node, "display", "none", "important"));
       }
@@ -11223,7 +11485,6 @@ window.MwiGuildCreditVersion = "1.2.70";
         !active ||
         !panelHost ||
         !tabBar ||
-        active.panel.hidden ||
         active.tab.getAttribute("aria-selected") !== "true" ||
         !active.tab.classList.contains("Mui-selected") ||
         otherSelected(tabBar)
@@ -11232,7 +11493,17 @@ window.MwiGuildCreditVersion = "1.2.70";
       active.panelHost = panelHost;
       active.tabBar = tabBar;
       captureSiblings(panelHost, tabBar);
+      restoreVisibility();
       return true;
+    }
+
+    function restoreVisibility() {
+      // Delayed native/foreign renders can hide live nodes without changing
+      // selection. Repair only our panel and its host while we own the sidebar.
+      for (const node of [active.panelHost, active.panel]) {
+        if (node.hidden) node.hidden = false;
+        if (readStyle(node.style, "display").value === "none") writeStyle(node.style, "display", "");
+      }
     }
 
     function show(panelHost, tabBar) {
@@ -11245,7 +11516,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       }
       active = { panel: state.panel, tab: state.creditTab, panelHost, tabBar };
       captureSiblings(panelHost, tabBar);
-      active.panel.hidden = false;
+      restoreVisibility();
       active.tab.classList.add("Mui-selected");
       active.tab.setAttribute("aria-selected", "true");
       active.tab.tabIndex = 0;
@@ -11305,7 +11576,8 @@ window.MwiGuildCreditVersion = "1.2.70";
 
   const SIDEBAR_REPLACEMENT_EVENT = "mwi:guild-sidebar-replacing";
   const OWNER = "mwi-guild-credit-optimizer";
-  const isSelected = (tab) => tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected");
+  const isSelected = (tab) =>
+    tab?.getAttribute?.("aria-selected") === "true" || tab?.classList?.contains("Mui-selected");
   const ownsSelection = (tab) => tab.getAttribute("aria-selected") === "true" && tab.classList.contains("Mui-selected");
   const isAvailable = (tab) =>
     tab.matches('button,[role="tab"]') &&
@@ -11409,6 +11681,7 @@ window.MwiGuildCreditVersion = "1.2.70";
           element === integration.panelHost ||
           element === integration.tabBar ||
           element === state.creditTab ||
+          element === state.panel ||
           (integration.tabBar.contains(element) && !state.creditTab.contains(element)) ||
           element?.contains(integration.tabBar)
         );
@@ -11481,11 +11754,11 @@ window.MwiGuildCreditVersion = "1.2.70";
       if (event.detail === OWNER) destroy();
     }
 
-    function show(panelHost, tabBar) {
+    function show(panelHost, tabBar, resume = false) {
       if (destroyed || !state.panel?.isConnected) return;
       coordinator.announce();
       selection.show(panelHost, tabBar);
-      options.onActivate?.(state.panel);
+      if (!resume) options.onActivate?.(state.panel);
     }
 
     function refresh() {
@@ -11502,6 +11775,9 @@ window.MwiGuildCreditVersion = "1.2.70";
       if (detectedLocale) options.onLocale?.(detectedLocale);
       const locale = getLocale();
       const staleSelected = dom.suppressStaleMounts(found, state.creditTab, state.panel) || resumeOpen;
+      const anotherSelected = Array.from(tabBar.children).some(
+        (tab) => tab !== state.creditTab && !tab.hidden && isSelected(tab)
+      );
       resumeOpen = false;
       const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
       const currentIntegrationMatches = Boolean(
@@ -11513,14 +11789,18 @@ window.MwiGuildCreditVersion = "1.2.70";
       if (currentIntegrationMatches && !localeChanged) {
         const label = getLabel();
         if (state.creditTab.textContent !== label) state.creditTab.textContent = label;
-        if (staleSelected) show(panelHost, tabBar);
+        if (staleSelected && !anotherSelected) show(panelHost, tabBar);
         else if (selection.isActive() && !selection.sync(panelHost, tabBar)) selection.hide();
         if (contentChanged && !state.panel.hidden) options.onRefresh?.(state.panel);
         return true;
       }
 
+      const wasActive = selection.isActive();
       const keepPanelOpen =
-        staleSelected || Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab));
+        !anotherSelected &&
+        (staleSelected ||
+          selection.isActive() ||
+          Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab)));
       const tabHadFocus = state.creditTab === windowRef.document.activeElement;
       const reuseTab = Boolean(
         state.creditTab?.isConnected &&
@@ -11547,7 +11827,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       state.creditTab = tab;
       state.panelLocale = locale;
       options.onMount?.(panel);
-      if (keepPanelOpen) show(panelHost, tabBar);
+      if (keepPanelOpen) show(panelHost, tabBar, wasActive && !replacement);
       if (tabHadFocus) tab.focus({ preventScroll: true });
       return true;
     }
@@ -11572,6 +11852,8 @@ window.MwiGuildCreditVersion = "1.2.70";
       documentRef.dispatchEvent(new windowRef.CustomEvent(SIDEBAR_REPLACEMENT_EVENT, { detail: OWNER }));
       documentRef.addEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
       interval = windowRef.setInterval(refresh, 3000);
+      documentRef.addEventListener("visibilitychange", schedule);
+      windowRef.addEventListener("pageshow", schedule);
       windowRef.addEventListener("resize", schedule, { passive: true });
       windowRef.addEventListener("orientationchange", schedule, { passive: true });
       refresh();
@@ -11585,6 +11867,8 @@ window.MwiGuildCreditVersion = "1.2.70";
       lifecycle.destroy();
       coordinator.destroy();
       windowRef.document.removeEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
+      windowRef.document.removeEventListener("visibilitychange", schedule);
+      windowRef.removeEventListener("pageshow", schedule);
       windowRef.removeEventListener("resize", schedule);
       windowRef.removeEventListener("orientationchange", schedule);
       pending = null;
@@ -11877,12 +12161,11 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer [data-role="trials-view"] :focus-visible{outline:2px solid #77e1cb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-view-tabs-shell{position:sticky;z-index:20;top:-12px;display:flex;align-items:stretch;gap:0;margin:0 -12px 12px;padding:8px 12px 0;border-bottom:1px solid #383b53;background:#202139}#mwi-credit-optimizer .mwi-view-tabs{display:flex;flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:thin}#mwi-credit-optimizer .mwi-view-tab-item{position:relative;display:block;flex:0 0 auto;touch-action:pan-y;cursor:grab}#mwi-credit-optimizer .mwi-view-tab-item[hidden]{display:none!important}#mwi-credit-optimizer .mwi-view-tab-item:active{cursor:grabbing}#mwi-credit-optimizer :is(.mwi-view-tab,.mwi-settings-trigger){min-height:40px!important;border-radius:0!important;background:transparent!important;color:#c9cbeb!important;padding:6px 10px!important;touch-action:pan-y}#mwi-credit-optimizer .mwi-view-tab-active{border-bottom:2px solid #77e1cb!important;background:transparent!important;color:#a3f0df!important}#mwi-credit-optimizer .mwi-icon-button{position:relative;width:32px;min-width:32px;min-height:32px;padding:0!important;border:1px solid #555875!important;background:#343650!important;color:#fff!important}#mwi-credit-optimizer .mwi-icon-button:before{position:absolute;top:50%;left:50%;width:7px;height:7px;border-top:2px solid currentColor;border-left:2px solid currentColor;content:""}#mwi-credit-optimizer .mwi-icon-up:before{transform:translate(-50%,-35%) rotate(45deg)}#mwi-credit-optimizer .mwi-icon-down:before{transform:translate(-50%,-65%) rotate(225deg)}
 
-        #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid #3f4969;background:#212941}#mwi-credit-optimizer .mwi-settings-header>span{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-header h3{margin:0;color:#f3fff9;font-size:14px}#mwi-credit-optimizer .mwi-settings-header p{margin:0;color:#aebbd4;font-size:10px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-close{flex:0 0 auto;width:28px;min-width:28px;min-height:28px!important;padding:0!important;border:1px solid #59607e!important;background:#343650!important;color:#e8e9f8!important;font-size:18px;line-height:1}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-shrine-icon{display:flex;flex:0 0 30px;width:30px;height:30px}#mwi-credit-optimizer .mwi-settings-shrine-icon .mwi-building-icon{width:100%;height:100%;margin:0}#mwi-credit-optimizer .mwi-settings-shrine-copy{display:grid;gap:3px;flex:1;min-width:0;text-align:left}#mwi-credit-optimizer .mwi-settings-shrine-name{font-size:11px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-shrine-effects{color:#bfc9df;font-size:10px;line-height:1.4}#mwi-credit-optimizer label.mwi-settings-option:focus-within{outline:2px solid #77f3d0;outline-offset:1px}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-switch+.mwi-settings-switch{margin-top:6px}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
+        #mwi-credit-optimizer .mwi-settings-panel{min-width:0;margin:-2px 0 10px;border:1px solid #4b5777;border-radius:8px;background:linear-gradient(145deg,#232a43,#25263f);box-shadow:0 8px 20px #0c0d173d;color:#f4f5ff}#mwi-credit-optimizer .mwi-settings-panel[hidden]{display:none!important}#mwi-credit-optimizer .mwi-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:9px 10px}#mwi-credit-optimizer .mwi-settings-block{min-width:0;padding:8px 0}#mwi-credit-optimizer .mwi-settings-block+.mwi-settings-block{border-top:1px solid #424866}#mwi-credit-optimizer .mwi-settings-block-heading{display:grid;gap:2px;margin:0 0 7px}#mwi-credit-optimizer .mwi-settings-block-heading h4{margin:0;color:#f2f4ff;font-size:12px}#mwi-credit-optimizer .mwi-settings-block-heading p{margin:0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-domains{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}#mwi-credit-optimizer .mwi-settings-domain{min-width:0;margin:0;padding:6px;border:1px solid #3f4665;border-radius:5px;background:#23253d}#mwi-credit-optimizer .mwi-settings-domain legend{padding:0 4px;color:#77f3d0;font-size:10px;font-weight:700}#mwi-credit-optimizer .mwi-settings-domain[data-domain="combat"] legend{color:#8cb9ff}#mwi-credit-optimizer .mwi-settings-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:4px}#mwi-credit-optimizer label.mwi-settings-option{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:#2b2d49;color:#e8eafa;font-size:10px;line-height:1.25;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-option:hover{border-color:#59607e;background:#313451}#mwi-credit-optimizer .mwi-settings-option span{min-width:0;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-shrine-icon{display:flex;flex:0 0 30px;width:30px;height:30px}#mwi-credit-optimizer .mwi-settings-shrine-icon .mwi-building-icon{width:100%;height:100%;margin:0}#mwi-credit-optimizer .mwi-settings-shrine-copy{display:grid;gap:3px;flex:1;min-width:0;text-align:left}#mwi-credit-optimizer .mwi-settings-shrine-name{font-size:11px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-shrine-effects{color:#bfc9df;font-size:10px;line-height:1.4}#mwi-credit-optimizer label.mwi-settings-option:focus-within{outline:2px solid #77f3d0;outline-offset:1px}#mwi-credit-optimizer .mwi-settings-option input[type="checkbox"]{flex:0 0 15px;width:15px;min-width:15px;height:15px;min-height:15px;margin:0;padding:0;accent-color:#43c4ad}#mwi-credit-optimizer .mwi-settings-placeholder{margin:0;padding:7px;border:1px dashed #545a79;border-radius:4px;color:#c6c9df;font-size:10px;line-height:1.35}#mwi-credit-optimizer label.mwi-settings-switch{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:6px;border-radius:5px;background:#23253d;cursor:pointer}#mwi-credit-optimizer label.mwi-settings-switch+.mwi-settings-switch{margin-top:6px}#mwi-credit-optimizer .mwi-settings-switch-copy{display:grid;gap:2px;min-width:0}#mwi-credit-optimizer .mwi-settings-switch-copy strong{color:#f2f4ff;font-size:11px;overflow-wrap:anywhere}#mwi-credit-optimizer .mwi-settings-switch-copy small{color:#aeb1cf;font-size:9px;line-height:1.35;overflow-wrap:anywhere}#mwi-credit-optimizer input.mwi-settings-switch-input{position:relative;flex:0 0 36px;width:36px;min-width:36px;height:20px;min-height:20px;margin:0;padding:2px;border:1px solid #626784;border-radius:999px;background:#383a54;appearance:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:before{display:block;width:14px;height:14px;border-radius:50%;background:#c7cae0;box-shadow:0 1px 3px #090a12aa;content:"";transition:transform .16s ease,background-color .16s ease}#mwi-credit-optimizer input.mwi-settings-switch-input:checked{border-color:#77f3d0;background:#2c665d}#mwi-credit-optimizer input.mwi-settings-switch-input:checked:before{transform:translateX(16px);background:#edfffa}#mwi-credit-optimizer .mwi-settings-status{min-height:0;margin:0;padding:0 10px 8px;color:#a9e9dc;font-size:10px;line-height:1.35}#mwi-credit-optimizer .mwi-settings-status:empty{display:none}#mwi-credit-optimizer .mwi-settings-status[data-error="true"]{color:#ff9ca3}
         #mwi-credit-optimizer[data-settings-open="true"] .mwi-settings-panel{margin:0;border:0;border-radius:0;box-shadow:none;background:transparent}
         #mwi-credit-optimizer .mwi-settings-trigger[aria-current="page"]{border-bottom:2px solid #77e1cb!important;color:#a3f0df!important}
-        #mwi-credit-optimizer .mwi-settings-close{width:auto;min-width:48px;padding:4px 10px!important;font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-settings-name{margin:0 0 8px;min-width:0}#mwi-credit-optimizer .mwi-settings-name>label{display:block;margin-bottom:5px;font-size:11px;font-weight:700}#mwi-credit-optimizer .mwi-settings-name-controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}#mwi-credit-optimizer .mwi-settings-name-controls input{flex:1 1 160px;width:100%;min-width:0;max-width:100%;box-sizing:border-box}#mwi-credit-optimizer .mwi-settings-name-controls button{flex:0 0 auto}#mwi-credit-optimizer .mwi-settings-name p{margin:5px 0 0;color:#aeb1cf;font-size:10px;line-height:1.4;overflow-wrap:anywhere}
-        @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer .mwi-settings-header{padding:8px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
+        @container (min-width:600px){#mwi-credit-optimizer .mwi-settings-domains{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (max-width:400px){#mwi-credit-optimizer .mwi-settings-content{padding:7px}#mwi-credit-optimizer label.mwi-settings-switch{align-items:flex-start}}
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer input.mwi-settings-switch-input,#mwi-credit-optimizer input.mwi-settings-switch-input:before{transition:none}}
         #mwi-credit-optimizer .mwi-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#mwi-credit-optimizer label{display:grid;gap:4px;color:#d8d8e8}#mwi-credit-optimizer .mwi-number-field{display:grid;gap:4px;min-width:0}#mwi-credit-optimizer .mwi-number-field>label{display:block}#mwi-credit-optimizer .mwi-price-reference{display:flex;flex:0 0 auto;align-items:center;gap:0;height:40px;min-height:40px;border:1px solid #5b5d7b;border-radius:6px;overflow:hidden;background:#292a46}#mwi-credit-optimizer .mwi-price-reference-label{padding:0 7px;color:#c9cbeb;font-size:11px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button{height:38px;min-height:38px;border-radius:0;background:#353653;color:#c9cbeb;padding:0 9px;white-space:nowrap}#mwi-credit-optimizer .mwi-price-reference button+button{border-left:1px solid #5b5d7b}#mwi-credit-optimizer .mwi-price-reference button[data-active="true"]{background:#43c4ad;color:#10201f}#mwi-credit-optimizer .mwi-controls>[data-role="refresh"]{min-height:40px}
         #mwi-credit-optimizer .mwi-number-stepper{display:flex;align-items:stretch;height:40px;min-height:40px;overflow:hidden;border:1px solid #7778b4;border-radius:6px;background:#f4f5ff;box-shadow:inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper:focus-within{border-color:#65e3ca;outline:2px solid #65e3ca;outline-offset:2px;box-shadow:0 0 0 4px #77f3d026,inset 0 1px 2px #3e416433}#mwi-credit-optimizer .mwi-number-stepper input{height:38px;min-height:38px;margin:0;border:0;border-radius:0;background:#f4f5ff;color:#1f2030;font-variant-numeric:tabular-nums}#mwi-credit-optimizer .mwi-number-stepper input:focus-visible{outline:0;box-shadow:none}#mwi-credit-optimizer .mwi-target-credit-stepper input{width:112px}#mwi-credit-optimizer .mwi-price-limit-stepper input{flex:0 0 68px;width:68px;min-width:68px;padding:4px 7px}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]{-moz-appearance:textfield;appearance:textfield}#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-inner-spin-button,#mwi-credit-optimizer .mwi-number-stepper input[type="number"]::-webkit-outer-spin-button{margin:0;-webkit-appearance:none}#mwi-credit-optimizer .mwi-stepper-buttons{display:grid;flex:0 0 34px;width:34px;min-width:34px;grid-template-rows:repeat(2,minmax(0,1fr));border-left:1px solid #7778b4;background:#373a58}#mwi-credit-optimizer button.mwi-stepper-button{display:grid;place-items:center;width:100%;min-width:0;height:19px;min-height:19px!important;margin:0;padding:0!important;border:0!important;border-radius:0!important;background:#3b3e5e!important;color:#f4f5ff!important;line-height:1;touch-action:none;user-select:none}#mwi-credit-optimizer button.mwi-stepper-button+button{border-top:1px solid #62658a!important}#mwi-credit-optimizer button.mwi-stepper-button:hover{background:#4a4e71!important;color:#fff!important}#mwi-credit-optimizer button.mwi-stepper-button:active,#mwi-credit-optimizer button.mwi-stepper-button[data-pressed="true"]{background:#245149!important;color:#bff8eb!important}#mwi-credit-optimizer button.mwi-stepper-button:focus-visible{z-index:5;outline:2px solid #77f3d0!important;outline-offset:-2px;box-shadow:none!important}#mwi-credit-optimizer .mwi-stepper-button svg{display:block;width:16px;height:10px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -11913,8 +12196,8 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer .mwi-guild-point-history{border-top:1px solid #38635d;color:#c5d9d5;font-size:12px}
         #mwi-credit-optimizer .mwi-guild-point-history>summary{padding:6px 9px;cursor:pointer;user-select:none}
         #mwi-credit-optimizer .mwi-guild-point-manual-form{border-top:1px solid #38635d;background:#203330}
-        #mwi-credit-optimizer .mwi-guild-point-table-scroll{overflow:auto;overscroll-behavior:contain}
-        #mwi-credit-optimizer .mwi-guild-point-history table{width:100%;min-width:430px;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+        #mwi-credit-optimizer .mwi-guild-point-table-scroll{overflow:visible}
+        #mwi-credit-optimizer .mwi-guild-point-history table{width:100%;min-width:0;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
         #mwi-credit-optimizer .mwi-guild-point-history th,#mwi-credit-optimizer .mwi-guild-point-history td{box-sizing:border-box;padding:10px 12px;border-bottom:1px solid #36534f;text-align:left}
         #mwi-credit-optimizer .mwi-guild-point-history thead th{position:sticky;top:0;z-index:1;background:#29443f;color:#abd5cd;font-weight:600}
         #mwi-credit-optimizer .mwi-guild-point-history th:first-child{width:31%}
@@ -12335,6 +12618,10 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer .mwi-construction-planning-help{padding:8px 0 0;border-top:1px solid var(--build-line)}
         #mwi-credit-optimizer .mwi-construction-planning-help p{margin:0 0 4px;font-size:12px;color:var(--build-muted)}
         #mwi-credit-optimizer .mwi-guild-point-planning-options>label{display:grid;grid-template-columns:minmax(0,1fr) 96px;align-items:center;gap:6px;padding:8px 0}
+        #mwi-credit-optimizer .mwi-guild-point-start-options>label{grid-template-columns:minmax(0,1fr) auto;font-size:14px}
+        #mwi-credit-optimizer .mwi-guild-point-start-input{display:flex;align-items:center;gap:6px}
+        #mwi-credit-optimizer .mwi-guild-point-start-input .mwi-guild-point-week-stepper{width:96px}
+        #mwi-credit-optimizer .mwi-guild-point-start-error{color:var(--build-danger);margin:4px 0;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-planning-options label small{grid-column:1/-1;color:var(--build-muted);font-size:12px;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-controls output{grid-column:1/-1;grid-row:2;min-width:0;color:var(--build-accent);font-size:14px;line-height:1.5;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-controls output[data-state="warning"]{color:var(--build-warning)}
@@ -12434,8 +12721,7 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer .mwi-building-tile{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px!important;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--build-text);text-align:left}
         #mwi-credit-optimizer .mwi-building-tile:hover{border-color:#626b86;background:#313a50}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{background:#293f41;border-color:#527b73}
-        #mwi-credit-optimizer .mwi-building-tile[data-current-trial="true"]{border-color:#d6ab56;box-shadow:inset 3px 0 #d6ab56}
-        #mwi-credit-optimizer .mwi-building-trial-badge{justify-self:start;max-width:100%;padding:1px 5px;border:1px solid #8d713e;border-radius:3px;background:#4b3c23;color:#ffe2a2;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-building-tile[data-current-trial="true"]{box-shadow:inset 0 0 0 1px #72b8ff}
         #mwi-credit-optimizer .mwi-building-icon{display:block;width:30px;height:30px;flex:0 0 30px}
         #mwi-credit-optimizer .mwi-building-icon svg{display:block;width:100%;height:100%}
         #mwi-credit-optimizer .mwi-building-icon-fallback svg{padding:3px;fill:none;stroke:var(--build-muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -12484,8 +12770,7 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer .mwi-guild-point-history>summary:focus-visible{outline:2px solid var(--build-accent);outline-offset:2px}
         #mwi-credit-optimizer .mwi-guild-point-history>summary .mwi-construction-icon{flex:0 0 16px}
         #mwi-credit-optimizer .mwi-guild-point-history[open]>summary .mwi-construction-icon{transform:rotate(180deg)}
-        #mwi-credit-optimizer .mwi-guild-point-table-scroll{scrollbar-width:thin;scrollbar-color:#66708b var(--build-surface)}
-        #mwi-credit-optimizer .mwi-guild-point-history :is(th,td){padding:8px 10px;border-bottom-color:var(--build-line)}
+        #mwi-credit-optimizer .mwi-guild-point-history :is(th,td){padding:8px 10px;border-bottom-color:var(--build-line);white-space:normal;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-guild-point-history thead th{background:#30364b;color:#cbd4e9}
         #mwi-credit-optimizer .mwi-guild-point-history tbody :is(th,td){background:transparent}
         #mwi-credit-optimizer .mwi-guild-point-history tbody tr:hover :is(th,td){background:#30394d}
@@ -12654,7 +12939,10 @@ window.MwiGuildCreditVersion = "1.2.70";
         #mwi-credit-optimizer .mwi-trial-table caption{text-align:left;padding:8px 0;color:var(--trial-muted);font-size:12px}
         #mwi-credit-optimizer .mwi-trial-table th,#mwi-credit-optimizer .mwi-trial-table td{padding:3px 4px;text-align:right;border-bottom:1px solid var(--trial-line);white-space:nowrap}
         #mwi-credit-optimizer .mwi-trial-table th:has([data-trial-sort="member"]),#mwi-credit-optimizer .mwi-trial-table th[scope="row"]{text-align:left;white-space:nowrap;min-width:0}
-        #mwi-credit-optimizer [data-mwi-trial-low-work="true"], [class*="GuildPanel_signupModal__"] [data-mwi-trial-low-work="true"]{color:#ffa7b5!important;text-decoration:underline dotted;text-underline-offset:3px}
+        #mwi-credit-optimizer .mwi-trial-table tbody tr:has([data-mwi-trial-low-work="true"]),[class*="GuildPanel_signupModal__"] [class*="GuildPanel_memberRow__"]:has([data-mwi-trial-low-work="true"]){background:#522d3d}
+        #mwi-credit-optimizer .mwi-trial-table tbody tr:has([data-mwi-trial-low-work="true"]):is(:hover,.mwi-trial-member-highlight,.mwi-trial-player-selected){background:#63384b;outline:1px solid var(--trial-accent);outline-offset:-1px}
+        #mwi-credit-optimizer [data-mwi-trial-low-work="true"], [class*="GuildPanel_signupModal__"] [data-mwi-trial-low-work="true"]{color:#ffa7b5!important;font-weight:600;text-decoration:none}
+        :is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"]::before{content:"";display:inline-block;width:14px;height:14px;margin-right:4px;vertical-align:-2px;background:currentColor;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.1 2.5a1 1 0 0 1 1.8 0l5.5 10a1 1 0 0 1-.9 1.5h-11a1 1 0 0 1-.9-1.5Z' fill='none' stroke='black' stroke-width='1.4'/%3E%3Cpath d='M8 5.5v4M8 11v.5' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;pointer-events:none}
         :is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"],.mwi-trial-name-text span,[class*="CharacterName_name__"] span){color:#ffa7b5!important;-webkit-text-fill-color:#ffa7b5!important;background-image:none!important;text-shadow:none!important;animation:none!important}
         :is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"])::before,:is(#mwi-credit-optimizer,[class*="GuildPanel_signupModal__"]) [data-mwi-trial-low-work="true"] :is(.mwi-trial-name-text,[class*="CharacterName_name__"])::after{display:none!important}
         #mwi-credit-optimizer .mwi-trial-member-absent{position:relative;display:inline-flex;vertical-align:middle;color:var(--trial-warning);cursor:default;line-height:1}
@@ -12956,8 +13244,27 @@ window.MwiGuildCreditVersion = "1.2.70";
       return matching;
     }
 
-    function guildPointForecastWeekCount() {
-      return core.normalizeGuildPointForecastWeeks(state.guildPointForecastWeeks);
+    const guildPointWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+    function currentGuildPointWeekNumber() {
+      return Math.max(1, Math.floor((Date.now() - guildTrialFirstStartAt) / guildPointWeekMs) + 1);
+    }
+
+    function guildPointForecastStartAt() {
+      const start = state.guildPointForecastStartAt;
+      return Number.isSafeInteger(start) &&
+        start >= guildTrialFirstStartAt &&
+        (start - guildTrialFirstStartAt) % guildPointWeekMs === 0
+        ? start
+        : guildTrialFirstStartAt;
+    }
+
+    function setGuildPointForecastStartWeek(value) {
+      const week = Number(value);
+      if (!Number.isSafeInteger(week) || week < 1 || week > currentGuildPointWeekNumber()) return false;
+      state.guildPointForecastStartAt = guildTrialFirstStartAt + (week - 1) * guildPointWeekMs;
+      state.guildPointForecastSaveFailed = persistGuildBuildingPlannerState() === false;
+      return true;
     }
 
     function guildPointPlanningWeekCount() {
@@ -13114,7 +13421,7 @@ window.MwiGuildCreditVersion = "1.2.70";
         currentGuildWeekPoints(),
         Date.now(),
         guildTrialFirstStartAt,
-        { forecastWeekCount: guildPointForecastWeekCount() }
+        { forecastStartAt: guildPointForecastStartAt() }
       );
     }
 
@@ -13147,7 +13454,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       const history = core.summarizeGuildPointHistory(
         { ...supplemented.history, weeks: [...weeksByStart.values()] },
         {
-          forecastWeekCount: guildPointForecastWeekCount(),
+          forecastStartAt: guildPointForecastStartAt(),
           currentWeekStartAt,
           currentWeekPoints: currentGuildWeekPoints()
         }
@@ -13361,11 +13668,20 @@ window.MwiGuildCreditVersion = "1.2.70";
       return `<svg class="mwi-construction-icon" viewBox="0 0 16 16" aria-hidden="true">${paths[name]}</svg>`;
     }
 
-    function renderGuildPointWeekStepper(role, value, minimum, maximum, labelKey, increaseKey, decreaseKey) {
+    function renderGuildPointWeekStepper(
+      role,
+      value,
+      minimum,
+      maximum,
+      labelKey,
+      increaseKey,
+      decreaseKey,
+      describedBy = ""
+    ) {
       const label = escapeHtml(t(labelKey));
       const increase = escapeHtml(t(increaseKey));
       const decrease = escapeHtml(t(decreaseKey));
-      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}" aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
+      return `<span class="mwi-number-stepper mwi-guild-point-week-stepper"><input data-role="${role}" type="number" min="${minimum}" max="${maximum}" step="1" inputmode="numeric" value="${value}"${describedBy ? ` aria-describedby="${escapeHtml(describedBy)}"` : ""} aria-label="${label}"><span class="mwi-stepper-buttons"><button class="mwi-stepper-button mwi-stepper-up" data-role="number-step" data-input-role="${role}" data-direction="1" type="button" aria-label="${increase}" title="${increase}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 8 8 2l6 6"></path></svg></button><button class="mwi-stepper-button mwi-stepper-down" data-role="number-step" data-input-role="${role}" data-direction="-1" type="button" aria-label="${decrease}" title="${decrease}"><svg viewBox="0 0 16 10" aria-hidden="true"><path d="M2 2l6 6 6-6"></path></svg></button></span></span>`;
     }
 
     function guildPointPlanningSummary(planning) {
@@ -13385,17 +13701,22 @@ window.MwiGuildCreditVersion = "1.2.70";
     }
 
     function renderGuildPointForecastSettings() {
-      const forecastWeeks = guildPointForecastWeekCount();
+      const startAt = guildPointForecastStartAt();
+      const startWeek = (startAt - guildTrialFirstStartAt) / guildPointWeekMs + 1;
+      const maximum = currentGuildPointWeekNumber();
       const forecastStepper = renderGuildPointWeekStepper(
-        "guild-point-forecast-weeks",
-        forecastWeeks,
-        2,
-        12,
-        "guildPointForecastWeeks",
-        "increaseGuildPointForecastWeeks",
-        "decreaseGuildPointForecastWeeks"
+        "guild-point-forecast-start-week",
+        startWeek,
+        1,
+        maximum,
+        "guildPointForecastStartWeek",
+        "increaseGuildPointForecastStartWeek",
+        "decreaseGuildPointForecastStartWeek",
+        "mwi-guild-point-start-save-error mwi-guild-point-start-error"
       );
-      return `<section class="mwi-guild-point-planning-options" aria-label="${escapeHtml(t("guildPointPlanningOptions"))}"><label><span>${escapeHtml(t("guildPointForecastWeeks"))}</span>${forecastStepper}</label></section>`;
+      const [weekPrefix, weekSuffix = ""] = t("guildPointForecastWeekInput").split("{week}");
+      const saveError = state.guildPointForecastSaveFailed ? t("guildPointForecastSaveFailed") : "";
+      return `<section class="mwi-guild-point-planning-options mwi-guild-point-start-options" aria-label="${escapeHtml(t("guildPointPlanningOptions"))}"><label><span>${escapeHtml(t("guildPointForecastStartWeek"))}</span><span class="mwi-guild-point-start-input"><span>${escapeHtml(weekPrefix)}</span>${forecastStepper}<span>${escapeHtml(weekSuffix)}</span></span></label><p id="mwi-guild-point-start-save-error" class="mwi-guild-point-start-error" role="status"${saveError ? "" : " hidden"}>${escapeHtml(saveError)}</p><p id="mwi-guild-point-start-error" class="mwi-guild-point-start-error" role="alert" hidden>${escapeHtml(t("guildPointForecastStartInvalid", { max: formatNumber(maximum) }))}</p></section>`;
     }
 
     function renderGuildPointForecastControls(plan) {
@@ -13703,7 +14024,7 @@ window.MwiGuildCreditVersion = "1.2.70";
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
       const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
       const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" data-numeric-cost="${String(numericCost)}" title="${escapeHtml(costLabel)}" id="${escapeHtml(costId)}">${escapeHtml(visibleCostLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
@@ -14137,6 +14458,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       hasGuildBuildingClearUndo,
       applyGuildBuildingFilters,
       guildPointHistorySummary,
+      setGuildPointForecastStartWeek,
       guildPointPlanningBudget,
       guildPointEta,
       renderGuildPointForecast,
@@ -14646,7 +14968,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
     function render({ member, weeks, projects = [], profileState, profileSectionsOpen = {} }) {
       tooltipRecords.clear();
-      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${renderMemberName(member)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3>${e(t("trialPlayerProfile"))}</h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects, member)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
+      return `<div class="mwi-trial-player-toolbar"><button type="button" data-trial-player-back>${e(t("trialPlayerBack"))}</button><h3 tabindex="-1" data-trial-player-title>${renderMemberName(member)} · ${e(t("trialPlayerHistory"))}</h3></div><div class="mwi-trial-player-layout"><aside class="mwi-trial-player-profile" aria-label="${e(t("trialPlayerProfile"))}"><header><h3><button type="button" data-trial-open-profile>${e(t("trialPlayerProfile"))}</button></h3><button type="button" data-trial-profile-refresh ${profileState.status === "loading" ? "disabled" : ""}>${e(t("trialProfileRefresh"))}</button></header><div data-trial-profile-content>${profileMarkup(profileState, profileSectionsOpen, projects, member)}</div></aside><div class="mwi-trial-player-history">${historyMarkup(weeks)}</div></div>`;
     }
     return { render, renderRankings, tooltipData: (key) => tooltipRecords.get(key) };
   }
@@ -16491,6 +16813,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           readPlayerProfile(panel, true);
           return;
         }
+        if (event.target.closest("[data-trial-open-profile]")) {
+          const memberName = selectedMember?.name;
+          const openProfile = () => getBridge()?.openPlayerProfile?.(memberName);
+          if (isFullscreen())
+            void toggleFullscreen(host).then(() => {
+              if (!disposed && host.isConnected && !isFullscreen()) openProfile();
+            });
+          else openProfile();
+          return;
+        }
         if (event.target.closest("[data-trial-player-back]")) {
           leavePlayer();
           mode = playerReturn?.mode || "week";
@@ -17682,7 +18014,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function renderOptimalMaterialPlan(plan, hasInventory, materialInventory) {
       if (!plan)
         return `<div class="mwi-material-plan-unavailable">${escapeHtml(t("optimalExchangeUnavailable"))}</div>`;
-      return `<div class="mwi-material-plan-item" data-guide-item-hrid="${escapeHtml(plan.itemHrid)}"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
+      return `<div class="mwi-material-plan-item" data-guide-item-hrid="${escapeHtml(plan.itemHrid)}"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid), "", hasInventory ? Math.max(0, plan.requiredItems - (Number(materialInventory?.[plan.itemHrid]) || 0)) : null)}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
     }
 
     function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans, materialInventory) {
@@ -17741,7 +18073,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const materialIcon =
             isGuildCredit || item.itemHrid === "/items/guild_token" || item.itemHrid === "/items/coin"
               ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))
-              : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
+              : marketItemIconMarkup(
+                  item.itemHrid,
+                  itemNameForMaterial(item.itemHrid),
+                  "",
+                  hasInventory ? row?.missing : null
+                );
           const guideMissing = row ? Math.max(0, Number(row.remainingMissing ?? row.missing) || 0) : 0;
           return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : escapeHtml(t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
         })
@@ -17908,7 +18245,49 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       );
     }
 
+    async function captureUpgradePlanning() {
+      extractItemDetailsFromReact(true);
+      const entries = guildBuffEntries();
+      await loadSnapshot(false);
+      const ranked = bestCreditConversions(
+        Object.fromEntries(GUILD_TOKEN_CREDIT_CONVERSIONS.map((r) => [r.creditItemHrid, r.creditCount]))
+      );
+      const unitCosts = Object.fromEntries(
+        Object.entries(ranked).map(([hrid, row]) => [hrid, row?.costPerCredit ?? null])
+      );
+      const tokenValues = core.rankGuildTokenCreditValues(
+        GUILD_TOKEN_CREDIT_CONVERSIONS,
+        Object.fromEntries(Object.entries(ranked).map(([hrid, row]) => [hrid, row ? [row] : []]))
+      );
+      const valid = tokenValues.filter((v) => v.status === "ok" && Number.isFinite(v.goldValuePerToken));
+      return {
+        shrines: entries
+          .filter((e) => /^\/guild_buffs\/(tempo|scholar)_(skilling|life)$/.test(e.hrid))
+          .map((e) => ({
+            hrid: e.hrid,
+            level: state.guildBuffLevels == null ? null : currentGuildBuffLevel(e),
+            maxLevel:
+              guildShrineLevelByHrid(e.detail.shrineHrid) === null
+                ? currentGuildBuffLevel(e)
+                : Math.min(e.maxLevel, guildShrineLevelByHrid(e.detail.shrineHrid)),
+            capacityKnown: guildShrineLevelByHrid(e.detail.shrineHrid) !== null,
+            detail: JSON.parse(JSON.stringify(e.detail)),
+            effects: core.guildBuffLevelEffects(e.detail)
+          })),
+        inventoryKnown: Array.isArray(state.characterItems),
+        inventory: inventoryItemCounts(),
+        unitCosts,
+        exchangeRules: GUILD_TOKEN_CREDIT_CONVERSIONS,
+        tokenValues,
+        tokenValue: valid.length ? Math.max(...valid.map((v) => v.goldValuePerToken)) : null,
+        tokenValueComplete: valid.length === GUILD_TOKEN_CREDIT_CONVERSIONS.length,
+        marketAt: state.snapshotTimestamp || state.snapshotFetchedAt || null,
+        policy: { tokenCreditHrids: Array.from(state.guildTokenCreditHrids), autoTokenBudget: 0 }
+      };
+    }
+
     return {
+      captureUpgradePlanning,
       guildBuffEntries,
       guildBuffLabel,
       itemNameForMaterial,
@@ -18186,7 +18565,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       [
         ["guildPointStartingBalance", ["guildPointStartingBalanceHint"]],
         ["guildPointPlanningWeeks", ["guildPointPlanningWeeksHint"]],
-        ["guildPointForecastWeeks", ["guildPointForecastWeeksHint"]],
+        ["guildPointForecastStartWeek", ["guildPointForecastStartWeekHint"]],
         ["guildPointStatisticsHeading", ["guildPointTrendHint", "helpForecastEvidence", "helpForecastBacktest"]],
         ["guildPointHelpDataTitle", ["guildPointHelpData"]],
         ["guildPointHelpMethodTitle", ["guildPointHelpMethod"]],
@@ -18369,11 +18748,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     function renderSettingsMarkup() {
       const snapshot = guildBuffSettingsSnapshot();
       const hidden = state.settingsOpen === true ? "" : " hidden";
-      return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-labelledby="mwi-settings-title" tabindex="-1"${hidden}><header class="mwi-settings-header"><span><h3 id="mwi-settings-title">${escapeHtml(
-        t("interfaceSettings")
-      )}</h3></span><button class="mwi-settings-close" data-role="settings-close" type="button" title="${escapeHtml(
-        t("backFromSettings")
-      )}" aria-label="${escapeHtml(t("backFromSettings"))}">${escapeHtml(t("backFromSettings"))}</button></header><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
+      return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-label="${escapeHtml(t("interfaceSettings"))}" tabindex="-1"${hidden}><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
         snapshot
       )}</div><p class="mwi-settings-status" data-role="settings-status" role="status" aria-live="polite" aria-atomic="true"></p></section>`;
     }
@@ -19834,7 +20209,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           refreshedSettings &&
           (refreshedSettings.querySelector('[data-role="settings-shrine-autofill"]') ||
             refreshedSettings.querySelector('[data-role="settings-show-construction"]') ||
-            refreshedSettings.querySelector('[data-role="settings-close"]'));
+            refreshedSettings);
         if (firstControl) {
           try {
             firstControl.focus({ preventScroll: true });
@@ -20146,9 +20521,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
       const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
       settingsTrigger.addEventListener("click", () => setSettingsOpen(panel, !state.settingsOpen));
-      settingsPanel.querySelector('[data-role="settings-close"]').addEventListener("click", () => {
-        setSettingsOpen(panel, false, { restoreFocus: true });
-      });
       settingsPanel.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || !state.settingsOpen) return;
         event.preventDefault();
@@ -20272,12 +20644,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         }
       });
       constructionResults.addEventListener("change", (event) => {
-        if (event.target.matches('[data-role="guild-point-forecast-weeks"]')) {
-          const weeks = Number(event.target.value);
-          state.guildPointForecastWeeks = Number.isSafeInteger(weeks) && weeks >= 2 && weeks <= 12 ? weeks : 6;
+        if (event.target.matches('[data-role="guild-point-forecast-start-week"]')) {
+          const valid = constructionView.setGuildPointForecastStartWeek(event.target.value);
+          const error = panel.querySelector("#mwi-guild-point-start-error");
+          if (error) error.hidden = valid;
+          if (!valid) {
+            event.target.setAttribute("aria-invalid", "true");
+            return;
+          }
           clearConstructionNotice(panel);
-          persistGuildBuildingPlannerState();
-          refreshConstructionAndFocus(panel, { role: "guild-point-forecast-weeks" }, null);
+          refreshConstructionAndFocus(panel, { role: "guild-point-forecast-start-week" }, null);
           return;
         }
         if (event.target.matches('[data-role="guild-point-planning-weeks"]')) {
@@ -20538,7 +20914,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        openMarketplaceForItem(button.dataset.itemHrid, button.dataset.itemName);
+        openMarketplaceForItem(button.dataset.itemHrid, button.dataset.itemName, button.dataset.purchaseQuantity);
       });
       panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => {
         addGuildUpgradePlan(guildBuffEntries());
@@ -21158,7 +21534,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     return storageApi.normalizePanelView(view, PANEL_VIEWS);
   }
   function persistGuildBuildingPlannerState() {
-    pluginStorage.persistGuildBuildingPlannerState(state);
+    const saved = pluginStorage.persistGuildBuildingPlannerState(state);
+    state.guildPointForecastSaveFailed = !saved;
+    return saved;
   }
   function persistPluginUiState() {
     return pluginStorage.persistPluginUiState(state);
@@ -21339,9 +21717,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     return `<span class="mwi-building-icon" data-icon-source="game"><svg aria-hidden="true" focusable="false" viewBox="0 0 50 50" width="100%" height="100%"><use href="${escapeHtml(href)}" width="50" height="50"></use></svg></span>`;
   }
 
-  function marketItemIconMarkup(itemHrid, label, className = "") {
+  function marketItemIconMarkup(itemHrid, label, className = "", purchaseQuantity = null) {
     const marketLabel = t("marketItem", { item: label });
-    return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
+    return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" data-purchase-quantity="${Number.isSafeInteger(purchaseQuantity) && purchaseQuantity > 0 ? purchaseQuantity : ""}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
   }
 
   function marketplaceSearchInput() {
@@ -21380,13 +21758,17 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     window.setTimeout(search, navigate ? 80 : 0);
   }
 
-  function openMarketplaceForItem(itemHrid, itemName) {
+  function openMarketplaceForItem(itemHrid, itemName, purchaseQuantity) {
     const bridge = window.__mwiGuildCreditBridge;
+    bridge?.cancelPurchasePrefill?.();
     try {
       // Our recommendation rows are unenhanced materials. Mirror the native
       // inventory action by explicitly using level 0 instead of leaving the
       // market order-book selection undefined.
-      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) return;
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) {
+        bridge.armPurchasePrefill?.(itemHrid, Number(purchaseQuantity));
+        return;
+      }
     } catch (_) {
       // Fall through to the compatibility path if the game changes its React internals.
     }
@@ -21478,6 +21860,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     setGuildTokenBudget,
     refreshGuildUpgrade
   } = upgradeView;
+
+  let disposeUpgradePlanning = null;
+  if (window.MwiGuildUpgradePlanning) {
+    const planningProvider = window.MwiGuildUpgradePlanning.create({
+      core,
+      capture: upgradeView.captureUpgradePlanning,
+      owner: () => state.planningCharacterId,
+      hostname: pageWindow.location.hostname,
+      version: PLUGIN_VERSION
+    });
+    disposeUpgradePlanning = window.MwiGuildUpgradePlanning.install(pageWindow, planningProvider);
+  }
 
   const storageTransferView = storageTransferViewApi.create({
     document,
@@ -21766,13 +22160,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       scheduleGuildExchangeAdvisor();
   }
 
-  function disposeRuntime() {
+  function disposeRuntime(event) {
+    // A cached page resumes with its live runtime; dispose only on a real exit.
+    if (event?.persisted) return;
+    window.removeEventListener("pagehide", disposeRuntime);
     storageTransferView.dispose();
+    disposeUpgradePlanning?.();
     trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
+    window.__mwiGuildCreditBridge?.cancelPurchasePrefill?.();
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarController.destroy();
@@ -21797,7 +22196,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   hydrateLocalInitData();
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
-  window.addEventListener("pagehide", disposeRuntime, { once: true });
+  window.addEventListener("pagehide", disposeRuntime);
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
   sidebarController.start();

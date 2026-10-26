@@ -9,6 +9,11 @@ export async function auditStorageTransfer(page, screenshotPath) {
   await page.locator("[data-cache-transfer]").waitFor({ state: "visible" });
   const action = (name) => page.locator(`[data-cache-action="${name}"]`);
   const status = page.locator("[data-cache-status]");
+  // Wait for the fixture's queued initial guild hydration to persist its planner.
+  // Otherwise a legitimate startup write can race the no-mutation assertions.
+  await page.waitForFunction(() =>
+    Boolean(globalThis.localStorage.getItem(`mwi-guild-building-planner-v1:${globalThis.location.hostname}:default`))
+  );
   const seed = await page.evaluate(() => {
     const planner = `mwi-guild-building-planner-v1:${globalThis.location.hostname}:cache-audit`;
     const history = `mwi-guild-trial-history-v1:${planner}:`;

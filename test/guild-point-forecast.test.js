@@ -127,7 +127,7 @@ test("历史补齐不把未核实值当作已知总量，已确认冲突仍停�
   assert.equal(h.weeks[0].earnedPoints, 99999);
 });
 
-test("持久化保留104周与完整性标记，旧记录保留数值但不冒充核实记录", () => {
+test("持久化保留历史与完整性标记，旧记录保留数值但不冒充核实记录", () => {
   const original = history(
     Array.from({ length: 30 }, (_, i) => i),
     "tracked"
@@ -254,4 +254,67 @@ test("手动覆盖和真实零值保留，未来记录不用于回填，负外�
   assert.equal(result.history.weeks[1].earnedPoints, 0);
   assert.equal(result.history.weeks[1].source, "manual");
   assert.equal(result.history.weeks[3].earnedPoints, 999999);
+});
+
+test("固定第8周后跨周持续扩展，超过12周也不移动起点", () => {
+  const h = history(Array.from({ length: 32 }, (_, index) => (index < 7 ? 99999 : (index + 1) * 100)));
+  const forecastStartAt = FIRST + 7 * WEEK;
+  const before = JSON.stringify(h);
+  for (const [currentIndex, currentWeekPoints, count, prediction] of [
+    [13, 1400, 7, 1500],
+    [14, 0, 7, 1600],
+    [14, 1500, 8, 1600],
+    [31, 3200, 25, 3300]
+  ]) {
+    const result = core.summarizeGuildPointHistory(h, {
+      forecastStartAt,
+      currentWeekStartAt: FIRST + currentIndex * WEEK,
+      currentWeekPoints
+    });
+    assert.equal(result.forecastStartAt, forecastStartAt);
+    assert.equal(result.forecastSamples[0].weekStartAt, forecastStartAt);
+    assert.equal(result.forecastSampleCount, count);
+    assert.equal(result.nextWeekForecastPoints, prediction);
+  }
+  assert.equal(JSON.stringify(h), before);
+});
+
+test("固定起点排除估算和缺失周，保留真实零值与实际周间距", () => {
+  const h = history([99999, 100, 88888, 300, 400]);
+  h.weeks[2].source = "estimated";
+  const result = core.summarizeGuildPointHistory(h, { forecastStartAt: FIRST + WEEK });
+  assert.deepEqual(
+    result.forecastSamples.map((r) => r.earnedPoints),
+    [100, 300, 400]
+  );
+  assert.equal(result.forecastPoints, 500);
+  h.manualWeeks = [{ weekStartAt: FIRST + WEEK, earnedPoints: 0 }];
+  const zero = core.summarizeGuildPointHistory(h, { forecastStartAt: FIRST + WEEK });
+  assert.equal(zero.forecastSamples[0].earnedPoints, 0);
+  assert.equal(core.summarizeGuildPointHistory(h, { forecastStartAt: FIRST + 4 * WEEK }).forecastPoints, null);
+});
+
+test("固定起点回测逐周扩展且不读取目标周及未来值", () => {
+  const h = history([99999, 99999, 300, 400, 500, 99999]);
+  const forecastStartAt = FIRST + 2 * WEEK;
+  const result = core.backtestGuildPointForecast(h, { forecastStartAt, beforeWeekStartAt: FIRST + 5 * WEEK });
+  assert.equal(result.lookback, null);
+  assert.equal(result.predictions.length, 1);
+  assert.equal(result.predictions[0].weekStartAt, FIRST + 4 * WEEK);
+  assert.equal(result.predictions[0].linear, 500);
+});
+
+test("超过104条的周记录与手动记录保留固定起点样本", () => {
+  const h = history(
+    Array.from({ length: 160 }, (_, i) => (i + 1) * 100),
+    "tracked"
+  );
+  h.manualWeeks = h.weeks.map(({ weekStartAt, earnedPoints }) => ({ weekStartAt, earnedPoints }));
+  const saved = storage.normalizeGuildPointHistory(h);
+  assert.equal(saved.weeks.length, 160);
+  assert.equal(saved.manualWeeks.length, 160);
+  const result = core.summarizeGuildPointHistory(saved, { forecastStartAt: FIRST + 7 * WEEK });
+  assert.equal(result.forecastSampleCount, 153);
+  assert.equal(result.forecastSamples[0].weekStartAt, FIRST + 7 * WEEK);
+  assert.equal(result.forecastPoints, 16100);
 });

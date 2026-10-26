@@ -273,7 +273,9 @@
     return storageApi.normalizePanelView(view, PANEL_VIEWS);
   }
   function persistGuildBuildingPlannerState() {
-    pluginStorage.persistGuildBuildingPlannerState(state);
+    const saved = pluginStorage.persistGuildBuildingPlannerState(state);
+    state.guildPointForecastSaveFailed = !saved;
+    return saved;
   }
   function persistPluginUiState() {
     return pluginStorage.persistPluginUiState(state);
@@ -454,9 +456,9 @@
     return `<span class="mwi-building-icon" data-icon-source="game"><svg aria-hidden="true" focusable="false" viewBox="0 0 50 50" width="100%" height="100%"><use href="${escapeHtml(href)}" width="50" height="50"></use></svg></span>`;
   }
 
-  function marketItemIconMarkup(itemHrid, label, className = "") {
+  function marketItemIconMarkup(itemHrid, label, className = "", purchaseQuantity = null) {
     const marketLabel = t("marketItem", { item: label });
-    return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
+    return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" data-purchase-quantity="${Number.isSafeInteger(purchaseQuantity) && purchaseQuantity > 0 ? purchaseQuantity : ""}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
   }
 
   function marketplaceSearchInput() {
@@ -495,13 +497,17 @@
     window.setTimeout(search, navigate ? 80 : 0);
   }
 
-  function openMarketplaceForItem(itemHrid, itemName) {
+  function openMarketplaceForItem(itemHrid, itemName, purchaseQuantity) {
     const bridge = window.__mwiGuildCreditBridge;
+    bridge?.cancelPurchasePrefill?.();
     try {
       // Our recommendation rows are unenhanced materials. Mirror the native
       // inventory action by explicitly using level 0 instead of leaving the
       // market order-book selection undefined.
-      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) return;
+      if (bridge && typeof bridge.goToMarketplace === "function" && bridge.goToMarketplace(itemHrid, 0)) {
+        bridge.armPurchasePrefill?.(itemHrid, Number(purchaseQuantity));
+        return;
+      }
     } catch (_) {
       // Fall through to the compatibility path if the game changes its React internals.
     }
@@ -593,6 +599,18 @@
     setGuildTokenBudget,
     refreshGuildUpgrade
   } = upgradeView;
+
+  let disposeUpgradePlanning = null;
+  if (window.MwiGuildUpgradePlanning) {
+    const planningProvider = window.MwiGuildUpgradePlanning.create({
+      core,
+      capture: upgradeView.captureUpgradePlanning,
+      owner: () => state.planningCharacterId,
+      hostname: pageWindow.location.hostname,
+      version: PLUGIN_VERSION
+    });
+    disposeUpgradePlanning = window.MwiGuildUpgradePlanning.install(pageWindow, planningProvider);
+  }
 
   const storageTransferView = storageTransferViewApi.create({
     document,
@@ -881,13 +899,18 @@
       scheduleGuildExchangeAdvisor();
   }
 
-  function disposeRuntime() {
+  function disposeRuntime(event) {
+    // A cached page resumes with its live runtime; dispose only on a real exit.
+    if (event?.persisted) return;
+    window.removeEventListener("pagehide", disposeRuntime);
     storageTransferView.dispose();
+    disposeUpgradePlanning?.();
     trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
+    window.__mwiGuildCreditBridge?.cancelPurchasePrefill?.();
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarController.destroy();
@@ -912,7 +935,7 @@
   hydrateLocalInitData();
   document.addEventListener("input", exchangeModalInteractionHandler, true);
   document.addEventListener("click", exchangeModalInteractionHandler, true);
-  window.addEventListener("pagehide", disposeRuntime, { once: true });
+  window.addEventListener("pagehide", disposeRuntime);
   if (document.body) startGuildExchangeAdvisor();
   else document.addEventListener("DOMContentLoaded", startGuildExchangeAdvisor, { once: true });
   sidebarController.start();

@@ -201,7 +201,14 @@ test("公会建设计划按站点和角色隔离并过滤非法等级", () => {
   assert.deepEqual(pluginStorage.loadSavedGuildBuildingPlannerState(), {
     plans: [{ buildingHrid: "/guild_buildings/guild_hall", startLevel: 1, targetLevel: 3 }],
     manualGuildPoints: 5000,
-    guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
+    guildPointSettings: {
+      guildPointForecastStartAt: Math.max(
+        config.GUILD_TRIAL_FIRST_START_AT,
+        config.GUILD_TRIAL_FIRST_START_AT +
+          (Math.floor((Date.now() - config.GUILD_TRIAL_FIRST_START_AT) / 604800000) - 6) * 604800000
+      ),
+      guildPointPlanningWeeks: 0
+    },
     category: "life",
     search: "",
     constructionUi: { pickerOpen: false, guildPointHistoryOpen: false, expandedBuildingHrids: [] },
@@ -216,7 +223,7 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
   const week = Date.parse("2026-09-01T02:00:00Z");
   pluginStorage.persistGuildBuildingPlannerState({
     manualGuildPoints: null,
-    guildPointForecastWeeks: 8,
+    guildPointForecastStartAt: config.GUILD_TRIAL_FIRST_START_AT + 7 * 604800000,
     guildPointPlanningWeeks: 4,
     buildingCategory: "all",
     buildingPlans: [],
@@ -250,8 +257,9 @@ test("公会点数历史按角色保存并过滤损坏记录", () => {
     }
   });
   const raw = JSON.parse(storage.value("mwi-guild-building-planner-v1:www.milkywayidle.com:hero-7"));
-  assert.equal(raw.schemaVersion, 8);
-  assert.equal(raw.guildPointForecastWeeks, 8);
+  assert.equal(raw.schemaVersion, 9);
+  assert.equal(raw.guildPointForecastStartAt, config.GUILD_TRIAL_FIRST_START_AT + 7 * 604800000);
+  assert.equal(raw.guildPointForecastWeeks, undefined);
   assert.equal(raw.guildPointPlanningWeeks, 4);
   assert.deepEqual(raw.guildPointHistory.weeks, [
     {
@@ -355,7 +363,10 @@ test("旧版本周点数缓存失效但余额、历史与施工计划保留", ()
   });
   assert.deepEqual(loaded.plans, stored.plans);
   assert.equal(loaded.manualGuildPoints, 500);
-  assert.deepEqual(JSON.parse(storage.value(key)), stored);
+  assert.deepEqual(JSON.parse(storage.value(key)), {
+    ...stored,
+    guildPointForecastStartAt: loaded.guildPointSettings.guildPointForecastStartAt
+  });
   storage.setItem(
     key,
     JSON.stringify({
@@ -772,4 +783,87 @@ test("设置页面、帮助和升级步骤展开状态可恢复且兼容旧计�
   );
   assert.equal(api.loadSavedPluginUiState().settingsOpen, false);
   assert.deepEqual(api.loadSavedPluginUiState().openHelpTopics, ["trialHistory"]);
+});
+
+test("旧回看范围只迁移一次，跨周重载保留日期起点和原始其他字段", (t) => {
+  const first = config.GUILD_TRIAL_FIRST_START_AT;
+  const week = 604800000;
+  const current = first + 13 * week;
+  t.mock.timers.enable({ apis: ["Date"], now: current + 1000 });
+  const key = `${config.GUILD_BUILDING_PLAN_STORAGE_PREFIX}:www.milkywayidle.com:hero-7`;
+  const seed = {
+    schemaVersion: 8,
+    guildPointForecastWeeks: 5,
+    guildPointPlanningWeeks: 3,
+    customData: { keep: true },
+    guildPointSnapshot: {
+      guildId: "guild-7",
+      lifetimePoints: 20000,
+      availablePoints: 1000,
+      currentWeekPoints: 1400,
+      weekStartAt: current,
+      observedAt: current + 1
+    }
+  };
+  const memory = memoryStorage({ [key]: JSON.stringify(seed) });
+  const storage = createStorage(memory);
+  assert.equal(
+    storage.loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointForecastStartAt,
+    first + 9 * week
+  );
+  assert.deepEqual(JSON.parse(memory.value(key)), { ...seed, guildPointForecastStartAt: first + 9 * week });
+  t.mock.timers.tick(10 * week);
+  assert.equal(
+    storage.loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointForecastStartAt,
+    first + 9 * week
+  );
+  assert.equal(storage.loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointPlanningWeeks, 3);
+});
+
+test("迁移忽略过期本周进度并校验起点日期，首次试炼前不产生负周次", (t) => {
+  const first = config.GUILD_TRIAL_FIRST_START_AT,
+    week = 604800000;
+  t.mock.timers.enable({ apis: ["Date"], now: first + 13 * week });
+  const key = `${config.GUILD_BUILDING_PLAN_STORAGE_PREFIX}:www.milkywayidle.com:hero-7`;
+  for (const value of [null, "", 0, first + 1, first + 20 * week]) {
+    const memory = memoryStorage({
+      [key]: JSON.stringify({
+        schemaVersion: 8,
+        guildPointForecastStartAt: value,
+        guildPointForecastWeeks: 5,
+        guildPointSnapshot: {
+          guildId: "g",
+          lifetimePoints: 20000,
+          availablePoints: 1,
+          currentWeekPoints: 999,
+          weekStartAt: first + 12 * week,
+          observedAt: first + 12 * week + 1
+        }
+      })
+    });
+    assert.equal(
+      createStorage(memory).loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointForecastStartAt,
+      first + 8 * week
+    );
+  }
+  t.mock.timers.setTime(first - 1);
+  const memory = memoryStorage({ [key]: JSON.stringify({ guildPointForecastWeeks: 12 }) });
+  assert.equal(
+    createStorage(memory).loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointForecastStartAt,
+    first
+  );
+});
+
+test("迁移写入失败不丢失规划设置，返回可见失败标记", () => {
+  const memory = {
+    getItem: () => JSON.stringify({ guildPointPlanningWeeks: 4, manualGuildPoints: 123 }),
+    setItem: () => {
+      throw Error("quota");
+    }
+  };
+  const result = createStorage(memory).loadSavedGuildBuildingPlannerState();
+  assert.equal(result.manualGuildPoints, 123);
+  assert.equal(result.guildPointSettings.guildPointPlanningWeeks, 4);
+  assert.equal(result.guildPointSettings.guildPointForecastSaveFailed, true);
+  assert.equal(createStorage(memory).persistGuildBuildingPlannerState({ buildingPlans: [] }), false);
 });

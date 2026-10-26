@@ -14,6 +14,11 @@ test("发布脚本按补丁版本递增并拒绝非法版本", async () => {
 test("发布脚本只允许当前版本归档并排除未跟踪工具草稿", async () => {
   const release = await import("../tools/release-current-version.mjs");
   assert.equal(release.isAllowedReleasePath("src/userscript.js", "1.1.29"), true);
+  assert.equal(release.isAllowedReleasePath("dist/milky-way-idle-guild-assistant.user.js", "1.1.29", false), true);
+  assert.equal(
+    release.isAllowedReleasePath("dist/milky-way-idle-guild-credit-optimizer.user.js", "1.1.29", false),
+    true
+  );
   assert.equal(release.isAllowedReleasePath("eslint.config.mjs", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath(".prettierignore", "1.1.29"), true);
   assert.equal(release.isAllowedReleasePath(".prettierrc.json", "1.1.29"), true);

@@ -159,7 +159,13 @@
     }
 
     function captureSiblings(panelHost, tabBar) {
-      for (const node of panelHost.children) {
+      const siblings = new Set(panelHost.children);
+      for (const [node, record] of hiddenNodes) {
+        if (siblings.has(node)) continue;
+        restoreStyle(node, "display", record);
+        hiddenNodes.delete(node);
+      }
+      for (const node of siblings) {
         if (node === active.panel || hiddenNodes.has(node) || !node.style) continue;
         hiddenNodes.set(node, claimStyle(node, "display", "none", "important"));
       }
@@ -181,7 +187,6 @@
         !active ||
         !panelHost ||
         !tabBar ||
-        active.panel.hidden ||
         active.tab.getAttribute("aria-selected") !== "true" ||
         !active.tab.classList.contains("Mui-selected") ||
         otherSelected(tabBar)
@@ -190,7 +195,17 @@
       active.panelHost = panelHost;
       active.tabBar = tabBar;
       captureSiblings(panelHost, tabBar);
+      restoreVisibility();
       return true;
+    }
+
+    function restoreVisibility() {
+      // Delayed native/foreign renders can hide live nodes without changing
+      // selection. Repair only our panel and its host while we own the sidebar.
+      for (const node of [active.panelHost, active.panel]) {
+        if (node.hidden) node.hidden = false;
+        if (readStyle(node.style, "display").value === "none") writeStyle(node.style, "display", "");
+      }
     }
 
     function show(panelHost, tabBar) {
@@ -203,7 +218,7 @@
       }
       active = { panel: state.panel, tab: state.creditTab, panelHost, tabBar };
       captureSiblings(panelHost, tabBar);
-      active.panel.hidden = false;
+      restoreVisibility();
       active.tab.classList.add("Mui-selected");
       active.tab.setAttribute("aria-selected", "true");
       active.tab.tabIndex = 0;

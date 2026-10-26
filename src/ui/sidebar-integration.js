@@ -10,7 +10,8 @@
 
   const SIDEBAR_REPLACEMENT_EVENT = "mwi:guild-sidebar-replacing";
   const OWNER = "mwi-guild-credit-optimizer";
-  const isSelected = (tab) => tab.getAttribute("aria-selected") === "true" || tab.classList.contains("Mui-selected");
+  const isSelected = (tab) =>
+    tab?.getAttribute?.("aria-selected") === "true" || tab?.classList?.contains("Mui-selected");
   const ownsSelection = (tab) => tab.getAttribute("aria-selected") === "true" && tab.classList.contains("Mui-selected");
   const isAvailable = (tab) =>
     tab.matches('button,[role="tab"]') &&
@@ -114,6 +115,7 @@
           element === integration.panelHost ||
           element === integration.tabBar ||
           element === state.creditTab ||
+          element === state.panel ||
           (integration.tabBar.contains(element) && !state.creditTab.contains(element)) ||
           element?.contains(integration.tabBar)
         );
@@ -186,11 +188,11 @@
       if (event.detail === OWNER) destroy();
     }
 
-    function show(panelHost, tabBar) {
+    function show(panelHost, tabBar, resume = false) {
       if (destroyed || !state.panel?.isConnected) return;
       coordinator.announce();
       selection.show(panelHost, tabBar);
-      options.onActivate?.(state.panel);
+      if (!resume) options.onActivate?.(state.panel);
     }
 
     function refresh() {
@@ -207,6 +209,9 @@
       if (detectedLocale) options.onLocale?.(detectedLocale);
       const locale = getLocale();
       const staleSelected = dom.suppressStaleMounts(found, state.creditTab, state.panel) || resumeOpen;
+      const anotherSelected = Array.from(tabBar.children).some(
+        (tab) => tab !== state.creditTab && !tab.hidden && isSelected(tab)
+      );
       resumeOpen = false;
       const localeChanged = Boolean(state.panel && state.panelLocale && state.panelLocale !== locale);
       const currentIntegrationMatches = Boolean(
@@ -218,14 +223,18 @@
       if (currentIntegrationMatches && !localeChanged) {
         const label = getLabel();
         if (state.creditTab.textContent !== label) state.creditTab.textContent = label;
-        if (staleSelected) show(panelHost, tabBar);
+        if (staleSelected && !anotherSelected) show(panelHost, tabBar);
         else if (selection.isActive() && !selection.sync(panelHost, tabBar)) selection.hide();
         if (contentChanged && !state.panel.hidden) options.onRefresh?.(state.panel);
         return true;
       }
 
+      const wasActive = selection.isActive();
       const keepPanelOpen =
-        staleSelected || Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab));
+        !anotherSelected &&
+        (staleSelected ||
+          selection.isActive() ||
+          Boolean(state.panel && !state.panel.hidden && state.creditTab && isSelected(state.creditTab)));
       const tabHadFocus = state.creditTab === windowRef.document.activeElement;
       const reuseTab = Boolean(
         state.creditTab?.isConnected &&
@@ -252,7 +261,7 @@
       state.creditTab = tab;
       state.panelLocale = locale;
       options.onMount?.(panel);
-      if (keepPanelOpen) show(panelHost, tabBar);
+      if (keepPanelOpen) show(panelHost, tabBar, wasActive && !replacement);
       if (tabHadFocus) tab.focus({ preventScroll: true });
       return true;
     }
@@ -277,6 +286,8 @@
       documentRef.dispatchEvent(new windowRef.CustomEvent(SIDEBAR_REPLACEMENT_EVENT, { detail: OWNER }));
       documentRef.addEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
       interval = windowRef.setInterval(refresh, 3000);
+      documentRef.addEventListener("visibilitychange", schedule);
+      windowRef.addEventListener("pageshow", schedule);
       windowRef.addEventListener("resize", schedule, { passive: true });
       windowRef.addEventListener("orientationchange", schedule, { passive: true });
       refresh();
@@ -290,6 +301,8 @@
       lifecycle.destroy();
       coordinator.destroy();
       windowRef.document.removeEventListener(SIDEBAR_REPLACEMENT_EVENT, replacementRequested);
+      windowRef.document.removeEventListener("visibilitychange", schedule);
+      windowRef.removeEventListener("pageshow", schedule);
       windowRef.removeEventListener("resize", schedule);
       windowRef.removeEventListener("orientationchange", schedule);
       pending = null;

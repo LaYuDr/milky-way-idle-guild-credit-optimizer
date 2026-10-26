@@ -1261,6 +1261,16 @@
           readPlayerProfile(panel, true);
           return;
         }
+        if (event.target.closest("[data-trial-open-profile]")) {
+          const memberName = selectedMember?.name;
+          const openProfile = () => getBridge()?.openPlayerProfile?.(memberName);
+          if (isFullscreen())
+            void toggleFullscreen(host).then(() => {
+              if (!disposed && host.isConnected && !isFullscreen()) openProfile();
+            });
+          else openProfile();
+          return;
+        }
         if (event.target.closest("[data-trial-player-back]")) {
           leavePlayer();
           mode = playerReturn?.mode || "week";

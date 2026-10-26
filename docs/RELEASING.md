@@ -4,6 +4,13 @@
 
 - dist/ contains the current public installation artifact and development
   outputs.
+- The primary installation file is `dist/milky-way-idle-guild-assistant.user.js`.
+  Every build also writes `dist/milky-way-idle-guild-credit-optimizer.user.js`
+  as a byte-identical compatibility copy for existing links and sync sources.
+  Both files are release inputs; repository and release checks reject divergence.
+- Keep the existing script identity, Greasy Fork script ID `586873`, update and
+  download URLs, and storage keys when changing artifact names. The GitHub
+  repository URL and development loader filename remain unchanged.
 - releases/vMAJOR.MINOR/ contains every retained historical userscript.
 - The historical filename is
   银河奶牛公会信用点性价比-vMAJOR.MINOR.PATCH.user.js.

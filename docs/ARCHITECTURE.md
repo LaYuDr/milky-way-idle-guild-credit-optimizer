@@ -64,7 +64,8 @@ Each boundary is marked in the generated runtime for debugging:
 ```text
 core/data modules -> runtime modules -> UI modules -> userscript composition root
                   -> dist/runtime.js
-                  -> dist/milky-way-idle-guild-credit-optimizer.user.js
+                  -> dist/milky-way-idle-guild-assistant.user.js
+                  -> dist/milky-way-idle-guild-credit-optimizer.user.js (identical compatibility copy)
                   -> dist/milky-way-idle-guild-credit-dev-loader.user.js
                   -> dist/test-harness.html
 ```

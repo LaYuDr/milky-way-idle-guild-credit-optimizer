@@ -22,6 +22,7 @@ function createDevServer({ build = rebuild } = {}) {
   return http.createServer((request, response) => {
     const pathname = new URL(request.url, "http://127.0.0.1").pathname;
     const files = {
+      "/milky-way-idle-guild-assistant.user.js": "milky-way-idle-guild-assistant.user.js",
       "/milky-way-idle-guild-credit-optimizer.user.js": "milky-way-idle-guild-credit-optimizer.user.js",
       "/milky-way-idle-guild-credit-dev-loader.user.js": "milky-way-idle-guild-credit-dev-loader.user.js",
       "/runtime.js": "runtime.js",

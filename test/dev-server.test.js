@@ -23,6 +23,30 @@ function request(server, url) {
   return response;
 }
 
+test("primary and legacy userscript URLs serve identical builds and fail closed", () => {
+  const server = createDevServer();
+  const urls = ["/milky-way-idle-guild-assistant.user.js", "/milky-way-idle-guild-credit-optimizer.user.js"];
+  const responses = urls.map((url) => request(server, url));
+  for (const response of responses) {
+    assert.equal(response.status, 200);
+    assert.match(response.headers["Content-Type"], /application\/javascript/);
+    assert.match(response.headers["Cache-Control"], /no-store/);
+    assert.match(response.body, /^\/\/ ==UserScript==/);
+  }
+  assert.equal(responses[0].body, responses[1].body);
+
+  const brokenServer = createDevServer({
+    build() {
+      throw new Error("fixture build failure");
+    }
+  });
+  for (const url of urls) {
+    const response = request(brokenServer, url);
+    assert.equal(response.status, 503);
+    assert.doesNotMatch(response.body, /==UserScript==/);
+  }
+});
+
 test("runtime requests rebuild every time; failed builds never serve stale dist and can recover", () => {
   let builds = 0;
   let broken = false;

@@ -223,8 +223,9 @@
       }
     }
 
-    function extractItemDetailsFromReact() {
+    function extractItemDetailsFromReact(force = false) {
       if (
+        !force &&
         state.itemDetails &&
         state.guildBuffDetails &&
         state.guildBuffLevels &&
@@ -254,6 +255,15 @@
         visited.add(fiber);
         scanned += 1;
         const stateValue = fiber.stateNode && fiber.stateNode.state;
+        if (Number.isSafeInteger(stateValue?.character?.id) && stateValue.character.id > 0) {
+          if (state.planningCharacterId && state.planningCharacterId !== stateValue.character.id) {
+            state.guildBuffLevels = null;
+            state.guildShrineLevels = null;
+            state.guildBuildingLevels = null;
+            state.characterItems = null;
+          }
+          state.planningCharacterId = stateValue.character.id;
+        }
         const candidates = [fiber.memoizedProps, fiber.pendingProps, stateValue, fiber.memoizedState];
         for (const candidate of candidates) {
           if (!candidate || typeof candidate !== "object") continue;
@@ -274,7 +284,8 @@
             state.guildBuildingLevels &&
             state.guildPointSummary &&
             state.guildWeekStartAt &&
-            state.characterItems
+            state.characterItems &&
+            (!force || state.planningCharacterId)
           )
             return true;
         }

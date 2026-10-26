@@ -94,6 +94,7 @@ const SOURCE_FILES = [
   "src/guild-building-data.js",
   "src/localization.js",
   "src/core.js",
+  "src/runtime/upgrade-planning.js",
   "src/shrine-guide.js",
   "src/trial-display.js",
   "src/runtime/storage.js",
@@ -128,8 +129,10 @@ const runtimeSource = SOURCE_FILES.map((file) => `// SOURCE: ${file}\n${source(f
 const runtime = `// MWI_GUILD_CREDIT_RUNTIME\nwindow.MwiGuildCreditVersion = ${JSON.stringify(version)};\n\n${runtimeSource}`;
 const usage = usageBuild.buildUsage(root, "src/runtime/usage-client.js", "mwi_guild", "公会助手", version);
 const bundle = `${header}${usage}${runtime}`;
-const output = path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js");
+const output = path.join(outputDirectory, "milky-way-idle-guild-assistant.user.js");
 fs.writeFileSync(output, bundle);
+// Keep the original installation/sync URL serving the exact same complete script.
+fs.writeFileSync(path.join(outputDirectory, "milky-way-idle-guild-credit-optimizer.user.js"), bundle);
 
 if (process.env.MWI_ARCHIVE_RELEASE === "1") {
   const releaseDirectory = path.join(root, "releases", `v${versionMatch[1]}.${versionMatch[2]}`);

@@ -13,7 +13,7 @@
       [
         ["guildPointStartingBalance", ["guildPointStartingBalanceHint"]],
         ["guildPointPlanningWeeks", ["guildPointPlanningWeeksHint"]],
-        ["guildPointForecastWeeks", ["guildPointForecastWeeksHint"]],
+        ["guildPointForecastStartWeek", ["guildPointForecastStartWeekHint"]],
         ["guildPointStatisticsHeading", ["guildPointTrendHint", "helpForecastEvidence", "helpForecastBacktest"]],
         ["guildPointHelpDataTitle", ["guildPointHelpData"]],
         ["guildPointHelpMethodTitle", ["guildPointHelpMethod"]],
@@ -196,11 +196,7 @@
     function renderSettingsMarkup() {
       const snapshot = guildBuffSettingsSnapshot();
       const hidden = state.settingsOpen === true ? "" : " hidden";
-      return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-labelledby="mwi-settings-title" tabindex="-1"${hidden}><header class="mwi-settings-header"><span><h3 id="mwi-settings-title">${escapeHtml(
-        t("interfaceSettings")
-      )}</h3></span><button class="mwi-settings-close" data-role="settings-close" type="button" title="${escapeHtml(
-        t("backFromSettings")
-      )}" aria-label="${escapeHtml(t("backFromSettings"))}">${escapeHtml(t("backFromSettings"))}</button></header><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
+      return `<section id="mwi-settings-panel" class="mwi-settings-panel" data-role="settings-panel" aria-label="${escapeHtml(t("interfaceSettings"))}" tabindex="-1"${hidden}><div class="mwi-settings-content" data-role="settings-content">${renderSettingsContent(
         snapshot
       )}</div><p class="mwi-settings-status" data-role="settings-status" role="status" aria-live="polite" aria-atomic="true"></p></section>`;
     }

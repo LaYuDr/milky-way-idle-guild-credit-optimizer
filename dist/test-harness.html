@@ -1019,6 +1019,53 @@
       const panel = document.getElementById("mwi-credit-optimizer");
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
       const checks = {};
+      const purchaseBridge = window.__mwiGuildCreditBridge;
+      const previousPurchaseInventory = purchaseBridge.characterItems;
+      purchaseBridge.characterItems = [
+        { itemHrid: "/items/beast_hide", itemLocationHrid: "/item_locations/inventory", count: 125 }
+      ];
+      purchaseBridge.characterItemsRevision = Number(purchaseBridge.characterItemsRevision || 0) + 1;
+      purchaseBridge.onCharacterItemsUpdated?.();
+      await waitFor(() => panel.querySelector('.mwi-material-plan-item [data-role="market-item-link"]'));
+      const purchaseCalls = [];
+      const savedNavigate = purchaseBridge.goToMarketplace;
+      const savedPrefill = purchaseBridge.armPurchasePrefill;
+      const materialLinks = [...panel.querySelectorAll('.mwi-material-plan-item [data-role="market-item-link"]')];
+      try {
+        purchaseBridge.goToMarketplace = (hrid, level) => {
+          purchaseCalls.push([hrid, level]);
+          return true;
+        };
+        purchaseBridge.armPurchasePrefill = (hrid, quantity) => purchaseCalls.push([hrid, quantity]);
+        checks.purchaseQuantityMatchesShortfall =
+          materialLinks.length > 0 &&
+          materialLinks.every((link) => {
+            const method = link.closest(".mwi-material-plan");
+            const required = Number(
+              method.querySelector(".mwi-material-plan-need strong").textContent.replace(/[^0-9]/g, "")
+            );
+            const inventory = Number(
+              method.querySelector(".mwi-material-plan-item small").textContent.replace(/[^0-9]/g, "")
+            );
+            const missing = Math.max(0, required - inventory);
+            return Number(link.dataset.purchaseQuantity) === missing;
+          });
+        const link = materialLinks.find((candidate) => Number(candidate.dataset.purchaseQuantity) > 0);
+        link?.click();
+        checks.purchaseIconPassesQuantity =
+          Boolean(link) &&
+          purchaseCalls.length === 2 &&
+          purchaseCalls[0][0] === link.dataset.itemHrid &&
+          purchaseCalls[0][1] === 0 &&
+          purchaseCalls[1][0] === link.dataset.itemHrid &&
+          purchaseCalls[1][1] === Number(link.dataset.purchaseQuantity);
+      } finally {
+        purchaseBridge.goToMarketplace = savedNavigate;
+        purchaseBridge.armPurchasePrefill = savedPrefill;
+        purchaseBridge.characterItems = previousPurchaseInventory;
+        purchaseBridge.characterItemsRevision = Number(purchaseBridge.characterItemsRevision || 0) + 1;
+        purchaseBridge.onCharacterItemsUpdated?.();
+      }
       const row = () => list.querySelector('[data-guild-buff-hrid="/guild_buffs/tempo_combat"]');
       const change = async (role, value) => {
         const input = row().querySelector(`[data-role="${role}"]`);
@@ -1754,7 +1801,7 @@
           growth: normalizedText(root.querySelector('[data-role="weekly-guild-point-growth"]')),
           forecast: normalizedText(root.querySelector('[data-role="next-week-guild-point-forecast"]')),
           eta: normalizedText(root.querySelector('[data-role="construction-eta"]')),
-          forecastWeeks: root.querySelector('[data-role="guild-point-forecast-weeks"]')?.value || "",
+          forecastStartWeek: root.querySelector('[data-role="guild-point-forecast-start-week"]')?.value || "",
           planningWeeks: root.querySelector('[data-role="guild-point-planning-weeks"]')?.value || "",
           planningSummary: normalizedText(root.querySelector(".mwi-guild-point-controls output")),
           exportDisabled: Boolean(root.querySelector('[data-role="export-guild-point-history"]')?.disabled),
@@ -1862,8 +1909,8 @@
 
       audit.initial = constructionStateSnapshot(panel);
       audit.forecastAlwaysVisible =
-        elementIsVisible(panel.querySelector('[data-role="guild-point-forecast-weeks"]')) &&
-        !panel.querySelector('[data-role="guild-point-forecast-weeks"]').closest("details") &&
+        elementIsVisible(panel.querySelector('[data-role="guild-point-forecast-start-week"]')) &&
+        !panel.querySelector('[data-role="guild-point-forecast-start-week"]').closest("details") &&
         !panel.querySelector(".mwi-guild-point-planning-options summary");
       audit.planningAlwaysVisible = !panel.querySelector('[data-role="guild-point-planning-weeks"]').closest("details");
       const historyToggle = panel.querySelector(".mwi-guild-point-history>summary");
@@ -1876,27 +1923,53 @@
       await settleConstructionAudit();
       // Forecast inputs remain visible through a rerender and history collapse.
       panel
-        .querySelector('[data-role="guild-point-forecast-weeks"]')
+        .querySelector('[data-role="guild-point-forecast-start-week"]')
         .dispatchEvent(new Event("change", { bubbles: true }));
       await settleConstructionAudit();
       audit.forecastVisibleAfterRefresh = elementIsVisible(
-        panel.querySelector('[data-role="guild-point-forecast-weeks"]')
+        panel.querySelector('[data-role="guild-point-forecast-start-week"]')
       );
 
-      await stepWeekControl("guild-point-forecast-weeks", -1, 5);
-      await stepWeekControl("guild-point-forecast-weeks", -1, 4);
+      const initialStartWeek = Number(panel.querySelector('[data-role="guild-point-forecast-start-week"]').value);
+      await stepWeekControl("guild-point-forecast-start-week", -1, Math.max(1, initialStartWeek - 1));
+      await stepWeekControl("guild-point-forecast-start-week", -1, Math.max(1, initialStartWeek - 2));
+      const startInput = panel.querySelector('[data-role="guild-point-forecast-start-week"]');
+      const savedStartWeek = startInput.value;
+      const plannerKey = `mwi-guild-building-planner-v1:${location.hostname}:default`;
+      const savedAnchor = JSON.parse(localStorage.getItem(plannerKey)).guildPointForecastStartAt;
+      startInput.value = "0";
+      startInput.dispatchEvent(new Event("change", { bubbles: true }));
+      audit.invalidStartPreservesAnchor =
+        startInput.value === "0" &&
+        startInput.getAttribute("aria-invalid") === "true" &&
+        elementIsVisible(panel.querySelector("#mwi-guild-point-start-error")) &&
+        JSON.parse(localStorage.getItem(plannerKey)).guildPointForecastStartAt === savedAnchor;
+      startInput.value = savedStartWeek;
+      startInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await settleConstructionAudit();
+      audit.startSaved =
+        JSON.parse(localStorage.getItem(plannerKey)).guildPointForecastStartAt ===
+        Date.parse("2026-07-10T00:00:00Z") + (Number(savedStartWeek) - 1) * 604800000;
+      audit.startRestored =
+        window.MwiGuildCreditStorage.createPluginStorage({
+          storage: localStorage,
+          location,
+          config: window.MwiGuildCreditConfig,
+          buildingDataApi: window.MwiGuildBuildingData,
+          marketDataApi: window.MwiGuildCreditMarketData
+        }).loadSavedGuildBuildingPlannerState().guildPointSettings.guildPointForecastStartAt === savedAnchor;
       await stepWeekControl("guild-point-planning-weeks", 1, 1);
       await stepWeekControl("guild-point-planning-weeks", 1, 2);
       audit.forecastSettings = {
         ...constructionStateSnapshot(panel),
         planningSummary: normalizedText(panel.querySelector(".mwi-guild-point-controls output")),
-        forecastWeeks: panel.querySelector('[data-role="guild-point-forecast-weeks"]')?.value || "",
+        forecastStartWeek: panel.querySelector('[data-role="guild-point-forecast-start-week"]')?.value || "",
         planningState: panel.querySelector('[data-role="guild-point-planning-summary"]')?.dataset.state,
         planningWeeks: panel.querySelector('[data-role="guild-point-planning-weeks"]')?.value || ""
       };
       await stepWeekControl("guild-point-planning-weeks", -1, 1);
       await stepWeekControl("guild-point-planning-weeks", -1, 0);
-      const forecastWeeks = panel.querySelector('[data-role="guild-point-forecast-weeks"]');
+      const forecastWeeks = panel.querySelector('[data-role="guild-point-forecast-start-week"]');
       const planningWeeks = panel.querySelector('[data-role="guild-point-planning-weeks"]');
       const weekStepperAudit = (input) => {
         const stepper = input.closest(".mwi-guild-point-week-stepper");
@@ -1922,7 +1995,7 @@
       await settleConstructionAudit();
       audit.forecastVisibleWithHistoryClosed =
         !panel.querySelector(".mwi-guild-point-history").open &&
-        elementIsVisible(panel.querySelector('[data-role="guild-point-forecast-weeks"]'));
+        elementIsVisible(panel.querySelector('[data-role="guild-point-forecast-start-week"]'));
       panel.querySelector(".mwi-guild-point-history>summary").click();
       await settleConstructionAudit();
 
@@ -1931,7 +2004,7 @@
         normalizedText(panel.querySelector('[data-role="guild-point-planning-summary"]'));
       budgetInput.value = "8000";
       budgetInput.dispatchEvent(new Event("input", { bubbles: true }));
-      const settingsBeforeBudgetCommit = panel.querySelector('[data-role="guild-point-forecast-weeks"]');
+      const settingsBeforeBudgetCommit = panel.querySelector('[data-role="guild-point-forecast-start-week"]');
       const pickerBeforeBudgetCommit = panel.querySelector('[data-role="toggle-building-picker"]');
       budgetInput.dispatchEvent(new Event("change", { bubbles: true }));
       audit.budgetCommitPreservesControls =
@@ -2156,7 +2229,16 @@
       const storedDefaultZeroPlan = audit.defaultZeroAdded.storedPlans.find(
         (plan) => plan.buildingHrid === unknownBuildingHrid
       );
+      const historyTable = panel.querySelector(".mwi-guild-point-table-scroll");
+      const historyTableStyle = getComputedStyle(historyTable);
       audit.checks = {
+        weeklyHistoryHasNoLocalScroller:
+          historyTableStyle.overflowX === "visible" &&
+          historyTableStyle.overflowY === "visible" &&
+          historyTableStyle.overscrollBehaviorX === "auto" &&
+          historyTableStyle.overscrollBehaviorY === "auto" &&
+          historyTable.scrollWidth <= historyTable.clientWidth &&
+          historyTable.scrollHeight <= historyTable.clientHeight,
         catalogNativeOrder:
           catalogOrder().slice(0, 23).join(",") ===
           "guild_hall,builders_hall,treasury,archives,skilling_encampment,combat_encampment,dairy_barn,garden,log_shed,forge,workshop,sewing_parlor,kitchen,brewery,laboratory,observatory,dining_room,library,dojo,armory,gym,archery_range,mystical_study",
@@ -2167,8 +2249,11 @@
           audit.historyToggleInitiallyClosed &&
           audit.historyToggleSize.height >= 48 &&
           audit.historyToggleSize.width >= 200 &&
-          panel.querySelectorAll('[data-role="guild-point-forecast-weeks"]').length === 1,
-        forecastLookbackAlwaysVisible:
+          panel.querySelectorAll('[data-role="guild-point-forecast-start-week"]').length === 1,
+        forecastStartSavedAndRestored: audit.startSaved && audit.startRestored,
+        invalidForecastStartPreservesAnchor: audit.invalidStartPreservesAnchor,
+        oldForecastLookbackRemoved: !panel.querySelector('[data-role="guild-point-forecast-weeks"]'),
+        forecastStartAlwaysVisible:
           audit.forecastAlwaysVisible &&
           audit.forecastVisibleAfterRefresh &&
           audit.planningAlwaysVisible &&
@@ -2217,12 +2302,13 @@
           compactNumber(audit.liveBudget.actualBalance) === "244" &&
           compactNumber(audit.liveBudget.restoredSummary).includes("244"),
         weeklyPointControlsUseNumberSteppers:
-          audit.forecastSettings.forecastWeeks === "4" &&
+          audit.forecastSettings.forecastStartWeek === String(Math.max(1, initialStartWeek - 2)) &&
           audit.forecastSettings.planningWeeks === "2" &&
           audit.weekSteppers.forecast.tagName === "INPUT" &&
           audit.weekSteppers.forecast.type === "number" &&
-          audit.weekSteppers.forecast.min === "2" &&
-          audit.weekSteppers.forecast.max === "12" &&
+          audit.weekSteppers.forecast.min === "1" &&
+          Number(audit.weekSteppers.forecast.max) ===
+            Math.floor((Date.now() - Date.parse("2026-07-10T00:00:00Z")) / 604800000) + 1 &&
           audit.weekSteppers.forecast.step === "1" &&
           audit.weekSteppers.planning.tagName === "INPUT" &&
           audit.weekSteppers.planning.type === "number" &&
@@ -2230,9 +2316,9 @@
           audit.weekSteppers.planning.max === "12" &&
           audit.weekSteppers.planning.step === "1" &&
           audit.weekSteppers.forecast.increaseLabel ===
-            (english ? "Increase the forecast lookback by 1 week" : "增加 1 周预测回看范围") &&
+            (english ? "Move the forecast start forward by 1 week" : "将预测起点推后 1 周") &&
           audit.weekSteppers.forecast.decreaseLabel ===
-            (english ? "Decrease the forecast lookback by 1 week" : "减少 1 周预测回看范围") &&
+            (english ? "Move the forecast start back by 1 week" : "将预测起点提前 1 周") &&
           audit.weekSteppers.planning.increaseLabel ===
             (english ? "Increase the planning horizon by 1 week" : "增加 1 周规划时间") &&
           audit.weekSteppers.planning.decreaseLabel ===
@@ -2687,8 +2773,7 @@
       }
       const shrineInputs = Array.from(settingsPanel.querySelectorAll('[data-role="settings-shrine-autofill"]'));
       const constructionSwitch = settingsPanel.querySelector('[data-role="settings-show-construction"]');
-      const closeButton = settingsPanel.querySelector('[data-role="settings-close"]');
-      const labelledBy = settingsPanel.getAttribute("aria-labelledby") || "";
+      const label = settingsPanel.getAttribute("aria-label") || "";
       return {
         rootOverflow: Math.max(0, root.scrollWidth - root.clientWidth),
         panelRect: elementRect(settingsPanel),
@@ -2706,9 +2791,10 @@
         },
         settings: {
           id: settingsPanel.id,
-          labelledBy,
-          labelPresent: Boolean(labelledBy && document.getElementById(labelledBy)),
-          closeLabel: closeButton?.getAttribute("aria-label") || "",
+          label,
+          headerAbsent: !settingsPanel.querySelector(
+            ".mwi-settings-header, [data-role='settings-close'], #mwi-settings-title"
+          ),
           statusLive: settingsPanel.querySelector('[data-role="settings-status"]')?.getAttribute("aria-live") || "",
           shrineInputCount: shrineInputs.length,
           shrineGameIconCount: settingsPanel.querySelectorAll('.mwi-settings-shrine-icon [data-icon-source="game"] use')
@@ -2995,13 +3081,13 @@
       const layout = settingsGeometrySnapshot(panel);
       const nameDraft = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
       nameDraft.value = "Unsubmitted draft";
-      settingsPanel.querySelector('[data-role="settings-close"]').click();
+      settingsTrigger.click();
       const returnedToFeature =
         settingsPanel.hidden && elementIsVisible(panel.querySelector('[data-role="construction-view"]'));
       ensureSettingsOpen();
       const draftSurvivesReturn =
         settingsPanel.querySelector('[data-role="settings-sidebar-name"]').value === "Unsubmitted draft";
-      const closeTarget = settingsPanel.querySelector('[data-role="settings-close"]');
+      const closeTarget = settingsPanel.querySelector('[data-role="settings-sidebar-name"]');
       closeTarget.focus();
       closeTarget.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       await waitFor(() => settingsPanel.hidden && settingsTrigger.getAttribute("aria-expanded") === "false");
@@ -3066,8 +3152,8 @@
           opened.trigger.expanded === "true" &&
           Boolean(opened.trigger.label) &&
           opened.settings.id === "mwi-settings-panel" &&
-          opened.settings.labelPresent &&
-          Boolean(opened.settings.closeLabel) &&
+          opened.settings.label === (document.documentElement.lang.startsWith("zh") ? "设置" : "Settings") &&
+          opened.settings.headerAbsent &&
           opened.settings.statusLive === "polite" &&
           opened.settings.shrineInputCount === 4 &&
           opened.settings.allShrineInputsLabelled &&
@@ -3194,7 +3280,7 @@
         creditView: normalizedText(root?.querySelector('[data-role="view-credit"]')),
         upgradeView: normalizedText(root?.querySelector('[data-role="view-upgrade"]')),
         constructionView: normalizedText(root?.querySelector('[data-role="view-construction"]')),
-        settingsTitle: normalizedText(root?.querySelector("#mwi-settings-title")),
+        settingsTitle: root?.querySelector('[data-role="settings-panel"]')?.getAttribute("aria-label") || "",
         constructionSwitch: normalizedText(
           constructionSwitch?.closest(".mwi-settings-switch")?.querySelector(".mwi-settings-switch-copy strong")
         ),
@@ -3305,7 +3391,7 @@
         state: localeAuditStateSnapshot(excludedHrid)
       };
 
-      root.querySelector('[data-role="settings-close"]').click();
+      root.querySelector('[data-role="toggle-settings"]').click();
       const returned = localeAuditStateSnapshot(excludedHrid);
       const report = { initial, switched, returned };
       report.checks = {
@@ -3397,6 +3483,22 @@
       tab.click();
       checks.openHidesNative =
         !panel.hidden && nativePanel.style.display === "none" && tab.tabIndex === 0 && native.tabIndex === -1;
+      // Simulate a delayed visibility write while the Guild tab stays selected.
+      const retainedContent = panel.firstElementChild;
+      for (const node of [panel, host]) {
+        node.hidden = true;
+        node.style.setProperty("display", "none", "important");
+        await waitFor(() => !node.hidden && getComputedStyle(node).display !== "none", 4000);
+      }
+      checks.selectedGuildVisibilityRecovers =
+        elementIsVisible(panel) &&
+        panel.firstElementChild === retainedContent &&
+        tab.getAttribute("aria-selected") === "true";
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      panel.hidden = true;
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      await waitFor(() => elementIsVisible(panel), 4000);
+      checks.cachedPageResumeKeepsRuntimeAlive = panel.firstElementChild === retainedContent;
       const latePanel = document.createElement("section");
       latePanel.style.setProperty("display", "grid", "important");
       host.append(latePanel);
@@ -3942,6 +4044,9 @@
       await waitFor(() => low.hasAttribute("data-mwi-trial-low-work"));
       low.click();
       const checks = {
+        signupWarningRowAndIcon:
+          lowWorkHasIcon(low) && getComputedStyle(low.parentElement).backgroundColor === "rgb(82, 45, 61)",
+        signupListNotTinted: getComputedStyle(low.parentElement.parentElement).backgroundColor !== "rgb(82, 45, 61)",
         signupOnlyLowMarked: modal.querySelectorAll("[data-mwi-trial-low-work]").length === 1,
         signupNativeClickPreserved: clicks === 1 && low.isConnected,
         signupReasonAndColor:
@@ -3952,6 +4057,8 @@
       };
       warning.dispose();
       const restoredName = low.querySelector("[data-name]");
+      checks.signupWarningDecorationRestored =
+        !lowWorkHasIcon(low) && getComputedStyle(low.parentElement).backgroundColor !== "rgb(82, 45, 61)";
       checks.signupPersonalizedNameRestored =
         getComputedStyle(restoredName).backgroundImage.includes("linear-gradient") &&
         getComputedStyle(restoredName, "::before").display !== "none" &&
@@ -3988,6 +4095,11 @@
       checks.signupRecordsUnchanged = JSON.stringify(records) === originalRecords;
       modal.remove();
       return checks;
+    }
+
+    function lowWorkHasIcon(node) {
+      const icon = getComputedStyle(node, "::before");
+      return icon.content === '\"\"' && icon.width === "14px" && icon.maskImage.includes("data:image/svg+xml");
     }
 
     function lowWorkTextIsRed(node) {
@@ -4195,6 +4307,8 @@
               node.title.includes("0.9%") &&
               getComputedStyle(node).color === "rgb(255, 167, 181)" &&
               lowWorkTextIsRed(node) &&
+              lowWorkHasIcon(node) &&
+              getComputedStyle(node.closest("tr")).backgroundColor === "rgb(82, 45, 61)" &&
               node.getAttribute("aria-description") === node.title
           ),
         combatNamesUnmarked: !host.querySelector('[data-trial-group="combat"] [data-mwi-trial-low-work]'),

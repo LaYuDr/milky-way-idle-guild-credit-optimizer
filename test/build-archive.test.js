@@ -36,10 +36,16 @@ test("构建只在正式发布时创建不可变历史归档", (context) => {
   const normalBuild = runBuild(root, false);
   assert.equal(normalBuild.status, 0, normalBuild.stderr);
   assert.equal(fs.existsSync(path.join(root, "releases")), false);
-  const currentBundle = fs.readFileSync(
-    path.join(root, "dist", "milky-way-idle-guild-credit-optimizer.user.js"),
-    "utf8"
-  );
+  const currentBundle = fs.readFileSync(path.join(root, "dist", "milky-way-idle-guild-assistant.user.js"), "utf8");
+  const legacyPath = path.join(root, "dist", "milky-way-idle-guild-credit-optimizer.user.js");
+  assert.equal(fs.readFileSync(legacyPath, "utf8"), currentBundle);
+  assert.match(currentBundle, /^\/\/ @name\s+公会助手$/m);
+  assert.match(currentBundle, /^\/\/ @namespace\s+https:\/\/www\.milkywayidle\.com\/$/m);
+  // A subsequent build must refresh the legacy entry rather than leave a stale copy.
+  fs.writeFileSync(legacyPath, "stale compatibility script");
+  const refreshedBuild = runBuild(root, false);
+  assert.equal(refreshedBuild.status, 0, refreshedBuild.stderr);
+  assert.equal(fs.readFileSync(legacyPath, "utf8"), currentBundle);
   assert.match(currentBundle, /^\/\/ @name:en\s+Milky Way Idle Guild Assistant$/m);
   const metadata = currentBundle.split("// ==/UserScript==", 1)[0];
   const releaseUrl = "https://update.greasyfork.org/scripts/586873/%E5%85%AC%E4%BC%9A%E5%8A%A9%E6%89%8B.user.js";

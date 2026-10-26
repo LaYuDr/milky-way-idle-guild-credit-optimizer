@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 
 // All documents and GM requests are fixtures. Never connects to a game or stats service.
 const directory = fs.mkdtempSync(path.resolve(".workbench/browser-usage-"));
-const bundle = fs.readFileSync("dist/milky-way-idle-guild-credit-optimizer.user.js", "utf8");
+const bundle = fs.readFileSync("dist/milky-way-idle-guild-assistant.user.js", "utf8");
 const code = bundle.split("// LAYU_USAGE_START mwi_guild\n")[1]?.split("// LAYU_USAGE_END mwi_guild")[0];
 assert.ok(code, "production telemetry block required");
 const cases = [

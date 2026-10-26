@@ -272,7 +272,7 @@
           refreshedSettings &&
           (refreshedSettings.querySelector('[data-role="settings-shrine-autofill"]') ||
             refreshedSettings.querySelector('[data-role="settings-show-construction"]') ||
-            refreshedSettings.querySelector('[data-role="settings-close"]'));
+            refreshedSettings);
         if (firstControl) {
           try {
             firstControl.focus({ preventScroll: true });
@@ -584,9 +584,6 @@
       const settingsTrigger = panel.querySelector('[data-role="toggle-settings"]');
       const settingsPanel = panel.querySelector('[data-role="settings-panel"]');
       settingsTrigger.addEventListener("click", () => setSettingsOpen(panel, !state.settingsOpen));
-      settingsPanel.querySelector('[data-role="settings-close"]').addEventListener("click", () => {
-        setSettingsOpen(panel, false, { restoreFocus: true });
-      });
       settingsPanel.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || !state.settingsOpen) return;
         event.preventDefault();
@@ -710,12 +707,16 @@
         }
       });
       constructionResults.addEventListener("change", (event) => {
-        if (event.target.matches('[data-role="guild-point-forecast-weeks"]')) {
-          const weeks = Number(event.target.value);
-          state.guildPointForecastWeeks = Number.isSafeInteger(weeks) && weeks >= 2 && weeks <= 12 ? weeks : 6;
+        if (event.target.matches('[data-role="guild-point-forecast-start-week"]')) {
+          const valid = constructionView.setGuildPointForecastStartWeek(event.target.value);
+          const error = panel.querySelector("#mwi-guild-point-start-error");
+          if (error) error.hidden = valid;
+          if (!valid) {
+            event.target.setAttribute("aria-invalid", "true");
+            return;
+          }
           clearConstructionNotice(panel);
-          persistGuildBuildingPlannerState();
-          refreshConstructionAndFocus(panel, { role: "guild-point-forecast-weeks" }, null);
+          refreshConstructionAndFocus(panel, { role: "guild-point-forecast-start-week" }, null);
           return;
         }
         if (event.target.matches('[data-role="guild-point-planning-weeks"]')) {
@@ -976,7 +977,7 @@
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        openMarketplaceForItem(button.dataset.itemHrid, button.dataset.itemName);
+        openMarketplaceForItem(button.dataset.itemHrid, button.dataset.itemName, button.dataset.purchaseQuantity);
       });
       panel.querySelector('[data-role="add-upgrade-plan"]').addEventListener("click", () => {
         addGuildUpgradePlan(guildBuffEntries());

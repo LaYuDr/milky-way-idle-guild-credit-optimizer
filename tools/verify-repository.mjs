@@ -44,10 +44,20 @@ for (const file of [
 const packageVersion = JSON.parse(read("package.json")).version;
 if (!/^\d+\.\d+\.\d+$/.test(packageVersion)) problems.push("Invalid package version: " + packageVersion);
 
-const currentBundle = "dist/milky-way-idle-guild-credit-optimizer.user.js";
+const currentBundle = "dist/milky-way-idle-guild-assistant.user.js";
+const legacyBundle = "dist/milky-way-idle-guild-credit-optimizer.user.js";
 const loaderBundle = "dist/milky-way-idle-guild-credit-dev-loader.user.js";
 const runtimeBundle = "dist/runtime.js";
-for (const file of [currentBundle, loaderBundle, runtimeBundle, "dist/test-harness.html"]) requireFile(file);
+for (const file of [currentBundle, legacyBundle, loaderBundle, runtimeBundle, "dist/test-harness.html"])
+  requireFile(file);
+
+if (
+  fs.existsSync(path.join(ROOT, currentBundle)) &&
+  fs.existsSync(path.join(ROOT, legacyBundle)) &&
+  !fs.readFileSync(path.join(ROOT, currentBundle)).equals(fs.readFileSync(path.join(ROOT, legacyBundle)))
+) {
+  problems.push("Current and legacy installation scripts must be byte-identical.");
+}
 
 if (fs.existsSync(path.join(ROOT, currentBundle)) && userscriptVersion(read(currentBundle)) !== packageVersion) {
   problems.push(currentBundle + " does not contain package version " + packageVersion);

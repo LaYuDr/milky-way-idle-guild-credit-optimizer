@@ -11,7 +11,7 @@
       helpRankingOrder: "榜单顺序",
       helpSettingsAndMarket: "设置与市场参考",
       helpForecastEvidence:
-        "预测仅使用回看范围内的已确认记录和非零游戏追踪值。自动估算不参与，追踪零值需手动确认后参与。",
+        "预测仅使用起始周之后（含起始周）的已确认记录和非零游戏追踪值。自动估算不参与，追踪零值需手动确认后参与。",
       helpForecastBacktest: "历史回测用于查看线性回归在已有记录上的表现，不改变当前预测方法。",
       helpConstructionEta: "按计划缺少的点数估算等待时间：先计本周预计剩余，再按下周预测点数估算后续各周。",
       helpTrialCoverage: "部分成员数值未知时，汇总仅包含该指标的已知值。",
@@ -201,7 +201,7 @@
       trialHistoryPointEstimateCoverage: "最近记录匹配 {matched} 项，平均值补齐 {missing} 项",
       guildPointHistoryUnavailable: "尚未读取公会点数；打开公会页面后会自动建立本机基线。",
       guildPointHistoryBaseline: "已建立累计点数基线；下一次周奖励到账后将生成首条周记录。",
-      guildPointForecastNeedsHistory: "回看范围内需要至少 2 周有效点数才能做线性回归；不使用历史均值补足。",
+      guildPointForecastNeedsHistory: "起始周之后（含起始周）需要至少 2 周有效点数才能做线性回归；不使用历史均值补足。",
       guildPointForecastColdStart: "此前 {count} 周平均 {average} 点，本周已获 {current} 点；均值仅供参考。",
       guildPointForecastMethod: "使用最近 {count} 周内的已核实记录预测。",
       guildPointForecastEstimatedMethod: "依据累计点数提供历史均值参考，自动补充记录不参与趋势拟合。",
@@ -249,10 +249,14 @@
       trialHelpRankingPreview: "参试次数、人均倍数和入会时间各有独立统计口径。",
       trialHelpCounts: "参试次数如何计算",
       trialHelpRankingAverage: "人均倍数与样本数",
-      guildPointForecastWeeks: "预测回看周数",
-      guildPointForecastWeeksHint: "本周已获点数时包含本周，否则截至上周；自动估算不参与线性回归。",
-      increaseGuildPointForecastWeeks: "增加 1 周预测回看范围",
-      decreaseGuildPointForecastWeeks: "减少 1 周预测回看范围",
+      guildPointForecastStartWeek: "预测起始周",
+      guildPointForecastStartWeekHint:
+        "起始周固定不变，新周自动纳入。本周已获点数时包含本周，否则截至上周；自动估算不参与线性回归。",
+      guildPointForecastWeekInput: "第 {week} 周",
+      guildPointForecastStartInvalid: "请输入 1～{max} 之间的整数周次；原起点未更改。",
+      guildPointForecastSaveFailed: "起点仅在本页生效，保存失败；请重新设置以重试。",
+      increaseGuildPointForecastStartWeek: "将预测起点推后 1 周",
+      decreaseGuildPointForecastStartWeek: "将预测起点提前 1 周",
       guildPointPlanningWeeks: "规划周数",
       guildPointPlanningOptions: "预测设置",
       guildPointPlanningWeeksHint:
@@ -861,7 +865,7 @@
       helpRankingOrder: "Ranking order",
       helpSettingsAndMarket: "Settings and market reference",
       helpForecastEvidence:
-        "Forecasts use confirmed records and nonzero game-tracked values within the lookback window. Estimated records are excluded; tracked zeros require manual confirmation.",
+        "Forecasts use confirmed records and nonzero game-tracked values on or after the selected start week. Estimated records are excluded; tracked zeros require manual confirmation.",
       helpForecastBacktest:
         "Historical backtests show how linear regression performs on existing records without changing the forecast method.",
       helpConstructionEta:
@@ -1066,7 +1070,7 @@
       guildPointHistoryBaseline:
         "The lifetime-point baseline is saved. The next weekly reward will create the first record.",
       guildPointForecastNeedsHistory:
-        "Linear regression needs at least two valid weeks within the lookback window. No historical-average fallback is used.",
+        "Linear regression needs at least two valid weeks on or after the selected start week. No historical-average fallback is used.",
       guildPointForecastColdStart:
         "The prior {count} weeks averaged {average} points; {current} earned this week. This average is a reference only.",
       guildPointForecastMethod: "Uses verified records within the latest {count} weeks.",
@@ -1088,7 +1092,7 @@
       guildPointHelpEvaluated: "Using {method}, evaluated against {count} past weeks.",
       guildPointHelpDataTitle: "Which records are used",
       guildPointHelpData:
-        "Positive current-week points mark this week as finished and include it in the lookback window; otherwise the window ends last week. Confirmed records and positive game-tracked values are used. Estimates and missing values are excluded. Tracked zeros require manual confirmation.",
+        "Positive current-week points mark this week as finished and include it in the forecast range; otherwise the window ends last week. Confirmed records and positive game-tracked values are used. Estimates and missing values are excluded. Tracked zeros require manual confirmation.",
       guildPointHelpMethodTitle: "How the forecast is calculated",
       guildPointHelpMethod:
         "Least-squares linear regression fits earned points against actual week numbers and extrapolates the target week, rounded to a nonnegative integer. At least two valid weeks are required. Evaluation no longer switches the method to a mean.\nMissing weeks retain their time gaps. No zeros or older samples are filled in. Insufficient data is shown as —.",
@@ -1117,11 +1121,14 @@
       trialHelpRankingPreview: "Participation, average multiples and joining times each use separate rules.",
       trialHelpCounts: "Participation counts",
       trialHelpRankingAverage: "Average multiples and sample counts",
-      guildPointForecastWeeks: "Forecast lookback",
-      guildPointForecastWeeksHint:
-        "Includes this week once points are earned; otherwise ends last week. Estimates are excluded from regression.",
-      increaseGuildPointForecastWeeks: "Increase the forecast lookback by 1 week",
-      decreaseGuildPointForecastWeeks: "Decrease the forecast lookback by 1 week",
+      guildPointForecastStartWeek: "Forecast start week",
+      guildPointForecastStartWeekHint:
+        "The start week stays fixed as new weeks are added. Includes this week once points are earned; otherwise ends last week. Estimates are excluded from regression.",
+      guildPointForecastWeekInput: "Week {week}",
+      guildPointForecastStartInvalid: "Enter a whole week number from 1 to {max}; the previous start is unchanged.",
+      guildPointForecastSaveFailed: "Start applies to this page only; saving failed. Set it again to retry.",
+      increaseGuildPointForecastStartWeek: "Move the forecast start forward by 1 week",
+      decreaseGuildPointForecastStartWeek: "Move the forecast start back by 1 week",
       guildPointPlanningWeeks: "Planning horizon",
       guildPointPlanningOptions: "Forecast settings",
       guildPointPlanningWeeksHint:

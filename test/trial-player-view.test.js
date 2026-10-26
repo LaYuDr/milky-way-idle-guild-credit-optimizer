@@ -211,6 +211,7 @@ test("入会时间在资料就绪及加载失败时均可显示，未知时不�
         weeks: [],
         profileState: { status, profile: { totalLevel: 1800, combatLevel: 112.8 } }
       });
+    assert.match(render("ready"), /data-trial-open-profile/);
     for (const status of ["ready", "loading", "timeout", "unavailable", "mismatch"]) {
       const html = render(status);
       assert.match(html, /<time datetime="2026-08-01T12:34:00.000Z">\d{4}-\d{2}-\d{2} \d{2}:\d{2}<\/time>/);

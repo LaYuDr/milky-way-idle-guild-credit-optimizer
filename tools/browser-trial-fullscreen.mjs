@@ -105,6 +105,16 @@ export async function auditTrialFullscreen(page, screenshotPath) {
   await host.evaluate((element) => {
     delete element.requestFullscreen;
   });
+  await enter.click();
+  await page.waitForFunction(() => Boolean(globalThis.document.fullscreenElement));
+  await host.locator('[data-trial-mode="player"]').click();
+  await host.locator("[data-trial-ranking-player]").first().click();
+  await host.locator("[data-trial-open-profile]").click();
+  await page.waitForFunction(() => !globalThis.document.fullscreenElement);
+  const nativeProfile = page.locator("dialog[data-test-profile]");
+  await nativeProfile.waitFor({ state: "visible" });
+  checks.nativeProfileExitsFullscreen = await nativeProfile.isVisible();
+  await nativeProfile.evaluate((element) => element.close());
   checks.historyUnchanged = before === (await snapshot());
   // Panel replacement removes the fullscreen element; the browser must release it.
   await enter.click();

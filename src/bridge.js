@@ -153,7 +153,7 @@
     return roots;
   }
 
-  function findGameController(methodName) {
+  function findGameController(methodName, includeAlternates = true) {
     const pending = reactFiberRoots();
     const visited = new Set();
     let inspected = 0;
@@ -167,7 +167,7 @@
       if (fiber.current) pending.push(fiber.current);
       if (fiber.child) pending.push(fiber.child);
       if (fiber.sibling) pending.push(fiber.sibling);
-      if (fiber.alternate) pending.push(fiber.alternate);
+      if (includeAlternates && fiber.alternate) pending.push(fiber.alternate);
     }
     return null;
   }
@@ -183,6 +183,75 @@
       Number.isInteger(enhancementLevel) && enhancementLevel >= 0 ? enhancementLevel : 0;
     try {
       controller.handleGoToMarketplace(itemHrid, normalizedEnhancementLevel);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  let purchaseTimer = null;
+  function cancelOnPurchaseInput(event) {
+    if (event.target?.closest?.('[class*="MarketplacePanel_modalContent"]')) bridge.cancelPurchasePrefill();
+  }
+  bridge.cancelPurchasePrefill = function () {
+    if (purchaseTimer !== null) page.clearInterval(purchaseTimer);
+    purchaseTimer = null;
+    page.document?.removeEventListener?.("input", cancelOnPurchaseInput, true);
+  };
+  bridge.armPurchasePrefill = function (itemHrid, quantity) {
+    bridge.cancelPurchasePrefill();
+    if (!/^\/items\/[a-z0-9_]+$/.test(itemHrid) || !Number.isSafeInteger(quantity) || quantity <= 0) return false;
+    const controller = findGameController("handleGoToMarketplace", false);
+    if (!controller) return false;
+    const characterId = controller.state?.character?.id;
+    const expires = Date.now() + 120000;
+    let seenTarget = false;
+    let seenForm = false;
+    page.document?.addEventListener?.("input", cancelOnPurchaseInput, true);
+    purchaseTimer = page.setInterval(() => {
+      try {
+        if (Date.now() >= expires || controller.state?.character?.id !== characterId)
+          return bridge.cancelPurchasePrefill();
+        const panel = findGameController("handleQuantityInputChanged", false);
+        if (!panel) {
+          if (seenTarget) bridge.cancelPurchasePrefill();
+          return;
+        }
+        const state = panel.state;
+        if (state?.itemHrid !== itemHrid) {
+          if (seenTarget) bridge.cancelPurchasePrefill();
+          return;
+        }
+        seenTarget = true;
+        if (!state.showPostListing) {
+          if (seenForm) bridge.cancelPurchasePrefill();
+          return;
+        }
+        seenForm = true;
+        if (state.isSell !== false || Number(state.enhancementLevelInput) !== 0) return bridge.cancelPurchasePrefill();
+        const price = Number(state.priceInput);
+        if (!Number.isFinite(price) || price <= 0) return;
+        if (typeof panel.getMaxQuantity !== "function") return bridge.cancelPurchasePrefill();
+        const maximum = panel.getMaxQuantity(false, itemHrid, 0, price);
+        if (!Number.isFinite(maximum) || maximum <= 0) return bridge.cancelPurchasePrefill();
+        const amount = Math.min(quantity, Math.floor(maximum), 1e10);
+        bridge.cancelPurchasePrefill();
+        // Only update the native quantity input, once. Never submit an order.
+        if (amount > 0) panel.handleQuantityInputChanged({ target: { value: String(amount) } });
+      } catch (_) {
+        bridge.cancelPurchasePrefill();
+      }
+    }, 100);
+    return true;
+  };
+
+  bridge.openPlayerProfile = function (name) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\u0000-\u001f\u007f]/.test(name))
+      return false;
+    const controller = findGameController("handleViewProfile");
+    if (!controller) return false;
+    try {
+      controller.handleViewProfile(name.trim());
       return true;
     } catch (_) {
       return false;

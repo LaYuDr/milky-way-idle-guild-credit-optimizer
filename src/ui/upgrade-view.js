@@ -666,7 +666,7 @@
     function renderOptimalMaterialPlan(plan, hasInventory, materialInventory) {
       if (!plan)
         return `<div class="mwi-material-plan-unavailable">${escapeHtml(t("optimalExchangeUnavailable"))}</div>`;
-      return `<div class="mwi-material-plan-item" data-guide-item-hrid="${escapeHtml(plan.itemHrid)}"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid))}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
+      return `<div class="mwi-material-plan-item" data-guide-item-hrid="${escapeHtml(plan.itemHrid)}"><span class="mwi-material-plan-icon">${marketItemIconMarkup(plan.itemHrid, itemNameForMaterial(plan.itemHrid), "", hasInventory ? Math.max(0, plan.requiredItems - (Number(materialInventory?.[plan.itemHrid]) || 0)) : null)}</span><span><b>${escapeHtml(itemNameForMaterial(plan.itemHrid))}</b><small>${escapeHtml(t("backpackInventory", { count: hasInventory ? formatNumber(Number(materialInventory && materialInventory[plan.itemHrid]) || 0) : t("notRead") }))}</small></span></div><div class="mwi-material-plan-need"><small>${escapeHtml(t("optimalExchangeNeeds"))}</small><strong>${formatNumber(plan.requiredItems)}</strong></div><span class="mwi-material-plan-rate">${escapeHtml(t("exchangeRate", { items: itemQuantity(plan.itemCount), credits: creditQuantity(plan.creditCount) }))}</span>`;
     }
 
     function renderMaterialTotals(results, totals, estimate, hasInventory, creditMaterialPlans, materialInventory) {
@@ -725,7 +725,12 @@
           const materialIcon =
             isGuildCredit || item.itemHrid === "/items/guild_token" || item.itemHrid === "/items/coin"
               ? iconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid))
-              : marketItemIconMarkup(item.itemHrid, itemNameForMaterial(item.itemHrid));
+              : marketItemIconMarkup(
+                  item.itemHrid,
+                  itemNameForMaterial(item.itemHrid),
+                  "",
+                  hasInventory ? row?.missing : null
+                );
           const guideMissing = row ? Math.max(0, Number(row.remainingMissing ?? row.missing) || 0) : 0;
           return `<article class="mwi-material-row${rowClass}" data-item-hrid="${escapeHtml(item.itemHrid)}" data-guide-missing="${escapeHtml(guideMissing)}" style="--mwi-material-accent:${accent}"><div class="mwi-material-credit">${materialIcon}<span class="mwi-material-copy"><span class="mwi-material-name">${escapeHtml(itemNameForMaterial(item.itemHrid))}</span><small>${hasInventory ? inventoryText : escapeHtml(t("inventoryNotRead"))}</small></span></div><div class="mwi-material-required"><small>${escapeHtml(t("requiredThisTime"))}</small><strong>${formatNumber(item.count)}</strong></div>${exchangeModeMarkup || '<span class="mwi-material-exchange-mode-spacer" aria-hidden="true"></span>'}<div class="mwi-material-plans">${conversionPlans.join("")}</div></article>`;
         })
@@ -892,7 +897,49 @@
       );
     }
 
+    async function captureUpgradePlanning() {
+      extractItemDetailsFromReact(true);
+      const entries = guildBuffEntries();
+      await loadSnapshot(false);
+      const ranked = bestCreditConversions(
+        Object.fromEntries(GUILD_TOKEN_CREDIT_CONVERSIONS.map((r) => [r.creditItemHrid, r.creditCount]))
+      );
+      const unitCosts = Object.fromEntries(
+        Object.entries(ranked).map(([hrid, row]) => [hrid, row?.costPerCredit ?? null])
+      );
+      const tokenValues = core.rankGuildTokenCreditValues(
+        GUILD_TOKEN_CREDIT_CONVERSIONS,
+        Object.fromEntries(Object.entries(ranked).map(([hrid, row]) => [hrid, row ? [row] : []]))
+      );
+      const valid = tokenValues.filter((v) => v.status === "ok" && Number.isFinite(v.goldValuePerToken));
+      return {
+        shrines: entries
+          .filter((e) => /^\/guild_buffs\/(tempo|scholar)_(skilling|life)$/.test(e.hrid))
+          .map((e) => ({
+            hrid: e.hrid,
+            level: state.guildBuffLevels == null ? null : currentGuildBuffLevel(e),
+            maxLevel:
+              guildShrineLevelByHrid(e.detail.shrineHrid) === null
+                ? currentGuildBuffLevel(e)
+                : Math.min(e.maxLevel, guildShrineLevelByHrid(e.detail.shrineHrid)),
+            capacityKnown: guildShrineLevelByHrid(e.detail.shrineHrid) !== null,
+            detail: JSON.parse(JSON.stringify(e.detail)),
+            effects: core.guildBuffLevelEffects(e.detail)
+          })),
+        inventoryKnown: Array.isArray(state.characterItems),
+        inventory: inventoryItemCounts(),
+        unitCosts,
+        exchangeRules: GUILD_TOKEN_CREDIT_CONVERSIONS,
+        tokenValues,
+        tokenValue: valid.length ? Math.max(...valid.map((v) => v.goldValuePerToken)) : null,
+        tokenValueComplete: valid.length === GUILD_TOKEN_CREDIT_CONVERSIONS.length,
+        marketAt: state.snapshotTimestamp || state.snapshotFetchedAt || null,
+        policy: { tokenCreditHrids: Array.from(state.guildTokenCreditHrids), autoTokenBudget: 0 }
+      };
+    }
+
     return {
+      captureUpgradePlanning,
       guildBuffEntries,
       guildBuffLabel,
       itemNameForMaterial,

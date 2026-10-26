@@ -22,8 +22,8 @@ function buildUsage(root, file, pluginId, name, version, development = false) {
     version,
     endpoint,
     development,
-    defaultEnabled: pluginId === "mwi_guild",
-    reportOptOut: pluginId === "mwi_guild"
+    defaultEnabled: ["mwi_guild", "mwi_invite", "mwi_enhancement", "mwi_assets"].includes(pluginId),
+    reportOptOut: ["mwi_guild", "mwi_invite", "mwi_enhancement", "mwi_assets"].includes(pluginId)
   });
   const api = {
     getValue: "GM_getValue",

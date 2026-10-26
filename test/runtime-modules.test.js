@@ -44,6 +44,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/ui/trial-signup-warning.js",
     "src/ui/trial-history-view.js",
     "src/runtime/config.js",
+    "src/runtime/upgrade-planning.js",
     "src/runtime/storage.js",
     "src/runtime/storage-transfer.js",
     "src/runtime/scheduler.js",
@@ -72,6 +73,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   const userscriptIndex = files.indexOf("src/userscript.js");
   assert.ok(requiredModules.every((file) => files.indexOf(file) < userscriptIndex));
   assert.ok(files.indexOf("src/runtime/config.js") < files.indexOf("src/trial-history.js"));
+  assert.ok(files.indexOf("src/core.js") < files.indexOf("src/runtime/upgrade-planning.js"));
   assert.ok(files.indexOf("src/ui/upgrade-view.js") < files.indexOf("src/ui/settings-view.js"));
   assert.ok(files.indexOf("src/ui/settings-view.js") < files.indexOf("src/ui/panel-shell.js"));
   assert.ok(files.indexOf("src/runtime/storage-transfer.js") < files.indexOf("src/ui/storage-transfer-view.js"));
@@ -84,7 +86,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
 test("组合入口保持精简并在页面退出时统一清理运行时资源", () => {
   const source = fs.readFileSync(path.join(root, "src", "userscript.js"), "utf8");
   assert.ok(source.split(/\r?\n/).length <= 1050, "src/userscript.js should remain a composition root");
-  assert.match(source, /function disposeRuntime\(\)/);
+  assert.match(source, /function disposeRuntime\(event\)/);
   assert.match(source, /\.dispose\(\)/);
   assert.match(source, /window\.addEventListener\("pagehide", disposeRuntime/);
 });

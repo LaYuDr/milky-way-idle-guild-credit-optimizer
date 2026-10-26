@@ -11,7 +11,7 @@
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
   const GUILD_POINT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const LEGACY_GUILD_TRIAL_FIRST_START_AT = Date.parse("2026-07-13T00:00:00Z");
-  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 8;
+  const GUILD_BUILDING_PLANNER_SCHEMA_VERSION = 9;
 
   function normalizeGuildShrineAutofillExcludedBuffHrids(value) {
     const values =
@@ -123,12 +123,8 @@
     return {
       guildId: String(source.guildId || "").slice(0, 160),
       lastObservation: normalizeObservation(source.lastObservation),
-      weeks: Array.from(byWeek.values())
-        .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-104),
-      manualWeeks: Array.from(manualByWeek.values())
-        .sort((left, right) => left.weekStartAt - right.weekStartAt)
-        .slice(-104)
+      weeks: Array.from(byWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt),
+      manualWeeks: Array.from(manualByWeek.values()).sort((left, right) => left.weekStartAt - right.weekStartAt)
     };
   }
 
@@ -690,7 +686,10 @@
       const fallback = {
         plans: [],
         manualGuildPoints: null,
-        guildPointSettings: { guildPointForecastWeeks: 6, guildPointPlanningWeeks: 0 },
+        guildPointSettings: {
+          guildPointForecastStartAt: config.GUILD_TRIAL_FIRST_START_AT,
+          guildPointPlanningWeeks: 0
+        },
         category: "all",
         search: "",
         constructionUi: normalizeConstructionUi(null),
@@ -733,18 +732,46 @@
         const category = ["all", "core", "life", "combat", "shrine"].includes(stored.category)
           ? stored.category
           : "all";
-        const guildPointForecastWeeksValue = Number(stored.guildPointForecastWeeks);
+        const firstWeek = config.GUILD_TRIAL_FIRST_START_AT;
+        const currentWeek =
+          firstWeek + Math.max(0, Math.floor((Date.now() - firstWeek) / GUILD_POINT_WEEK_MS)) * GUILD_POINT_WEEK_MS;
+        const storedStart = Number(stored.guildPointForecastStartAt);
+        const validStart =
+          Number.isSafeInteger(storedStart) &&
+          storedStart >= firstWeek &&
+          storedStart <= currentWeek &&
+          (storedStart - firstWeek) % GUILD_POINT_WEEK_MS === 0;
+        const legacyWeeks = Number(stored.guildPointForecastWeeks);
+        const lookback = Number.isSafeInteger(legacyWeeks) && legacyWeeks >= 2 && legacyWeeks <= 12 ? legacyWeeks : 6;
+        const snapshot = normalizeGuildPointSnapshot(stored.guildPointSnapshot);
+        const includeCurrent =
+          Number(stored.schemaVersion) >= 7 &&
+          snapshot?.currentWeekPoints > 0 &&
+          Number.isSafeInteger(snapshot.weekStartAt) &&
+          Math.floor((snapshot.weekStartAt - firstWeek) / GUILD_POINT_WEEK_MS) ===
+            Math.floor((currentWeek - firstWeek) / GUILD_POINT_WEEK_MS);
+        const guildPointForecastStartAt = validStart
+          ? storedStart
+          : Math.max(
+              firstWeek,
+              currentWeek + (includeCurrent ? GUILD_POINT_WEEK_MS : 0) - lookback * GUILD_POINT_WEEK_MS
+            );
+        let forecastSaveFailed = false;
+        if (!validStart) {
+          // Freeze the migrated boundary once without rewriting unrelated planner data.
+          try {
+            storage.setItem(guildBuildingPlannerStorageKey(), JSON.stringify({ ...stored, guildPointForecastStartAt }));
+          } catch (_) {
+            forecastSaveFailed = true;
+          }
+        }
         const guildPointPlanningWeeksValue = Number(stored.guildPointPlanningWeeks);
         return {
           plans,
           manualGuildPoints,
           guildPointSettings: {
-            guildPointForecastWeeks:
-              Number.isSafeInteger(guildPointForecastWeeksValue) &&
-              guildPointForecastWeeksValue >= 2 &&
-              guildPointForecastWeeksValue <= 12
-                ? guildPointForecastWeeksValue
-                : 6,
+            guildPointForecastStartAt,
+            ...(forecastSaveFailed ? { guildPointForecastSaveFailed: true } : {}),
             guildPointPlanningWeeks:
               Number.isSafeInteger(guildPointPlanningWeeksValue) &&
               guildPointPlanningWeeksValue >= 0 &&
@@ -775,6 +802,7 @@
 
     function persistGuildBuildingPlannerState(state) {
       try {
+        if (!storage || typeof storage.setItem !== "function") return false;
         storage &&
           storage.setItem(
             guildBuildingPlannerStorageKey(),
@@ -782,7 +810,7 @@
               schemaVersion: GUILD_BUILDING_PLANNER_SCHEMA_VERSION,
               rulesVersion: buildingDataApi.RULES_VERSION,
               manualGuildPoints: state.manualGuildPoints,
-              guildPointForecastWeeks: state.guildPointForecastWeeks,
+              guildPointForecastStartAt: state.guildPointForecastStartAt,
               guildPointPlanningWeeks: state.guildPointPlanningWeeks,
               category: state.buildingCategory,
               search: shortText(state.buildingSearch),
@@ -800,8 +828,10 @@
               }))
             })
           );
+        return true;
       } catch (_) {
         // Keep the current page state when browser storage is unavailable.
+        return false;
       }
     }
 

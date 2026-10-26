@@ -94,7 +94,7 @@ function selectionFixture() {
   const foreignPanel = fakeElement();
   const panel = fakeElement();
   panel.hidden = true;
-  const panelHost = { children: [nativePanel, foreignPanel, panel] };
+  const panelHost = Object.assign(fakeElement(), { children: [nativePanel, foreignPanel, panel] });
   const tabBar = { children: [nativeTab, foreignTab, creditTab] };
   const selection = interaction.createSelectionController({ panel, creditTab });
   return { selection, nativeTab, foreignTab, creditTab, nativePanel, foreignPanel, panel, panelHost, tabBar };
@@ -248,8 +248,7 @@ test("explicit show reclaims the panel after external visibility or selection ch
   const { selection, panelHost, tabBar, panel, creditTab } = selectionFixture();
   selection.show(panelHost, tabBar);
   panel.hidden = true;
-  assert.equal(selection.sync(panelHost, tabBar), false);
-  assert.equal(selection.show(panelHost, tabBar), true);
+  assert.equal(selection.sync(panelHost, tabBar), true);
   assert.equal(panel.hidden, false);
   creditTab.setAttribute("aria-selected", "false");
   assert.equal(selection.sync(panelHost, tabBar), false);
@@ -322,4 +321,42 @@ test("document coordinator retains string-detail contract and removes its listen
   document.dispatchEvent(new CustomEvent(interaction.SIDEBAR_ACTIVATION_EVENT, { detail: "mwitools" }));
   assert.deepEqual(owners, ["invite"]);
   assert.equal(document.listeners.get(interaction.SIDEBAR_ACTIVATION_EVENT).size, 0);
+});
+
+test("sync repairs hidden Guild content only while Guild exclusively owns selection", () => {
+  const { selection, panelHost, tabBar, panel, foreignTab } = selectionFixture();
+  selection.show(panelHost, tabBar);
+  panel.hidden = true;
+  panel.style.setProperty("display", "none", "important");
+  panelHost.hidden = true;
+  panelHost.style.setProperty("display", "none", "important");
+  assert.equal(selection.sync(panelHost, tabBar), true);
+  assert.equal(panel.hidden, false);
+  assert.equal(panel.style.getPropertyValue("display"), "");
+  assert.equal(panelHost.hidden, false);
+  assert.equal(panelHost.style.getPropertyValue("display"), "");
+  const writes = panel.style.writes.length + panelHost.style.writes.length;
+  selection.sync(panelHost, tabBar);
+  assert.equal(panel.style.writes.length + panelHost.style.writes.length, writes);
+  foreignTab.setAttribute("aria-selected", "true");
+  panelHost.hidden = true;
+  panelHost.style.setProperty("display", "none");
+  assert.equal(selection.sync(panelHost, tabBar), false);
+  assert.equal(panelHost.hidden, true);
+  assert.equal(panelHost.style.getPropertyValue("display"), "none");
+  selection.hide();
+  assert.equal(selection.sync(panelHost, tabBar), false);
+});
+
+test("idle sync releases removed sibling snapshots before a later reinsertion", () => {
+  const { selection, panelHost, tabBar, nativePanel } = selectionFixture();
+  selection.show(panelHost, tabBar);
+  panelHost.children = panelHost.children.filter((node) => node !== nativePanel);
+  selection.sync(panelHost, tabBar);
+  assert.equal(nativePanel.style.getPropertyValue("display"), "flex");
+  nativePanel.style.setProperty("display", "grid");
+  panelHost.children.push(nativePanel);
+  selection.sync(panelHost, tabBar);
+  selection.hide();
+  assert.equal(nativePanel.style.getPropertyValue("display"), "grid");
 });

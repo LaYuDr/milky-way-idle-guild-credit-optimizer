@@ -60,19 +60,62 @@ export async function auditConstructionTrials(page, screenshotPath) {
   await page.locator('[data-role="building-category"][data-category="life"]').click();
   for (const name of ["log_shed", "sewing_parlor", "brewery", "laboratory"]) {
     const tile = page.locator(`[data-role="building-tile"][data-building-hrid="/guild_buildings/${name}"]`);
-    assert.equal(await tile.locator(".mwi-building-trial-badge").isVisible(), true);
-    assert.ok(
-      (await tile.getAttribute("aria-label")).includes(await tile.locator(".mwi-building-trial-badge").textContent())
-    );
+    assert.equal(await tile.locator(".mwi-building-trial-badge").count(), 0);
+    const label = await tile.getAttribute("aria-label");
+    assert.match(label, /本周生活试炼|This week’s skilling trial/);
+    assert.equal(await tile.getAttribute("title"), label);
     const style = await tile.evaluate((element) => ({
       border: globalThis.getComputedStyle(element).borderColor,
+      shadow: globalThis.getComputedStyle(element).boxShadow,
       background: globalThis.getComputedStyle(element).backgroundColor,
       planned: element.dataset.planned
     }));
-    assert.equal(style.border, "rgb(214, 171, 86)");
-    if (style.planned === "true") assert.equal(style.background, "rgb(41, 63, 65)");
+    assert.ok(style.shadow.includes("rgb(114, 184, 255)"));
+    assert.ok(style.shadow.includes("inset"));
+    if (style.planned === "true") {
+      assert.equal(style.background, "rgb(41, 63, 65)");
+      assert.equal(style.border, "rgb(82, 123, 115)");
+    }
+    const geometry = await tile.evaluate((element) => {
+      const measure = () => {
+        const rect = element.getBoundingClientRect();
+        return [rect.x, rect.y, rect.width, rect.height];
+      };
+      const highlighted = measure();
+      element.dataset.currentTrial = "false";
+      const plain = measure();
+      element.dataset.currentTrial = "true";
+      return { highlighted, plain, rows: element.querySelector(".mwi-building-tile-copy").children.length };
+    });
+    assert.deepEqual(geometry.highlighted, geometry.plain, "Highlight must not change tile geometry");
+    assert.equal(geometry.rows, 3, "No extra trial text row");
   }
+  const iconSizes = await page.locator(".mwi-building-tile:not([hidden]) .mwi-building-icon").evaluateAll((icons) =>
+    icons
+      .filter((icon) => icon.getClientRects().length)
+      .map((icon) => {
+        const rect = icon.getBoundingClientRect();
+        const svg = icon.querySelector("svg").getBoundingClientRect();
+        return [rect.width, rect.height, svg.width, svg.height];
+      })
+  );
+  assert.ok(iconSizes.length > 0);
+  for (const size of iconSizes) assert.deepEqual(size, [30, 30, 30, 30]);
   const wood = page.locator('[data-role="building-tile"][data-building-hrid="/guild_buildings/log_shed"]');
+  await wood.hover();
+  assert.ok(
+    await wood.evaluate((element) => globalThis.getComputedStyle(element).boxShadow.includes("rgb(114, 184, 255)"))
+  );
+  await page.keyboard.press("Tab");
+  await wood.focus();
+  const focusStyle = await wood.evaluate((element) => ({
+    visible: element.matches(":focus-visible"),
+    outline: globalThis.getComputedStyle(element).outlineStyle,
+    shadow: globalThis.getComputedStyle(element).boxShadow
+  }));
+  assert.equal(focusStyle.visible, true);
+  assert.notEqual(focusStyle.outline, "none");
+  assert.ok(focusStyle.shadow.includes("rgb(114, 184, 255)"));
   await wood.click();
   await page.waitForFunction(
     () =>
@@ -92,7 +135,7 @@ export async function auditConstructionTrials(page, screenshotPath) {
     .evaluate(
       (grid) =>
         grid.scrollWidth > grid.clientWidth + 1 ||
-        [...grid.querySelectorAll(".mwi-building-tile, .mwi-building-trial-badge")].some(
+        [...grid.querySelectorAll(".mwi-building-tile")].some(
           (element) => element.scrollWidth > element.clientWidth + 1
         )
     );
@@ -111,7 +154,9 @@ export async function auditConstructionTrials(page, screenshotPath) {
   const max = page.locator('[data-role="building-tile"][data-building-hrid="/guild_buildings/observatory"]');
   assert.equal(await max.getAttribute("data-current-level"), "20");
   assert.equal(await max.isDisabled(), true);
-  assert.equal(await max.locator(".mwi-building-trial-badge").count(), 1);
+  assert.ok(
+    await max.evaluate((element) => globalThis.getComputedStyle(element).boxShadow.includes("rgb(114, 184, 255)"))
+  );
   await page.evaluate(() => {
     const bridge = globalThis.window.__mwiGuildCreditBridge;
     bridge.guildBuildingLevels = globalThis.window.__trialBuildingPreviousLevels;
@@ -184,7 +229,11 @@ export async function auditConstructionTrials(page, screenshotPath) {
     fourProjectsMapped: true,
     registrationLineup: true,
     fallbackParties: true,
-    accessibleBadge: true,
+    accessibleTrialLabel: true,
+    blueInsetOutline: true,
+    hoverAndKeyboardFocus: true,
+    highlightGeometryUnchanged: true,
+    uniformCatalogIcons: true,
     plannedColorKept: true,
     noOverflow: true,
     staleAndGuildChangesClear: true,
