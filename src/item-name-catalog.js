@@ -1,8 +1,10 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./runtime/storage-codec.js") : root.MwiGuildStorageCodec
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditItemNameCatalog = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (storageCodec) {
   "use strict";
 
   const STORAGE_KEY = "mwi-official-item-name-catalog-v1";
@@ -398,7 +400,7 @@
   function createItemNameCatalog(options) {
     const pageWindow = options && options.pageWindow;
     const documentRef = options && options.document;
-    const storage = options && options.storage;
+    const storage = storageCodec.createStorage(options && options.storage);
     const version = (options && options.version) || null;
     let current = readCachedCatalog(storage) || {
       names: Object.create(null),

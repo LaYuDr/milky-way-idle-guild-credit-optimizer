@@ -32,6 +32,7 @@ const FIXED_RELEASE_PATHS = new Set([
   "docs/USAGE_STATISTICS.md",
   "docs/GREASY_FORK_DESCRIPTION.md",
   "docs/TRIAL_ANALYTICS_RESTORE.md",
+  "docs/THIRD_PARTY_NOTICES.md",
   "eslint.config.mjs",
   "package.json",
   "package-lock.json",

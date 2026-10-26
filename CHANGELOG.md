@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.66] - 2026-10-26
+
+### Changed
+
+- 对试炼历史、市场行情和物品名称缓存增加无损压缩；兼容旧缓存并逐项安全迁移，完整保留历史、成员资料和导入溯源，保持导入导出及现有功能。
+
 ## [1.2.65] - 2026-10-25
 
 ### Changed

@@ -1104,8 +1104,10 @@ and mean imputation; pure tests cover latest records, boundaries and missing dat
 ### Persistent navigation and disclosure state
 
 Persistence is an allowlist of user choices and validated data, not a dump of
-runtime objects. Existing saved plans, budgets, point history/snapshots, market
-caches, trial records, column settings and ranking order retain their formats.
+runtime objects. Existing plans, budgets, point history/snapshots, market data,
+trial records, column settings and ranking order retain their logical formats.
+Large local cache values use the transparent encoding described below; exported
+trial JSON retains its existing format.
 The following additional choices now survive reloads:
 
 | Area           | Saved choices                                                                                                                                                                           | Storage scope                                        |
@@ -1129,6 +1131,54 @@ imports, edit confirmations, unsaved form drafts or timed undo as current state.
 The existing game-data hydration and cache freshness rules remain authoritative.
 A saved player selection restores history navigation; profile details require an
 explicit refresh after reload and do not trigger a new request during restoration.
+
+### Lossless local cache compression
+
+`src/runtime/storage-codec.js` wraps only the storage passed to the plugin. It
+never patches the game's `localStorage`, changes key names, removes history or
+introduces shared references between records. Eligible keys are trial-history
+records, the official market snapshot, live-market data and the official item-name
+catalog. Plans, settings and other scripts' keys stay in their original format.
+
+JSON strings of at least 4,096 UTF-16 code units are stored as
+`MWIGC:1:<originalLength>:<checksum>:<UTF16Payload>` only if this saves at least
+10%. The local lz-string subset preserves every original code unit, including
+unknown fields, imported source text/formulas, explicit zero/null and numeric
+precision. It verifies a complete round trip before writing. The integrity
+checksum detects accidental corruption; it is not an authentication mechanism.
+The decoder enforces the declared output limit while expanding data and rejects
+bad lengths, checksums, unsupported versions and truncated payloads. Values over
+16 Mi code units remain uncompressed on write.
+
+Legacy JSON is accepted alongside compressed values. Reading an eligible legacy
+value attempts one atomic, same-key replacement after rechecking its original
+value; a quota/access failure keeps the original readable. Only accessed records
+are migrated, without scanning other characters. Unreadable compressed history
+reports the existing load failure and is not overwritten by capture. Save errors
+continue through the existing import rollback logic. A bounded cache (64 entries,
+2 Mi combined raw/decoded code units) avoids repeatedly decoding unchanged data
+and checks the backing value on every read, including cross-tab writes.
+
+Older plugin builds cannot decode the new local representation. Before a
+downgrade, preserve a backup and restore eligible values to plain JSON while the
+current codec is still available. Restoration can require more quota; a failed
+write leaves the corresponding compressed value intact. Exporting trial JSON
+continues to produce ordinary schema 1/2 records for external tools and imports.
+Tests and diagnostics that inspect localStorage directly should call
+`MwiGuildStorageCodec.decode(rawValue)` before parsing eligible values.
+
+Focused verification:
+
+```bash
+npm run check:quick -- test/storage-codec.test.js test/runtime-storage.test.js test/trial-history.test.js test/runtime-modules.test.js test/core.test.js
+npm run test:browser -- --suite trials,credit --channel chrome
+```
+
+Keep real exported cache data and measurement reports under `.workbench/`, never
+in fixtures or released artifacts. Measure key/value UTF-16 lengths on an
+isolated copy and compare decoded raw strings, complete records, exports and
+derived history/ranking results. Such measurements do not modify live-game data
+or constitute a real-game installation test.
 
 Verification:
 

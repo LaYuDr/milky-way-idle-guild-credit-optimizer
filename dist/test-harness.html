@@ -4087,7 +4087,7 @@
         Object.keys(localStorage)
           .filter((key) => key.startsWith("mwi-guild-trial-history-v1:"))
           .sort()
-          .map((key) => JSON.parse(localStorage.getItem(key)));
+          .map((key) => JSON.parse(window.MwiGuildStorageCodec.decode(localStorage.getItem(key))));
       send(message);
       const repeatCount = saved().length;
       send({ ...message, guildTrialStatList: [] });

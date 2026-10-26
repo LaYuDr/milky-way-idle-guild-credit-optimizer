@@ -38,6 +38,8 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.equal(files.length, new Set(files).size);
   assert.equal(files.at(-1), "src/userscript.js");
   const requiredModules = [
+    "src/vendor/lz-string.js",
+    "src/runtime/storage-codec.js",
     "src/trial-history.js",
     "src/ui/trial-signup-warning.js",
     "src/ui/trial-history-view.js",
@@ -61,6 +63,9 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/ui/credit-view.js"
   ];
   for (const file of requiredModules) assert.ok(files.includes(file), `missing module entry ${file}`);
+  assert.ok(files.indexOf("src/vendor/lz-string.js") < files.indexOf("src/runtime/storage-codec.js"));
+  assert.ok(files.indexOf("src/runtime/storage-codec.js") < files.indexOf("src/runtime/storage.js"));
+  assert.ok(files.indexOf("src/runtime/storage-codec.js") < files.indexOf("src/item-name-catalog.js"));
   assert.ok(files.indexOf("src/ui/trial-signup-warning.js") < files.indexOf("src/ui/trial-history-view.js"));
   const userscriptIndex = files.indexOf("src/userscript.js");
   assert.ok(requiredModules.every((file) => files.indexOf(file) < userscriptIndex));

@@ -2,7 +2,7 @@
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.65
+// @version      1.2.66
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
@@ -507,7 +507,7 @@
     return { dispose, report, client };
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { createUsageClient, boot };
-  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.65","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
+  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.66","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
 setValue: typeof GM_setValue === "function" ? GM_setValue : null,
 listen: typeof GM_addValueChangeListener === "function" ? GM_addValueChangeListener : null,
 unlisten: typeof GM_removeValueChangeListener === "function" ? GM_removeValueChangeListener : null,
@@ -516,7 +516,364 @@ request: typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : null}); }
 
 // LAYU_USAGE_END mwi_guild
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.65";
+window.MwiGuildCreditVersion = "1.2.66";
+
+// SOURCE: src/vendor/lz-string.js
+/*
+ * lz-string 1.5.0, UTF-16 codec subset. Copyright (c) 2013 pieroxy.
+ * MIT license: docs/THIRD_PARTY_NOTICES.md.
+ * Adapted with a decoded-length limit and an isolated project export.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildStorageLZ = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+  const r = String.fromCharCode;
+  const i = {
+    compressToUTF16: function (o) {
+      return null == o
+        ? ""
+        : i._compress(o, 15, function (o) {
+            return r(o + 32);
+          }) + " ";
+    },
+    _compress: function (r, o, n) {
+      if (null == r) return "";
+      var e,
+        t,
+        i,
+        s = {},
+        u = {},
+        a = "",
+        p = "",
+        c = "",
+        l = 2,
+        f = 3,
+        h = 2,
+        d = [],
+        m = 0,
+        v = 0;
+      for (i = 0; i < r.length; i += 1)
+        if (
+          ((a = r.charAt(i)),
+          Object.prototype.hasOwnProperty.call(s, a) || ((s[a] = f++), (u[a] = !0)),
+          (p = c + a),
+          Object.prototype.hasOwnProperty.call(s, p))
+        )
+          c = p;
+        else {
+          if (Object.prototype.hasOwnProperty.call(u, c)) {
+            if (c.charCodeAt(0) < 256) {
+              for (e = 0; e < h; e++) ((m <<= 1), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++);
+              for (t = c.charCodeAt(0), e = 0; e < 8; e++)
+                ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+            } else {
+              for (t = 1, e = 0; e < h; e++)
+                ((m = (m << 1) | t), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t = 0));
+              for (t = c.charCodeAt(0), e = 0; e < 16; e++)
+                ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+            }
+            (0 == --l && ((l = Math.pow(2, h)), h++), delete u[c]);
+          } else
+            for (t = s[c], e = 0; e < h; e++)
+              ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+          (0 == --l && ((l = Math.pow(2, h)), h++), (s[p] = f++), (c = String(a)));
+        }
+      if ("" !== c) {
+        if (Object.prototype.hasOwnProperty.call(u, c)) {
+          if (c.charCodeAt(0) < 256) {
+            for (e = 0; e < h; e++) ((m <<= 1), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++);
+            for (t = c.charCodeAt(0), e = 0; e < 8; e++)
+              ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+          } else {
+            for (t = 1, e = 0; e < h; e++)
+              ((m = (m << 1) | t), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t = 0));
+            for (t = c.charCodeAt(0), e = 0; e < 16; e++)
+              ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+          }
+          (0 == --l && ((l = Math.pow(2, h)), h++), delete u[c]);
+        } else
+          for (t = s[c], e = 0; e < h; e++)
+            ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+        0 == --l && ((l = Math.pow(2, h)), h++);
+      }
+      for (t = 2, e = 0; e < h; e++)
+        ((m = (m << 1) | (1 & t)), v == o - 1 ? ((v = 0), d.push(n(m)), (m = 0)) : v++, (t >>= 1));
+      for (;;) {
+        if (((m <<= 1), v == o - 1)) {
+          d.push(n(m));
+          break;
+        }
+        v++;
+      }
+      return d.join("");
+    },
+    _decompress: function (o, n, e, maxLength) {
+      let outputLength = 1;
+      var t,
+        i,
+        s,
+        u,
+        a,
+        p,
+        c,
+        l = [],
+        f = 4,
+        h = 4,
+        d = 3,
+        m = "",
+        v = [],
+        g = { val: e(0), position: n, index: 1 };
+      for (t = 0; t < 3; t += 1) l[t] = t;
+      for (s = 0, a = Math.pow(2, 2), p = 1; p != a;)
+        ((u = g.val & g.position),
+          (g.position >>= 1),
+          0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+          (s |= (u > 0 ? 1 : 0) * p),
+          (p <<= 1));
+      switch (s) {
+        case 0:
+          for (s = 0, a = Math.pow(2, 8), p = 1; p != a;)
+            ((u = g.val & g.position),
+              (g.position >>= 1),
+              0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+              (s |= (u > 0 ? 1 : 0) * p),
+              (p <<= 1));
+          c = r(s);
+          break;
+        case 1:
+          for (s = 0, a = Math.pow(2, 16), p = 1; p != a;)
+            ((u = g.val & g.position),
+              (g.position >>= 1),
+              0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+              (s |= (u > 0 ? 1 : 0) * p),
+              (p <<= 1));
+          c = r(s);
+          break;
+        case 2:
+          return "";
+      }
+      for (l[3] = c, i = c, v.push(c); ;) {
+        if (g.index > o) return "";
+        for (s = 0, a = Math.pow(2, d), p = 1; p != a;)
+          ((u = g.val & g.position),
+            (g.position >>= 1),
+            0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+            (s |= (u > 0 ? 1 : 0) * p),
+            (p <<= 1));
+        switch ((c = s)) {
+          case 0:
+            for (s = 0, a = Math.pow(2, 8), p = 1; p != a;)
+              ((u = g.val & g.position),
+                (g.position >>= 1),
+                0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+                (s |= (u > 0 ? 1 : 0) * p),
+                (p <<= 1));
+            ((l[h++] = r(s)), (c = h - 1), f--);
+            break;
+          case 1:
+            for (s = 0, a = Math.pow(2, 16), p = 1; p != a;)
+              ((u = g.val & g.position),
+                (g.position >>= 1),
+                0 == g.position && ((g.position = n), (g.val = e(g.index++))),
+                (s |= (u > 0 ? 1 : 0) * p),
+                (p <<= 1));
+            ((l[h++] = r(s)), (c = h - 1), f--);
+            break;
+          case 2:
+            return v.join("");
+        }
+        if ((0 == f && ((f = Math.pow(2, d)), d++), l[c])) m = l[c];
+        else {
+          if (c !== h) return null;
+          m = i + i.charAt(0);
+        }
+        outputLength += m.length;
+        if (outputLength > maxLength) throw new Error("Decompressed storage exceeds its declared length");
+        (v.push(m), (l[h++] = i + m.charAt(0)), (i = m), 0 == --f && ((f = Math.pow(2, d)), d++));
+      }
+    }
+  };
+  return {
+    compressToUTF16: i.compressToUTF16,
+    decompressFromUTF16(value, maxLength) {
+      if (typeof value !== "string" || !value.length) return null;
+      return i._decompress(value.length, 16384, (index) => value.charCodeAt(index) - 32, maxLength);
+    }
+  };
+});
+
+
+// SOURCE: src/runtime/storage-codec.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("../vendor/lz-string.js") : root.MwiGuildStorageLZ
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildStorageCodec = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (lz) {
+  "use strict";
+
+  const MARKER = "MWIGC:";
+  const PREFIX = `${MARKER}1:`;
+  const MIN_LENGTH = 4096;
+  const MAX_LENGTH = 16 * 1024 * 1024;
+  const CACHE_CHARACTERS = 2 * 1024 * 1024;
+  const LARGE_CACHE_KEYS = new Set([
+    "mwi-guild-credit-live-market-v1",
+    "mwi-guild-credit-market-snapshot-v1",
+    "mwi-official-item-name-catalog-v1"
+  ]);
+
+  function eligible(key) {
+    return LARGE_CACHE_KEYS.has(key) || key.startsWith("mwi-guild-trial-history-v1:mwi-guild-building-planner-v1:");
+  }
+
+  // Integrity check for accidental corruption, not an authentication mechanism.
+  function checksum(text) {
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function decode(value) {
+    if (value === null || !value.startsWith(MARKER)) return value;
+    if (!value.startsWith(PREFIX)) throw new Error("Unsupported compressed storage version");
+    const lengthEnd = value.indexOf(":", PREFIX.length);
+    const checksumEnd = value.indexOf(":", lengthEnd + 1);
+    const lengthText = value.slice(PREFIX.length, lengthEnd);
+    const length = Number(lengthText);
+    const expectedChecksum = value.slice(lengthEnd + 1, checksumEnd);
+    const data = value.slice(checksumEnd + 1);
+    if (
+      lengthEnd < 0 ||
+      checksumEnd < 0 ||
+      !/^[1-9][0-9]*$/.test(lengthText) ||
+      !Number.isSafeInteger(length) ||
+      length > MAX_LENGTH ||
+      !/^[a-f0-9]{8}$/.test(expectedChecksum) ||
+      data.length > MAX_LENGTH ||
+      !data.length
+    )
+      throw new Error("Invalid compressed storage header");
+    const text = lz.decompressFromUTF16(data, length);
+    if (typeof text !== "string" || text.length !== length || checksum(text) !== expectedChecksum)
+      throw new Error("Compressed storage integrity check failed");
+    return text;
+  }
+
+  function encode(text) {
+    if (text.length < MIN_LENGTH || text.length > MAX_LENGTH) return text;
+    try {
+      // Never migrate malformed JSON or non-JSON values merely by reading them.
+      JSON.parse(text);
+      const encoded = `${PREFIX}${text.length}:${checksum(text)}:${lz.compressToUTF16(text)}`;
+      if (encoded.length > text.length * 0.9) return text;
+      // Verify the entire original string, including unknown fields and precision,
+      // before replacing an existing value with the smaller representation.
+      return decode(encoded) === text ? encoded : text;
+    } catch (_) {
+      return text;
+    }
+  }
+
+  function createStorage(storage) {
+    if (!storage) return storage;
+    const cache = new Map();
+    let cachedCharacters = 0;
+    function remember(key, raw, text) {
+      const previous = cache.get(key);
+      if (previous) cachedCharacters -= previous.raw.length + previous.text.length;
+      cache.delete(key);
+      if (
+        (raw !== text || (eligible(key) && text.length >= MIN_LENGTH)) &&
+        raw.length + text.length <= CACHE_CHARACTERS
+      ) {
+        cache.set(key, { raw, text });
+        cachedCharacters += raw.length + text.length;
+      }
+      while (cache.size > 64 || cachedCharacters > CACHE_CHARACTERS) {
+        const oldest = cache.keys().next().value;
+        const value = cache.get(oldest);
+        cachedCharacters -= value.raw.length + value.text.length;
+        cache.delete(oldest);
+      }
+    }
+    return {
+      get length() {
+        return storage.length;
+      },
+      key(index) {
+        return storage.key(index);
+      },
+      getItem(key) {
+        const raw = storage.getItem(key);
+        if (raw === null || !eligible(key)) return raw;
+        const cached = cache.get(key);
+        if (cached && cached.raw === raw) {
+          cache.delete(key);
+          cache.set(key, cached);
+          return cached.text;
+        }
+        const text = decode(raw);
+        let saved = raw;
+        if (raw === text) {
+          const encoded = encode(text);
+          if (encoded !== raw) {
+            try {
+              // LocalStorage replaces one key atomically; no shared references,
+              // deletion, extra backup quota or cross-character scan is needed.
+              if (storage.getItem(key) === raw) {
+                storage.setItem(key, encoded);
+                saved = encoded;
+              }
+            } catch (_) {
+              // Readable legacy data stays usable even when migration is blocked.
+            }
+          }
+        }
+        remember(key, saved, text);
+        return text;
+      },
+      setItem(key, value) {
+        const text = String(value);
+        const encoded = eligible(key) ? encode(text) : text;
+        // Propagate quota/access failures to the existing save/rollback handling.
+        storage.setItem(key, encoded);
+        remember(key, encoded, text);
+      },
+      removeItem(key) {
+        storage.removeItem(key);
+        remember(key, "", "");
+      }
+    };
+  }
+
+  return { createStorage, encode, decode, eligible, MIN_LENGTH, MAX_LENGTH };
+});
+
 
 // SOURCE: src/market-data.js
 (function (root, factory) {
@@ -3514,10 +3871,12 @@ window.MwiGuildCreditVersion = "1.2.65";
 
 // SOURCE: src/item-name-catalog.js
 (function (root, factory) {
-  const api = factory();
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./runtime/storage-codec.js") : root.MwiGuildStorageCodec
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditItemNameCatalog = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (storageCodec) {
   "use strict";
 
   const STORAGE_KEY = "mwi-official-item-name-catalog-v1";
@@ -3913,7 +4272,7 @@ window.MwiGuildCreditVersion = "1.2.65";
   function createItemNameCatalog(options) {
     const pageWindow = options && options.pageWindow;
     const documentRef = options && options.document;
-    const storage = options && options.storage;
+    const storage = storageCodec.createStorage(options && options.storage);
     const version = (options && options.version) || null;
     let current = readCachedCatalog(storage) || {
       names: Object.create(null),
@@ -7834,11 +8193,12 @@ window.MwiGuildCreditVersion = "1.2.65";
 // SOURCE: src/runtime/storage.js
 (function (root, factory) {
   const api = factory(
-    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay,
+    typeof module !== "undefined" && module.exports ? require("./storage-codec.js") : root.MwiGuildStorageCodec
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditStorage = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi, storageCodec) {
   "use strict";
 
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
@@ -8101,7 +8461,8 @@ window.MwiGuildCreditVersion = "1.2.65";
   }
 
   function createPluginStorage(options) {
-    const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
+    const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
+    const storage = storageCodec.createStorage(options.storage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {

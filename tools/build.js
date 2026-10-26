@@ -80,6 +80,8 @@ ${usageBuild.metadata}// @grant        GM_addElement
 `;
 
 const SOURCE_FILES = [
+  "src/vendor/lz-string.js",
+  "src/runtime/storage-codec.js",
   "src/market-data.js",
   "src/market-dom.js",
   "src/runtime/config.js",

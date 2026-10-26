@@ -1,10 +1,11 @@
 (function (root, factory) {
   const api = factory(
-    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay
+    typeof module !== "undefined" && module.exports ? require("../trial-display.js") : root.MwiGuildTrialDisplay,
+    typeof module !== "undefined" && module.exports ? require("./storage-codec.js") : root.MwiGuildStorageCodec
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.MwiGuildCreditStorage = api;
-})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (displayApi, storageCodec) {
   "use strict";
 
   const GUILD_BUFF_HRID_PATTERN = /^\/guild_buffs\/[A-Za-z0-9_./-]+$/;
@@ -267,7 +268,8 @@
   }
 
   function createPluginStorage(options) {
-    const { storage, location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
+    const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
+    const storage = storageCodec.createStorage(options.storage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
     function guildBuildingPlannerStorageKey() {
