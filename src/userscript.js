@@ -623,6 +623,7 @@
   const { renderSettingsMarkup, refreshSettings } = settingsView;
   const constructionView = constructionViewApi.createConstructionView({
     getTrialPointEstimate: () => trialHistoryView.estimateCurrentTrialPoints(),
+    getTrialContext: () => window.__mwiGuildCreditBridge?.trialHistoryContext,
     state,
     buildingDataApi,
     t,

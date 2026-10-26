@@ -2,7 +2,7 @@
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.68
+// @version      1.2.69
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
@@ -507,7 +507,7 @@
     return { dispose, report, client };
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { createUsageClient, boot };
-  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.68","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
+  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.69","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
 setValue: typeof GM_setValue === "function" ? GM_setValue : null,
 listen: typeof GM_addValueChangeListener === "function" ? GM_addValueChangeListener : null,
 unlisten: typeof GM_removeValueChangeListener === "function" ? GM_removeValueChangeListener : null,
@@ -516,7 +516,7 @@ request: typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : null}); }
 
 // LAYU_USAGE_END mwi_guild
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.68";
+window.MwiGuildCreditVersion = "1.2.69";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -4718,6 +4718,47 @@ window.MwiGuildCreditVersion = "1.2.68";
     return BASE_LEVEL_COSTS.map((cost) => (cost === null ? null : { guildPointCost: Math.round(cost * factor) }));
   }
 
+  const LIFE_TRIAL_BUILDINGS = Object.freeze({
+    "/guild_skilling/milking": "/guild_buildings/dairy_barn",
+    "/guild_skilling/foraging": "/guild_buildings/garden",
+    "/guild_skilling/woodcutting": "/guild_buildings/log_shed",
+    "/guild_skilling/cheesesmithing": "/guild_buildings/forge",
+    "/guild_skilling/crafting": "/guild_buildings/workshop",
+    "/guild_skilling/tailoring": "/guild_buildings/sewing_parlor",
+    "/guild_skilling/cooking": "/guild_buildings/kitchen",
+    "/guild_skilling/brewing": "/guild_buildings/brewery",
+    "/guild_skilling/alchemy": "/guild_buildings/laboratory",
+    "/guild_skilling/enhancing": "/guild_buildings/observatory"
+  });
+
+  function currentLifeTrialBuildings(context, now = Date.now(), expectedGuildId = null) {
+    const guild = context?.guild;
+    const week =
+      typeof guild?.currentWeekStartAt === "number" ? guild.currentWeekStartAt : Date.parse(guild?.currentWeekStartAt);
+    if (
+      guild?.id == null ||
+      !String(guild.id) ||
+      (expectedGuildId != null && String(expectedGuildId) !== String(guild.id)) ||
+      !Number.isSafeInteger(week) ||
+      week <= 0 ||
+      !Number.isFinite(now) ||
+      now < week ||
+      now >= week + 7 * 86400000
+    )
+      return new Set();
+    const parties = guild.currentTrialsData?.skilling?.parties;
+    const hrids = Array.isArray(context.weeklyTrialSet?.skillHrids)
+      ? context.weeklyTrialSet.skillHrids
+      : parties && typeof parties === "object" && !Array.isArray(parties)
+        ? Object.keys(parties)
+        : [];
+    return new Set(
+      hrids
+        .filter((hrid) => typeof hrid === "string" && Object.hasOwn(LIFE_TRIAL_BUILDINGS, hrid))
+        .map((hrid) => LIFE_TRIAL_BUILDINGS[hrid])
+    );
+  }
+
   function definitions() {
     return BUILDINGS.map((building) => ({
       ...building,
@@ -4729,6 +4770,7 @@ window.MwiGuildCreditVersion = "1.2.68";
   }
 
   return {
+    currentLifeTrialBuildings,
     RULES_VERSION,
     MAX_LEVEL,
     BASE_LEVEL_COSTS,
@@ -5081,6 +5123,7 @@ window.MwiGuildCreditVersion = "1.2.68";
       constructionNoBudgetSummary: "未设置预算 · 共 {total} 次升级",
       constructionBudgetAllFit: "预算覆盖全部 {total} 次升级。",
       constructionBudgetStopsBefore: "可完成 {affordable}/{total} 次；下一项 {building} {from}→{to} 还差 {count}",
+      buildingCurrentTrial: "本周生活试炼",
       buildingCatalog: "建筑目录",
       buildingCatalogHint: "选择建筑加入计划；可连续添加多座。",
       addBuilding: "添加建筑",
@@ -5955,6 +5998,7 @@ window.MwiGuildCreditVersion = "1.2.68";
       constructionNoBudgetSummary: "No budget set · {total} upgrades planned",
       constructionBudgetAllFit: "The budget covers all {total} upgrades.",
       constructionBudgetStopsBefore: "Covers {affordable}/{total}; {building} {from}→{to} needs {count} more",
+      buildingCurrentTrial: "This week’s skilling trial",
       buildingCatalog: "Building catalog",
       buildingCatalogHint: "Choose buildings to add; the picker stays open for batch planning.",
       addBuilding: "Add building",
@@ -12388,6 +12432,8 @@ window.MwiGuildCreditVersion = "1.2.68";
         #mwi-credit-optimizer .mwi-building-tile{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px!important;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--build-text);text-align:left}
         #mwi-credit-optimizer .mwi-building-tile:hover{border-color:#626b86;background:#313a50}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{background:#293f41;border-color:#527b73}
+        #mwi-credit-optimizer .mwi-building-tile[data-current-trial="true"]{border-color:#d6ab56;box-shadow:inset 3px 0 #d6ab56}
+        #mwi-credit-optimizer .mwi-building-trial-badge{justify-self:start;max-width:100%;padding:1px 5px;border:1px solid #8d713e;border-radius:3px;background:#4b3c23;color:#ffe2a2;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-icon{display:block;width:30px;height:30px;flex:0 0 30px}
         #mwi-credit-optimizer .mwi-building-icon svg{display:block;width:100%;height:100%}
         #mwi-credit-optimizer .mwi-building-icon-fallback svg{padding:3px;fill:none;stroke:var(--build-muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -12865,7 +12911,8 @@ window.MwiGuildCreditVersion = "1.2.68";
       URL,
       Blob,
       guildTrialFirstStartAt,
-      getTrialPointEstimate = () => null
+      getTrialPointEstimate = () => null,
+      getTrialContext = () => null
     } = dependencies;
 
     const constructionUi = {
@@ -12879,6 +12926,32 @@ window.MwiGuildCreditVersion = "1.2.68";
     };
 
     state.constructionUi = constructionUi;
+    let trialWeekTimer = null;
+    let trialWeekExpiresAt = null;
+
+    function currentTrialBuildings() {
+      const context = getTrialContext();
+      const now = Date.now();
+      const matching = buildingDataApi.currentLifeTrialBuildings(context, now, state.guildPointSummary?.guildId);
+      const week = context?.guild?.currentWeekStartAt;
+      const expiresAt = (typeof week === "number" ? week : Date.parse(week)) + 7 * 86400000;
+      const nextExpiry = matching.size ? expiresAt : null;
+      if (nextExpiry !== trialWeekExpiresAt) {
+        if (trialWeekTimer !== null) pageWindow.clearTimeout(trialWeekTimer);
+        trialWeekTimer = null;
+        trialWeekExpiresAt = nextExpiry;
+        if (nextExpiry !== null)
+          trialWeekTimer = pageWindow.setTimeout(
+            () => {
+              trialWeekTimer = null;
+              trialWeekExpiresAt = null;
+              if (state.panel?.isConnected) refreshGuildConstruction(state.panel);
+            },
+            Math.max(1, nextExpiry - now)
+          );
+      }
+      return matching;
+    }
 
     function guildPointForecastWeekCount() {
       return core.normalizeGuildPointForecastWeeks(state.guildPointForecastWeeks);
@@ -13595,7 +13668,8 @@ window.MwiGuildCreditVersion = "1.2.68";
       </section>`;
     }
 
-    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref) {
+    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref, currentTrial) {
+      const trialLabel = currentTrial ? t("buildingCurrentTrial") : "";
       const currentLabel = formatNumber(liveLevel);
       const label = guildBuildingLabel(definition);
       const searchText =
@@ -13617,10 +13691,13 @@ window.MwiGuildCreditVersion = "1.2.68";
               })
             : t("buildingCatalogNextLevelCostUnavailable");
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
+      const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
+      const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
+      const weeklyBuildings = currentTrialBuildings();
       const categories = ["all", "core", "life", "combat", "shrine"]
         .map(
           (category) =>
@@ -13635,7 +13712,8 @@ window.MwiGuildCreditVersion = "1.2.68";
             plansByHrid.get(definition.hrid),
             levels.levels.get(definition.hrid),
             levels.knownHrids.has(definition.hrid),
-            spriteBaseHref
+            spriteBaseHref,
+            definition.category === "life" && weeklyBuildings.has(definition.hrid)
           )
         )
         .join("");
@@ -14024,6 +14102,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function dispose() {
+      if (trialWeekTimer !== null) pageWindow.clearTimeout(trialWeekTimer);
+      trialWeekTimer = null;
+      trialWeekExpiresAt = null;
       discardGuildBuildingClearUndo();
     }
 
@@ -21417,6 +21498,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   const { renderSettingsMarkup, refreshSettings } = settingsView;
   const constructionView = constructionViewApi.createConstructionView({
     getTrialPointEstimate: () => trialHistoryView.estimateCurrentTrialPoints(),
+    getTrialContext: () => window.__mwiGuildCreditBridge?.trialHistoryContext,
     state,
     buildingDataApi,
     t,

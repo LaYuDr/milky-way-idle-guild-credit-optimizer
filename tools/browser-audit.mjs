@@ -7,6 +7,7 @@ import { createDevServer } from "./dev-server.js";
 import { runSteps } from "./check.mjs";
 import { auditTrialFullscreen } from "./browser-trial-fullscreen.mjs";
 import { auditStorageTransfer } from "./browser-storage-transfer.mjs";
+import { auditConstructionTrials } from "./browser-construction-trials.mjs";
 
 const WIDTHS = [320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200];
 const SMALL = [320, 420, 610, 900];
@@ -244,6 +245,9 @@ export async function runAuditCase(browser, baseURL, entry, directory, timeout =
       await toggle.press("Space");
       if ((await disclosure.evaluate((element) => element.open)) !== wasOpen)
         result.failures.push("history toggle: Space did not restore open state");
+    }
+    if (entry.name === "construction" && !result.failures.length) {
+      result.currentTrials = await auditConstructionTrials(page, path.join(directory, `${id}-current-trials.png`));
     }
     if (entry.name === "trials" && !result.failures.length) {
       result.fullscreen = await auditTrialFullscreen(page, path.join(directory, `${id}-fullscreen.png`));

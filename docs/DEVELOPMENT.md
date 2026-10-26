@@ -581,6 +581,33 @@ The settings matrix opens every help topic, checks translated content, overflow,
 missing description targets, and expansion retention after a setting changes.
 The trials matrix requires the former ranking-help block to be absent.
 
+### Current skilling trial buildings
+
+The construction catalog marks this week's matching life buildings with an amber
+border and a localized text badge. Planned tiles keep their existing green
+background and queue state. The highlight never adds, removes, reorders or
+changes plans, cost or levels. Full-level and unknown-level tiles use the same
+project match; existing disabled/default-zero rules remain authoritative.
+
+`guild-building-data.js:currentLifeTrialBuildings` maps the ten official skilling
+trial HRIDs to their skill buildings. Prefer `trialHistoryContext.weeklyTrialSet.skillHrids`
+from the existing official-message bridge, including registration before results;
+otherwise use the current guild's skilling parties. An explicit empty weekly list
+is authoritative. Never infer the lineup from archived/imported history, names,
+player signups, combat projects or the general skilling encampment. Only matching
+guild data within `[currentWeekStartAt, currentWeekStartAt + 7 days)` is eligible.
+
+The existing trial-context callback schedules construction refreshes. A single
+week-expiry timer removes marks even without another server message; disposal
+clears it. No new requests, persistence keys or capture paths are introduced.
+
+Run `npm run check:quick -- test/current-trial-buildings.test.js test/guild-building.test.js`
+and the full construction browser matrix. The latter now also checks the screenshot's
+woodcutting/tailoring/brewing/alchemy mapping, registration and fallback data,
+guild/stale/missing data, accessible badges, retained planned colors, unchanged
+plans and contained layout at all documented widths/locales. These are localhost
+fixtures, not real-game acceptance.
+
 ### Full local-data backup and cleanup
 
 Settings includes **Export all data only**, **Export and clear all local data**,

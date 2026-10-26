@@ -162,6 +162,47 @@
     return BASE_LEVEL_COSTS.map((cost) => (cost === null ? null : { guildPointCost: Math.round(cost * factor) }));
   }
 
+  const LIFE_TRIAL_BUILDINGS = Object.freeze({
+    "/guild_skilling/milking": "/guild_buildings/dairy_barn",
+    "/guild_skilling/foraging": "/guild_buildings/garden",
+    "/guild_skilling/woodcutting": "/guild_buildings/log_shed",
+    "/guild_skilling/cheesesmithing": "/guild_buildings/forge",
+    "/guild_skilling/crafting": "/guild_buildings/workshop",
+    "/guild_skilling/tailoring": "/guild_buildings/sewing_parlor",
+    "/guild_skilling/cooking": "/guild_buildings/kitchen",
+    "/guild_skilling/brewing": "/guild_buildings/brewery",
+    "/guild_skilling/alchemy": "/guild_buildings/laboratory",
+    "/guild_skilling/enhancing": "/guild_buildings/observatory"
+  });
+
+  function currentLifeTrialBuildings(context, now = Date.now(), expectedGuildId = null) {
+    const guild = context?.guild;
+    const week =
+      typeof guild?.currentWeekStartAt === "number" ? guild.currentWeekStartAt : Date.parse(guild?.currentWeekStartAt);
+    if (
+      guild?.id == null ||
+      !String(guild.id) ||
+      (expectedGuildId != null && String(expectedGuildId) !== String(guild.id)) ||
+      !Number.isSafeInteger(week) ||
+      week <= 0 ||
+      !Number.isFinite(now) ||
+      now < week ||
+      now >= week + 7 * 86400000
+    )
+      return new Set();
+    const parties = guild.currentTrialsData?.skilling?.parties;
+    const hrids = Array.isArray(context.weeklyTrialSet?.skillHrids)
+      ? context.weeklyTrialSet.skillHrids
+      : parties && typeof parties === "object" && !Array.isArray(parties)
+        ? Object.keys(parties)
+        : [];
+    return new Set(
+      hrids
+        .filter((hrid) => typeof hrid === "string" && Object.hasOwn(LIFE_TRIAL_BUILDINGS, hrid))
+        .map((hrid) => LIFE_TRIAL_BUILDINGS[hrid])
+    );
+  }
+
   function definitions() {
     return BUILDINGS.map((building) => ({
       ...building,
@@ -173,6 +214,7 @@
   }
 
   return {
+    currentLifeTrialBuildings,
     RULES_VERSION,
     MAX_LEVEL,
     BASE_LEVEL_COSTS,

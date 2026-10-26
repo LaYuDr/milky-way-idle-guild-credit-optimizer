@@ -30,7 +30,8 @@
       URL,
       Blob,
       guildTrialFirstStartAt,
-      getTrialPointEstimate = () => null
+      getTrialPointEstimate = () => null,
+      getTrialContext = () => null
     } = dependencies;
 
     const constructionUi = {
@@ -44,6 +45,32 @@
     };
 
     state.constructionUi = constructionUi;
+    let trialWeekTimer = null;
+    let trialWeekExpiresAt = null;
+
+    function currentTrialBuildings() {
+      const context = getTrialContext();
+      const now = Date.now();
+      const matching = buildingDataApi.currentLifeTrialBuildings(context, now, state.guildPointSummary?.guildId);
+      const week = context?.guild?.currentWeekStartAt;
+      const expiresAt = (typeof week === "number" ? week : Date.parse(week)) + 7 * 86400000;
+      const nextExpiry = matching.size ? expiresAt : null;
+      if (nextExpiry !== trialWeekExpiresAt) {
+        if (trialWeekTimer !== null) pageWindow.clearTimeout(trialWeekTimer);
+        trialWeekTimer = null;
+        trialWeekExpiresAt = nextExpiry;
+        if (nextExpiry !== null)
+          trialWeekTimer = pageWindow.setTimeout(
+            () => {
+              trialWeekTimer = null;
+              trialWeekExpiresAt = null;
+              if (state.panel?.isConnected) refreshGuildConstruction(state.panel);
+            },
+            Math.max(1, nextExpiry - now)
+          );
+      }
+      return matching;
+    }
 
     function guildPointForecastWeekCount() {
       return core.normalizeGuildPointForecastWeeks(state.guildPointForecastWeeks);
@@ -760,7 +787,8 @@
       </section>`;
     }
 
-    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref) {
+    function renderGuildBuildingTile(definition, plan, liveLevel, levelKnown, spriteBaseHref, currentTrial) {
+      const trialLabel = currentTrial ? t("buildingCurrentTrial") : "";
       const currentLabel = formatNumber(liveLevel);
       const label = guildBuildingLabel(definition);
       const searchText =
@@ -782,10 +810,13 @@
               })
             : t("buildingCatalogNextLevelCostUnavailable");
       const costId = `mwi-building-next-cost-${definition.iconSymbolId}`;
-      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span><span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
+      const actionLabel = atMaxLevel ? t("buildingTileMaxLabel", { building: label }) : accessibleLabel;
+      const tileLabel = currentTrial ? `${actionLabel} · ${trialLabel}` : actionLabel;
+      return `<button class="mwi-building-tile" data-role="building-tile" data-building-hrid="${escapeHtml(definition.hrid)}" data-category="${definition.category}" data-planned="${String(Boolean(plan))}" data-current-trial="${String(Boolean(currentTrial))}" data-level-known="${String(levelKnown)}" data-current-level="${liveLevel}" data-building-search="${escapeHtml(searchText)}" aria-label="${escapeHtml(tileLabel)}" aria-describedby="${escapeHtml(costId)}" title="${escapeHtml(tileLabel)}" type="button"${atMaxLevel ? " disabled" : ""}>${guildBuildingIconMarkup(definition, spriteBaseHref)}<span class="mwi-building-tile-copy"><span class="mwi-building-tile-name">${escapeHtml(label)}</span>${currentTrial ? `<span class="mwi-building-trial-badge">${escapeHtml(trialLabel)}</span>` : ""}<span class="mwi-building-tile-level">${escapeHtml(t(plan ? (levelKnown ? "buildingCatalogPlannedLevel" : "buildingCatalogUnknownPlannedLevel") : levelKnown ? "buildingCatalogCurrentLevel" : "buildingCatalogUnknownLevel", { current: currentLabel, target: plan ? formatNumber(plan.targetLevel) : "" }))}</span><span class="mwi-building-tile-cost" id="${escapeHtml(costId)}">${escapeHtml(costLabel)}</span></span></button>`;
     }
 
     function renderGuildBuildingPicker(definitions, levels, plansByHrid, spriteBaseHref) {
+      const weeklyBuildings = currentTrialBuildings();
       const categories = ["all", "core", "life", "combat", "shrine"]
         .map(
           (category) =>
@@ -800,7 +831,8 @@
             plansByHrid.get(definition.hrid),
             levels.levels.get(definition.hrid),
             levels.knownHrids.has(definition.hrid),
-            spriteBaseHref
+            spriteBaseHref,
+            definition.category === "life" && weeklyBuildings.has(definition.hrid)
           )
         )
         .join("");
@@ -1189,6 +1221,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     }
 
     function dispose() {
+      if (trialWeekTimer !== null) pageWindow.clearTimeout(trialWeekTimer);
+      trialWeekTimer = null;
+      trialWeekExpiresAt = null;
       discardGuildBuildingClearUndo();
     }
 

@@ -570,6 +570,8 @@
         #mwi-credit-optimizer .mwi-building-tile{display:grid;grid-template-columns:30px minmax(0,1fr);align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px!important;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--build-text);text-align:left}
         #mwi-credit-optimizer .mwi-building-tile:hover{border-color:#626b86;background:#313a50}
         #mwi-credit-optimizer .mwi-building-tile[data-planned="true"]{background:#293f41;border-color:#527b73}
+        #mwi-credit-optimizer .mwi-building-tile[data-current-trial="true"]{border-color:#d6ab56;box-shadow:inset 3px 0 #d6ab56}
+        #mwi-credit-optimizer .mwi-building-trial-badge{justify-self:start;max-width:100%;padding:1px 5px;border:1px solid #8d713e;border-radius:3px;background:#4b3c23;color:#ffe2a2;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
         #mwi-credit-optimizer .mwi-building-icon{display:block;width:30px;height:30px;flex:0 0 30px}
         #mwi-credit-optimizer .mwi-building-icon svg{display:block;width:100%;height:100%}
         #mwi-credit-optimizer .mwi-building-icon-fallback svg{padding:3px;fill:none;stroke:var(--build-muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
