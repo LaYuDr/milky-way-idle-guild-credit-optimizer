@@ -174,8 +174,8 @@ test("迁移前比较原值，不覆盖其他页面的新写入", () => {
   const read = raw.getItem.bind(raw);
   let reads = 0;
   raw.getItem = (key) => {
-    reads += 1;
-    if (reads === 2) raw.values.set(key, newer);
+    if (key === marketKey) reads += 1;
+    if (key === marketKey && reads === 2) raw.values.set(key, newer);
     return read(key);
   };
   const store = codec.createStorage(raw);

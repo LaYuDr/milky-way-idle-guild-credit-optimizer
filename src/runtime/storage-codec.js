@@ -72,8 +72,64 @@
     }
   }
 
+  const GENERATION_KEY = "mwi-guild-storage-generation-v1";
+  const guards = new WeakMap();
+  const pauses = new WeakMap();
+
+  // Old pages must not repopulate cleared data or overwrite an imported backup.
+  // This guards only plugin-owned wrappers, never the game's native Storage.
+  function guardStorage(storage) {
+    if (!storage) return storage;
+    if (guards.has(storage)) return guards.get(storage);
+    const pause = { count: 0 };
+    let generation;
+    try {
+      generation = storage.getItem(GENERATION_KEY);
+    } catch (_) {
+      // Preserve the existing graceful startup when storage access is denied.
+    }
+    function assertWritable() {
+      if (pause.count) throw new Error("Plugin backup is pending; finish or cancel it before saving");
+      const current = storage.getItem(GENERATION_KEY);
+      if (generation === undefined) generation = current;
+      if (generation !== current) throw new Error("Plugin data changed; reload this page before saving");
+    }
+    const guarded = {
+      get length() {
+        return storage.length;
+      },
+      key: (index) => storage.key(index),
+      getItem: (key) => storage.getItem(key),
+      setItem(key, value) {
+        assertWritable();
+        storage.setItem(key, value);
+      },
+      removeItem(key) {
+        assertWritable();
+        storage.removeItem(key);
+      }
+    };
+    pauses.set(storage, pause);
+    pauses.set(guarded, pause);
+    guards.set(storage, guarded);
+    guards.set(guarded, guarded);
+    return guarded;
+  }
+
+  function pauseStorage(storage) {
+    guardStorage(storage);
+    const pause = pauses.get(storage);
+    pause.count += 1;
+    let active = true;
+    return () => {
+      if (active) pause.count -= 1;
+      active = false;
+    };
+  }
+
   function createStorage(storage) {
     if (!storage) return storage;
+    storage = guardStorage(storage);
     const cache = new Map();
     let cachedCharacters = 0;
     function remember(key, raw, text) {
@@ -144,5 +200,15 @@
     };
   }
 
-  return { createStorage, encode, decode, eligible, MIN_LENGTH, MAX_LENGTH };
+  return {
+    createStorage,
+    guardStorage,
+    pauseStorage,
+    encode,
+    decode,
+    eligible,
+    MIN_LENGTH,
+    MAX_LENGTH,
+    GENERATION_KEY
+  };
 });

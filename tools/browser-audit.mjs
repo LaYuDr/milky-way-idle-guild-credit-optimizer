@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createDevServer } from "./dev-server.js";
 import { runSteps } from "./check.mjs";
 import { auditTrialFullscreen } from "./browser-trial-fullscreen.mjs";
+import { auditStorageTransfer } from "./browser-storage-transfer.mjs";
 
 const WIDTHS = [320, 360, 420, 460, 480, 520, 560, 610, 720, 900, 1200];
 const SMALL = [320, 420, 610, 900];
@@ -15,6 +16,7 @@ export const SUITES = {
   credit: suite("creditAudit", WIDTHS, [1200]),
   construction: suite("constructionAudit"),
   settings: suite("settingsAudit"),
+  "storage-transfer": suite("storageTransferAudit"),
   trials: suite("trialHistoryAudit"),
   "shrine-upgrade": suite("shrineUpgradeAudit"),
   "upgrade-empty": suite("upgradeEmptyAudit", SMALL, [320, 610]),
@@ -137,12 +139,16 @@ export async function runAuditCase(browser, baseURL, entry, directory, timeout =
     const url = new URL("/test-harness.html", baseURL);
     url.search = new URLSearchParams({
       [entry.flag]: "1",
-      resetState: "1",
+      resetState: entry.name === "storage-transfer" ? "0" : "1",
       sidebarWidth: String(entry.width),
       locale: entry.locale,
       auditPlans: "4"
     }).toString();
     await page.goto(url.href, { timeout, waitUntil: "domcontentloaded" });
+    if (entry.name === "storage-transfer") {
+      result.report = await auditStorageTransfer(page, path.join(directory, `${id}-verify.png`));
+      return result;
+    }
     await page.waitForFunction(
       () => Boolean(globalThis.document.querySelector("#layout-audit-output")?.textContent),
       null,

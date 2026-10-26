@@ -136,7 +136,7 @@ npm run test:browser -- --suite layout,credit,construction,settings
 npm run test:browser -- --suite trials --widths 320,900 --locales zh,en
 ```
 
-Suites: `layout`, `credit`, `construction`, `settings`, `trials`, `shrine-upgrade`,
+Suites: `layout`, `credit`, `construction`, `settings`, `storage-transfer`, `trials`, `shrine-upgrade`,
 `upgrade-empty`, `market-filter`, `locale-race`, `sidebar-resize`,
 `sidebar-startup`, `sidebar-integration`, `construction-snapshot`, `token-guide`. `--suite all` runs
 all supported suites; it is not the default for a small feature change.
@@ -580,6 +580,63 @@ settings preserves expanded help topics and keyboard focus.
 The settings matrix opens every help topic, checks translated content, overflow,
 missing description targets, and expansion retention after a setting changes.
 The trials matrix requires the former ranking-help block to be absent.
+
+### Full local-data backup and cleanup
+
+Settings includes **Export all data only**, **Export and clear all local data**,
+and a full-backup file importer. `src/runtime/storage-transfer.js` uses an explicit
+key allowlist: UI and price preferences, every character's planner, trial records,
+trial display/navigation/order, recovery-original backups, market live/snapshot/
+request state, and the official item-name catalog. Scope is this browser origin;
+it never uses `localStorage.clear()`, reads credentials, accesses IndexedDB,
+touches other plugins or changes usage settings/installation identity in the
+userscript manager. The separate **Trial history → Import JSON** flow is retained.
+
+The full JSON envelope has `format: "mwi-guild-local-backup"`, schema version 1,
+exact `origin`, plugin version, export timestamp and `{key, rawValue}` entries.
+Raw strings preserve compression, malformed diagnostic values, unknown fields,
+source provenance and original price timestamps. Import validates all entries
+before writing, rejects unknown keys, duplicate keys and other origins, and
+limits files to 64 MiB / 32 Mi UTF-16 code units and 20,000 entries. Importing
+never makes stale market observations fresh or changes game/manual trial sources.
+
+Download initiation is not proof of a saved file. For clearing, the player first
+saves a backup, selects that downloaded file, and must pass a complete raw-entry
+comparison before the final clear confirmation becomes available. Cancelling,
+blocked downloads and mismatched files leave data in place. Import previews new,
+identical and conflicting keys. Defaults import only missing keys. Explicitly
+choosing overwrite first downloads and requires verification of the current full
+backup, then requires a separate overwrite confirmation. Keys outside the imported
+file are retained in both modes.
+
+During preview/verification the page's plugin storage wrappers pause writes;
+cancellation releases the pause. Before mutation, recheck the complete snapshot.
+A changed value or new key stops the operation. Writes/deletes are read back,
+final state is verified, and failures restore exact previous raw values only
+where this attempt's value remains. Partial rollback is reported honestly.
+
+`mwi-guild-storage-generation-v1` is a small coordination token, excluded from
+backup/cache entries. Mutation changes this token before data writes. Wrappers
+from already-open updated plugin pages reject subsequent writes until reload,
+preventing old in-memory history/plans from undoing the operation. Native game
+Storage is never patched. Old plugin versions cannot honor the token, so the UI
+asks players to close other game tabs first. Keep the result and Reload action
+reachable; after reload current game observations can legitimately rebuild caches.
+
+Reproducible browser QA:
+
+```bash
+npm run check:quick -- test/storage-transfer.test.js test/storage-codec.test.js test/runtime-storage.test.js
+npm run test:browser -- --suite storage-transfer,settings --channel chrome
+```
+
+The `storage-transfer` suite runs eleven Chinese widths plus English at 320,
+610 and 900. It checks complete downloads, confirmation gating, invalid and
+wrong-origin files, cancelled/blocked downloads, changed-data protection,
+clear/no-resurrection, missing-only import, provenance/raw-byte retention,
+backup-before-overwrite, reload, unrelated keys, live feedback and overflow.
+All fixtures and downloads stay in ephemeral localhost contexts. Run the existing
+trial, credit, construction and shrine suites when changing their storage guards.
 
 Guild construction and Trial history default to visible when no preference is saved.
 Explicit saved `false` values remain hidden. Feature audits exercise these defaults

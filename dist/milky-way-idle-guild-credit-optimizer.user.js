@@ -2,7 +2,7 @@
 // @name         公会助手
 // @name:en      Milky Way Idle Guild Assistant
 // @namespace    https://www.milkywayidle.com/
-// @version      1.2.67
+// @version      1.2.68
 // @author       柆雨
 // @license      MIT
 // @homepageURL  https://github.com/LaYuDr/milky-way-idle-guild-credit-optimizer
@@ -507,7 +507,7 @@
     return { dispose, report, client };
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { createUsageClient, boot };
-  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.67","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
+  try { boot({"pluginId":"mwi_guild","name":"公会助手","version":"1.2.68","endpoint":"https://ukpyedhl.cn-hk1.rainapp.top","development":false,"defaultEnabled":true,"reportOptOut":true}, {getValue: typeof GM_getValue === "function" ? GM_getValue : null,
 setValue: typeof GM_setValue === "function" ? GM_setValue : null,
 listen: typeof GM_addValueChangeListener === "function" ? GM_addValueChangeListener : null,
 unlisten: typeof GM_removeValueChangeListener === "function" ? GM_removeValueChangeListener : null,
@@ -516,7 +516,7 @@ request: typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : null}); }
 
 // LAYU_USAGE_END mwi_guild
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.67";
+window.MwiGuildCreditVersion = "1.2.68";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -799,8 +799,64 @@ window.MwiGuildCreditVersion = "1.2.67";
     }
   }
 
+  const GENERATION_KEY = "mwi-guild-storage-generation-v1";
+  const guards = new WeakMap();
+  const pauses = new WeakMap();
+
+  // Old pages must not repopulate cleared data or overwrite an imported backup.
+  // This guards only plugin-owned wrappers, never the game's native Storage.
+  function guardStorage(storage) {
+    if (!storage) return storage;
+    if (guards.has(storage)) return guards.get(storage);
+    const pause = { count: 0 };
+    let generation;
+    try {
+      generation = storage.getItem(GENERATION_KEY);
+    } catch (_) {
+      // Preserve the existing graceful startup when storage access is denied.
+    }
+    function assertWritable() {
+      if (pause.count) throw new Error("Plugin backup is pending; finish or cancel it before saving");
+      const current = storage.getItem(GENERATION_KEY);
+      if (generation === undefined) generation = current;
+      if (generation !== current) throw new Error("Plugin data changed; reload this page before saving");
+    }
+    const guarded = {
+      get length() {
+        return storage.length;
+      },
+      key: (index) => storage.key(index),
+      getItem: (key) => storage.getItem(key),
+      setItem(key, value) {
+        assertWritable();
+        storage.setItem(key, value);
+      },
+      removeItem(key) {
+        assertWritable();
+        storage.removeItem(key);
+      }
+    };
+    pauses.set(storage, pause);
+    pauses.set(guarded, pause);
+    guards.set(storage, guarded);
+    guards.set(guarded, guarded);
+    return guarded;
+  }
+
+  function pauseStorage(storage) {
+    guardStorage(storage);
+    const pause = pauses.get(storage);
+    pause.count += 1;
+    let active = true;
+    return () => {
+      if (active) pause.count -= 1;
+      active = false;
+    };
+  }
+
   function createStorage(storage) {
     if (!storage) return storage;
+    storage = guardStorage(storage);
     const cache = new Map();
     let cachedCharacters = 0;
     function remember(key, raw, text) {
@@ -871,7 +927,17 @@ window.MwiGuildCreditVersion = "1.2.67";
     };
   }
 
-  return { createStorage, encode, decode, eligible, MIN_LENGTH, MAX_LENGTH };
+  return {
+    createStorage,
+    guardStorage,
+    pauseStorage,
+    encode,
+    decode,
+    eligible,
+    MIN_LENGTH,
+    MAX_LENGTH,
+    GENERATION_KEY
+  };
 });
 
 
@@ -5340,6 +5406,49 @@ window.MwiGuildCreditVersion = "1.2.67";
       trialImportFile: "选择试炼历史 JSON 文件",
       trialImportHint:
         "支持历史导出文件和手动整理记录（最大 10 MB）。先预览再保存；可补全未知日期及周次，重复或统计冲突记录会跳过。",
+      cacheTitle: "本地数据备份与清空",
+      cachePaused: "预览或校验期间暂时暂停本页保存。请先完成或取消本次操作，再修改插件其他设置。",
+      cacheScope: "范围：当前网站内，本插件所有角色的设置、神龛与建设计划、试炼历史、市场与名称缓存、恢复前原值备份。",
+      cacheBoundary:
+        "不处理游戏账号、其他插件数据或脚本管理器中的使用统计设置。请先关闭其他游戏标签页；清空或导入后刷新页面，当前游戏数据可能重新生成部分缓存。",
+      cacheExport: "只导出全部数据",
+      cacheExportClear: "导出并清空全部缓存",
+      cacheImport: "导入本插件全部数据备份（JSON，最大 64 MB）",
+      cacheClearWarning:
+        "即将清空 {count} 项本地数据（约 {size}），包括历史与计划。先保存下载文件，再选择该文件校验；校验通过后才可确认清空。",
+      cacheReplaceWarning:
+        "覆盖导入前，已发起下载当前 {count} 项数据的备份（约 {size}）。先保存并选择该文件校验，再确认覆盖。文件外的现有数据会保留。",
+      cacheVerifyFile: "选择刚下载的备份文件进行校验",
+      cacheConfirmClear: "备份已校验，确认清空",
+      cacheConfirmReplace: "备份已校验，确认覆盖导入",
+      cacheCancel: "取消，保留现有数据",
+      cacheReload: "刷新页面以应用更改",
+      cacheImportPreview: "本地数据导入预览",
+      cacheImportSummary: "新增 {added} 项 · 相同 {duplicates} 项 · 冲突 {conflicts} 项 · 约 {size}",
+      cacheImportHint:
+        "此处仅接受完整数据备份；试炼专用 JSON 请到历史试炼页导入。默认仅导入缺失项，保留冲突项。完整备份会保留游戏采集与手动整理的原有来源；不会刷新旧价格或补造历史信息。",
+      cacheOverwrite: "覆盖现有冲突项（先导出并校验当前数据备份）",
+      cachePrepareReplace: "先备份当前数据，再覆盖导入",
+      cacheConfirmImport: "确认导入缺失项",
+      cacheStatus_new: "缺失，可导入",
+      cacheStatus_duplicate: "相同，跳过",
+      cacheStatus_conflict: "冲突，默认保留现有数据",
+      cacheEmpty: "当前没有可清空的本插件本地数据。",
+      cacheDownloadStarted: "已发起备份下载，请检查浏览器的下载结果。本地数据未清空。",
+      cacheDownloadVerify: "请保存下载文件，并选择该文件校验。尚未清空或覆盖任何数据。",
+      cacheVerified: "备份内容校验通过，请确认下方操作。",
+      cacheCancelled: "已取消，本地数据保留。",
+      cacheReading: "正在读取并校验文件…",
+      cachePreviewReady: "文件已验证，请检查导入预览。",
+      cacheInvalidBackup: "文件不是有效的完整数据备份，或与刚导出的内容不一致。请选择正确的文件；现有数据未更改。",
+      cacheWrongOrigin: "备份来自其他网站或游戏区服，请在原网站导入。现有数据未更改。",
+      cacheFileTooLarge: "备份文件超出大小限制，请选择较小的有效备份。现有数据未更改。",
+      cacheAccessFailed: "无法读取存储、文件或启动下载，现有数据未清空或覆盖。请检查浏览器权限后重试。",
+      cacheDataChanged: "其他页面或当前游戏更新了本地数据，操作已停止。请刷新页面，重新导出备份或预览导入。",
+      cacheCleared: "已清空 {count} 项数据，备份内容已校验。请刷新页面；刷新前暂停本页写入，避免旧数据写回。",
+      cacheImported: "已导入 {count} 项数据。请刷新页面应用备份；刷新前暂停本页写入，避免旧数据覆盖。",
+      cachePartial: "操作失败，仍有 {count} 项未能恢复原值。请保留备份并刷新页面后检查；不要删除下载文件。",
+      cacheSaveFailed: "操作失败，本次数据更改已撤回。请保留备份，检查存储空间并刷新后重试。",
       trialImportReading: "正在读取文件…",
       trialImportPreview: "导入预览",
       trialImportSummary:
@@ -6181,6 +6290,62 @@ window.MwiGuildCreditVersion = "1.2.67";
       trialImportFile: "Choose a trial history JSON file",
       trialImportHint:
         "Import exported history or manually transcribed records (up to 10 MB). Preview before saving. Missing dates and weeks can be filled in; duplicates and statistics conflicts are skipped.",
+      cacheTitle: "Local data backup and cleanup",
+      cachePaused:
+        "Saving on this page is paused during preview or verification. Finish or cancel this operation before changing other plugin settings.",
+      cacheScope:
+        "Scope: this plugin’s settings, shrine and construction plans, trial history, market and name caches, and pre-recovery backups for every character on this website.",
+      cacheBoundary:
+        "Game accounts, other plugins, and usage settings in the userscript manager are excluded. Close other game tabs first. Reload after clearing or importing; current game data may regenerate some caches.",
+      cacheExport: "Export all data only",
+      cacheExportClear: "Export and clear all local data",
+      cacheImport: "Import a full plugin backup (JSON, up to 64 MB)",
+      cacheClearWarning:
+        "This will clear {count} entries (about {size}), including history and plans. Save the download and select that file for verification before confirming deletion.",
+      cacheReplaceWarning:
+        "Before overwriting, a backup download of the current {count} entries (about {size}) has started. Save and select that file for verification. Existing entries outside the imported file will be kept.",
+      cacheVerifyFile: "Select the backup you just downloaded to verify it",
+      cacheConfirmClear: "Backup verified — clear data",
+      cacheConfirmReplace: "Backup verified — import and overwrite",
+      cacheCancel: "Cancel and keep existing data",
+      cacheReload: "Reload to apply changes",
+      cacheImportPreview: "Local data import preview",
+      cacheImportSummary: "{added} new · {duplicates} identical · {conflicts} conflicts · about {size}",
+      cacheImportHint:
+        "Only full plugin backups are accepted here; import trial-only JSON from Trial history. Import missing entries by default and keep conflicts. Full backups preserve game-capture and manual provenance. Old prices keep their original timestamps; missing historical information is not invented.",
+      cacheOverwrite: "Overwrite conflicts (export and verify a current backup first)",
+      cachePrepareReplace: "Back up current data before overwriting",
+      cacheConfirmImport: "Import missing entries",
+      cacheStatus_new: "Missing; ready to import",
+      cacheStatus_duplicate: "Identical; skipped",
+      cacheStatus_conflict: "Conflict; keep current data by default",
+      cacheEmpty: "There is no plugin data to clear.",
+      cacheDownloadStarted:
+        "Backup download started. Check your browser’s download result. Local data has not been cleared.",
+      cacheDownloadVerify:
+        "Save the download and select that file for verification. No data has been cleared or overwritten.",
+      cacheVerified: "Backup contents verified. Confirm the action below.",
+      cacheCancelled: "Cancelled. Existing data was kept.",
+      cacheReading: "Reading and verifying file…",
+      cachePreviewReady: "File validated. Review the import preview.",
+      cacheInvalidBackup:
+        "This is not a valid full backup, or it differs from the backup just exported. Select the correct file. Existing data is unchanged.",
+      cacheWrongOrigin:
+        "This backup belongs to another website or game region. Import it on the original website. Existing data is unchanged.",
+      cacheFileTooLarge:
+        "This backup exceeds the size limit. Select a smaller valid backup. Existing data is unchanged.",
+      cacheAccessFailed:
+        "Storage or file access failed, or the download could not start. Existing data was not cleared or overwritten. Check browser permissions and retry.",
+      cacheDataChanged:
+        "Another page or the game changed local data. The operation stopped. Reload and export a fresh backup or preview the import again.",
+      cacheCleared:
+        "Cleared {count} entries after verifying the backup. Reload this page. Writes are paused until reload so old in-memory data cannot return.",
+      cacheImported:
+        "Imported {count} entries. Reload to apply the backup. Writes are paused until reload so old in-memory data cannot overwrite it.",
+      cachePartial:
+        "The operation failed; {count} entries could not be restored to their original values. Keep the downloaded backup, reload, and check your data.",
+      cacheSaveFailed:
+        "The operation failed and its data changes were rolled back. Keep the backup, check storage space, and reload before retrying.",
       trialImportReading: "Reading file…",
       trialImportPreview: "Import preview",
       trialImportSummary:
@@ -8490,7 +8655,7 @@ window.MwiGuildCreditVersion = "1.2.67";
 
   function createPluginStorage(options) {
     const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
-    const rawStorage = options.storage;
+    const rawStorage = storageCodec.guardStorage(options.storage);
     const storage = storageCodec.createStorage(rawStorage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 
@@ -9247,6 +9412,209 @@ window.MwiGuildCreditVersion = "1.2.67";
     normalizeGuildShrineAutofillExcludedBuffHrids,
     createPluginStorage
   };
+});
+
+
+// SOURCE: src/runtime/storage-transfer.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports ? require("./config.js") : root.MwiGuildCreditConfig,
+    typeof module !== "undefined" && module.exports ? require("./storage-codec.js") : root.MwiGuildStorageCodec
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildStorageTransfer = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (config, codec) {
+  "use strict";
+
+  const FORMAT = "mwi-guild-local-backup";
+  const MAX_TEXT = 32 * 1024 * 1024;
+  const MAX_FILE_BYTES = 64 * 1024 * 1024;
+  const EXACT_KEYS = new Set([
+    config.PRICE_REFERENCE_STORAGE_KEY,
+    config.UI_STATE_STORAGE_KEY,
+    config.MARKET_LIVE_STORAGE_KEY,
+    config.MARKETPLACE_SNAPSHOT_STORAGE_KEY,
+    config.MARKETPLACE_REQUEST_STATE_STORAGE_KEY,
+    "mwi-official-item-name-catalog-v1"
+  ]);
+  const planner = `${config.GUILD_BUILDING_PLAN_STORAGE_PREFIX}:[a-zA-Z0-9.-]+:[^:]+`;
+  const scoped = [
+    new RegExp(`^${planner}$`),
+    new RegExp(`^${config.TRIAL_DISPLAY_STORAGE_PREFIX}:${planner}(?::view|:ranking-order)?$`),
+    new RegExp(`^${config.TRIAL_HISTORY_STORAGE_PREFIX}:${planner}:[^:]+$`),
+    new RegExp(`^mwi-guild-trial-recovery-v1:${planner}:[^:]+:[^:]+$`)
+  ];
+  function ownsKey(key) {
+    return typeof key === "string" && (EXACT_KEYS.has(key) || scoped.some((pattern) => pattern.test(key)));
+  }
+  function sameEntries(left, right) {
+    return (
+      left.length === right.length &&
+      left.every((entry, index) => entry.key === right[index].key && entry.rawValue === right[index].rawValue)
+    );
+  }
+  function byteSize(entries) {
+    return entries.reduce((sum, entry) => sum + 2 * (entry.key.length + entry.rawValue.length), 0);
+  }
+  function fail(code) {
+    throw Object.assign(new Error(code), { code });
+  }
+
+  function create({ storage, origin, version, now = Date.now }) {
+    function keys() {
+      const result = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (ownsKey(key)) result.push(key);
+      }
+      return [...new Set(result)].sort();
+    }
+    function readEntries() {
+      return keys().map((key) => {
+        const rawValue = storage.getItem(key);
+        if (typeof rawValue !== "string") fail("cacheDataChanged");
+        return { key, rawValue };
+      });
+    }
+    function snapshot() {
+      const entries = readEntries();
+      if (!sameEntries(entries, readEntries())) fail("cacheDataChanged");
+      return { format: FORMAT, schemaVersion: 1, origin, pluginVersion: version, exportedAt: now(), entries };
+    }
+    function validate(backup) {
+      if (
+        backup?.format !== FORMAT ||
+        backup.schemaVersion !== 1 ||
+        !Array.isArray(backup.entries) ||
+        backup.entries.length > 20000 ||
+        !Number.isSafeInteger(backup.exportedAt) ||
+        backup.exportedAt <= 0 ||
+        typeof backup.pluginVersion !== "string" ||
+        !/^\d+\.\d+\.\d+$/.test(backup.pluginVersion)
+      )
+        fail("cacheInvalidBackup");
+      if (backup.origin !== origin) fail("cacheWrongOrigin");
+      const seen = new Set();
+      const entries = backup.entries.map((entry) => {
+        if (
+          !entry ||
+          !ownsKey(entry.key) ||
+          entry.key.length > 4096 ||
+          seen.has(entry.key) ||
+          typeof entry.rawValue !== "string" ||
+          entry.rawValue.length > MAX_TEXT
+        )
+          fail("cacheInvalidBackup");
+        seen.add(entry.key);
+        return { key: entry.key, rawValue: entry.rawValue };
+      });
+      return { ...backup, entries: entries.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
+    }
+    function parse(text) {
+      if (typeof text !== "string" || text.length > MAX_TEXT) fail("cacheFileTooLarge");
+      let value;
+      try {
+        value = JSON.parse(text);
+      } catch (_) {
+        fail("cacheInvalidBackup");
+      }
+      const backup = validate(value);
+      // Use the same code-unit order as Storage snapshots, regardless of locale.
+      backup.entries.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+      return backup;
+    }
+    function verifyFile(text, expected) {
+      return sameEntries(parse(text).entries, expected.entries);
+    }
+    function preview(backup) {
+      const incoming = validate(backup).entries;
+      const current = snapshot();
+      const existing = new Map(current.entries.map((entry) => [entry.key, entry.rawValue]));
+      return {
+        current,
+        entries: incoming.map((entry) => ({
+          ...entry,
+          status: !existing.has(entry.key)
+            ? "new"
+            : existing.get(entry.key) === entry.rawValue
+              ? "duplicate"
+              : "conflict"
+        }))
+      };
+    }
+
+    function mutate(expected, changes) {
+      let generation;
+      const written = [];
+      try {
+        if (!sameEntries(expected.entries, snapshot().entries)) fail("cacheDataChanged");
+        if (!changes.length) return { status: "applied", changed: 0, needsReload: false };
+        generation = globalThis.crypto?.randomUUID?.() || `${now()}-${Math.random()}`;
+        storage.setItem(codec.GENERATION_KEY, generation);
+        if (storage.getItem(codec.GENERATION_KEY) !== generation) fail("cacheSaveFailed");
+        for (const change of changes) {
+          if (storage.getItem(codec.GENERATION_KEY) !== generation) fail("cacheDataChanged");
+          if (storage.getItem(change.key) !== change.before) fail("cacheDataChanged");
+          if (change.after === null) storage.removeItem(change.key);
+          else storage.setItem(change.key, change.after);
+          // Log before verification, so even a silently ignored write is handled.
+          written.push(change);
+          if (storage.getItem(change.key) !== change.after) fail("cacheSaveFailed");
+        }
+        const desired = new Map(expected.entries.map((entry) => [entry.key, entry.rawValue]));
+        for (const { key, after } of changes) {
+          if (after === null) desired.delete(key);
+          else desired.set(key, after);
+        }
+        const actual = snapshot().entries;
+        const target = [...desired]
+          .map(([key, rawValue]) => ({ key, rawValue }))
+          .sort((a, b) => (a.key < b.key ? -1 : 1));
+        if (storage.getItem(codec.GENERATION_KEY) !== generation || !sameEntries(target, actual))
+          fail("cacheDataChanged");
+        return { status: "applied", changed: changes.length, needsReload: true };
+      } catch (error) {
+        let remaining = 0;
+        for (const { key, before, after } of written.reverse()) {
+          try {
+            // Never roll back another page's newer value.
+            if (storage.getItem(key) === after) {
+              if (before === null) storage.removeItem(key);
+              else storage.setItem(key, before);
+            }
+            if (storage.getItem(key) !== before) remaining += 1;
+          } catch (_) {
+            remaining += 1;
+          }
+        }
+        return {
+          status: remaining ? "partial" : error?.code === "cacheDataChanged" ? "stale" : "failed",
+          changed: remaining,
+          needsReload: generation !== undefined
+        };
+      }
+    }
+    function clear(backup) {
+      validate(backup);
+      return mutate(
+        backup,
+        backup.entries.map(({ key, rawValue }) => ({ key, before: rawValue, after: null }))
+      );
+    }
+    function restore(plan, overwrite = false) {
+      // Revalidate at the write boundary; never trust a caller-supplied status.
+      validate({ ...plan.current, entries: plan.entries });
+      const previous = new Map(plan.current.entries.map((entry) => [entry.key, entry.rawValue]));
+      const changes = plan.entries.flatMap(({ key, rawValue }) => {
+        const before = previous.get(key) ?? null;
+        return before === rawValue || (before !== null && !overwrite) ? [] : [{ key, before, after: rawValue }];
+      });
+      return mutate(plan.current, changes);
+    }
+    return { snapshot, parse, verifyFile, preview, clear, restore, pauseWrites: () => codec.pauseStorage(storage) };
+  }
+
+  return { create, ownsKey, sameEntries, byteSize, FORMAT, MAX_TEXT, MAX_FILE_BYTES };
 });
 
 
@@ -17475,6 +17843,242 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 });
 
 
+// SOURCE: src/ui/storage-transfer-view.js
+(function (root, factory) {
+  const api = factory(
+    typeof module !== "undefined" && module.exports
+      ? require("../runtime/storage-transfer.js")
+      : root.MwiGuildStorageTransfer
+  );
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.MwiGuildStorageTransferView = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function (transferApi) {
+  "use strict";
+
+  function create({ document, pageWindow, storage, version, t, escapeHtml, onFinished = () => {} }) {
+    const service = transferApi.create({ storage, origin: pageWindow.location.origin, version });
+    let phase = "idle";
+    let pending = null;
+    let imported = null;
+    let plan = null;
+    let verified = false;
+    let overwrite = false;
+    let busy = false;
+    let notice = { key: "", values: {} };
+    let revision = 0;
+    let resumeWrites = null;
+    function pauseWrites() {
+      resumeWrites ??= service.pauseWrites();
+    }
+    function resume() {
+      resumeWrites?.();
+      resumeWrites = null;
+    }
+    const label = (key, values) => escapeHtml(t(key, values));
+    const size = (entries) => `${(transferApi.byteSize(entries) / 1024).toFixed(1)} KiB`;
+    function render() {
+      let markup = `<section class="mwi-settings-block" data-cache-transfer aria-labelledby="mwi-cache-title" aria-busy="${busy}"><div class="mwi-settings-block-heading"><h4 id="mwi-cache-title">${label("cacheTitle")}</h4></div><p class="mwi-trial-help">${label("cacheScope")}</p><p class="mwi-trial-help">${label("cacheBoundary")}</p>`;
+      if (phase === "verify" || phase === "import") markup += `<p class="mwi-trial-notice">${label("cachePaused")}</p>`;
+      if (phase === "done") {
+        markup += `<button type="button" data-cache-action="reload">${label("cacheReload")}</button>`;
+      } else if (phase === "verify") {
+        markup += `<p class="mwi-trial-notice">${label(pending.kind === "clear" ? "cacheClearWarning" : "cacheReplaceWarning", { count: pending.backup.entries.length, size: size(pending.backup.entries) })}</p><label class="mwi-settings-switch-copy" for="mwi-cache-verify">${label("cacheVerifyFile")}</label><input id="mwi-cache-verify" data-cache-file="verify" type="file" style="width:100%;max-width:100%;min-width:0" accept=".json,application/json"${busy ? " disabled" : ""}><div class="mwi-trial-controls"><button type="button" data-cache-action="commit"${!verified || busy ? " disabled" : ""}>${label(pending.kind === "clear" ? "cacheConfirmClear" : "cacheConfirmReplace")}</button><button type="button" data-cache-action="cancel"${busy ? " disabled" : ""}>${label("cacheCancel")}</button></div>`;
+      } else {
+        markup += `<div class="mwi-trial-controls"><button type="button" data-cache-action="export"${busy ? " disabled" : ""}>${label("cacheExport")}</button><button type="button" data-cache-action="export-clear"${busy ? " disabled" : ""}>${label("cacheExportClear")}</button></div><label class="mwi-settings-switch-copy" for="mwi-cache-import">${label("cacheImport")}</label><input id="mwi-cache-import" data-cache-file="import" type="file" style="width:100%;max-width:100%;min-width:0" accept=".json,application/json"${busy ? " disabled" : ""}>`;
+        if (phase === "import") {
+          const count = (status) => plan.entries.filter((entry) => entry.status === status).length;
+          markup += `<div data-cache-preview><p class="mwi-trial-meta">${label("cacheImportSummary", { added: count("new"), duplicates: count("duplicate"), conflicts: count("conflict"), size: size(plan.entries) })}</p><p class="mwi-trial-help">${label("cacheImportHint")}</p><ul class="mwi-trial-import-list" tabindex="0" aria-label="${label("cacheImportPreview")}">${plan.entries.map((entry) => `<li><strong>${label(`cacheStatus_${entry.status}`)}</strong><span style="overflow-wrap:anywhere">${escapeHtml(entry.key)}</span></li>`).join("")}</ul>${count("conflict") ? `<label class="mwi-settings-switch"><span class="mwi-settings-switch-copy">${label("cacheOverwrite")}</span><input data-cache-overwrite type="checkbox"${overwrite ? " checked" : ""}${busy ? " disabled" : ""}></label>` : ""}<div class="mwi-trial-controls"><button type="button" data-cache-action="import"${busy || !(count("new") + (overwrite ? count("conflict") : 0)) ? " disabled" : ""}>${label(overwrite && count("conflict") ? "cachePrepareReplace" : "cacheConfirmImport")}</button><button type="button" data-cache-action="cancel"${busy ? " disabled" : ""}>${label("cacheCancel")}</button></div></div>`;
+        }
+      }
+      return (
+        markup +
+        `<p class="mwi-settings-status" data-cache-status role="status" aria-live="polite" aria-atomic="true">${notice.key ? label(notice.key, notice.values) : ""}</p></section>`
+      );
+    }
+    function refresh() {
+      const host = document.querySelector("[data-cache-transfer]");
+      if (!host) return;
+      const focused = document.activeElement;
+      const action = host.contains(focused) ? focused?.dataset?.cacheAction : null;
+      host.outerHTML = render();
+      if (action) document.querySelector(`[data-cache-action="${action}"]`)?.focus({ preventScroll: true });
+    }
+    function report(error) {
+      notice = {
+        key: ["cacheDataChanged", "cacheWrongOrigin", "cacheInvalidBackup", "cacheFileTooLarge"].includes(error?.code)
+          ? error.code
+          : "cacheAccessFailed",
+        values: {}
+      };
+    }
+    function download(backup) {
+      const text = JSON.stringify(backup, null, 2);
+      if (text.length > transferApi.MAX_TEXT) throw Object.assign(new Error(), { code: "cacheFileTooLarge" });
+      const url = pageWindow.URL.createObjectURL(new pageWindow.Blob([text], { type: "application/json" }));
+      try {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `mwi-guild-local-backup-${new Date(backup.exportedAt).toISOString().replace(/[:.]/g, "-")}.json`;
+        document.body.appendChild(anchor);
+        try {
+          anchor.click();
+        } finally {
+          anchor.remove();
+        }
+      } finally {
+        pageWindow.setTimeout(() => pageWindow.URL.revokeObjectURL(url), 1000);
+      }
+    }
+    function prepare(kind) {
+      if (kind !== "export") pauseWrites();
+      const backup = service.snapshot();
+      if (kind === "clear" && !backup.entries.length) {
+        notice = { key: "cacheEmpty", values: {} };
+        resume();
+        return;
+      }
+      download(backup);
+      if (kind === "export") {
+        notice = { key: "cacheDownloadStarted", values: {} };
+        return;
+      }
+      pending = { kind, backup, imported, plan };
+      verified = false;
+      phase = "verify";
+      notice = { key: "cacheDownloadVerify", values: {} };
+    }
+    function finish(result, kind) {
+      resume();
+      notice = {
+        key:
+          result.status === "applied"
+            ? kind === "clear"
+              ? "cacheCleared"
+              : "cacheImported"
+            : result.status === "stale"
+              ? "cacheDataChanged"
+              : result.status === "partial"
+                ? "cachePartial"
+                : "cacheSaveFailed",
+        values: { count: result.changed }
+      };
+      if (result.needsReload) {
+        phase = "done";
+        imported = pending = plan = null;
+        onFinished();
+      } else {
+        phase = "idle";
+        imported = pending = plan = null;
+      }
+    }
+    function onClick(event) {
+      const target = event.target?.closest?.("[data-cache-action]");
+      if (!target?.closest("[data-cache-transfer]") || target.disabled || busy) return;
+      const action = target.dataset.cacheAction;
+      if (action === "reload") {
+        pageWindow.location.reload();
+        return;
+      }
+      if (phase === "done") return;
+      try {
+        if (action === "export" || action === "export-clear") prepare(action === "export" ? "export" : "clear");
+        else if (action === "cancel") {
+          revision += 1;
+          phase = "idle";
+          resume();
+          imported = pending = plan = null;
+          verified = overwrite = false;
+          notice = { key: "cacheCancelled", values: {} };
+        } else if (action === "import" && plan) {
+          if (!transferApi.sameEntries(plan.current.entries, service.snapshot().entries))
+            throw Object.assign(new Error(), { code: "cacheDataChanged" });
+          if (overwrite && plan.entries.some((entry) => entry.status === "conflict")) prepare("replace");
+          else finish(service.restore(plan), "import");
+        } else if (action === "commit" && pending && verified) {
+          if (!transferApi.sameEntries(pending.backup.entries, service.snapshot().entries))
+            throw Object.assign(new Error(), { code: "cacheDataChanged" });
+          finish(
+            pending.kind === "clear" ? service.clear(pending.backup) : service.restore(pending.plan, true),
+            pending.kind
+          );
+        }
+      } catch (error) {
+        report(error);
+        if (phase === "idle") resume();
+        if (error?.code === "cacheDataChanged") {
+          resume();
+          phase = "idle";
+          imported = pending = plan = null;
+          verified = false;
+        }
+      }
+      refresh();
+    }
+    async function onChange(event) {
+      const input = event.target;
+      if (!input?.closest?.("[data-cache-transfer]") || busy || phase === "done") return;
+      if (input.matches("[data-cache-overwrite]")) {
+        overwrite = input.checked;
+        refresh();
+        return;
+      }
+      if (!input.dataset.cacheFile) return;
+      const file = input.files?.[0];
+      if (!file) return;
+      const mode = input.dataset.cacheFile;
+      const request = ++revision;
+      busy = true;
+      if (mode === "verify") verified = false;
+      notice = { key: "cacheReading", values: {} };
+      refresh();
+      try {
+        if (file.size > transferApi.MAX_FILE_BYTES) throw Object.assign(new Error(), { code: "cacheFileTooLarge" });
+        const text = await file.text();
+        if (request !== revision) return;
+        if (mode === "verify") {
+          if (!pending || !service.verifyFile(text, pending.backup))
+            throw Object.assign(new Error(), { code: "cacheInvalidBackup" });
+          verified = true;
+          notice = { key: "cacheVerified", values: {} };
+        } else {
+          imported = service.parse(text);
+          pauseWrites();
+          plan = service.preview(imported);
+          overwrite = false;
+          phase = "import";
+          notice = { key: "cachePreviewReady", values: {} };
+        }
+      } catch (error) {
+        if (request !== revision) return;
+        if (mode === "import") {
+          imported = plan = null;
+          phase = "idle";
+          resume();
+        }
+        report(error);
+      } finally {
+        if (request === revision) {
+          busy = false;
+          refresh();
+        }
+      }
+    }
+    document.addEventListener("click", onClick);
+    document.addEventListener("change", onChange);
+    return {
+      render,
+      dispose() {
+        revision += 1;
+        resume();
+        document.removeEventListener("click", onClick);
+        document.removeEventListener("change", onChange);
+      }
+    };
+  }
+  return { create };
+});
+
+
 // SOURCE: src/ui/settings-view.js
 (function (root, factory) {
   const api = factory(
@@ -17584,7 +18188,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       guildBuffLabel,
       guildBuildingSpriteBaseHref,
       guildBuildingIconMarkup,
-      updateRenderedMarkup
+      updateRenderedMarkup,
+      renderStorageTransfer = () => ""
     } = dependencies;
     const effects = effectApi.createFormatter({ core, t, ui });
     function renderGuildBuffEffects(detail) {
@@ -17667,7 +18272,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <section class="mwi-settings-block" aria-labelledby="mwi-settings-interface-heading"><div class="mwi-settings-block-heading"><h4 id="mwi-settings-interface-heading">${escapeHtml(t("interfaceVisibility"))}</h4></div>
       <form class="mwi-settings-name" data-role="settings-sidebar-name-form"><label for="mwi-settings-sidebar-name">${escapeHtml(t("sidebarDisplayName"))}</label><div class="mwi-settings-name-controls"><input id="mwi-settings-sidebar-name" data-role="settings-sidebar-name" type="text" value="${escapeHtml(state.sidebarDisplayName || "")}" placeholder="${escapeHtml(t("sidebarCredit"))}" autocomplete="off"><button id="mwi-settings-sidebar-name-save" type="submit">${escapeHtml(t("sidebarNameSave"))}</button><button id="mwi-settings-sidebar-name-reset" type="button">${escapeHtml(t("sidebarNameReset"))}</button></div></form>
       <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showConstructionView"))}</strong></span><input id="mwi-settings-show-construction" class="mwi-settings-switch-input" data-role="settings-show-construction" type="checkbox" role="switch"></label>
-      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showTrialHistoryView"))}</strong></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch"></label></section><div data-layu-usage-settings="mwi_guild" lang="${escapeHtml(ui().locale)}"></div>${renderHelp()}`;
+      <label class="mwi-settings-switch"><span class="mwi-settings-switch-copy"><strong>${escapeHtml(t("showTrialHistoryView"))}</strong></span><input id="mwi-settings-show-trials" class="mwi-settings-switch-input" data-role="settings-show-trials" type="checkbox" role="switch"></label></section>${renderStorageTransfer()}<div data-layu-usage-settings="mwi_guild" lang="${escapeHtml(ui().locale)}"></div>${renderHelp()}`;
     }
 
     function renderSettingsMarkup() {
@@ -20208,6 +20813,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   const constructionViewApi = window.MwiGuildCreditConstructionView;
   const upgradeViewApi = window.MwiGuildCreditUpgradeView;
   const settingsViewApi = window.MwiGuildCreditSettingsView;
+  const storageTransferViewApi = window.MwiGuildStorageTransferView;
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
@@ -20234,6 +20840,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     !constructionViewApi ||
     !upgradeViewApi ||
     !settingsViewApi ||
+    !storageTransferViewApi ||
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
@@ -20781,7 +21388,21 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     refreshGuildUpgrade
   } = upgradeView;
 
+  const storageTransferView = storageTransferViewApi.create({
+    document,
+    pageWindow,
+    storage: pageWindow.localStorage,
+    version: PLUGIN_VERSION,
+    t,
+    escapeHtml,
+    // Keep the success/reload controls reachable; persisted writes are already
+    // blocked by the generation guard until this page is refreshed.
+    onFinished: () => {
+      stopShrineGuideObserver();
+    }
+  });
   const settingsView = settingsViewApi.createSettingsView({
+    renderStorageTransfer: () => storageTransferView.render(),
     core,
     guildBuildingSpriteBaseHref,
     guildBuildingIconMarkup,
@@ -21054,6 +21675,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   }
 
   function disposeRuntime() {
+    storageTransferView.dispose();
     trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();

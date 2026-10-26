@@ -19,6 +19,7 @@
   const constructionViewApi = window.MwiGuildCreditConstructionView;
   const upgradeViewApi = window.MwiGuildCreditUpgradeView;
   const settingsViewApi = window.MwiGuildCreditSettingsView;
+  const storageTransferViewApi = window.MwiGuildStorageTransferView;
   const shrineGuideUiApi = window.MwiGuildCreditShrineGuideUi;
   const exchangeAdvisorApi = window.MwiGuildCreditExchangeAdvisor;
   const panelShellApi = window.MwiGuildCreditPanelShell;
@@ -45,6 +46,7 @@
     !constructionViewApi ||
     !upgradeViewApi ||
     !settingsViewApi ||
+    !storageTransferViewApi ||
     !shrineGuideUiApi ||
     !exchangeAdvisorApi ||
     !panelShellApi ||
@@ -592,7 +594,21 @@
     refreshGuildUpgrade
   } = upgradeView;
 
+  const storageTransferView = storageTransferViewApi.create({
+    document,
+    pageWindow,
+    storage: pageWindow.localStorage,
+    version: PLUGIN_VERSION,
+    t,
+    escapeHtml,
+    // Keep the success/reload controls reachable; persisted writes are already
+    // blocked by the generation guard until this page is refreshed.
+    onFinished: () => {
+      stopShrineGuideObserver();
+    }
+  });
   const settingsView = settingsViewApi.createSettingsView({
+    renderStorageTransfer: () => storageTransferView.render(),
     core,
     guildBuildingSpriteBaseHref,
     guildBuildingIconMarkup,
@@ -865,6 +881,7 @@
   }
 
   function disposeRuntime() {
+    storageTransferView.dispose();
     trialHistoryView.dispose();
     disposePanelShell();
     disposeConstructionView();

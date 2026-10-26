@@ -269,7 +269,7 @@
 
   function createPluginStorage(options) {
     const { location, config, buildingDataApi, marketDataApi, trialHistoryApi } = options;
-    const rawStorage = options.storage;
+    const rawStorage = storageCodec.guardStorage(options.storage);
     const storage = storageCodec.createStorage(rawStorage);
     const creditHrids = new Set(config.CREDIT_TYPES.map(([hrid]) => hrid));
 

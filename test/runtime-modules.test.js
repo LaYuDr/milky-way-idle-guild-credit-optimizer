@@ -45,6 +45,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/ui/trial-history-view.js",
     "src/runtime/config.js",
     "src/runtime/storage.js",
+    "src/runtime/storage-transfer.js",
     "src/runtime/scheduler.js",
     "src/runtime/game-state.js",
     "src/runtime/game-data.js",
@@ -55,6 +56,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
     "src/ui/sidebar-integration.js",
     "src/ui/styles.js",
     "src/ui/upgrade-view.js",
+    "src/ui/storage-transfer-view.js",
     "src/ui/settings-view.js",
     "src/ui/construction-view.js",
     "src/ui/shrine-guide-ui.js",
@@ -72,6 +74,7 @@ test("构建入口使用显式且无重复的模块清单并最后启动 userscr
   assert.ok(files.indexOf("src/runtime/config.js") < files.indexOf("src/trial-history.js"));
   assert.ok(files.indexOf("src/ui/upgrade-view.js") < files.indexOf("src/ui/settings-view.js"));
   assert.ok(files.indexOf("src/ui/settings-view.js") < files.indexOf("src/ui/panel-shell.js"));
+  assert.ok(files.indexOf("src/runtime/storage-transfer.js") < files.indexOf("src/ui/storage-transfer-view.js"));
   for (const file of ["src/ui/sidebar-dom.js", "src/ui/sidebar-interaction.js"]) {
     assert.ok(files.indexOf(file) < files.indexOf("src/ui/sidebar-integration.js"));
   }
