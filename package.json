@@ -1,6 +1,6 @@
 {
   "name": "milky-way-idle-guild-assistant",
-  "version": "1.2.73",
+  "version": "1.2.75",
   "private": true,
   "description": "Read-only guild assistant for Milky Way Idle: credit exchanges, shrine upgrades, construction planning, and trial history",
   "scripts": {

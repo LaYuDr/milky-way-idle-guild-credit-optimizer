@@ -30,7 +30,7 @@
       const creditName = itemNameForMaterial(creditItemHrid);
       const icon = iconMarkup(creditItemHrid, creditName);
       const collapsed = state.collapsedCreditSections.has(creditItemHrid);
-      const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
+      const heading = `<div class="mwi-credit-heading-row">${icon}<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}"><span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button></div>`;
       if (!available.length) {
         const emptyMessage =
           priceLimited && state.maxConversionItemUnitPrice

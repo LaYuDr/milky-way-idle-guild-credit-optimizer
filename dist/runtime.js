@@ -1,5 +1,5 @@
 // MWI_GUILD_CREDIT_RUNTIME
-window.MwiGuildCreditVersion = "1.2.73";
+window.MwiGuildCreditVersion = "1.2.75";
 
 // SOURCE: src/vendor/lz-string.js
 /*
@@ -2840,6 +2840,38 @@ window.MwiGuildCreditVersion = "1.2.73";
     }
   };
 
+  let guildCreditNavigationRequest = 0;
+  bridge.cancelGuildCreditNavigation = function () {
+    guildCreditNavigationRequest += 1;
+  };
+  bridge.openGuildCreditExchange = async function (creditItemHrid) {
+    if (!/^\/items\/(?:green|brown|white|blue|purple|red|silver|gold)_guild_credit$/.test(creditItemHrid)) return false;
+    const request = ++guildCreditNavigationRequest;
+    try {
+      const game = findGameController("handleChangeNavTarget", false);
+      if (game) game.handleChangeNavTarget("guild");
+      // Official client main.8add56c3: shop is the guild credit/shrine tab;
+      // creditTileClicked only opens and resets its exchange form. Never call
+      // executeExchange or exchangeGuildCreditsHandler here.
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (request !== guildCreditNavigationRequest) return false;
+        const guild = findGameController("creditTileClicked", false);
+        if (guild && guild.props?.guild && typeof guild.tabChanged === "function") {
+          guild.tabChanged("shop");
+          guild.creditTileClicked(creditItemHrid);
+          return true;
+        }
+        if (!game) return false;
+        await new Promise((resolve) => {
+          page.setTimeout(resolve, 50);
+        });
+      }
+    } catch (_) {
+      return false;
+    }
+    return false;
+  };
+
   let purchaseTimer = null;
   function cancelOnPurchaseInput(event) {
     if (event.target?.closest?.('[class*="MarketplacePanel_modalContent"]')) bridge.cancelPurchasePrefill();
@@ -4361,6 +4393,8 @@ window.MwiGuildCreditVersion = "1.2.73";
       priceReferenceB: "右一",
       priceReferenceBTitle: "右一：最高收购价；低于可交易区间的报价会忽略",
       marketItem: "在市场中查看{item}",
+      openGuildCreditExchange: "打开{credit}兑换页面",
+      guildCreditExchangeUnavailable: "暂时无法打开兑换页面，请先进入公会商店后重试。",
       updateChecking: "当前版本 v{current} · 最新版本：检查中...",
       updateAvailable: "当前版本 v{current} · 最新版本 v{latest} · 发现新版本",
       updateNow: "立即更新",
@@ -5216,6 +5250,8 @@ window.MwiGuildCreditVersion = "1.2.73";
       priceReferenceB: "Highest bid",
       priceReferenceBTitle: "Highest bid: quotes below the tradable range are ignored",
       marketItem: "View {item} in Marketplace",
+      openGuildCreditExchange: "Open {credit} exchange",
+      guildCreditExchangeUnavailable: "Unable to open the exchange. Open the Guild Shop and try again.",
       updateChecking: "Current v{current} · Latest: checking...",
       updateAvailable: "Current v{current} · Latest v{latest} · Update available",
       updateNow: "Update now",
@@ -8785,8 +8821,10 @@ window.MwiGuildCreditVersion = "1.2.73";
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView !== false,
-          showTrialHistoryView: stored.showTrialHistoryView !== false,
+          // This release opens both pages once for existing installations.
+          // Every later save records the policy, preserving subsequent opt-outs.
+          showConstructionView: !(Number(stored.defaultViewsVersion) >= 1) || stored.showConstructionView !== false,
+          showTrialHistoryView: !(Number(stored.defaultViewsVersion) >= 1) || stored.showTrialHistoryView !== false,
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           settingsOpen: stored.settingsOpen === true,
           openHelpTopics: Array.isArray(stored.openHelpTopics)
@@ -8986,6 +9024,7 @@ window.MwiGuildCreditVersion = "1.2.73";
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
+            defaultViewsVersion: 1,
             showConstructionView: state.showConstructionView === true,
             showTrialHistoryView: state.showTrialHistoryView === true,
             sidebarDisplayName: normalizeSidebarDisplayName(state.sidebarDisplayName),
@@ -12273,23 +12312,32 @@ window.MwiGuildCreditVersion = "1.2.73";
         }
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group{transition:none}}
 
-        /* Shrine plan editor: effects and costs stay next to the chosen interval. */
+        /* Credit icons navigate independently of section disclosure controls. */
+        #mwi-credit-optimizer .mwi-credit-icon-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;min-width:24px;height:24px;min-height:24px!important;padding:0!important;border:1px solid transparent;border-radius:4px;background:transparent;color:inherit;vertical-align:middle;cursor:pointer}
+        #mwi-credit-optimizer .mwi-credit-icon-link .mwi-item-icon{display:block;width:100%;height:100%}
+        #mwi-credit-optimizer .mwi-credit-icon-link:hover{background:#34514e;border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-credit-icon-link:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-shrine-materials .mwi-credit-icon-link{flex-basis:20px;width:20px;min-width:20px;height:20px;min-height:20px!important}
+        #mwi-credit-optimizer .mwi-credit-heading-row{display:flex;align-items:center;gap:0;padding-left:9px}
+        #mwi-credit-optimizer .mwi-credit-heading-row .mwi-credit-heading{min-width:0;flex:1}
+
+        /* Compact shrine workspace: level editing stays visible when details collapse. */
         #mwi-credit-optimizer .mwi-upgrade-planner{background:#24273b;border:1px solid #41465f;border-radius:6px;box-shadow:none;text-align:left}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan-list{gap:0}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan{display:block;min-width:0;padding:12px;border:0;border-top:1px solid #41465f;border-radius:0;background:transparent;box-shadow:none;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;color:#edf0fa}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:hover,#mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:focus-within{background:transparent}
-        #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(140px,1fr) minmax(180px,240px) auto 32px;gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-building-icon{display:block;width:32px;height:32px}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{align-self:center}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan :is(.mwi-upgrade-plan-shrine,.mwi-upgrade-plan-start,.mwi-upgrade-plan-target){display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
-        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;overflow:visible;text-overflow:clip;white-space:normal;color:#b7bfd4;font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan select{width:100%!important;min-height:36px;padding:5px 8px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,sans-serif}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan{grid-column:auto;grid-row:auto;display:grid;place-items:center;align-self:end;min-width:32px;width:32px;height:36px;min-height:36px;padding:4px!important;border:0;background:transparent!important;color:#b7bfd4!important;box-shadow:none}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan:hover{background:#503445!important;color:#ffa7b5!important}
-        #mwi-credit-optimizer .mwi-shrine-level-status{margin:8px 0 12px;color:#b7bfd4;font-size:12px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-shrine-level-controls{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) auto;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-level-status{margin:0;color:#b7bfd4;font-size:12px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-level-controls{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-upgrade-level-arrow{grid-column:auto;grid-row:auto;display:block;align-self:end;line-height:36px;color:#b7bfd4;font-size:14px}
-        #mwi-credit-optimizer .mwi-shrine-target-actions{display:flex;flex-wrap:wrap;gap:6px}
+        #mwi-credit-optimizer .mwi-shrine-target-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
         #mwi-credit-optimizer .mwi-shrine-target-actions button{min-height:36px;padding:5px 8px;font-size:12px;border:1px solid #41465f;border-radius:4px;background:#34394f;color:#edf0fa}
         #mwi-credit-optimizer .mwi-shrine-target-actions button:hover{background:#454e68}
         #mwi-credit-optimizer .mwi-shrine-target-actions button:disabled{opacity:.45;cursor:default}
@@ -12317,10 +12365,27 @@ window.MwiGuildCreditVersion = "1.2.73";
         #mwi-credit-optimizer .mwi-shrine-step-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin-bottom:6px}
         #mwi-credit-optimizer .mwi-shrine-step-heading strong{color:#edf0fa;font-weight:600}
         #mwi-credit-optimizer .mwi-shrine-step-heading span{color:#91dfcb}
-        @container (max-width:520px){#mwi-credit-optimizer .mwi-shrine-level-controls{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr)}#mwi-credit-optimizer .mwi-shrine-target-actions{grid-column:1/-1}}
+        #mwi-credit-optimizer .mwi-shrine-plan-overview{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0 40px}
+        #mwi-credit-optimizer .mwi-shrine-plan-overview .mwi-shrine-warning{margin:0}
+        @container (max-width:650px){
+          #mwi-credit-optimizer .mwi-shrine-plan-header{grid-template-columns:32px minmax(0,1fr) 50px 32px}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{grid-column:1;grid-row:1}
+          #mwi-credit-optimizer .mwi-upgrade-planner .mwi-shrine-plan-header .mwi-upgrade-plan-shrine{grid-column:2/4;grid-row:1}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-level-controls{grid-column:1/3;grid-row:2;gap:6px}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-collapse-bar{grid-column:3/5;grid-row:2;justify-self:end}
+          #mwi-credit-optimizer .mwi-upgrade-planner .mwi-shrine-plan-header .mwi-remove-plan{grid-column:4;grid-row:1}
+        }
+        @container (max-width:400px){
+          #mwi-credit-optimizer .mwi-shrine-plan-header{grid-template-columns:32px minmax(0,1fr) 32px 32px}
+          #mwi-credit-optimizer .mwi-shrine-collapse-bar button{padding-inline:0}
+          #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-level-controls .mwi-shrine-picker-trigger{gap:4px;padding-inline:6px}
+          #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-shrine-picker-trigger>svg{flex-basis:12px;width:12px}
+          #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-shrine-picker-trigger>span{white-space:nowrap}
+          #mwi-credit-optimizer .mwi-shrine-plan-overview{margin-left:0}
+        }
 
-        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#b7bfd4;font-size:12px}
-        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:30px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;align-items:center;gap:8px;white-space:nowrap;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button:hover{background:#34394f}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button[aria-expanded="true"] svg{transform:rotate(180deg)}
@@ -17312,13 +17377,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           const collapsed = plan.collapsed === true;
           const bodyId = `mwi-shrine-plan-body-${plan.id}`;
           return `<article class="mwi-upgrade-plan" data-plan-id="${escapeHtml(plan.id)}" data-guild-buff-hrid="${escapeHtml(entry.hrid)}" data-shrine-hrid="${escapeHtml(shrineHrid)}" data-domain="${isCombatGuildBuff(entry) ? "combat" : "life"}" aria-label="${escapeHtml(title)}">
-          <div class="mwi-shrine-plan-header"><span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span><div class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></div><button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button></div>
-          <div class="mwi-shrine-collapse-bar"><span>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</span><button type="button" data-role="toggle-plan" aria-expanded="${!collapsed}" aria-controls="${escapeHtml(bodyId)}" aria-label="${escapeHtml(t(collapsed ? "shrineExpandNamed" : "shrineCollapseNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>${escapeHtml(t(collapsed ? "shrineExpand" : "shrineCollapse"))}</button></div>
-          <div class="mwi-shrine-plan-body" id="${escapeHtml(bodyId)}"${collapsed ? " hidden" : ""}>
-          <p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap) }))}</p>
-          <div class="mwi-shrine-level-controls"><div class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></div><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><div class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></div><div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div></div>
+          <div class="mwi-shrine-plan-header">
+          <span class="mwi-shrine-plan-icon" aria-hidden="true">${icon}</span>
+          <div class="mwi-upgrade-plan-shrine"><span class="mwi-upgrade-field-label">${escapeHtml(t("shrine"))} · ${escapeHtml(t(isCombatGuildBuff(entry) ? "domainCombat" : "domainLife"))}</span><select data-role="plan-buff" aria-label="${escapeHtml(t("shrine"))}">${buffOptions}</select></div>
+          <div class="mwi-shrine-level-controls"><div class="mwi-upgrade-plan-start"><span class="mwi-upgrade-field-label">${escapeHtml(t("startLevel"))}</span><select data-role="plan-start" aria-label="${escapeHtml(t("startLevel"))}">${levelOptionMarkup(0, entry.maxLevel - 1, plan.startLevel)}</select></div><span class="mwi-upgrade-level-arrow" aria-hidden="true">→</span><div class="mwi-upgrade-plan-target"><span class="mwi-upgrade-field-label">${escapeHtml(t("targetLevel"))}</span><select data-role="plan-target" aria-label="${escapeHtml(t("targetLevel"))}">${levelOptionMarkup(plan.startLevel + 1, entry.maxLevel, plan.targetLevel)}</select></div></div>
+          <div class="mwi-shrine-collapse-bar"><button type="button" data-role="toggle-plan" aria-expanded="${!collapsed}" aria-controls="${escapeHtml(bodyId)}" aria-label="${escapeHtml(t(collapsed ? "shrineExpandNamed" : "shrineCollapseNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>${escapeHtml(t(collapsed ? "shrineExpand" : "shrineCollapse"))}</button></div>
+          <button class="mwi-remove-plan" data-role="remove-plan" type="button" title="${escapeHtml(t("removePlan"))}" aria-label="${escapeHtml(t("shrineRemoveNamed", { shrine: title }))}"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+          </div>
+          <div class="mwi-shrine-plan-overview"><p class="mwi-shrine-level-status">${escapeHtml(t("shrineLevelStatus", { current, cap: cap === null ? t("notRead") : formatNumber(cap) }))}</p>
           ${!knownLevel ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineStartAssumed"))}</p>` : ""}
-          ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}
+          ${cap === null ? `<p class="mwi-shrine-warning">${escapeHtml(t("shrineCapUnknown"))}</p>` : aboveCap ? `<p class="mwi-shrine-warning" data-shrine-cap-warning>${escapeHtml(t("shrineAboveCap", { level: formatNumber(cap) }))}</p>` : ""}</div>
+          <div class="mwi-shrine-plan-body" id="${escapeHtml(bodyId)}"${collapsed ? " hidden" : ""}>
+          <div class="mwi-shrine-target-actions"><button type="button" data-role="shrine-target-next">${escapeHtml(t("shrineNextLevel"))}</button><button type="button" data-role="shrine-target-cap" data-target-level="${cap === null ? "" : Math.min(cap, entry.maxLevel)}"${cap === null || cap <= plan.startLevel ? " disabled" : ""}>${escapeHtml(t("shrineToGuildCap"))}</button></div>
           <section class="mwi-shrine-plan-effects" aria-label="${escapeHtml(t("shrineEffectComparison"))}"><h4>${escapeHtml(t("shrineEffectComparison"))}<small>${escapeHtml(t("shrineLevelRange", { start: plan.startLevel, target: plan.targetLevel }))}</small></h4>${renderPlanEffects(preview)}</section>
           <section class="mwi-shrine-plan-cost" aria-label="${escapeHtml(t("shrineRangeCost"))}"><h4>${escapeHtml(t("shrineRangeCost"))}</h4>${renderPlanMaterials(preview)}</section>
           <details class="mwi-shrine-steps" data-shrine-steps${openPlans.has(plan.id) ? " open" : ""}><summary data-shrine-steps-summary>${escapeHtml(t("shrineSteps", { count: preview.steps.length }))}</summary><ol>${preview.steps.map((step) => `<li data-shrine-step="${step.level}"><div class="mwi-shrine-step-heading"><strong>${escapeHtml(t("shrineStepLevel", { start: step.level - 1, target: step.level }))}</strong><span>${step.effects.length ? step.effects.map((effect) => escapeHtml(`${effects.name(effect)} ${effects.value(effect, effect.value)}`)).join(" · ") : escapeHtml(t("shrineEffectsUnavailable"))}</span></div>${renderPlanMaterials({ status: "ok", totals: step.totals })}</li>`).join("")}</ol>${preview.status !== "ok" ? renderPlanMaterials(preview) : ""}</details>
@@ -19480,6 +19550,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       resetGuildPointHistory,
       persistGuildBuildingPlannerState,
       setPriceReference,
+      openGuildCreditExchange,
       openMarketplaceForItem
     } = dependencies;
     const sortableControllers = [];
@@ -19911,6 +19982,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
           <button class="mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}">${escapeHtml(t("interfaceSettings"))}</button>
         </div>
+        <div class="mwi-status" data-role="credit-navigation-status" role="status" hidden></div>
         ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
           <div class="mwi-controls">
@@ -20377,6 +20449,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         );
       });
       panel.addEventListener("click", (event) => {
+        const creditLink = event.target.closest('[data-role="guild-credit-link"]');
+        if (creditLink) {
+          event.preventDefault();
+          event.stopPropagation();
+          openGuildCreditExchange(creditLink.dataset.creditHrid);
+          return;
+        }
         const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
         if (modeButton) {
           const creditItemHrid = modeButton.dataset.creditHrid;
@@ -20620,7 +20699,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       const creditName = itemNameForMaterial(creditItemHrid);
       const icon = iconMarkup(creditItemHrid, creditName);
       const collapsed = state.collapsedCreditSections.has(creditItemHrid);
-      const heading = `<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}">${icon}<span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
+      const heading = `<div class="mwi-credit-heading-row">${icon}<button class="mwi-credit-heading" data-role="toggle-credit-section" type="button" aria-expanded="${String(!collapsed)}"><span>${escapeHtml(creditName)}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button></div>`;
       if (!available.length) {
         const emptyMessage =
           priceLimited && state.maxConversionItemUnitPrice
@@ -21142,8 +21221,29 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   function iconMarkup(itemHrid, label) {
     const href = itemSpriteHref(itemHrid);
-    if (!href) return '<span class="mwi-item-icon mwi-item-icon-fallback" aria-hidden="true"></span>';
-    return `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`;
+    const icon = href
+      ? `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`
+      : '<span class="mwi-item-icon mwi-item-icon-fallback" aria-hidden="true"></span>';
+    if (!CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return icon;
+    const action = t("openGuildCreditExchange", { credit: label });
+    return `<button class="mwi-credit-icon-link" data-role="guild-credit-link" data-credit-hrid="${escapeHtml(itemHrid)}" type="button" title="${escapeHtml(action)}" aria-label="${escapeHtml(action)}">${icon}</button>`;
+  }
+
+  let guildCreditNavigationRequest = 0;
+  async function openGuildCreditExchange(itemHrid) {
+    if (!CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return;
+    const request = ++guildCreditNavigationRequest;
+    const status = state.panel?.querySelector('[data-role="credit-navigation-status"]');
+    if (status) status.hidden = true;
+    let opened = false;
+    try {
+      opened = await window.__mwiGuildCreditBridge?.openGuildCreditExchange?.(itemHrid);
+    } catch (_) {
+      // A changed or not-yet-mounted game UI must leave the player's plan intact.
+    }
+    if (request !== guildCreditNavigationRequest || opened || !status?.isConnected) return;
+    status.textContent = t("guildCreditExchangeUnavailable");
+    status.hidden = false;
   }
 
   function guildBuildingSpriteBaseHref() {
@@ -21196,6 +21296,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   }
 
   function marketItemIconMarkup(itemHrid, label, className = "", purchaseQuantity = null) {
+    if (CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return iconMarkup(itemHrid, label);
     const marketLabel = t("marketItem", { item: label });
     return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" data-purchase-quantity="${Number.isSafeInteger(purchaseQuantity) && purchaseQuantity > 0 ? purchaseQuantity : ""}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
   }
@@ -21527,6 +21628,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     resetGuildPointHistory,
     persistGuildBuildingPlannerState,
     setPriceReference,
+    openGuildCreditExchange,
     openMarketplaceForItem
   });
   const { createPanel, recreatePanel, dispose: disposePanelShell } = panelShell;
@@ -21650,6 +21752,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
     window.__mwiGuildCreditBridge?.cancelPurchasePrefill?.();
+    window.__mwiGuildCreditBridge?.cancelGuildCreditNavigation?.();
+    guildCreditNavigationRequest += 1;
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarController.destroy();

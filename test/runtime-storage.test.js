@@ -103,6 +103,7 @@ test("神龛填充排除项只保留合法 HRID 并与建设页可见性持久�
         "/guild_buffs/contains space",
         42
       ],
+      defaultViewsVersion: 1,
       showConstructionView: false,
       showTrialHistoryView: false
     })
@@ -143,6 +144,7 @@ test("建设与历史试炼页签默认开启，并保留明确关闭的设置",
   for (const value of [undefined, null, 0, 1, "false", "true", false, true]) {
     const storage = memoryStorage({
       [config.UI_STATE_STORAGE_KEY]: JSON.stringify({
+        defaultViewsVersion: 1,
         showConstructionView: value,
         showTrialHistoryView: value
       })
@@ -866,4 +868,38 @@ test("迁移写入失败不丢失规划设置，返回可见失败标记", () =>
   assert.equal(result.guildPointSettings.guildPointPlanningWeeks, 4);
   assert.equal(result.guildPointSettings.guildPointForecastSaveFailed, true);
   assert.equal(createStorage(memory).persistGuildBuildingPlannerState({ buildingPlans: [] }), false);
+});
+
+test("旧用户升级同时开启建设与试炼，后续主动关闭仍能保存", () => {
+  for (const flags of [
+    [false, false],
+    [false, true],
+    [true, false]
+  ]) {
+    const old = {
+      showConstructionView: flags[0],
+      showTrialHistoryView: flags[1],
+      targetCredit: 900,
+      sidebarDisplayName: "我的助手",
+      upgradePlans: [{ guildBuffHrid: "/guild_buffs/tempo_life", startLevel: 1, targetLevel: 2 }]
+    };
+    const storage = memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify(old), "other-plugin": "keep" });
+    const api = createStorage(storage);
+    const state = api.loadSavedPluginUiState();
+    assert.equal(state.showConstructionView, true);
+    assert.equal(state.showTrialHistoryView, true);
+    assert.equal(state.targetCredit, 900);
+    assert.deepEqual(state.upgradePlans, old.upgradePlans);
+    state.showConstructionView = false;
+    state.showTrialHistoryView = false;
+    assert.equal(
+      api.persistPluginUiState({ ...state, collapsedCreditSections: new Set(), guildTokenCreditHrids: new Set() }),
+      true
+    );
+    const after = api.loadSavedPluginUiState();
+    assert.equal(after.showConstructionView, false);
+    assert.equal(after.showTrialHistoryView, false);
+    assert.equal(JSON.parse(storage.value(config.UI_STATE_STORAGE_KEY)).defaultViewsVersion, 1);
+    assert.equal(storage.value("other-plugin"), "keep");
+  }
 });

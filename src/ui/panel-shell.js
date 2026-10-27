@@ -65,6 +65,7 @@
       resetGuildPointHistory,
       persistGuildBuildingPlannerState,
       setPriceReference,
+      openGuildCreditExchange,
       openMarketplaceForItem
     } = dependencies;
     const sortableControllers = [];
@@ -496,6 +497,7 @@
           <div class="mwi-view-tabs" role="tablist" aria-label="${escapeHtml(t("panelViewOrder"))}">${renderPanelTabs()}</div>
           <button class="mwi-settings-trigger" data-role="toggle-settings" type="button" aria-expanded="${String(state.settingsOpen)}" aria-controls="mwi-settings-panel" aria-label="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}" title="${escapeHtml(t(state.settingsOpen ? "closeInterfaceSettings" : "openInterfaceSettings"))}">${escapeHtml(t("interfaceSettings"))}</button>
         </div>
+        <div class="mwi-status" data-role="credit-navigation-status" role="status" hidden></div>
         ${renderSettingsMarkup()}
         <div id="mwi-view-panel-credit" data-role="credit-view" role="tabpanel" aria-labelledby="mwi-view-tab-credit"${state.activeView === "credit" ? "" : " hidden"}>
           <div class="mwi-controls">
@@ -962,6 +964,13 @@
         );
       });
       panel.addEventListener("click", (event) => {
+        const creditLink = event.target.closest('[data-role="guild-credit-link"]');
+        if (creditLink) {
+          event.preventDefault();
+          event.stopPropagation();
+          openGuildCreditExchange(creditLink.dataset.creditHrid);
+          return;
+        }
         const modeButton = event.target.closest('[data-role="toggle-credit-token-mode"]');
         if (modeButton) {
           const creditItemHrid = modeButton.dataset.creditHrid;

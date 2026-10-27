@@ -464,11 +464,16 @@ Shrine and level selectors use a custom, themed listbox popover. Shrine options 
 by life/combat, with official icons, effect descriptions, selected marks and unavailable reasons.
 The hidden native select is only an adapter for the existing plan change handlers; it cannot
 receive user focus or open a system picker. Each plan
-can independently collapse its details while keeping the shrine selector, domain, level
-range, remove control and expand action visible. Existing and newly added plans start expanded;
+can independently collapse its details while keeping the shrine selector, domain, editable start/target
+levels, purchased-level/guild-cap status, warnings, remove control and expand action visible.
+The compact workspace aligns shrine and level choices in one row on wide panels; panels
+at most 650px wide place the level interval and disclosure on a second row. Changing either
+level while collapsed updates costs and saved plans without expanding details; the target
+remains strictly above the start. Each field has one picker and one existing change-event path. Existing and newly added plans start expanded;
 only an explicit true `collapsed` flag is saved in local UI state. Collapsing changes no costs,
 levels or guide plans. Changing the selected shrine expands that plan for review.
-Expanded plans show purchased levels, guild cap, effect comparison and total materials. One level and To guild cap are local planning shortcuts. A target above
+Expanded plans show the effect comparison, total materials and existing local planning shortcuts.
+One level sets the target to start + 1; To guild cap preserves its existing meaning. A target above
 the guild cap remains a future plan with a warning; an unread cap is not treated as zero.
 The per-level disclosure lists only the selected interval, with effects at each destination
 level and materials for that step. It preserves expansion and control focus across refreshes.
@@ -488,7 +493,8 @@ The new shrine-upgrade suite covers all eleven Chinese widths and English 320/61
 including custom group rendering, hidden native controls, keyboard arrows/Home/End/typeahead,
 Enter and pointer selection, Escape/Tab/outside dismissal, popup refresh retention, viewport
 placement, zero-to-first effects, start/target changes, exact total and per-step costs,
-independent combat effects, disclosure and focus retention, shortcuts, duplicate selection,
+independent combat effects, disclosure and focus retention, collapsed start/target editing and
+persistence, compact responsive alignment, shortcuts, duplicate selection,
 future-cap warnings and overflow. Plan height follows the visible content rather than the
 previous single-line row limit. Preserve the existing empty-plan and guide regressions.
 
@@ -1384,3 +1390,21 @@ text overflow and minimum control height. It saves 320px Chinese/English capture
 and a matrix report under `.workbench/browser-usage-*`. No real game or statistics
 service is contacted. This does not replace final Tampermonkey or receiver
 integration evidence.
+
+### Guild credit icon navigation and default page migration (2026-10-27)
+
+Every guild credit icon rendered by the assistant is a named native button. Credit-value headings
+keep the exchange icon separate from their collapse button; shrine totals, step costs and material
+summaries use the same renderer. Clicking an icon navigates to the native Guild Shop and calls
+`creditTileClicked` for that exact credit. The bridge resolves current React controllers on demand,
+waits at most two seconds for mounting, cancels obsolete clicks/page exits, and never calls an
+exchange submission handler. Missing game UI displays a localized recovery message.
+The official public client `main.8add56c3.chunk.js` was checked on 2026-10-27 for the `guild`
+navigation target, `shop` tab and `creditTileClicked` form-opening behavior. Browser fixtures verify
+all eight credits, per-plan/material links, independent heading disclosure, failure feedback and
+no nested buttons. Real-game confirmation remains distinct from fixture evidence.
+
+Construction and trial-history pages default on for fresh installations. UI records without
+`defaultViewsVersion >= 1` also open both pages on upgrade, as explicitly requested. Every subsequent
+UI save writes policy version 1, preserving any later deliberate opt-out. Existing plans, history,
+prices, tab ordering and other plugins' storage remain intact; no data is cleared.

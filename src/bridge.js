@@ -189,6 +189,38 @@
     }
   };
 
+  let guildCreditNavigationRequest = 0;
+  bridge.cancelGuildCreditNavigation = function () {
+    guildCreditNavigationRequest += 1;
+  };
+  bridge.openGuildCreditExchange = async function (creditItemHrid) {
+    if (!/^\/items\/(?:green|brown|white|blue|purple|red|silver|gold)_guild_credit$/.test(creditItemHrid)) return false;
+    const request = ++guildCreditNavigationRequest;
+    try {
+      const game = findGameController("handleChangeNavTarget", false);
+      if (game) game.handleChangeNavTarget("guild");
+      // Official client main.8add56c3: shop is the guild credit/shrine tab;
+      // creditTileClicked only opens and resets its exchange form. Never call
+      // executeExchange or exchangeGuildCreditsHandler here.
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (request !== guildCreditNavigationRequest) return false;
+        const guild = findGameController("creditTileClicked", false);
+        if (guild && guild.props?.guild && typeof guild.tabChanged === "function") {
+          guild.tabChanged("shop");
+          guild.creditTileClicked(creditItemHrid);
+          return true;
+        }
+        if (!game) return false;
+        await new Promise((resolve) => {
+          page.setTimeout(resolve, 50);
+        });
+      }
+    } catch (_) {
+      return false;
+    }
+    return false;
+  };
+
   let purchaseTimer = null;
   function cancelOnPurchaseInput(event) {
     if (event.target?.closest?.('[class*="MarketplacePanel_modalContent"]')) bridge.cancelPurchasePrefill();

@@ -403,8 +403,29 @@
 
   function iconMarkup(itemHrid, label) {
     const href = itemSpriteHref(itemHrid);
-    if (!href) return '<span class="mwi-item-icon mwi-item-icon-fallback" aria-hidden="true"></span>';
-    return `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`;
+    const icon = href
+      ? `<svg class="mwi-item-icon" role="img" aria-label="${escapeHtml(label)}"><use href="${escapeHtml(href)}"></use></svg>`
+      : '<span class="mwi-item-icon mwi-item-icon-fallback" aria-hidden="true"></span>';
+    if (!CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return icon;
+    const action = t("openGuildCreditExchange", { credit: label });
+    return `<button class="mwi-credit-icon-link" data-role="guild-credit-link" data-credit-hrid="${escapeHtml(itemHrid)}" type="button" title="${escapeHtml(action)}" aria-label="${escapeHtml(action)}">${icon}</button>`;
+  }
+
+  let guildCreditNavigationRequest = 0;
+  async function openGuildCreditExchange(itemHrid) {
+    if (!CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return;
+    const request = ++guildCreditNavigationRequest;
+    const status = state.panel?.querySelector('[data-role="credit-navigation-status"]');
+    if (status) status.hidden = true;
+    let opened = false;
+    try {
+      opened = await window.__mwiGuildCreditBridge?.openGuildCreditExchange?.(itemHrid);
+    } catch (_) {
+      // A changed or not-yet-mounted game UI must leave the player's plan intact.
+    }
+    if (request !== guildCreditNavigationRequest || opened || !status?.isConnected) return;
+    status.textContent = t("guildCreditExchangeUnavailable");
+    status.hidden = false;
   }
 
   function guildBuildingSpriteBaseHref() {
@@ -457,6 +478,7 @@
   }
 
   function marketItemIconMarkup(itemHrid, label, className = "", purchaseQuantity = null) {
+    if (CREDIT_TYPES.some(([hrid]) => hrid === itemHrid)) return iconMarkup(itemHrid, label);
     const marketLabel = t("marketItem", { item: label });
     return `<button class="mwi-market-item-link ${escapeHtml(className)}" data-role="market-item-link" data-item-hrid="${escapeHtml(itemHrid)}" data-item-name="${escapeHtml(label)}" data-purchase-quantity="${Number.isSafeInteger(purchaseQuantity) && purchaseQuantity > 0 ? purchaseQuantity : ""}" type="button" title="${escapeHtml(marketLabel)}" aria-label="${escapeHtml(marketLabel)}">${iconMarkup(itemHrid, label)}</button>`;
   }
@@ -788,6 +810,7 @@
     resetGuildPointHistory,
     persistGuildBuildingPlannerState,
     setPriceReference,
+    openGuildCreditExchange,
     openMarketplaceForItem
   });
   const { createPanel, recreatePanel, dispose: disposePanelShell } = panelShell;
@@ -911,6 +934,8 @@
     guildTokenBudgetRefreshTask.dispose();
     marketDataRefreshTask.dispose();
     window.__mwiGuildCreditBridge?.cancelPurchasePrefill?.();
+    window.__mwiGuildCreditBridge?.cancelGuildCreditNavigation?.();
+    guildCreditNavigationRequest += 1;
     inventoryDataRefreshTask.dispose();
     guildDataRefreshTask.dispose();
     sidebarController.destroy();

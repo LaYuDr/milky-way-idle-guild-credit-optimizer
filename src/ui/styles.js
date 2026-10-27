@@ -646,23 +646,32 @@
         }
         @media (prefers-reduced-motion:reduce){#mwi-credit-optimizer .mwi-construction-group{transition:none}}
 
-        /* Shrine plan editor: effects and costs stay next to the chosen interval. */
+        /* Credit icons navigate independently of section disclosure controls. */
+        #mwi-credit-optimizer .mwi-credit-icon-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;min-width:24px;height:24px;min-height:24px!important;padding:0!important;border:1px solid transparent;border-radius:4px;background:transparent;color:inherit;vertical-align:middle;cursor:pointer}
+        #mwi-credit-optimizer .mwi-credit-icon-link .mwi-item-icon{display:block;width:100%;height:100%}
+        #mwi-credit-optimizer .mwi-credit-icon-link:hover{background:#34514e;border-color:#91dfcb}
+        #mwi-credit-optimizer .mwi-credit-icon-link:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
+        #mwi-credit-optimizer .mwi-shrine-materials .mwi-credit-icon-link{flex-basis:20px;width:20px;min-width:20px;height:20px;min-height:20px!important}
+        #mwi-credit-optimizer .mwi-credit-heading-row{display:flex;align-items:center;gap:0;padding-left:9px}
+        #mwi-credit-optimizer .mwi-credit-heading-row .mwi-credit-heading{min-width:0;flex:1}
+
+        /* Compact shrine workspace: level editing stays visible when details collapse. */
         #mwi-credit-optimizer .mwi-upgrade-planner{background:#24273b;border:1px solid #41465f;border-radius:6px;box-shadow:none;text-align:left}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan-list{gap:0}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan{display:block;min-width:0;padding:12px;border:0;border-top:1px solid #41465f;border-radius:0;background:transparent;box-shadow:none;font:14px/1.45 system-ui,-apple-system,"Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums;color:#edf0fa}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:hover,#mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan:focus-within{background:transparent}
-        #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-plan-header{display:grid;grid-template-columns:32px minmax(140px,1fr) minmax(180px,240px) auto 32px;gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-building-icon{display:block;width:32px;height:32px}
         #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{align-self:center}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan :is(.mwi-upgrade-plan-shrine,.mwi-upgrade-plan-start,.mwi-upgrade-plan-target){display:grid;gap:4px;min-width:0;grid-column:auto;grid-row:auto;text-align:left;justify-items:stretch;font-weight:400}
-        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-field-label{display:block;overflow:visible;text-overflow:clip;white-space:normal;color:#b7bfd4;font-size:12px;line-height:1.4}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-upgrade-plan select{width:100%!important;min-height:36px;padding:5px 8px;border:1px solid #626b86;border-radius:5px;background:#191c2e;color:#edf0fa;font:14px/1.4 system-ui,sans-serif}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan{grid-column:auto;grid-row:auto;display:grid;place-items:center;align-self:end;min-width:32px;width:32px;height:36px;min-height:36px;padding:4px!important;border:0;background:transparent!important;color:#b7bfd4!important;box-shadow:none}
         #mwi-credit-optimizer .mwi-upgrade-planner .mwi-remove-plan:hover{background:#503445!important;color:#ffa7b5!important}
-        #mwi-credit-optimizer .mwi-shrine-level-status{margin:8px 0 12px;color:#b7bfd4;font-size:12px;overflow-wrap:anywhere}
-        #mwi-credit-optimizer .mwi-shrine-level-controls{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) auto;gap:8px;align-items:end}
+        #mwi-credit-optimizer .mwi-shrine-level-status{margin:0;color:#b7bfd4;font-size:12px;overflow-wrap:anywhere}
+        #mwi-credit-optimizer .mwi-shrine-level-controls{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);gap:8px;align-items:end}
         #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-upgrade-level-arrow{grid-column:auto;grid-row:auto;display:block;align-self:end;line-height:36px;color:#b7bfd4;font-size:14px}
-        #mwi-credit-optimizer .mwi-shrine-target-actions{display:flex;flex-wrap:wrap;gap:6px}
+        #mwi-credit-optimizer .mwi-shrine-target-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
         #mwi-credit-optimizer .mwi-shrine-target-actions button{min-height:36px;padding:5px 8px;font-size:12px;border:1px solid #41465f;border-radius:4px;background:#34394f;color:#edf0fa}
         #mwi-credit-optimizer .mwi-shrine-target-actions button:hover{background:#454e68}
         #mwi-credit-optimizer .mwi-shrine-target-actions button:disabled{opacity:.45;cursor:default}
@@ -690,10 +699,27 @@
         #mwi-credit-optimizer .mwi-shrine-step-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin-bottom:6px}
         #mwi-credit-optimizer .mwi-shrine-step-heading strong{color:#edf0fa;font-weight:600}
         #mwi-credit-optimizer .mwi-shrine-step-heading span{color:#91dfcb}
-        @container (max-width:520px){#mwi-credit-optimizer .mwi-shrine-level-controls{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr)}#mwi-credit-optimizer .mwi-shrine-target-actions{grid-column:1/-1}}
+        #mwi-credit-optimizer .mwi-shrine-plan-overview{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 0 40px}
+        #mwi-credit-optimizer .mwi-shrine-plan-overview .mwi-shrine-warning{margin:0}
+        @container (max-width:650px){
+          #mwi-credit-optimizer .mwi-shrine-plan-header{grid-template-columns:32px minmax(0,1fr) 50px 32px}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-plan-icon{grid-column:1;grid-row:1}
+          #mwi-credit-optimizer .mwi-upgrade-planner .mwi-shrine-plan-header .mwi-upgrade-plan-shrine{grid-column:2/4;grid-row:1}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-level-controls{grid-column:1/3;grid-row:2;gap:6px}
+          #mwi-credit-optimizer .mwi-shrine-plan-header .mwi-shrine-collapse-bar{grid-column:3/5;grid-row:2;justify-self:end}
+          #mwi-credit-optimizer .mwi-upgrade-planner .mwi-shrine-plan-header .mwi-remove-plan{grid-column:4;grid-row:1}
+        }
+        @container (max-width:400px){
+          #mwi-credit-optimizer .mwi-shrine-plan-header{grid-template-columns:32px minmax(0,1fr) 32px 32px}
+          #mwi-credit-optimizer .mwi-shrine-collapse-bar button{padding-inline:0}
+          #mwi-credit-optimizer .mwi-upgrade-plan .mwi-shrine-level-controls .mwi-shrine-picker-trigger{gap:4px;padding-inline:6px}
+          #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-shrine-picker-trigger>svg{flex-basis:12px;width:12px}
+          #mwi-credit-optimizer .mwi-shrine-level-controls .mwi-shrine-picker-trigger>span{white-space:nowrap}
+          #mwi-credit-optimizer .mwi-shrine-plan-overview{margin-left:0}
+        }
 
-        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;color:#b7bfd4;font-size:12px}
-        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:30px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar{display:flex;align-items:center;gap:8px;white-space:nowrap;color:#b7bfd4;font-size:12px}
+        #mwi-credit-optimizer .mwi-shrine-collapse-bar button{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:4px 6px;border:0;border-radius:4px;background:transparent;color:#91dfcb;font:inherit;cursor:pointer}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button:hover{background:#34394f}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-shrine-collapse-bar button[aria-expanded="true"] svg{transform:rotate(180deg)}

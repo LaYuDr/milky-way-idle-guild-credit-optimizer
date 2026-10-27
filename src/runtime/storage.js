@@ -659,8 +659,10 @@
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
             stored.guildShrineAutofillExcludedBuffHrids
           ),
-          showConstructionView: stored.showConstructionView !== false,
-          showTrialHistoryView: stored.showTrialHistoryView !== false,
+          // This release opens both pages once for existing installations.
+          // Every later save records the policy, preserving subsequent opt-outs.
+          showConstructionView: !(Number(stored.defaultViewsVersion) >= 1) || stored.showConstructionView !== false,
+          showTrialHistoryView: !(Number(stored.defaultViewsVersion) >= 1) || stored.showTrialHistoryView !== false,
           sidebarDisplayName: normalizeSidebarDisplayName(stored.sidebarDisplayName),
           settingsOpen: stored.settingsOpen === true,
           openHelpTopics: Array.isArray(stored.openHelpTopics)
@@ -860,6 +862,7 @@
             guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
               state.guildShrineAutofillExcludedBuffHrids
             ),
+            defaultViewsVersion: 1,
             showConstructionView: state.showConstructionView === true,
             showTrialHistoryView: state.showTrialHistoryView === true,
             sidebarDisplayName: normalizeSidebarDisplayName(state.sidebarDisplayName),

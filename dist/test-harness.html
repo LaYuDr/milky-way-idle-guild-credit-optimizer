@@ -866,7 +866,14 @@
       const visibleAuditElements = auditElements.filter((element) => {
         const style = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
-        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        // Closed native details may retain geometry for unpainted descendants.
+        return (
+          element.checkVisibility() &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
       });
       const overflow = visibleAuditElements
         .filter((element) => {
@@ -1013,6 +1020,78 @@
     };
 
     window.__mwiLayoutAuditReady = layoutAudit ? prepareLayoutAudit() : Promise.resolve(null);
+
+    async function auditCreditNavigation(panel, checks) {
+      const root = document.createElement("div");
+      root.id = "root";
+      document.body.append(root);
+      const calls = [];
+      const guild = {
+        props: { guild: {} },
+        tabChanged: (tab) => calls.push(["tab", tab]),
+        creditTileClicked: (credit) => {
+          calls.push(["credit", credit]);
+          root.dataset.exchangeCredit = credit;
+        },
+        executeExchange: () => {
+          throw new Error("Unexpected exchange submission");
+        }
+      };
+      root.__reactContainer$creditNavigation = {
+        current: {
+          child: {
+            stateNode: { handleChangeNavTarget: (target) => calls.push(["navigate", target]) },
+            sibling: { stateNode: guild }
+          }
+        }
+      };
+      const delay = () => new Promise((resolve) => setTimeout(resolve, 80));
+      const materialLinks = [
+        ...panel.querySelectorAll(
+          '.mwi-shrine-materials [data-role="guild-credit-link"],.mwi-material-credit [data-role="guild-credit-link"]'
+        )
+      ];
+      checks.materialCreditLinks = materialLinks.length > 0;
+      for (const link of materialLinks) {
+        link.click();
+        await delay();
+      }
+      checks.materialLinksOpenMatchingCredit = materialLinks.every((link) =>
+        calls.some(([kind, credit]) => kind === "credit" && credit === link.dataset.creditHrid)
+      );
+      panel.querySelector('[data-role="view-credit"]').click();
+      await waitFor(() => panel.querySelector('.mwi-token-value-row [data-role="guild-credit-link"]'));
+      const links = [...panel.querySelectorAll('.mwi-token-value-row [data-role="guild-credit-link"]')];
+      for (const link of links) {
+        link.click();
+        await delay();
+      }
+      checks.allEightCreditLinks =
+        new Set(links.map((link) => link.dataset.creditHrid)).size === 8 &&
+        links.every((link) => calls.some(([kind, credit]) => kind === "credit" && credit === link.dataset.creditHrid));
+      const section = panel.querySelector("[data-credit-item-hrid]");
+      const collapsed = section.dataset.collapsed;
+      section.querySelector('[data-role="guild-credit-link"]').click();
+      await delay();
+      checks.creditIconDoesNotCollapse = section.dataset.collapsed === collapsed;
+      checks.noNestedButtons = !panel.querySelector("button button");
+      checks.creditIconsNamed = [...panel.querySelectorAll('[data-role="guild-credit-link"]')].every((link) =>
+        Boolean(link.getAttribute("aria-label"))
+      );
+      checks.onlyNativeNavigation = calls.every(
+        ([kind, value]) =>
+          kind === "credit" || (kind === "navigate" && value === "guild") || (kind === "tab" && value === "shop")
+      );
+      root.remove();
+      links[0].click();
+      await delay();
+      checks.creditNavigationFailureVisible = panel
+        .querySelector('[data-role="credit-navigation-status"]')
+        .checkVisibility();
+      panel.querySelector('[data-role="credit-navigation-status"]').hidden = true;
+      panel.querySelector('[data-role="view-upgrade"]').click();
+      await delay();
+    }
 
     async function runShrineUpgradeAudit() {
       await prepareLayoutAudit();
@@ -1185,7 +1264,55 @@
         [...list.querySelectorAll(".mwi-shrine-plan-body")].filter((el) => el.hidden).length === 1;
       checks.collapsedSummary =
         Boolean(row().querySelector('[data-picker-role="plan-buff"]').getClientRects().length) &&
-        row().querySelector(".mwi-shrine-collapse-bar").textContent.includes("2");
+        ["plan-start", "plan-target"].every((role) => trigger(role).checkVisibility()) &&
+        trigger("plan-target").textContent.includes("2");
+      checks.levelControlsOutsideDetails = ["plan-start", "plan-target"].every(
+        (role) => !trigger(role).closest(".mwi-shrine-plan-body")
+      );
+      const buffBounds = trigger("plan-buff").getBoundingClientRect();
+      const startBounds = trigger("plan-start").getBoundingClientRect();
+      const wideHeader =
+        getComputedStyle(row().querySelector(".mwi-shrine-plan-header")).gridTemplateColumns.split(" ").length === 5;
+      checks.compactResponsiveLayout = wideHeader
+        ? Math.abs(buffBounds.top - startBounds.top) < 1
+        : startBounds.top >= buffBounds.bottom;
+      const headerBounds = row().querySelector(".mwi-shrine-plan-header").getBoundingClientRect();
+      checks.compactShrineWidth = wideHeader || buffBounds.width >= headerBounds.width - 80;
+      checks.levelValuesStayOnOneLine = ["plan-start", "plan-target"].every((role) => {
+        const value = trigger(role).querySelector("span");
+        return value.getBoundingClientRect().height <= parseFloat(getComputedStyle(value).lineHeight) * 1.1;
+      });
+      checks.levelLabelsNotClipped = [
+        ...row().querySelectorAll(".mwi-shrine-level-controls .mwi-upgrade-field-label")
+      ].every(
+        (label) => getComputedStyle(label).textOverflow !== "ellipsis" && label.scrollWidth <= label.clientWidth + 1
+      );
+      const collapsedTotals = panel.querySelector('[data-role="upgrade-results"]').textContent;
+      trigger("plan-target").click();
+      key(popup(), "Home");
+      key(popup(), "Enter");
+      await delay();
+      checks.collapsedTargetEditable =
+        planBody().hidden &&
+        row().querySelector('[data-role="plan-target"]').value === "1" &&
+        panel.querySelector('[data-role="upgrade-results"]').textContent !== collapsedTotals &&
+        document.activeElement === trigger("plan-target");
+      trigger("plan-start").click();
+      key(popup(), "End");
+      key(popup(), "Enter");
+      await delay();
+      checks.collapsedStartEditable =
+        planBody().hidden &&
+        row().querySelector('[data-role="plan-start"]').value === "1" &&
+        row().querySelector('[data-role="plan-target"]').value === "2" &&
+        document.activeElement === trigger("plan-start");
+      const editedPlan = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1")).upgradePlans.find(
+        (plan) => plan.guildBuffHrid === "/guild_buffs/tempo_combat"
+      );
+      checks.collapsedEditsPersisted =
+        editedPlan.collapsed === true && editedPlan.startLevel === 1 && editedPlan.targetLevel === 2;
+      await change("plan-start", 0);
+      await change("plan-target", 2);
       checks.collapseKeepsTotals = panel.querySelector('[data-role="upgrade-results"]').textContent === totalsBefore;
       const storedPlans = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1")).upgradePlans;
       checks.collapsePersisted =
@@ -1205,6 +1332,10 @@
       await change("plan-target", 2);
       checks.aboveCapWarning = Boolean(row().querySelector("[data-shrine-cap-warning]"));
       checks.futureTargetPreserved = row().querySelector('[data-role="plan-target"]').value === "2";
+      collapse().click();
+      checks.collapsedCapWarning =
+        planBody().hidden && row().querySelector("[data-shrine-cap-warning]").checkVisibility();
+      collapse().click();
       bridge.guildShrineLevels = previousShrines;
       bridge.onCharacterItemsUpdated?.();
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1231,6 +1362,7 @@
       popup().querySelector(`[data-option-index="${oldIndex}"]`).click();
       panel.querySelector('[data-role="add-upgrade-plan"]').click();
       checks.shrineChangeRestored = Boolean(row()) && list.querySelectorAll("[data-plan-id]").length === 4;
+      await auditCreditNavigation(panel, checks);
       return { checks, layout: window.__mwiCollectLayoutAudit() };
     }
     if (searchParams.has("shrineUpgradeAudit")) {
