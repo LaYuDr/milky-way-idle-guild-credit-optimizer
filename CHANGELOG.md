@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.76] - 2026-11-01
+
+### Changed
+
+- New shrine plans start collapsed while keeping level controls available. Match material credit icon sizes to the recommended item icons, and add an independently collapsible guild-token value table below shrine materials while preserving the original table.
+
 ## [1.2.75] - 2026-10-27
 
 ### Changed

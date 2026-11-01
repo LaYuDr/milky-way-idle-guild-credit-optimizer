@@ -469,8 +469,9 @@ levels, purchased-level/guild-cap status, warnings, remove control and expand ac
 The compact workspace aligns shrine and level choices in one row on wide panels; panels
 at most 650px wide place the level interval and disclosure on a second row. Changing either
 level while collapsed updates costs and saved plans without expanding details; the target
-remains strictly above the start. Each field has one picker and one existing change-event path. Existing and newly added plans start expanded;
-only an explicit true `collapsed` flag is saved in local UI state. Collapsing changes no costs,
+remains strictly above the start. Each field has one picker and one existing change-event path. Manual Add shrine creates a collapsed plan whose level pickers remain visible; existing plans retain
+their saved disclosure state. Batch fill keeps its existing behavior. Only an explicit true
+`collapsed` flag is saved in local UI state. Collapsing changes no costs,
 levels or guide plans. Changing the selected shrine expands that plan for review.
 Expanded plans show the effect comparison, total materials and existing local planning shortcuts.
 One level sets the target to start + 1; To guild cap preserves its existing meaning. A target above
@@ -1408,3 +1409,17 @@ Construction and trial-history pages default on for fresh installations. UI reco
 `defaultViewsVersion >= 1` also open both pages on upgrade, as explicitly requested. Every subsequent
 UI save writes policy version 1, preserving any later deliberate opt-out. Existing plans, history,
 prices, tab ordering and other plugins' storage remain intact; no data is cleared.
+
+### Upgrade-page token value copy and material icon size
+
+The shrine upgrade view keeps a second Guild Token exchange-value section after material totals,
+before the plugin footer. The original credit-value section remains in place. Both use the same
+renderer, ranking helper, price-reference/price-limit inputs and existing snapshot loader. The copy
+also appears for an empty plan; a missing quote remains unpriced and cached/error state is labelled.
+Its collapse preference is saved separately as `guildTokenValuesUpgradeCollapsed` and never hides
+the original. Refreshing the copy preserves the active icon/header focus. The copy retains named
+credit buttons that open the corresponding native exchange form.
+
+Material-summary credit icons match the right-hand item art at 38×38px in a 40×40px button. Other
+credit-icon contexts retain their existing size. Verify both sections, matching prices, independent
+collapse, empty plans, refresh, icon geometry and navigation in the shrine/credit/layout matrices.

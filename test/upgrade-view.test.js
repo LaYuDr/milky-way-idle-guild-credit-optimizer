@@ -128,6 +128,7 @@ test("失效计划被移除后保持空状态，显式添加仍可创建一项",
   assert.equal(view.addGuildUpgradePlan(entries), true);
   assert.equal(state.upgradePlans.length, 1);
   assert.equal(state.upgradePlans[0].id, "plan-10");
+  assert.equal(state.upgradePlans[0].collapsed, true);
 });
 
 test("当前领域全部排除时保持计划与编号不变并返回明确状态", () => {
@@ -161,4 +162,16 @@ test("当前领域全部排除时在可见状态区说明禁用原因", () => {
   assert.match(lifeButton.title, /^guildAutofillDomainExcluded:/);
   assert.match(status.textContent, /guildAutofillDomainExcluded:domainLife/);
   assert.equal(combatButton.disabled, false);
+});
+
+test("手动添加默认折叠并保留已有计划的展开状态", () => {
+  const { entries, state, view } = createFixture();
+  state.upgradePlans = [{ ...state.upgradePlans[0], collapsed: false }];
+  const oldPlan = { ...state.upgradePlans[0] };
+  assert.equal(view.addGuildUpgradePlan(entries), true);
+  assert.deepEqual(state.upgradePlans[0], oldPlan);
+  assert.equal(state.upgradePlans[1].collapsed, true);
+  view.ensureGuildUpgradePlans(entries);
+  assert.equal(state.upgradePlans[0].collapsed, false);
+  assert.equal(state.upgradePlans[1].collapsed, true);
 });

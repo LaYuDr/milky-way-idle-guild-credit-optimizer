@@ -588,6 +588,7 @@
       const fallback = {
         collapsedCreditSections: [],
         guildTokenValuesCollapsed: false,
+        guildTokenValuesUpgradeCollapsed: false,
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
         shrineGuideEnabled: false,
@@ -652,6 +653,7 @@
         return {
           collapsedCreditSections,
           guildTokenValuesCollapsed: stored.guildTokenValuesCollapsed === true,
+          guildTokenValuesUpgradeCollapsed: stored.guildTokenValuesUpgradeCollapsed === true,
           guildTokenCreditHrids,
           autoGuildTokenBudget,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
@@ -852,6 +854,7 @@
           JSON.stringify({
             collapsedCreditSections: Array.from(state.collapsedCreditSections),
             guildTokenValuesCollapsed: state.guildTokenValuesCollapsed,
+            guildTokenValuesUpgradeCollapsed: state.guildTokenValuesUpgradeCollapsed === true,
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
             shrineGuideEnabled: state.shrineGuideEnabled,

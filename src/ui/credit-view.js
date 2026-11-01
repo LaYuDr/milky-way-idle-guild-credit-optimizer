@@ -22,6 +22,7 @@
       loadSnapshot,
       creditConversionGroups,
       snapshotOrderBook,
+      updateRenderedMarkup,
       refreshOfficialItemNameCatalog
     } = dependencies;
 
@@ -47,7 +48,7 @@
       return `<section class="mwi-credit-section" data-credit-item-hrid="${escapeHtml(creditItemHrid)}" data-collapsed="${String(collapsed)}" style="--mwi-credit-color:${color}">${heading}<div class="mwi-credit-body"${collapsed ? " hidden" : ""}><table><colgroup><col class="mwi-credit-item-column"><col class="mwi-credit-exchange-column"><col class="mwi-credit-unit-cost-column"><col class="mwi-credit-target-cost-column"></colgroup><thead><tr><th>${itemLabel}</th><th>${exchangeLabel}</th><th>${perCreditLabel}</th><th>${targetCostLabel}</th></tr></thead><tbody>${available.map((row) => `<tr><td data-label="${itemLabel}" title="${escapeHtml(row.itemName)}"><span class="mwi-item">${marketItemIconMarkup(row.itemHrid, row.itemName)}<span class="mwi-item-name">${escapeHtml(row.itemName)}</span></span></td><td data-label="${exchangeLabel}">${escapeHtml(t("exchangeRate", { items: itemQuantity(row.itemCount), credits: creditQuantity(row.creditCount) }))}</td><td class="mwi-cost" data-label="${perCreditLabel}">${formatNumber(row.costPerCredit, 2)}</td><td data-label="${targetCostLabel}">${core.formatCompactCost(row.cost)}</td></tr>`).join("")}</tbody></table></div></section>`;
     }
 
-    function renderGuildTokenValues(values) {
+    function renderGuildTokenValues(values, context = "credit") {
       const valuesByCredit = new Map(values.map((value) => [value.creditItemHrid, value]));
       const rows = GUILD_TOKEN_CREDIT_CONVERSIONS.map((rule) => {
         const value = valuesByCredit.get(rule.creditItemHrid) || { status: "unpriced", ...rule };
@@ -61,10 +62,60 @@
         }
         return `<div class="mwi-token-value-row"><span class="mwi-item">${iconMarkup(value.creditItemHrid, creditName)}<span class="mwi-item-name">${escapeHtml(creditName)}</span></span><span class="mwi-token-value-exchange">${escapeHtml(exchange)}</span><span class="mwi-cost">${core.formatCompactCost(value.goldValuePerToken)} ${escapeHtml(t("gold"))}</span></div>`;
       }).join("");
-      const collapsed = state.guildTokenValuesCollapsed;
+      const collapsed =
+        context === "upgrade" ? state.guildTokenValuesUpgradeCollapsed : state.guildTokenValuesCollapsed;
       const guildTokenName = itemNameForMaterial("/items/guild_token");
       const heading = `<button class="mwi-credit-heading mwi-token-value-heading" data-role="toggle-token-values" type="button" aria-expanded="${String(!collapsed)}">${iconMarkup("/items/guild_token", guildTokenName)}<span>${escapeHtml(t("tokenExchangeValue", { token: guildTokenName }))}</span><span class="mwi-collapse-icon" aria-hidden="true">${collapsed ? "▸" : "▾"}</span></button>`;
-      return `<section class="mwi-token-value-section" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
+      return `<section class="mwi-token-value-section" data-token-values-context="${context}" data-collapsed="${String(collapsed)}">${heading}<div class="mwi-token-value-body mwi-token-value-list"${collapsed ? " hidden" : ""}>${rows}</div></section>`;
+    }
+
+    function guildTokenValues(groups = creditConversionGroups()) {
+      const ranked = groups.map((group) => {
+        const rule = GUILD_TOKEN_CREDIT_CONVERSIONS.find(
+          (candidate) => candidate.creditItemHrid === group.creditItemHrid
+        );
+        const books = Object.fromEntries(
+          group.conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)])
+        );
+        return [group.creditItemHrid, core.rankConversions(group.conversions, books, rule.creditCount)];
+      });
+      return core.rankGuildTokenCreditValues(GUILD_TOKEN_CREDIT_CONVERSIONS, Object.fromEntries(ranked));
+    }
+
+    let copyRefreshId = 0;
+    async function refreshGuildTokenValuesCopy(panel) {
+      const host = panel.querySelector('[data-role="upgrade-token-values"]');
+      if (!host) return;
+      const refreshId = ++copyRefreshId;
+      let failed = false;
+      const render = () => {
+        if (refreshId !== copyRefreshId || !host.isConnected) return;
+        const active = host.contains(window.document.activeElement) ? window.document.activeElement : null;
+        const focusedRole = active?.dataset.role;
+        const focusedCredit = active?.dataset.creditHrid;
+        const notice = failed
+          ? t("snapshotFailed")
+          : state.marketSnapshotFallbackActive
+            ? t("snapshotFallbackNotice")
+            : "";
+        const replaced = updateRenderedMarkup(
+          host,
+          renderGuildTokenValues(guildTokenValues(), "upgrade") +
+            (notice ? `<p class="mwi-status">${escapeHtml(notice)}</p>` : "")
+        );
+        if (replaced && focusedRole) {
+          [...host.querySelectorAll("[data-role]")]
+            .find((node) => node.dataset.role === focusedRole && node.dataset.creditHrid === focusedCredit)
+            ?.focus({ preventScroll: true });
+        }
+      };
+      render();
+      try {
+        await loadSnapshot(false);
+      } catch (_) {
+        failed = true;
+      }
+      render();
     }
 
     async function refreshPanel(panel, forceSnapshot) {
@@ -102,18 +153,13 @@
           const books = Object.fromEntries(
             group.conversions.map((conversion) => [conversion.itemHrid, snapshotOrderBook(conversion.itemHrid)])
           );
-          const tokenRule = GUILD_TOKEN_CREDIT_CONVERSIONS.find((rule) => rule.creditItemHrid === group.creditItemHrid);
           return {
             ...group,
             priceLimited: group.conversions.length < (unfilteredConversionCounts.get(group.creditItemHrid) || 0),
-            ranked: core.rankConversions(group.conversions, books, target),
-            tokenRanked: core.rankConversions(group.conversions, books, tokenRule.creditCount)
+            ranked: core.rankConversions(group.conversions, books, target)
           };
         });
-        const tokenValues = core.rankGuildTokenCreditValues(
-          GUILD_TOKEN_CREDIT_CONVERSIONS,
-          Object.fromEntries(rankedGroups.map((group) => [group.creditItemHrid, group.tokenRanked]))
-        );
+        const tokenValues = guildTokenValues(creditGroups);
         status.textContent = "";
         status.hidden = true;
         results.innerHTML = `${renderGuildTokenValues(tokenValues)}<div class="mwi-credit-grid">${rankedGroups.map((group) => renderCreditSection(group.creditItemHrid, group.color, group.ranked, group.priceLimited)).join("")}</div>`;
@@ -139,7 +185,7 @@
       state.refreshTimer = window.setTimeout(() => refreshPanel(panel), 250);
     }
 
-    return { refreshPanel };
+    return { refreshPanel, refreshGuildTokenValuesCopy };
   }
 
   return { createCreditView };

@@ -40,6 +40,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
   assert.deepEqual(broken.loadSavedPluginUiState(), {
     collapsedCreditSections: [],
     guildTokenValuesCollapsed: false,
+    guildTokenValuesUpgradeCollapsed: false,
     guildTokenCreditHrids: [],
     autoGuildTokenBudget: null,
     shrineGuideEnabled: false,
@@ -902,4 +903,20 @@ test("旧用户升级同时开启建设与试炼，后续主动关闭仍能保�
     assert.equal(JSON.parse(storage.value(config.UI_STATE_STORAGE_KEY)).defaultViewsVersion, 1);
     assert.equal(storage.value("other-plugin"), "keep");
   }
+});
+
+test("代币价值副本与原表的折叠偏好分别保存和恢复", () => {
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const state = api.loadSavedPluginUiState();
+  assert.equal(state.guildTokenValuesUpgradeCollapsed, false);
+  state.guildTokenValuesCollapsed = false;
+  state.guildTokenValuesUpgradeCollapsed = true;
+  assert.equal(
+    api.persistPluginUiState({ ...state, collapsedCreditSections: new Set(), guildTokenCreditHrids: new Set() }),
+    true
+  );
+  const saved = api.loadSavedPluginUiState();
+  assert.equal(saved.guildTokenValuesCollapsed, false);
+  assert.equal(saved.guildTokenValuesUpgradeCollapsed, true);
 });

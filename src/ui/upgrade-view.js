@@ -43,7 +43,8 @@
       refreshOfficialItemNameCatalog,
       scheduleShrineGuide,
       scheduleGuildExchangeAdvisor,
-      guildTokenBudgetRefreshTask
+      guildTokenBudgetRefreshTask,
+      refreshGuildTokenValuesCopy = () => {}
     } = dependencies;
 
     const effects = effectApi.createFormatter({ core, t, ui });
@@ -321,7 +322,8 @@
         id: `plan-${state.nextUpgradePlanId++}`,
         guildBuffHrid: entry.hrid,
         startLevel,
-        targetLevel: startLevel + 1
+        targetLevel: startLevel + 1,
+        collapsed: true
       });
       state.upgradePresetNotice = "";
       return true;
@@ -774,6 +776,7 @@
       const status = panel.querySelector('[data-role="upgrade-status"]');
       const results = panel.querySelector('[data-role="upgrade-results"]');
       const entries = guildBuffEntries();
+      refreshGuildTokenValuesCopy(panel);
       if (!entries.length) {
         setShrineGuideContext(null);
         updateGuildTokenBudgetControl(panel, null, false);

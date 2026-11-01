@@ -649,6 +649,8 @@
         /* Credit icons navigate independently of section disclosure controls. */
         #mwi-credit-optimizer .mwi-credit-icon-link{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;min-width:24px;height:24px;min-height:24px!important;padding:0!important;border:1px solid transparent;border-radius:4px;background:transparent;color:inherit;vertical-align:middle;cursor:pointer}
         #mwi-credit-optimizer .mwi-credit-icon-link .mwi-item-icon{display:block;width:100%;height:100%}
+        #mwi-credit-optimizer .mwi-material-credit>.mwi-credit-icon-link{flex-basis:40px;width:40px;min-width:40px;height:40px;min-height:40px!important}
+        #mwi-credit-optimizer .mwi-material-credit>.mwi-credit-icon-link .mwi-item-icon{flex-basis:38px;width:38px;height:38px}
         #mwi-credit-optimizer .mwi-credit-icon-link:hover{background:#34514e;border-color:#91dfcb}
         #mwi-credit-optimizer .mwi-credit-icon-link:focus-visible{outline:2px solid #91dfcb;outline-offset:2px}
         #mwi-credit-optimizer .mwi-shrine-materials .mwi-credit-icon-link{flex-basis:20px;width:20px;min-width:20px;height:20px;min-height:20px!important}

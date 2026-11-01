@@ -158,6 +158,7 @@
     refreshQueued: false,
     collapsedCreditSections: new Set(savedUiState.collapsedCreditSections),
     guildTokenValuesCollapsed: savedUiState.guildTokenValuesCollapsed,
+    guildTokenValuesUpgradeCollapsed: savedUiState.guildTokenValuesUpgradeCollapsed,
     upgradeRefreshId: 0,
     exchangeAdvisorUi: null,
     exchangeAdvisorRootObserver: null,
@@ -568,6 +569,7 @@
   }
 
   const upgradeView = upgradeViewApi.createUpgradeView({
+    refreshGuildTokenValuesCopy: (panel) => creditView.refreshGuildTokenValuesCopy(panel),
     core,
     state,
     t,
@@ -831,6 +833,7 @@
     loadSnapshot,
     creditConversionGroups,
     snapshotOrderBook,
+    updateRenderedMarkup,
     refreshOfficialItemNameCatalog
   });
   const { refreshPanel } = creditView;

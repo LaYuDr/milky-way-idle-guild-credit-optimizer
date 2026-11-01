@@ -1046,12 +1046,23 @@
         }
       };
       const delay = () => new Promise((resolve) => setTimeout(resolve, 80));
+      await waitFor(() => panel.querySelector(".mwi-material-plan-icon .mwi-item-icon")?.checkVisibility());
       const materialLinks = [
         ...panel.querySelectorAll(
           '.mwi-shrine-materials [data-role="guild-credit-link"],.mwi-material-credit [data-role="guild-credit-link"]'
         )
       ];
       checks.materialCreditLinks = materialLinks.length > 0;
+      const referenceIcon = panel.querySelector(".mwi-material-plan-icon .mwi-item-icon");
+      const creditIcons = [...panel.querySelectorAll(".mwi-material-credit>.mwi-credit-icon-link .mwi-item-icon")];
+      const referenceSize = referenceIcon?.getBoundingClientRect();
+      checks.materialCreditIconSizeMatchesItem =
+        Boolean(referenceSize) &&
+        creditIcons.length > 0 &&
+        creditIcons.every((icon) => {
+          const size = icon.getBoundingClientRect();
+          return Math.abs(size.width - referenceSize.width) < 1 && Math.abs(size.height - referenceSize.height) < 1;
+        });
       for (const link of materialLinks) {
         link.click();
         await delay();
@@ -1060,8 +1071,34 @@
         calls.some(([kind, credit]) => kind === "credit" && credit === link.dataset.creditHrid)
       );
       panel.querySelector('[data-role="view-credit"]').click();
-      await waitFor(() => panel.querySelector('.mwi-token-value-row [data-role="guild-credit-link"]'));
-      const links = [...panel.querySelectorAll('.mwi-token-value-row [data-role="guild-credit-link"]')];
+      await waitFor(() =>
+        panel.querySelector('[data-role="results"] .mwi-token-value-row [data-role="guild-credit-link"]')
+      );
+      const links = [
+        ...panel.querySelectorAll('[data-role="results"] .mwi-token-value-row [data-role="guild-credit-link"]')
+      ];
+      const original = panel.querySelector('[data-role="results"] .mwi-token-value-section');
+      const copyHost = panel.querySelector('[data-role="upgrade-token-values"]');
+      await waitFor(() => copyHost.querySelectorAll(".mwi-token-value-row").length === 8);
+      const copy = () => copyHost.querySelector(".mwi-token-value-section");
+      checks.tokenValueOriginalRetained = Boolean(original) && copy() !== original;
+      checks.tokenValueCopyPlacement =
+        panel.querySelector('[data-role="upgrade-results"]').nextElementSibling === copyHost;
+      const prices = (section) =>
+        [...section.querySelectorAll(".mwi-token-value-row")].map((row) => row.textContent.trim()).join("|");
+      checks.tokenValueCopyMatchesOriginal = prices(copy()) === prices(original);
+      const originalCollapsed = original.dataset.collapsed;
+      copy().querySelector('[data-role="toggle-token-values"]').click();
+      checks.tokenValueCopyCollapseIndependent =
+        copy().dataset.collapsed === "true" && original.dataset.collapsed === originalCollapsed;
+      const storedCopy = JSON.parse(localStorage.getItem("mwi-guild-credit-ui-state-v1"));
+      checks.tokenValueCopyCollapseSaved =
+        storedCopy.guildTokenValuesUpgradeCollapsed === true && storedCopy.guildTokenValuesCollapsed === false;
+      copy().querySelector('[data-role="toggle-token-values"]').click();
+      copyHost.querySelector('[data-role="guild-credit-link"]').click();
+      await delay();
+      checks.tokenValueCopyLinkWorks =
+        root.dataset.exchangeCredit === copyHost.querySelector('[data-role="guild-credit-link"]').dataset.creditHrid;
       for (const link of links) {
         link.click();
         await delay();
@@ -1098,6 +1135,14 @@
       const panel = document.getElementById("mwi-credit-optimizer");
       const list = panel.querySelector('[data-role="upgrade-plan-list"]');
       const checks = {};
+      checks.addedPlansCollapsedByDefault = [...list.querySelectorAll(".mwi-upgrade-plan")].every(
+        (row) => row.querySelector(".mwi-shrine-plan-body").hidden
+      );
+      const planIds = [...list.querySelectorAll(".mwi-upgrade-plan")].map((row) => row.dataset.planId);
+      for (const planId of planIds) {
+        const row = [...list.querySelectorAll(".mwi-upgrade-plan")].find((node) => node.dataset.planId === planId);
+        if (row.querySelector(".mwi-shrine-plan-body").hidden) row.querySelector('[data-role="toggle-plan"]').click();
+      }
       const purchaseBridge = window.__mwiGuildCreditBridge;
       const previousPurchaseInventory = purchaseBridge.characterItems;
       purchaseBridge.characterItems = [
@@ -1416,6 +1461,13 @@
       addButton.click();
       await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 1);
       const explicitAddedPlanCount = list.querySelectorAll(".mwi-upgrade-plan").length;
+      const newPlan = list.querySelector(".mwi-upgrade-plan");
+      const explicitAddedPlanCollapsed =
+        newPlan.querySelector(".mwi-shrine-plan-body").hidden &&
+        newPlan.querySelector('[data-picker-role="plan-target"]').checkVisibility();
+      const tokenValueCopyRetained = panel
+        .querySelector('[data-role="upgrade-token-values"] .mwi-token-value-section')
+        .checkVisibility();
       panel.querySelector('[data-role="clear-upgrade-plans"]').click();
       await waitFor(() => list.querySelectorAll(".mwi-upgrade-plan").length === 0);
       const finalStoredState = storedUiState();
@@ -1438,6 +1490,8 @@
             emptyCopy.message === "" &&
             addButton.textContent.includes(english ? "Add shrine" : "添加神龛"),
           explicitAddStillWorks: explicitAddedPlanCount === 1,
+          explicitAddDefaultsCollapsed: explicitAddedPlanCollapsed,
+          tokenValueCopyRetained,
           finalClearRemainsPersisted:
             Array.isArray(finalStoredState.upgradePlans) && finalStoredState.upgradePlans.length === 0,
           panelHasNoHorizontalOverflow: root.scrollWidth <= root.clientWidth + 1

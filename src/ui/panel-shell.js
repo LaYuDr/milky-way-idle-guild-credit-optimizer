@@ -529,6 +529,7 @@
           ${renderGuildTokenCreditPlanToggle()}
           <div class="mwi-status" data-role="upgrade-status">${escapeHtml(t("waitingUpgradeRules"))}</div>
           <div data-role="upgrade-results"></div>
+          <div data-role="upgrade-token-values"></div>
         </div>
         <div id="mwi-view-panel-construction" data-role="construction-view" role="tabpanel" aria-labelledby="mwi-view-tab-construction"${state.activeView === "construction" ? "" : " hidden"}>
           <div class="mwi-status mwi-construction-status" data-role="construction-status" hidden><span data-role="construction-status-text" role="status" aria-live="polite" aria-atomic="true"></span><button data-role="undo-clear-building-plans" type="button" hidden>${escapeHtml(t("undoClearBuildingPlans"))}</button></div>
@@ -639,20 +640,6 @@
       panel.querySelector('[data-role="results"]').addEventListener("click", (event) => {
         const target = event.target && (event.target.nodeType === 1 ? event.target : event.target.parentElement);
         if (!target) return;
-        const tokenToggle = target.closest('[data-role="toggle-token-values"]');
-        if (tokenToggle) {
-          const tokenSection = tokenToggle.closest(".mwi-token-value-section");
-          const tokenBody = tokenSection && tokenSection.querySelector(".mwi-token-value-body");
-          if (!tokenSection || !tokenBody) return;
-          state.guildTokenValuesCollapsed = !state.guildTokenValuesCollapsed;
-          tokenSection.dataset.collapsed = String(state.guildTokenValuesCollapsed);
-          tokenToggle.setAttribute("aria-expanded", String(!state.guildTokenValuesCollapsed));
-          const tokenIcon = tokenToggle.querySelector(".mwi-collapse-icon");
-          if (tokenIcon) tokenIcon.textContent = state.guildTokenValuesCollapsed ? "▸" : "▾";
-          tokenBody.hidden = state.guildTokenValuesCollapsed;
-          persistPluginUiState();
-          return;
-        }
         const toggle = target.closest('[data-role="toggle-credit-section"]');
         const section = toggle && toggle.closest("[data-credit-item-hrid]");
         if (!section) return;
@@ -964,6 +951,23 @@
         );
       });
       panel.addEventListener("click", (event) => {
+        const tokenToggle = event.target.closest('[data-role="toggle-token-values"]');
+        if (tokenToggle) {
+          const section = tokenToggle.closest(".mwi-token-value-section");
+          const body = section?.querySelector(".mwi-token-value-body");
+          if (!body) return;
+          const key =
+            section.dataset.tokenValuesContext === "upgrade"
+              ? "guildTokenValuesUpgradeCollapsed"
+              : "guildTokenValuesCollapsed";
+          state[key] = !state[key];
+          section.dataset.collapsed = String(state[key]);
+          tokenToggle.setAttribute("aria-expanded", String(!state[key]));
+          tokenToggle.querySelector(".mwi-collapse-icon").textContent = state[key] ? "▸" : "▾";
+          body.hidden = state[key];
+          persistPluginUiState();
+          return;
+        }
         const creditLink = event.target.closest('[data-role="guild-credit-link"]');
         if (creditLink) {
           event.preventDefault();
