@@ -591,6 +591,7 @@
         guildTokenValuesUpgradeCollapsed: false,
         guildTokenCreditHrids: [],
         autoGuildTokenBudget: null,
+        labyrinthPrefillEnabled: true,
         shrineGuideEnabled: false,
         maxConversionItemUnitPrice: null,
         guildShrineAutofillExcludedBuffHrids: [],
@@ -656,6 +657,7 @@
           guildTokenValuesUpgradeCollapsed: stored.guildTokenValuesUpgradeCollapsed === true,
           guildTokenCreditHrids,
           autoGuildTokenBudget,
+          labyrinthPrefillEnabled: stored.labyrinthPrefillEnabled !== false,
           shrineGuideEnabled: stored.shrineGuideEnabled === true,
           maxConversionItemUnitPrice,
           guildShrineAutofillExcludedBuffHrids: normalizeGuildShrineAutofillExcludedBuffHrids(
@@ -857,6 +859,7 @@
             guildTokenValuesUpgradeCollapsed: state.guildTokenValuesUpgradeCollapsed === true,
             guildTokenCreditHrids: Array.from(state.guildTokenCreditHrids),
             autoGuildTokenBudget: state.autoGuildTokenBudget,
+            labyrinthPrefillEnabled: state.labyrinthPrefillEnabled !== false,
             shrineGuideEnabled: state.shrineGuideEnabled,
             maxConversionItemUnitPrice:
               Number.isSafeInteger(state.maxConversionItemUnitPrice) && state.maxConversionItemUnitPrice > 0

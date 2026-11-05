@@ -25,8 +25,10 @@
   const panelShellApi = window.MwiGuildCreditPanelShell;
   const trialHistoryApi = window.MwiGuildTrialHistory;
   const trialHistoryViewApi = window.MwiGuildTrialHistoryView;
+  const labyrinthPrefillApi = window.MwiGuildLabyrinthPrefill;
   const creditViewApi = window.MwiGuildCreditCreditView;
   if (
+    !labyrinthPrefillApi ||
     !core ||
     !marketDataApi ||
     !itemNameCatalogApi ||
@@ -120,6 +122,7 @@
     upgradePresetNotice: "",
     guildTokenCreditHrids: new Set(savedUiState.guildTokenCreditHrids),
     autoGuildTokenBudget: savedUiState.autoGuildTokenBudget,
+    labyrinthPrefillEnabled: savedUiState.labyrinthPrefillEnabled,
     shrineGuideEnabled: savedUiState.shrineGuideEnabled,
     maxConversionItemUnitPrice: savedUiState.maxConversionItemUnitPrice,
     guildShrineAutofillExcludedBuffHrids: new Set(savedUiState.guildShrineAutofillExcludedBuffHrids),
@@ -289,6 +292,17 @@
     state.priceReference = reference;
     pluginStorage.persistPriceReference(reference);
   }
+  const labyrinthPrefill = labyrinthPrefillApi.create({
+    document,
+    pageWindow,
+    t,
+    getEnabled: () => state.labyrinthPrefillEnabled,
+    setEnabled: (enabled) => {
+      state.labyrinthPrefillEnabled = enabled;
+      return persistPluginUiState();
+    }
+  });
+
   function ui() {
     return localizationApi.createLocalizer(currentGameLocale());
   }
@@ -929,6 +943,7 @@
     // A cached page resumes with its live runtime; dispose only on a real exit.
     if (event?.persisted) return;
     window.removeEventListener("pagehide", disposeRuntime);
+    labyrinthPrefill.dispose();
     storageTransferView.dispose();
     disposeUpgradePlanning?.();
     trialHistoryView.dispose();
@@ -957,6 +972,7 @@
     document.removeEventListener("click", exchangeModalInteractionHandler, true);
   }
 
+  labyrinthPrefill.start();
   trialHistoryView.start();
   hydrateBridgeData();
   extractItemDetailsFromReact();

@@ -1423,3 +1423,40 @@ credit buttons that open the corresponding native exchange form.
 Material-summary credit icons match the right-hand item art at 38×38px in a 40×40px button. Other
 credit-icon contexts retain their existing size. Verify both sections, matching prices, independent
 collapse, empty plans, refresh, icon geometry and navigation in the shrine/credit/layout matrices.
+
+## Labyrinth recommendation prefill
+
+`src/ui/labyrinth-prefill.js` reads the calculator's visible
+`td.mwi-lab-auto-recommend-cell` in the clicked native automation row. A capture
+listener arms a row-scoped MutationObserver only when the user clicks Edit in
+`LabyrinthPanel_skipThreshold`. Once the native threshold input appears, its
+prototype value setter plus a bubbling input event updates the unsaved draft.
+There is no save click, React state mutation or network request. The inline checkbox
+above the automation table defaults on and persists only the local
+`labyrinthPrefillEnabled` UI preference. Turning it off cancels pending work;
+no game setting is saved. Its mounting observer ignores ordinary game updates,
+reconciles table replacement, and removes the control on disposal.
+The displayed setting number is used directly (`+63` becomes `63`); do not add
+one again. Signed integers including zero are accepted within the official
+handler's -999…999 range. Missing, duplicate, pending or malformed recommendations
+leave the native draft alone. Calculator selectors are a third-party contract;
+unrecognized future markup intentionally does nothing.
+
+The request is single-use and expires after one second. Further clicks, manual
+input, changed room key/recommendation, removed rows and runtime disposal cancel
+it. Already-open editors are never updated when a calculation finishes.
+
+Verification: `test/labyrinth-prefill.test.js` covers parsing and safe rejection;
+`node tools/browser-labyrinth-prefill.mjs` is the dedicated affected browser
+matrix (zh/en × 320/900px). It uses isolated local DOM fixtures, a controlled-input
+value tracker, draft capture and a synthetic Save button. It checks row isolation,
+manual overrides, zero/negative values, pending/invalid results, delayed editors,
+cancellation, timeout and disposal, and blocks external requests. On macOS launch
+this command outside Seatbelt through normal tool approval. Reports are under
+`.workbench/labyrinth-prefill-*/matrix.json`.
+
+Real-game acceptance is separate: after installation is authorized, calculate a
+recommendation, click Edit and compare the native draft against the same row's
+right-hand value. Confirm manual changes persist. Leave actual Save to the user;
+local browser fixtures do not prove compatibility with currently installed
+calculator/game versions or authorize changing account settings.

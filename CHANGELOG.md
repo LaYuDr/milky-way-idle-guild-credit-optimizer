@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.77] - 2026-11-06
+
+### Changed
+
+- Added optional labyrinth recommendation prefill: clicking Edit fills only that row’s displayed recommended setting level, with Save remaining manual. Added a default-on checkbox on the labyrinth automation page, persisted locally, with cancellation and controlled-input browser coverage.
+
 ## [1.2.76] - 2026-11-01
 
 ### Changed

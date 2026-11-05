@@ -45,6 +45,7 @@ const FIXED_RELEASE_PATHS = new Set([
   "tools/check.mjs",
   "tools/browser-audit.mjs",
   "tools/browser-usage.mjs",
+  "tools/browser-labyrinth-prefill.mjs",
   "tools/usage-build.js",
   "tools/browser-trial-fullscreen.mjs",
   "tools/browser-storage-transfer.mjs",

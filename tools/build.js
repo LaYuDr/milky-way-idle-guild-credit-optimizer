@@ -103,6 +103,7 @@ const SOURCE_FILES = [
   "src/runtime/game-state.js",
   "src/runtime/game-data.js",
   "src/ui/dom.js",
+  "src/ui/labyrinth-prefill.js",
   "src/ui/sidebar-dom.js",
   "src/ui/sidebar-interaction.js",
   "src/ui/sidebar-integration.js",

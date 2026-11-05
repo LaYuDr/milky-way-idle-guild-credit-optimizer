@@ -7,6 +7,9 @@
 
   const STRINGS = {
     "zh-CN": {
+      labyrinthPrefillToggle: "编辑时填入推荐等级",
+      labyrinthPrefillHint: "点击编辑时填入当前行推荐等级，保存仍需手动点击。",
+      labyrinthPrefillSaveFailed: "设置仅对本次页面生效，未能保存到浏览器。",
       settingsHelp: "帮助",
       helpRankingOrder: "榜单顺序",
       helpSettingsAndMarket: "设置与市场参考",
@@ -861,6 +864,9 @@
       sidebarCredit: "公会"
     },
     en: {
+      labyrinthPrefillToggle: "Fill recommended level when editing",
+      labyrinthPrefillHint: "Fill this row’s recommended level when you click Edit. Click Save yourself to apply it.",
+      labyrinthPrefillSaveFailed: "This setting applies to this page only; it could not be saved in the browser.",
       settingsHelp: "Help",
       helpRankingOrder: "Ranking order",
       helpSettingsAndMarket: "Settings and market reference",

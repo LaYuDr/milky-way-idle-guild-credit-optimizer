@@ -43,6 +43,7 @@ test("损坏的 UI 状态安全回退且旧版全选字段可迁移", () => {
     guildTokenValuesUpgradeCollapsed: false,
     guildTokenCreditHrids: [],
     autoGuildTokenBudget: null,
+    labyrinthPrefillEnabled: true,
     shrineGuideEnabled: false,
     maxConversionItemUnitPrice: null,
     guildShrineAutofillExcludedBuffHrids: [],
@@ -919,4 +920,19 @@ test("代币价值副本与原表的折叠偏好分别保存和恢复", () => {
   const saved = api.loadSavedPluginUiState();
   assert.equal(saved.guildTokenValuesCollapsed, false);
   assert.equal(saved.guildTokenValuesUpgradeCollapsed, true);
+});
+
+test("迷宫预填开关默认开启，只接受明确关闭并持久化选择", () => {
+  for (const value of [undefined, null, "false", 0, true, false]) {
+    const api = createStorage(
+      memoryStorage({ [config.UI_STATE_STORAGE_KEY]: JSON.stringify({ labyrinthPrefillEnabled: value }) })
+    );
+    assert.equal(api.loadSavedPluginUiState().labyrinthPrefillEnabled, value !== false);
+  }
+  const storage = memoryStorage();
+  const api = createStorage(storage);
+  const state = { ...api.loadSavedPluginUiState(), guildTokenCreditHrids: new Set() };
+  state.labyrinthPrefillEnabled = false;
+  assert.equal(api.persistPluginUiState(state), true);
+  assert.equal(api.loadSavedPluginUiState().labyrinthPrefillEnabled, false);
 });
